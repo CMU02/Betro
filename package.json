@@ -1,0 +1,78 @@
+{
+  "name": "Betro",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "zod": "^4.5.4",
+      "@types/bun": "^1.4.3",
+      "varlock": "1.23.0",
+      "@types/node": "^26.4.1",
+      "libsql": "0.5.29",
+      "@orpc/server": "^1.15.6",
+      "@orpc/openapi": "^1.15.6",
+      "@orpc/zod": "^1.15.6",
+      "better-auth": "1.7.12",
+      "lucide-react": "^1.41.0",
+      "next-themes": "^0.4.6",
+      "sonner": "^2.0.8",
+      "@orpc/tanstack-query": "^1.15.6",
+      "@orpc/client": "^1.15.6",
+      "@tanstack/react-query": "^5.104.2",
+      "@tanstack/react-form": "^1.33.5",
+      "@tailwindcss/postcss": "^4.3.3",
+      "@types/react-dom": "^19.2.7",
+      "tailwindcss": "^4.3.3",
+      "@better-auth/expo": "1.7.12",
+      "drizzle-orm": "1.0.0-rc.5"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "check-types": "turbo run check-types",
+    "dev:native": "turbo run dev -F native --",
+    "dev:web": "turbo run dev -F web --",
+    "dev:server": "turbo run dev:bare -F fastify --",
+    "db:push": "turbo run db:push -F @Betro/db --",
+    "db:studio": "turbo run db:studio -F @Betro/db --",
+    "db:generate": "turbo run db:generate -F @Betro/db --",
+    "db:migrate": "turbo run db:migrate -F @Betro/db --",
+    "deploy:server": "turbo run deploy -F @Betro/infra --",
+    "destroy": "turbo run destroy -F @Betro/infra --",
+    "deploy:setup": "bunx vercel link",
+    "dev:vercel": "bunx vercel dev -L",
+    "env:preview": "tsx scripts/sync-vercel-env.ts preview",
+    "env:production": "tsx scripts/sync-vercel-env.ts production",
+    "deploy:web": "bunx vercel deploy",
+    "deploy:web:prod": "bunx vercel deploy --prod",
+    "deploy:check": "bunx vercel deploy --dry",
+    "env:generate": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./apps/native/ && varlock codegen --path ./packages/db/",
+    "postinstall": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./apps/native/ && varlock codegen --path ./packages/db/",
+    "auth:generate": "cd apps/server && bun run auth:generate",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@Betro/config": "workspace:*",
+    "@biomejs/biome": "2.5.15",
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "tsx": "^4.23.13",
+    "turbo": "^2.11.7",
+    "typescript": "^6.0.3",
+    "ultracite": "8.0.0",
+    "varlock": "catalog:"
+  },
+  "overrides": {
+    "@next/env": "npm:@varlock/nextjs-integration@1.2.2"
+  },
+  "packageManager": "bun@1.4.0"
+}

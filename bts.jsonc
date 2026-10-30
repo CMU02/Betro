@@ -1,0 +1,28 @@
+// Better-T-Stack project metadata
+//
+// Keep this file to use the `add` command.
+// Add addons: bunx create-better-t-stack@latest add
+//
+// Docs: https://better-t-stack.dev/docs
+// Stack Builder: https://better-t-stack.dev/new
+
+{
+  "$schema": "https://r2.better-t-stack.dev/schema.json",
+  "version": "3.49.0",
+  "createdAt": "2026-10-30T10:54:22.657Z",
+  "reproducibleCommand": "bun create better-t-stack@latest Betro --frontend next native-uniwind --backend fastify --runtime bun --database sqlite --orm drizzle --api orpc --auth better-auth --payments none --addons biome skills turborepo ultracite --examples none --db-setup none --web-deploy vercel --server-deploy prisma --git --package-manager bun --install",
+  "database": "sqlite",
+  "orm": "drizzle",
+  "backend": "fastify",
+  "runtime": "bun",
+  "frontend": ["next", "native-uniwind"],
+  "addons": ["biome", "skills", "turborepo", "ultracite"],
+  "examples": [],
+  "auth": "better-auth",
+  "payments": "none",
+  "packageManager": "bun",
+  "dbSetup": "none",
+  "api": "orpc",
+  "webDeploy": "vercel",
+  "serverDeploy": "prisma",
+}

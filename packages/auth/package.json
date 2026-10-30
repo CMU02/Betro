@@ -1,0 +1,25 @@
+{
+  "name": "@Betro/auth",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "check-types": "tsc -b"
+  },
+  "dependencies": {
+    "@Betro/db": "workspace:*",
+    "@better-auth/core": "1.7.12",
+    "@better-auth/drizzle-adapter": "1.7.12",
+    "@better-auth/expo": "catalog:",
+    "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@Betro/config": "workspace:*",
+    "typescript": "^6.0.3"
+  }
+}
