@@ -97,6 +97,38 @@ function gyeonguiRows(
 	]);
 }
 
+function lineRows(
+	lineName: string,
+	origin: string,
+	destination: string
+): KricRow[] {
+	return parseKricSheet([
+		HEADER,
+		sheetRow(
+			"K5001",
+			lineName,
+			origin,
+			destination,
+			"일반",
+			"평일",
+			origin,
+			"05:00:00",
+			"05:00:00"
+		),
+		sheetRow(
+			"K5001",
+			lineName,
+			origin,
+			destination,
+			"일반",
+			"평일",
+			destination,
+			"05:10:00",
+			"05:10:00"
+		),
+	]);
+}
+
 describe("parseKricSheet", () => {
 	it("reads columns by header name and converts excel times to HH:MM:SS", () => {
 		const [first] = gyeonguiRows("K1001", "평일", "덕소", "문산");
@@ -237,6 +269,18 @@ describe("parseKricKorailRows", () => {
 		);
 		expect(trips).toHaveLength(1);
 		expect(trips[0]?.lineKey).toBe("seohae");
+		expect(trips[0]?.direction).toBe("down");
+	});
+
+	it("judges 서해선 대곡 to 일산 as up", () => {
+		const { trips } = parseKricKorailRows(lineRows("서해선", "대곡", "일산"));
+		expect(trips[0]?.direction).toBe("up");
+	});
+
+	it("judges 수인분당선 고색 to 오이도 as down", () => {
+		const { trips } = parseKricKorailRows(
+			lineRows("수인분당선", "고색", "오이도")
+		);
 		expect(trips[0]?.direction).toBe("down");
 	});
 });

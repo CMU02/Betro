@@ -40,8 +40,8 @@ export const KORAIL_STATION_ORDER: Readonly<Record<string, readonly string[]>> =
 			"문산",
 			"임진강",
 		],
-		seohae: ["원시", "일산", "대곡"],
-		"suin-bundang": ["신인천", "고색", "오이도", "죽전", "왕십리", "청량리"],
+		seohae: ["원시", "대곡", "일산"],
+		"suin-bundang": ["신인천", "오이도", "고색", "죽전", "왕십리", "청량리"],
 	};
 
 const SERVICE_DAY_LABELS: Readonly<Record<string, ServiceDay>> = {
