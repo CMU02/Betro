@@ -21,7 +21,7 @@ describe("fetchStationMaster job", () => {
 		await expect(
 			fetchStationMaster({
 				dataDir,
-				fetchImpl: fetchImpl as typeof fetch,
+				fetchImpl: fetchImpl as unknown as typeof fetch,
 				key: "K",
 			})
 		).rejects.toThrow("raw saved");

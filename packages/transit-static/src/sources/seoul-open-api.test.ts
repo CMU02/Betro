@@ -111,7 +111,10 @@ describe("raw master rows", () => {
 					},
 				})
 			);
-		const raw = await fetchStationMasterRaw("K", fetchImpl as typeof fetch);
+		const raw = await fetchStationMasterRaw(
+			"K",
+			fetchImpl as unknown as typeof fetch
+		);
 		expect(raw.ok && raw.rows).toEqual([rawRow]);
 		if (raw.ok) {
 			expect(normalizeStationMasterRows(raw.rows).ok).toBe(false);
