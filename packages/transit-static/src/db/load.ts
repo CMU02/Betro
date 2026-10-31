@@ -8,9 +8,9 @@ import {
 	trackShape,
 	trackStation,
 } from "@Betro/db/schema/transit";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 import type { CrosswalkRow } from "../crosswalk/match";
-import type { LineKey } from "../lines";
+import { isLineKey, type LineKey } from "../lines";
 
 /** SQLite 바인딩 변수 한도 안에 머물도록 한 번에 넣는 행 수. */
 const INSERT_CHUNK_SIZE = 500;
@@ -199,4 +199,43 @@ export async function isCurrentManifest(
 	return (
 		current !== undefined && sameManifest(current.sourceManifest, manifest)
 	);
+}
+
+function toLineKey(value: string, statnId: string): LineKey {
+	if (!isLineKey(value)) {
+		throw new Error(`station_crosswalk ${statnId}: unknown line_key ${value}`);
+	}
+	return value;
+}
+
+/** station_crosswalk 현재 배치(is_current)의 행을 statnId 순으로 돌려준다. 현재 배치가 없으면 빈 배열. */
+export async function loadCurrentCrosswalk(
+	db: Database
+): Promise<CrosswalkRow[]> {
+	const rows = await db
+		.select({ row: stationCrosswalk })
+		.from(stationCrosswalk)
+		.innerJoin(referenceBatch, eq(stationCrosswalk.batchId, referenceBatch.id))
+		.where(
+			and(
+				eq(referenceBatch.kind, "station_crosswalk"),
+				eq(referenceBatch.isCurrent, true)
+			)
+		)
+		.orderBy(asc(stationCrosswalk.statnId));
+	return rows.map(({ row }) => ({
+		bldnId: row.bldnId ?? "",
+		coordSource: "station-master",
+		frCode: row.frCode ?? undefined,
+		lat: row.lat,
+		lineKey: toLineKey(row.lineKey, row.statnId),
+		lng: row.lng,
+		matchMethod: row.matchMethod,
+		nameAliases: row.nameAliases,
+		nameCanonical: row.nameCanonical,
+		qualityFlags: row.qualityFlags,
+		stationCd: row.stationCd ?? undefined,
+		statnId: row.statnId,
+		subwayId: row.subwayId,
+	}));
 }

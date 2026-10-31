@@ -2,7 +2,12 @@ import { referenceBatch, stationCrosswalk } from "@Betro/db/schema/transit";
 import { createTestDb } from "@Betro/db/test-db";
 import { describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
-import { isCurrentManifest, loadCrosswalk, loadTracks } from "./load";
+import {
+	isCurrentManifest,
+	loadCrosswalk,
+	loadCurrentCrosswalk,
+	loadTracks,
+} from "./load";
 
 const row = {
 	bldnId: "0150",
@@ -100,5 +105,27 @@ describe("isCurrentManifest", () => {
 			})
 		).toBe(false);
 		expect(await isCurrentManifest(db, "track", manifest)).toBe(false);
+	});
+});
+
+describe("loadCurrentCrosswalk", () => {
+	it("returns the rows of the current batch only", async () => {
+		const db = await createTestDb();
+		expect(await loadCurrentCrosswalk(db)).toEqual([]);
+		await loadCrosswalk(db, [{ ...row, nameCanonical: "옛서울" }], {
+			xlsx: { fileName: "s57.xlsx", sha256: "a" },
+		});
+		await loadCrosswalk(db, [{ ...row, frCode: "133", stationCd: "0150" }], {
+			xlsx: { fileName: "s58.xlsx", sha256: "b" },
+		});
+		expect(await loadCurrentCrosswalk(db)).toEqual([
+			{
+				...row,
+				frCode: "133",
+				nameAliases: ["서울역"],
+				qualityFlags: [],
+				stationCd: "0150",
+			},
+		]);
 	});
 });

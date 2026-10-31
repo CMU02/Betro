@@ -1,6 +1,7 @@
 import { createDb } from "@Betro/db";
 import { parseArgs } from "node:util";
 import { buildCrosswalk } from "./jobs/build-crosswalk";
+import { buildTracks } from "./jobs/build-tracks";
 import { fetchOsm } from "./jobs/fetch-osm";
 import { fetchStationMaster } from "./jobs/fetch-station-master";
 import { fetchStationSearch } from "./jobs/fetch-station-search";
@@ -39,6 +40,21 @@ const commands: Record<string, CommandHandler> = {
 			dataDir: resolveDataDir(process.env),
 			db,
 			dryRun,
+		});
+		if (!result.ok) {
+			process.exitCode = 1;
+		}
+	},
+	"build:tracks": async (args) => {
+		const { values } = parseArgs({
+			args,
+			options: { "dry-run": { type: "boolean" } },
+		});
+		// dry-run이어도 현재 crosswalk 배치를 DB에서 읽으므로 DB는 항상 연다.
+		const result = await buildTracks({
+			dataDir: resolveDataDir(process.env),
+			db: createDb({ DATABASE_URL: resolveDatabaseUrl(process.env) }),
+			dryRun: values["dry-run"] === true,
 		});
 		if (!result.ok) {
 			process.exitCode = 1;

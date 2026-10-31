@@ -36,8 +36,8 @@ export function projectPoint(coords: LngLat[], point: LngLat): ProjectedPoint {
 	});
 	const [lng, lat] = nearest.geometry.coordinates;
 	return {
-		distanceM: nearest.properties.location ?? 0,
-		offsetM: nearest.properties.dist ?? 0,
+		distanceM: nearest.properties.location,
+		offsetM: nearest.properties.dist,
 		snapped: [lng ?? 0, lat ?? 0],
 	};
 }

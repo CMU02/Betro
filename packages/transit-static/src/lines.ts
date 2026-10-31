@@ -51,3 +51,11 @@ export const LINES: readonly LineInfo[] = [
 export function lineKeyBySubwayId(subwayId: string): LineKey | undefined {
 	return LINES.find((line) => line.subwayId === subwayId)?.lineKey;
 }
+
+const LINE_KEYS: ReadonlySet<string> = new Set(
+	LINES.map((line) => line.lineKey)
+);
+
+export function isLineKey(value: string): value is LineKey {
+	return LINE_KEYS.has(value);
+}
