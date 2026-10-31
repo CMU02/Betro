@@ -100,7 +100,8 @@ function toStops(rows: KricRow[]): SourceStop[] {
 	}));
 }
 
-function copyAsSaturday(trip: SourceTrip): SourceTrip {
+/** 휴일 trip을 토요일로 복제한다(토요일 시간표가 없는 출처용). */
+export function copyAsSaturday(trip: SourceTrip): SourceTrip {
 	return {
 		...trip,
 		qualityFlags: [...trip.qualityFlags],
