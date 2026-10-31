@@ -110,11 +110,11 @@ function str(value: unknown): string {
 	return value === null || value === undefined ? "" : String(value).trim();
 }
 
-export async function fetchStationMaster(
+export async function fetchStationMasterRaw(
 	key: string,
 	fetchImpl: typeof fetch = fetch
-): Promise<SeoulApiResult<StationMasterRow>> {
-	const rows: StationMasterRow[] = [];
+): Promise<SeoulApiResult<RawRow>> {
+	const rows: RawRow[] = [];
 	let start = 1;
 	for (let page = 0; page < MAX_MASTER_PAGES; page += 1) {
 		const end = start + MASTER_PAGE_SIZE - 1;
@@ -127,24 +127,7 @@ export async function fetchStationMaster(
 		if (!result.ok) {
 			return result;
 		}
-		for (const raw of result.rows) {
-			const lat = Number(raw.LAT);
-			const lng = Number(raw.LOT);
-			if (!(Number.isFinite(lat) && Number.isFinite(lng))) {
-				return {
-					code: "PARSE",
-					message: `invalid LAT/LOT for BLDN_ID ${str(raw.BLDN_ID)}`,
-					ok: false,
-				};
-			}
-			rows.push({
-				bldnId: str(raw.BLDN_ID),
-				bldnNm: str(raw.BLDN_NM),
-				lat,
-				lng,
-				route: str(raw.ROUTE),
-			});
-		}
+		rows.push(...result.rows);
 		if (end >= result.totalCount || result.rows.length === 0) {
 			return { ok: true, rows, totalCount: result.totalCount };
 		}
@@ -157,27 +140,80 @@ export async function fetchStationMaster(
 	};
 }
 
+export function normalizeStationMasterRows(
+	rawRows: RawRow[]
+): SeoulApiResult<StationMasterRow> {
+	const rows: StationMasterRow[] = [];
+	for (const raw of rawRows) {
+		const lat = Number(raw.LAT);
+		const lng = Number(raw.LOT);
+		if (!(Number.isFinite(lat) && Number.isFinite(lng))) {
+			return {
+				code: "PARSE",
+				message: `invalid LAT/LOT for BLDN_ID ${str(raw.BLDN_ID)}`,
+				ok: false,
+			};
+		}
+		rows.push({
+			bldnId: str(raw.BLDN_ID),
+			bldnNm: str(raw.BLDN_NM),
+			lat,
+			lng,
+			route: str(raw.ROUTE),
+		});
+	}
+	return { ok: true, rows, totalCount: rows.length };
+}
+
+export async function fetchStationMaster(
+	key: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<SeoulApiResult<StationMasterRow>> {
+	const raw = await fetchStationMasterRaw(key, fetchImpl);
+	if (!raw.ok) {
+		return raw;
+	}
+	const normalized = normalizeStationMasterRows(raw.rows);
+	return normalized.ok
+		? { ...normalized, totalCount: raw.totalCount }
+		: normalized;
+}
+
+export function fetchStationSearchRaw(
+	key: string,
+	name: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<SeoulApiResult<RawRow>> {
+	return requestEnvelope(
+		fetchImpl,
+		SEARCH_SERVICE,
+		seoulApiUrl(key, SEARCH_SERVICE, 1, SEARCH_PAGE_SIZE, name)
+	);
+}
+
+export function normalizeStationSearchRows(
+	rawRows: RawRow[]
+): StationSearchRow[] {
+	return rawRows.map((raw) => ({
+		frCode: str(raw.FR_CODE),
+		lineNum: str(raw.LINE_NUM),
+		stationCd: str(raw.STATION_CD),
+		stationNm: str(raw.STATION_NM),
+	}));
+}
+
 export async function fetchStationSearch(
 	key: string,
 	name: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<SeoulApiResult<StationSearchRow>> {
-	const result = await requestEnvelope(
-		fetchImpl,
-		SEARCH_SERVICE,
-		seoulApiUrl(key, SEARCH_SERVICE, 1, SEARCH_PAGE_SIZE, name)
-	);
+	const result = await fetchStationSearchRaw(key, name, fetchImpl);
 	if (!result.ok) {
 		return result;
 	}
 	return {
 		ok: true,
-		rows: result.rows.map((raw) => ({
-			frCode: str(raw.FR_CODE),
-			lineNum: str(raw.LINE_NUM),
-			stationCd: str(raw.STATION_CD),
-			stationNm: str(raw.STATION_NM),
-		})),
+		rows: normalizeStationSearchRows(result.rows),
 		totalCount: result.totalCount,
 	};
 }

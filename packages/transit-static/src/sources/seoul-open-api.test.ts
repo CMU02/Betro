@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
 	fetchStationMaster,
+	fetchStationMasterRaw,
+	normalizeStationMasterRows,
 	parseSeoulEnvelope,
 	seoulApiUrl,
 } from "./seoul-open-api";
@@ -92,6 +94,27 @@ describe("fetchStationMaster", () => {
 				lng: 127.1,
 				route: "1호선",
 			});
+		}
+	});
+});
+
+describe("raw master rows", () => {
+	it("returns original rows untouched, even when LAT is invalid", async () => {
+		const rawRow = { BLDN_ID: " 0150 ", EXTRA: "x", LAT: "bad", LOT: "127" };
+		const fetchImpl = () =>
+			Promise.resolve(
+				Response.json({
+					subwayStationMaster: {
+						list_total_count: 1,
+						RESULT: { CODE: "INFO-000", MESSAGE: "ok" },
+						row: [rawRow],
+					},
+				})
+			);
+		const raw = await fetchStationMasterRaw("K", fetchImpl as typeof fetch);
+		expect(raw.ok && raw.rows).toEqual([rawRow]);
+		if (raw.ok) {
+			expect(normalizeStationMasterRows(raw.rows).ok).toBe(false);
 		}
 	});
 });

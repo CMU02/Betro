@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { readRaw, saveRaw } from "../raw-store";
-import { fetchStationSearch as fetchSearchRows } from "../sources/seoul-open-api";
+import { fetchStationSearchRaw } from "../sources/seoul-open-api";
 import { parseStationRows, readStationXlsx } from "../sources/station-xlsx";
 
 const XLSX_SOURCE = "oa-12764-station-xlsx";
@@ -53,7 +53,7 @@ export async function fetchStationSearch({
 			skipped += 1;
 			continue;
 		}
-		const result = await fetchSearchRows(key, name, fetchImpl);
+		const result = await fetchStationSearchRaw(key, name, fetchImpl);
 		if (!result.ok) {
 			throw new Error(
 				`station search failed for ${name}: ${result.code} ${result.message}`
