@@ -1,4 +1,7 @@
-import type { TimetableSourceKind } from "@Betro/db/schema/transit";
+import type {
+	ExpressKind,
+	TimetableSourceKind,
+} from "@Betro/db/schema/transit";
 import { z } from "zod";
 import { LINES, type LineKey } from "../lines";
 
@@ -9,12 +12,23 @@ const MANUAL_FILE_KINDS: ReadonlySet<TimetableSourceKind> = new Set([
 ]);
 
 /**
- * 기본 출처를 대신하지 않고 그 위에 trip을 더하는 출처.
- * 공항철도 직통은 KRIC 파일에 없는 별도 열차라, 일반 열차(kric-packed)와 합친다.
+ * 기본 출처 전체가 아니라 그 안의 한 열차 종류만 대신하는 출처(부분 대체).
+ * 공항철도 직통은 KRIC 파일(kric-packed)에도 정차를 건너뛰는 열차로 들어 있다(요일마다 52편, express "direct").
+ * 공식 직통 시각표(airport-express-csv)를 쓰면 기본 출처의 direct trip을 빼고 이 출처의 trip으로 바꾼다.
+ * 두 출처의 열차번호가 달라 duplicate-trip 검사로는 겹침을 잡을 수 없다.
  */
-const SUPPLEMENT_KINDS: ReadonlySet<TimetableSourceKind> = new Set([
-	"airport-express-csv",
-]);
+const PARTIAL_REPLACEMENT_KINDS: ReadonlyMap<TimetableSourceKind, ExpressKind> =
+	new Map([["airport-express-csv", "direct"]]);
+
+/** 이 출처가 다른 출처의 어떤 열차 종류를 대신하는지. 부분 대체 출처가 아니면 undefined. */
+export function replacedExpress(
+	kind: TimetableSourceKind
+): ExpressKind | undefined {
+	return PARTIAL_REPLACEMENT_KINDS.get(kind);
+}
+
+const isPartialReplacement = (kind: TimetableSourceKind): boolean =>
+	PARTIAL_REPLACEMENT_KINDS.has(kind);
 
 const KRIC_KEY_KINDS: ReadonlySet<TimetableSourceKind> = new Set(["kric-api"]);
 
@@ -101,7 +115,8 @@ function unavailableReason(
 
 /**
  * 노선마다 실제로 쓸 출처를 정한다. primary, secondary 순으로 처음 쓸 수 있는 기본 출처 하나를 고르고
- * (1차의 수동 파일이 없으면 2차로 내려간다), 보조 출처(공항철도 직통)는 쓸 수 있으면 그 위에 더한다.
+ * (1차의 수동 파일이 없으면 2차로 내려간다), 부분 대체 출처(공항철도 직통)는 쓸 수 있으면 뒤에 붙인다.
+ * 부분 대체 출처가 대신하는 열차 종류(replacedExpress)는 build-timetable이 기본 출처의 trip에서 뺀다.
  * 결과는 LINES 순서다.
  */
 export function resolveSources(
@@ -114,7 +129,7 @@ export function resolveSources(
 		const sources: TimetableSourceKind[] = [];
 		const missing: string[] = [];
 		let base: TimetableSourceKind | undefined;
-		for (const kind of candidates.filter((k) => !SUPPLEMENT_KINDS.has(k))) {
+		for (const kind of candidates.filter((k) => !isPartialReplacement(k))) {
 			if (base) {
 				break;
 			}
@@ -128,7 +143,7 @@ export function resolveSources(
 		if (base) {
 			sources.push(base);
 		}
-		for (const kind of candidates.filter((k) => SUPPLEMENT_KINDS.has(k))) {
+		for (const kind of candidates.filter(isPartialReplacement)) {
 			const reason = unavailableReason(kind, entry, available);
 			if (reason) {
 				missing.push(reason);

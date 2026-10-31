@@ -6,6 +6,7 @@ import timetableSourcesJson from "../manual/timetable-sources.json" with {
 import {
 	parseTimetableSourcesConfig,
 	type ResolvedLineSources,
+	replacedExpress,
 	resolveSources,
 } from "./registry";
 
@@ -96,7 +97,12 @@ describe("resolveSources", () => {
 			sources: ["kric-api"],
 		});
 	});
-	it("adds the airport express CSV on top of the KRIC file trips", () => {
+	it("names the train kind each partial replacement source takes over", () => {
+		expect(replacedExpress("airport-express-csv")).toBe("direct");
+		expect(replacedExpress("kric-packed")).toBeUndefined();
+		expect(replacedExpress("korail-xlsx")).toBeUndefined();
+	});
+	it("adds the airport express CSV after the KRIC file as a partial replacement", () => {
 		const manualFile = config.lines.airport.manualFile ?? "";
 		const without = entryFor(
 			resolveSources(config, { hasKricKey: false, manualFiles: [] }),

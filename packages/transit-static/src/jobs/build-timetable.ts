@@ -1,5 +1,6 @@
 import type { Database } from "@Betro/db";
 import type {
+	ExpressKind,
 	ServiceDay,
 	SourceManifest,
 	TimetableSourceKind,
@@ -10,6 +11,7 @@ import { z } from "zod";
 import {
 	isCurrentManifest,
 	loadCurrentCrosswalk,
+	loadCurrentTripCounts,
 	loadTimetable,
 	withLogicVersion,
 } from "../db/load";
@@ -43,7 +45,9 @@ import type { SourceTrip, StopTime, Trip } from "../timetable/model";
 import {
 	parseTimetableSourcesConfig,
 	type ResolvedLineSources,
+	replacedExpress,
 	resolveSources,
+	type TimetableSourcesConfig,
 } from "../timetable/registry";
 import { type LineReport, renderTimetableReport } from "../timetable/report";
 import {
@@ -58,8 +62,9 @@ const JOB_NAME = "build-timetable";
 /**
  * 시간표 변환·검증 로직 버전. 바꾸면 원본이 같아도 다시 적재된다(manifest 키 timetableVersion).
  * 2: 출발이 도착보다 이른 CSV 행과 시각 칸이 거꾸로 적힌 KRIC 묶음 행을 버리고, 대응표 범위 밖 역(별칭 statnId null)을 뺀다.
+ * 3: 공항철도 직통 CSV가 있으면 kric-packed의 direct trip을 빼고 그 CSV로 바꾼다(부분 대체).
  */
-export const TIMETABLE_LOGIC_VERSION = 2;
+export const TIMETABLE_LOGIC_VERSION = 3;
 /** 범위 밖 역을 빼고 남은 정차가 이보다 적으면 그 열차는 대응표 범위 안을 달리지 않는 것으로 보고 버린다. */
 const MIN_STOPS_IN_SCOPE = 2;
 const UNKNOWN_VERSION = "unknown";
@@ -111,11 +116,15 @@ function readAliases(): StationAlias[] {
 		.map((alias) => ({ ...alias, lineKey: alias.lineKey as LineKey }));
 }
 
-/** 한 출처를 읽은 결과. 원본이 없으면 missing에 이유를 둔다. */
+/**
+ * 한 출처를 읽은 결과. 원본 파일이 없으면 missing에 이유를 둔다(고른 출처의 실패라 source-missing error가 된다).
+ * 수집 코드가 아직 없는 출처(GTX-A kric-api)는 notCollected에 이유를 둔다. 출처가 처음부터 없는 노선과 같이 보고 막지 않는다.
+ */
 interface SourceLoad {
 	errors: string[];
 	manifest: SourceManifest;
 	missing?: string;
+	notCollected?: string;
 	trips: SourceTrip[];
 	/** trip에 기준일이 없을 때 쓸 노선별 출처 기준일 */
 	versionFor: (lineKey: LineKey) => string;
@@ -310,10 +319,7 @@ async function loadAirportExpress(
 }
 
 /** 출처별 원본을 한 번씩만 읽도록 결과를 기억한다. 수동 파일 출처는 노선마다 따로 읽는다. */
-function createSourceLoader(
-	dataDir: string,
-	config: ReturnType<typeof parseTimetableSourcesConfig>
-) {
+function createSourceLoader(dataDir: string, config: TimetableSourcesConfig) {
 	const loads = new Map<string, Promise<SourceLoad>>();
 	let kricFile: Promise<KricFile | undefined> | undefined;
 	const kric = () => {
@@ -337,9 +343,14 @@ function createSourceLoader(
 			case "airport-express-csv":
 				return await loadAirportExpress(dataDir, manualFile);
 			case "kric-api":
-				return missingLoad(
-					"kric-api: GTX-A 역별 시간표 수집이 아직 없음(KRIC_SERVICE_KEY 키 대기)"
-				);
+				return {
+					errors: [],
+					manifest: {},
+					notCollected:
+						"kric-api: GTX-A 역별 시간표 수집이 아직 없음(KRIC_SERVICE_KEY 키 대기)",
+					trips: [],
+					versionFor: () => UNKNOWN_VERSION,
+				};
 			default:
 				return missingLoad(`${source}: 알 수 없는 출처`);
 		}
@@ -433,7 +444,11 @@ function recordVersion(
 	}
 }
 
-function lineReport(resolved: ResolvedLineSources, trips: Trip[]): LineReport {
+function lineReport(
+	resolved: ResolvedLineSources,
+	trips: Trip[],
+	replacedTrips: number
+): LineReport {
 	const byServiceDay: Record<ServiceDay, number> = {
 		holiday: 0,
 		saturday: 0,
@@ -448,6 +463,7 @@ function lineReport(resolved: ResolvedLineSources, trips: Trip[]): LineReport {
 		byServiceDay,
 		lineKey: resolved.lineKey,
 		missing: resolved.missing,
+		replacedTrips,
 		saturdayCopied: trips.some(
 			(t) =>
 				t.serviceDay === "saturday" && t.serviceDaySource === "holiday-copied"
@@ -467,6 +483,8 @@ export interface BuildTimetableInput {
 	/** KRIC_SERVICE_KEY 유무를 볼 환경. 기본 process.env. */
 	env?: Record<string, string | undefined>;
 	now?: Date;
+	/** 노선별 출처 설정. 기본은 manual/timetable-sources.json. */
+	sourcesConfig?: TimetableSourcesConfig;
 }
 
 export interface BuildTimetableResult {
@@ -476,7 +494,11 @@ export interface BuildTimetableResult {
 	issues: TimetableIssue[];
 	linesWithoutTimetable: LineKey[];
 	loaded: boolean;
-	/** error 등급 issue 0건 그리고 대응표에 없는 역 0건. 시간표 없는 노선은 영향 없음. */
+	/**
+	 * error 등급 issue 0건 그리고 대응표에 없는 역 0건. 출처가 처음부터 없는 노선(GTX-A 키 대기)은 영향 없음.
+	 * 고른 출처의 원본 없음(source-missing), 고른 출처의 trip 0건(source-empty),
+	 * 현재 배치에 있던 노선의 trip 0건(line-dropped)은 error issue라 막는다.
+	 */
 	ok: boolean;
 	reportPaths: { jsonPath: string; mdPath: string };
 	/** 어댑터가 버린 행·열차와 읽지 못한 시각. ok에는 들어가지 않고 보고서에 싣는다. */
@@ -488,6 +510,8 @@ export interface BuildTimetableResult {
 }
 
 interface CollectedTrips {
+	/** 노선 단위 error: 고른 출처의 원본 없음(source-missing), 고른 출처가 trip 0건(source-empty) */
+	lineIssues: TimetableIssue[];
 	lines: LineReport[];
 	manifest: SourceManifest;
 	resolver: StationResolver;
@@ -496,10 +520,88 @@ interface CollectedTrips {
 	trips: Trip[];
 }
 
+const lineIssue = (
+	lineKey: LineKey,
+	code: TimetableIssue["code"],
+	detail: string
+): TimetableIssue => ({ code, detail, lineKey, severity: "error" });
+
+/**
+ * 부분 대체 출처(공항철도 직통 CSV)가 trip을 냈으면, 다른 출처의 trip 중 그 출처가 대신하는 열차 종류를 뺀다.
+ * 돌려주는 replaced는 뺀 trip 수.
+ */
+function applyPartialReplacements(
+	tripsBySource: Map<TimetableSourceKind, Trip[]>
+): {
+	replaced: number;
+	trips: Trip[];
+} {
+	/** 대신할 열차 종류 → 그 종류를 맡는 출처 */
+	const replacedBy = new Map<ExpressKind, TimetableSourceKind>();
+	for (const [source, trips] of tripsBySource) {
+		const express = replacedExpress(source);
+		if (express && trips.length > 0) {
+			replacedBy.set(express, source);
+		}
+	}
+	let replaced = 0;
+	const kept: Trip[] = [];
+	for (const [source, trips] of tripsBySource) {
+		for (const trip of trips) {
+			const owner = replacedBy.get(trip.express);
+			if (owner !== undefined && owner !== source) {
+				replaced += 1;
+			} else {
+				kept.push(trip);
+			}
+		}
+	}
+	return { replaced, trips: kept };
+}
+
+/**
+ * 고른 출처 하나에서 이 노선 trip을 만든다. 수집 코드가 없는 출처는 건너뛴 이유만,
+ * 원본이 없거나(source-missing) trip이 0건이면(source-empty) 노선 단위 error도 돌려준다.
+ */
+function lineTripsFromSource(
+	source: TimetableSourceKind,
+	lineKey: LineKey,
+	result: SourceLoad,
+	resolver: StationResolver,
+	sourceErrors: string[]
+): { issue?: TimetableIssue; missing?: string; trips: Trip[] } {
+	if (result.notCollected) {
+		return { missing: result.notCollected, trips: [] };
+	}
+	if (result.missing) {
+		return {
+			issue: lineIssue(lineKey, "source-missing", result.missing),
+			missing: result.missing,
+			trips: [],
+		};
+	}
+	const version = result.versionFor(lineKey);
+	const trips = result.trips
+		.filter((sourceTrip) => sourceTrip.lineKey === lineKey)
+		.map((sourceTrip) => toTrip(sourceTrip, version, resolver, sourceErrors))
+		.filter((trip): trip is Trip => trip !== undefined);
+	if (trips.length > 0) {
+		return { trips };
+	}
+	return {
+		issue: lineIssue(
+			lineKey,
+			"source-empty",
+			`${source}: 고른 출처가 이 노선 trip을 하나도 만들지 못함. 원본 형식이 바뀌었거나 노선이 빠졌는지 보고서의 출처 오류를 보세요.`
+		),
+		trips,
+	};
+}
+
 async function collectTrips(
 	dataDir: string,
 	resolvedLines: ResolvedLineSources[],
-	config: ReturnType<typeof parseTimetableSourcesConfig>,
+	config: TimetableSourcesConfig,
 	resolver: StationResolver
 ): Promise<CollectedTrips> {
 	const load = createSourceLoader(dataDir, config);
@@ -509,9 +611,10 @@ async function collectTrips(
 	const sourceVersions: Record<string, string> = {};
 	const trips: Trip[] = [];
 	const lines: LineReport[] = [];
+	const lineIssues: TimetableIssue[] = [];
 	for (const resolved of resolvedLines) {
 		const { lineKey } = resolved;
-		const lineTrips: Trip[] = [];
+		const tripsBySource = new Map<TimetableSourceKind, Trip[]>();
 		const missing = [...resolved.missing];
 		for (const source of resolved.sources) {
 			const { key, load: pending } = load(source, lineKey);
@@ -522,30 +625,77 @@ async function collectTrips(
 				Object.assign(manifest, result.manifest);
 				sourceErrors.push(...result.errors);
 			}
-			if (result.missing) {
-				missing.push(result.missing);
-				continue;
+			const outcome = lineTripsFromSource(
+				source,
+				lineKey,
+				result,
+				resolver,
+				sourceErrors
+			);
+			if (outcome.missing) {
+				missing.push(outcome.missing);
 			}
-			const version = result.versionFor(lineKey);
-			for (const sourceTrip of result.trips) {
-				if (sourceTrip.lineKey !== lineKey) {
-					continue;
-				}
-				const trip = toTrip(sourceTrip, version, resolver, sourceErrors);
-				if (trip) {
-					lineTrips.push(trip);
-					recordVersion(
-						sourceVersions,
-						`${trip.source}/${lineKey}`,
-						trip.sourceVersion
-					);
-				}
+			if (outcome.issue) {
+				lineIssues.push(outcome.issue);
 			}
+			tripsBySource.set(source, outcome.trips);
+		}
+		const { replaced, trips: lineTrips } =
+			applyPartialReplacements(tripsBySource);
+		for (const trip of lineTrips) {
+			recordVersion(
+				sourceVersions,
+				`${trip.source}/${lineKey}`,
+				trip.sourceVersion
+			);
 		}
 		trips.push(...lineTrips);
-		lines.push(lineReport({ ...resolved, missing }, lineTrips));
+		lines.push(lineReport({ ...resolved, missing }, lineTrips, replaced));
 	}
-	return { lines, manifest, resolver, sourceErrors, sourceVersions, trips };
+	return {
+		lineIssues,
+		lines,
+		manifest,
+		resolver,
+		sourceErrors,
+		sourceVersions,
+		trips,
+	};
+}
+
+/** 현재 배치에 trip이 있던 노선이 이번에 0건이면 line-dropped error. 적재하면 그 노선 시간표가 사라진다. */
+function droppedLines(
+	current: Partial<Record<LineKey, number>>,
+	tripsByLine: Record<LineKey, number>
+): TimetableIssue[] {
+	return LINES.flatMap(({ lineKey }) => {
+		const before = current[lineKey] ?? 0;
+		if (before === 0 || tripsByLine[lineKey] > 0) {
+			return [];
+		}
+		return [
+			lineIssue(
+				lineKey,
+				"line-dropped",
+				`현재 배치에 trip ${before}건이 있지만 이번에는 0건. 적재하면 이 노선 시간표가 사라지므로 막습니다.`
+			),
+		];
+	});
+}
+
+/** 노선 단위 error를 이유별로 묶어 "[code] 이유 (노선, ...)" 줄로. 원본 없음 이유에는 FETCH_HINT가 들어 있다. */
+function lineIssueSummary(issues: TimetableIssue[]): string[] {
+	const byDetail = new Map<string, LineKey[]>();
+	for (const issue of issues) {
+		if (issue.trainNo !== undefined || issue.severity !== "error") {
+			continue;
+		}
+		const key = `[${issue.code}] ${issue.detail}`;
+		byDetail.set(key, [...(byDetail.get(key) ?? []), issue.lineKey]);
+	}
+	return [...byDetail].map(
+		([detail, lineKeys]) => `${detail} (${lineKeys.join(", ")})`
+	);
 }
 
 function byFrequency(unresolved: UnresolvedStation[]): UnresolvedStation[] {
@@ -570,6 +720,7 @@ export async function buildTimetable({
 	dryRun,
 	env = process.env,
 	now = new Date(),
+	sourcesConfig,
 }: BuildTimetableInput): Promise<BuildTimetableResult> {
 	const crosswalk = await loadCurrentCrosswalk(db);
 	if (crosswalk.length === 0) {
@@ -577,7 +728,8 @@ export async function buildTimetable({
 			"현재 station_crosswalk 배치가 없습니다. 먼저 `bun transit build:crosswalk`를 실행하세요."
 		);
 	}
-	const config = parseTimetableSourcesConfig(timetableSourcesJson);
+	const config =
+		sourcesConfig ?? parseTimetableSourcesConfig(timetableSourcesJson);
 	const resolvedLines = resolveSources(config, {
 		hasKricKey: readKricServiceKey(env) !== undefined,
 		manualFiles: await listManualFiles(dataDir),
@@ -589,17 +741,18 @@ export async function buildTimetable({
 		createStationResolver(crosswalk, aliases)
 	);
 	const { trips } = collected;
-	const issues = validateTrips(
-		trips,
-		new Set(crosswalk.map((row) => row.statnId))
-	);
+	const tripsByLine = Object.fromEntries(
+		collected.lines.map((line) => [line.lineKey, line.trips])
+	) as Record<LineKey, number>;
+	const issues = [
+		...collected.lineIssues,
+		...droppedLines(await loadCurrentTripCounts(db), tripsByLine),
+		...validateTrips(trips, new Set(crosswalk.map((row) => row.statnId))),
+	];
 	const unresolvedStations = byFrequency(collected.resolver.unresolved());
 	const excludedStations = byFrequency(collected.resolver.excluded());
 	const errorCount = issues.filter((i) => i.severity === "error").length;
 	const ok = errorCount === 0 && unresolvedStations.length === 0;
-	const tripsByLine = Object.fromEntries(
-		collected.lines.map((line) => [line.lineKey, line.trips])
-	) as Record<LineKey, number>;
 	const linesWithoutTimetable = LINES.map((line) => line.lineKey).filter(
 		(lineKey) => tripsByLine[lineKey] === 0
 	);
@@ -652,8 +805,11 @@ export async function buildTimetable({
 		`ok: ${ok}\ntrip: ${trips.length}\nerror: ${errorCount}\nwarn: ${issues.length - errorCount}\n대응표에 없는 역: ${unresolvedStations.length}\n대응표 범위 밖으로 뺀 역: ${excludedStations.length}\n출처 오류: ${collected.sourceErrors.length}\n시간표 없는 노선: ${linesWithoutTimetable.join(", ") || "없음"}\nreport: ${reportPaths.mdPath}`
 	);
 	if (!ok) {
+		for (const line of lineIssueSummary(issues)) {
+			console.error(line);
+		}
 		console.error(
-			"시간표 검증 실패: DB에 적재하지 않습니다. 보고서를 보고 timetable-station-aliases.json을 고치세요."
+			"시간표 검증 실패: DB에 적재하지 않습니다. 위 노선 출처 오류를 고치거나, 보고서를 보고 timetable-station-aliases.json을 고치세요."
 		);
 		return result;
 	}

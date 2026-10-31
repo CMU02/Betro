@@ -21,6 +21,8 @@ export interface LineReport {
 	lineKey: LineKey;
 	/** 쓸 수 없어 건너뛴 출처와 이유(수동 파일 없음, 키 없음, 원본 없음) */
 	missing: string[];
+	/** 부분 대체 출처가 대신해 기본 출처에서 뺀 trip 수(공항철도 직통) */
+	replacedTrips: number;
 	/** 토요일 trip이 휴일 복제(holiday-copied)인 노선 */
 	saturdayCopied: boolean;
 	sources: TimetableSourceKind[];
@@ -96,11 +98,29 @@ const cell = (value: string | number | undefined): string =>
 const row = (values: (string | number | undefined)[]): string =>
 	`| ${values.map(cell).join(" | ")} |`;
 
+/** 건너뛴 출처와, 부분 대체 출처가 기본 출처에서 바꾼 trip 수. */
+function lineNotes(line: LineReport): string[] {
+	if (line.replacedTrips === 0) {
+		return line.missing;
+	}
+	return [
+		...line.missing,
+		`${line.sources[0] ?? "기본 출처"} trip ${line.replacedTrips}건을 ${line.sources.slice(1).join(", ")}로 바꿈`,
+	];
+}
+
 function linesSection(lines: LineReport[]): string[] {
 	return [
 		"## 노선별 출처",
 		"",
-		row(["노선", "출처", "기준일", "trip", ...SERVICE_DAYS, "건너뛴 출처"]),
+		row([
+			"노선",
+			"출처",
+			"기준일",
+			"trip",
+			...SERVICE_DAYS,
+			"건너뛴 출처·대체",
+		]),
 		row(["---", "---", "---", "---", "---", "---", "---", "---"]),
 		...lines.map((line) =>
 			row([
@@ -111,7 +131,7 @@ function linesSection(lines: LineReport[]): string[] {
 					.join(", ") || "-",
 				line.trips,
 				...SERVICE_DAYS.map((day) => line.byServiceDay[day]),
-				line.missing.join("; ") || "-",
+				lineNotes(line).join("; ") || "-",
 			])
 		),
 		"",
@@ -132,10 +152,12 @@ function issuesSection(issues: TimetableIssue[]): string[] {
 		"",
 		`상위 ${top.length}건 (전체 ${issues.length}건):`,
 		"",
-		...top.map(
-			(issue) =>
-				`- [${issue.severity}] ${issue.code} ${issue.lineKey} ${issue.serviceDay} ${issue.trainNo}: ${issue.detail}`
-		),
+		...top.map((issue) => {
+			const where = [issue.lineKey, issue.serviceDay, issue.trainNo]
+				.filter((part) => part !== undefined)
+				.join(" ");
+			return `- [${issue.severity}] ${issue.code} ${where}: ${issue.detail}`;
+		}),
 		"",
 	];
 }
@@ -215,7 +237,7 @@ export function renderTimetableReport(input: TimetableReportInput): ReportBody {
 		"",
 		...linesSection(input.lines),
 		...bulletList(
-			"## 시간표 없는 노선 (linesWithoutTimetable, ok에 영향 없음)",
+			"## 시간표 없는 노선 (linesWithoutTimetable: 출처가 처음부터 없는 노선은 ok에 영향 없음, 고른 출처가 실패한 노선은 source-* error)",
 			input.linesWithoutTimetable
 		),
 		...bulletList("## 토요일을 휴일로 복제한 노선", saturdayCopiedLines),

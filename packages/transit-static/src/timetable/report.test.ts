@@ -91,4 +91,44 @@ describe("renderTimetableReport", () => {
 		expect(top[0]?.trainNo).toBe("E1");
 		expect(markdown).toContain("- gtx-a");
 	});
+	it("prints line-level issues without a service day or train and notes replaced trips", () => {
+		const { markdown } = renderTimetableReport({
+			dryRun: true,
+			excludedStations: [],
+			issues: [
+				{
+					code: "source-empty",
+					detail: "korail-xlsx: 0건",
+					lineKey: "gyeongui-jungang",
+					severity: "error",
+				},
+			],
+			lines: [
+				{
+					byServiceDay: { holiday: 2, saturday: 2, weekday: 2 },
+					lineKey: "airport",
+					missing: [],
+					replacedTrips: 156,
+					saturdayCopied: false,
+					sources: ["kric-packed", "airport-express-csv"],
+					trips: 6,
+					versions: {},
+				},
+			],
+			linesWithoutTimetable: ["gyeongui-jungang"],
+			manifest: {},
+			now: NOW,
+			ok: false,
+			sourceErrors: [],
+			sourceVersions: {},
+			unresolvedStations: [],
+		});
+		expect(markdown).toContain(
+			"- [error] source-empty gyeongui-jungang: korail-xlsx: 0건"
+		);
+		expect(markdown).not.toContain("undefined");
+		expect(markdown).toContain(
+			"kric-packed trip 156건을 airport-express-csv로 바꿈"
+		);
+	});
 });

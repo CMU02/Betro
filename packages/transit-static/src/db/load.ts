@@ -11,7 +11,7 @@ import {
 	trackShape,
 	trackStation,
 } from "@Betro/db/schema/transit";
-import { and, asc, desc, eq, ne } from "drizzle-orm";
+import { and, asc, count, desc, eq, ne } from "drizzle-orm";
 import type { CrosswalkRow } from "../crosswalk/match";
 import { isLineKey, type LineKey } from "../lines";
 import type { Trip } from "../timetable/model";
@@ -349,6 +349,24 @@ const currentTimetable = and(
 	eq(referenceBatch.kind, "timetable"),
 	eq(referenceBatch.isCurrent, true)
 );
+
+/** timetable 현재 배치의 노선별 trip 수. 현재 배치가 없거나 trip이 없는 노선은 빠진다. */
+export async function loadCurrentTripCounts(
+	db: Database
+): Promise<Partial<Record<LineKey, number>>> {
+	const rows = await db
+		.select({ lineKey: timetableTrip.lineKey, trips: count() })
+		.from(timetableTrip)
+		.innerJoin(referenceBatch, eq(timetableTrip.batchId, referenceBatch.id))
+		.where(currentTimetable)
+		.groupBy(timetableTrip.lineKey);
+	const counts: Partial<Record<LineKey, number>> = {};
+	for (const row of rows) {
+		counts[toLineKey(row.lineKey, `timetable_trip line ${row.lineKey}`)] =
+			row.trips;
+	}
+	return counts;
+}
 
 /**
  * timetable 현재 배치의 trip을 정차(seq 순)와 함께 id 순으로 돌려준다. lineKey를 주면 그 노선만.

@@ -112,7 +112,11 @@ bun transit report:match-rate                # 표본 열차번호를 현재 tim
 ```
 
 - `build:timetable`은 DB의 현재 `station_crosswalk` 배치로 역을 잇는다. 대응표를 먼저 적재해야 한다(`--dry-run`이어도 DB를 읽는다).
-- 노선마다 `src/manual/timetable-sources.json`으로 출처를 고른다. 1차 출처의 수동 파일이 없으면 2차로 내려가고, 쓸 수 있는 출처가 없는 노선은 `linesWithoutTimetable`로 보고서에만 남긴다(다른 노선의 적재를 막지 않는다).
+- 노선마다 `src/manual/timetable-sources.json`으로 출처를 고른다. 1차 출처의 수동 파일이 없으면 2차로 내려가고, 쓸 수 있는 출처가 처음부터 없는 노선(GTX-A 키 대기)은 `linesWithoutTimetable`로 보고서에만 남긴다(다른 노선의 적재를 막지 않는다).
+- 고른 출처가 실패하면 그 노선을 조용히 빼지 않고 막는다(노선 단위 error issue):
+  - `source-missing`: 고른 출처의 원본이 `data/raw/`에 없다. 콘솔에 `fetch:timetable-sources`를 먼저 실행하라는 안내와 노선 목록이 나오고 exit 1이다.
+  - `source-empty`: 고른 출처가 그 노선 trip을 하나도 만들지 못했다(예: 형식이 다른 korail XLSX, 시트 이름이 다른 파일). 보고서 "출처 오류"에서 원인을 본다. 수동 파일이 원인이면 파일을 고치거나 빼면 2차 출처로 내려간다.
+  - `line-dropped`: 현재 배치에 trip이 있던 노선이 이번에 0건이다. 적재하면 그 노선 시간표가 사라지므로 막는다.
 - `ok` = error 등급 검증 결과 0건 **그리고** 대응표에 없는 역 0건. ok가 아니면 exit 1이고 적재하지 않는다. 어댑터가 버린 행·열차(출처 오류)와 범위 밖으로 뺀 역은 보고서에 남지만 ok에는 들어가지 않는다.
 - 검증: 모든 정차의 역이 대응표에 있는지, 한 열차 안에서 시각이 줄지 않는지(24시 넘김 처리 후), 정차가 2곳 이상인지(error). 역간 소요시간이 같은 구간 중앙값의 3배 이상이거나 1/3 미만이면 warn, 같은 역 재통과는 `duplicate-stop` warn.
 - 적재는 한 트랜잭션으로 `reference_batch(kind="timetable")`를 만들고 `timetable_trip`, `timetable_stop_time`을 넣은 뒤 현재 배치로 바꾼다. manifest는 원본 해시, 현재 대응표 내용, 두 매뉴얼 표 내용, 로직 버전(`timetableVersion` = `TIMETABLE_LOGIC_VERSION`)이다. 모두 같으면 다시 적재하지 않는다. 변환·검증 결과가 달라지는 코드를 고치면 그 상수를 올린다.
@@ -124,9 +128,9 @@ bun transit report:match-rate                # 표본 열차번호를 현재 tim
 |---|---|---|---|
 | `seoul-metro-csv` 서울교통공사 CSV | 1~9호선(코레일 직결 구간 포함) | 없음 | 2026-09-14판 적재 |
 | `kric-korail` KRIC id=900 xlsx | 경의중앙, 경춘, 수인분당, 서해, 경강 | 없음 | korail XLSX가 없어 이 출처로 내려감 |
-| `kric-packed` KRIC id=900 xlsx | 공항철도 일반, 신분당, 우이신설, 신림 | 없음 | 적재 |
+| `kric-packed` KRIC id=900 xlsx | 공항철도(일반·직통), 신분당, 우이신설, 신림 | 없음 | 적재. 공항철도 직통은 정차를 건너뛰는 열차로 요일마다 52편(trip 156건, `express="direct"`) |
 | `korail-xlsx` korail.com 시각표 | 코레일 5노선(1차 출처) | `data/manual/timetables/` 파일 | 없음 |
-| `airport-express-csv` 공항철도 직통 | 공항철도 직통(보조) | `data/manual/timetables/` 파일 | 없음(직통 trip 없음) |
+| `airport-express-csv` 공항철도 직통 | 공항철도 직통(부분 대체) | `data/manual/timetables/` 파일 | 없음. 넣으면 `kric-packed`의 직통 trip을 빼고 이 파일의 직통으로 바꾼다 |
 | `kric-api` KRIC subwayTimetable | GTX-A | `KRIC_SERVICE_KEY` | 키 대기. GTX-A는 `linesWithoutTimetable` |
 
 ## 수동 투입 시간표 파일
@@ -153,7 +157,7 @@ bun transit report:match-rate                # 표본 열차번호를 현재 tim
 
 - `timetable-sources.json`: `{ "lines": { "<lineKey>": { "primary", "secondary"?, "manualFile"? } } }`. 19개 lineKey가 모두 있어야 하고 모르는 노선·출처는 실패한다.
   - 출처 이름: `seoul-metro-csv`, `kric-korail`, `kric-packed`, `korail-xlsx`, `airport-express-csv`, `kric-api`.
-  - `primary`, `secondary` 순으로 처음 쓸 수 있는 기본 출처 하나를 쓴다. `korail-xlsx`·`airport-express-csv`는 `manualFile`이 있고 그 파일이 있어야, `kric-api`는 `KRIC_SERVICE_KEY`가 있어야 쓸 수 있다. `airport-express-csv`는 기본 출처를 대신하지 않고 그 위에 trip을 더하는 보조 출처다.
+  - `primary`, `secondary` 순으로 처음 쓸 수 있는 기본 출처 하나를 쓴다. `korail-xlsx`·`airport-express-csv`는 `manualFile`이 있고 그 파일이 있어야, `kric-api`는 `KRIC_SERVICE_KEY`가 있어야 쓸 수 있다. `airport-express-csv`는 부분 대체 출처다. 기본 출처(`kric-packed`) 전체가 아니라 그 안의 직통 trip(`express="direct"`)만 대신한다. 이 파일이 trip을 내면 KRIC 직통 trip을 빼고(두 출처의 열차번호가 달라 `duplicate-trip`으로는 겹침을 잡을 수 없다) 보고서 노선 표에 바꾼 trip 수를 적는다.
   - 출처를 바꾸면 그 노선의 열차번호 체계가 달라질 수 있으니 `report:match-rate`를 다시 돌린다.
 - `timetable-station-aliases.json`: `{ "lineKey", "source", "sourceStation", "statnId" }` 배열. 코드·이름으로 못 맞춘 시간표 역에만 넣는다.
   - `source`는 출처 이름 또는 `"*"`(모든 출처). 같은 역이 여러 출처에서 안 맞으면 `"*"`를 쓴다. 출처 이름이 맞는 별칭을 `"*"`보다 먼저 본다.

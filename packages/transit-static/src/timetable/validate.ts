@@ -15,12 +15,20 @@ export interface TimetableIssue {
 		| "segment-outlier"
 		| "empty-trip"
 		| "duplicate-stop"
-		| "duplicate-trip";
+		| "duplicate-trip"
+		/** 노선 단위: 고른 출처의 원본 파일이 없다. */
+		| "source-missing"
+		/** 노선 단위: 고른 출처가 이 노선 trip을 하나도 만들지 못했다. */
+		| "source-empty"
+		/** 노선 단위: 현재 배치에 trip이 있던 노선이 새 배치에서 0건이 된다. */
+		| "line-dropped";
 	detail: string;
 	lineKey: LineKey;
-	serviceDay: ServiceDay;
+	/** 열차 단위 issue에만 있다. 노선 단위 issue(source-*, line-dropped)에는 없다. */
+	serviceDay?: ServiceDay;
 	severity: "error" | "warn";
-	trainNo: string;
+	/** 열차 단위 issue에만 있다. */
+	trainNo?: string;
 }
 
 interface SegmentSample {
