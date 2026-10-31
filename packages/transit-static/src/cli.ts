@@ -4,6 +4,7 @@ import { buildCrosswalk } from "./jobs/build-crosswalk";
 import { buildTimetable } from "./jobs/build-timetable";
 import { buildTracks } from "./jobs/build-tracks";
 import { fetchOsm } from "./jobs/fetch-osm";
+import { fetchRealtimeSample } from "./jobs/fetch-realtime-sample";
 import { fetchStationMaster } from "./jobs/fetch-station-master";
 import { fetchStationSearch } from "./jobs/fetch-station-search";
 import { fetchStationXlsx } from "./jobs/fetch-station-xlsx";
@@ -83,6 +84,9 @@ const commands: Record<string, CommandHandler> = {
 	},
 	"fetch:osm": async () => {
 		await fetchOsm({ dataDir: resolveDataDir(process.env) });
+	},
+	"fetch:realtime-sample": async () => {
+		await fetchRealtimeSample(resolveDataDir(process.env));
 	},
 	"fetch:station-master": async () => {
 		const key = requireApiKey();
