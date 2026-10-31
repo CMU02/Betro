@@ -9,9 +9,20 @@ import type { SourceStop, SourceTrip } from "../timetable/model";
 export const KRIC_API_BASE =
 	"https://openapi.kric.go.kr/openapi/trainUseInfo/subwayTimetable";
 
-/** GTX-A 노선·운영기관 코드(확인 필요). */
+/**
+ * GTX-A 노선·운영기관 코드. 연구 보고서 KRIC 코드표(2026.07.11): GX GTX-A(lnCd A, 동탄 X111만 SR).
+ */
 export const GTX_A_LN_CD = "A";
-export const GTX_A_RAIL_OPR_ISTT_CD = "SR";
+export const GTX_A_RAIL_OPR_ISTT_CD = "GX";
+export const GTX_A_DONGTAN_STIN_CD = "X111";
+export const GTX_A_DONGTAN_RAIL_OPR_ISTT_CD = "SR";
+
+/** 역별 운영기관 코드. 동탄(X111)만 SR, 나머지는 GX. */
+export function gtxARailOprIsttCd(stinCd: string): string {
+	return stinCd === GTX_A_DONGTAN_STIN_CD
+		? GTX_A_DONGTAN_RAIL_OPR_ISTT_CD
+		: GTX_A_RAIL_OPR_ISTT_CD;
+}
 
 export const KRIC_MISSING_KEY_MESSAGE =
 	"KRIC_SERVICE_KEY가 없습니다. 국가철도공단 철도산업정보센터(KRIC)에서 서비스키를 발급받아 설정하세요.";
@@ -29,7 +40,8 @@ const RESULT_OK = "00";
 /** HHMMSS가 이 값이면 그쪽 시각이 없는 것으로 본다(기점의 도착, 종점의 출발). */
 const NO_TIME = "000000";
 const COMPACT_TIME_PATTERN = /^(\d{2})(\d{2})(\d{2})$/;
-const MIDNIGHT_HOURS = 4;
+/** kric-packed.ts의 LATE_NIGHT_CUTOFF_HOUR와 같은 기준. */
+const MIDNIGHT_HOURS = 3;
 const HOURS_PER_DAY = 24;
 const SECONDS_PER_HOUR = 3600;
 const SECONDS_PER_MINUTE = 60;
@@ -90,6 +102,7 @@ export async function fetchKricTimetable(
 	return json.body ?? [];
 }
 
+/** HHMMSS를 서비스일 기준 "HH:MM:SS"로 바꾼다. 3시 전 시각은 24~26시로 올린다. */
 function toClock(compact: string): string | null {
 	if (compact === "" || compact === NO_TIME) {
 		return null;
@@ -98,15 +111,16 @@ function toClock(compact: string): string | null {
 	if (!match) {
 		throw new Error(`Unrecognized KRIC time: "${compact}"`);
 	}
-	return `${match[1]}:${match[2]}:${match[3]}`;
+	const hour = Number(match[1]);
+	const shifted = hour < MIDNIGHT_HOURS ? hour + HOURS_PER_DAY : hour;
+	return `${String(shifted).padStart(2, "0")}:${match[2]}:${match[3]}`;
 }
 
-/** 정렬용 초. 새벽(4시 전) 시각은 전날 운행의 연장으로 보고 24시간을 더한다. */
+/** 정렬용 초. toClock이 이미 새벽(3시 전) 시각에 24시간을 더해 서비스일 기준으로 내보낸다. */
 function sortKey(row: KricTimetableRow): number {
 	const clock = toClock(row.dptTm) ?? toClock(row.arvTm) ?? "00:00:00";
 	const [h = 0, m = 0, s = 0] = clock.split(":").map(Number);
-	const hours = h < MIDNIGHT_HOURS ? h + HOURS_PER_DAY : h;
-	return hours * SECONDS_PER_HOUR + m * SECONDS_PER_MINUTE + s;
+	return h * SECONDS_PER_HOUR + m * SECONDS_PER_MINUTE + s;
 }
 
 /** 역 단위 응답을 trnNo로 묶어 열차 trip으로 만든다. 정차 순서는 시각 순이다. */

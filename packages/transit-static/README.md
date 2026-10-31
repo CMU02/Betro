@@ -107,4 +107,4 @@ OSM 데이터 자체의 오류로 갈래를 빼거나 경고를 남겨 둔 경�
 
 - korail.com 노선별 시간표 XLSX (`src/sources/korail-xlsx.ts`): **실제 파일 형식은 확인 필요.** 아직 실제 파일을 받지 못해 `src/sources/__fixtures__/korail-sample.xlsx`(평일·휴일 2시트)로만 테스트했다. 현재 가정: 시트 이름에 `평일`/`휴일`, 열 하나 = 열차 1편, 0행 `열차번호`, 1행 `방향`(상행/하행), 2행부터 `역명` + `HH:MM`. 실제 파일을 받으면 이 가정을 대조해 고정한다. 휴일 시트는 토요일로 복제한다(`holiday-copied`).
 - 공항철도 직통 CSV (`src/sources/airport-express-csv.ts`): 헤더 `direction,departStation,departTime,arriveStation,arriveTime`. `direction`은 `up`/`down`(또는 상행/하행). 정차는 서울역, 인천공항1터미널, 인천공항2터미널만 허용한다. 열차번호가 없어 `DIRECT-<direction>-<HHMM>`으로 만들고 `synthetic-train-no`를 표시한다.
-- GTX-A KRIC API (`src/sources/kric-api.ts`): `KRIC_SERVICE_KEY` 환경 변수가 필요하다. 키가 없어 실호출로 확인하지 못했고(키 대기), 노선·운영기관 코드(`A`, `SR`)와 응답 필드명, `dayCd` 의미(8 평일, 7 토요일, 9 휴일)는 모두 확인 필요다. 테스트는 `fetchImpl` 목으로만 한다.
+- GTX-A KRIC API (`src/sources/kric-api.ts`): `KRIC_SERVICE_KEY` 환경 변수가 필요하다. 키가 없어 실호출로 확인하지 못했고(키 대기), 노선 코드 `A`와 운영기관 코드(`GX`, 동탄 X111만 `SR`, 연구 보고서 코드표 기준)는 확인됐고 응답 필드명, `dayCd` 의미(8 평일, 7 토요일, 9 휴일)는 확인 필요다. `fetch:timetable-sources --gtx-a`는 키가 없으면 안내 후 exit 1 한다(실다운로드는 Task 11). 테스트는 `fetchImpl` 목으로만 한다.

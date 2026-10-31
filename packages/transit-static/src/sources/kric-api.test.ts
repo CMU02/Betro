@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
 	assembleKricApiTrips,
 	fetchKricTimetable,
+	gtxARailOprIsttCd,
 	KRIC_MISSING_KEY_MESSAGE,
 	type KricTimetableRow,
 	readKricServiceKey,
@@ -19,7 +20,7 @@ function row(
 		dayCd: "8",
 		dptTm,
 		lnCd: "A",
-		railOprIsttCd: "SR",
+		railOprIsttCd: "GX",
 		stinCd,
 		stinNm,
 		trnNo,
@@ -59,6 +60,35 @@ describe("assembleKricApiTrips", () => {
 	});
 });
 
+describe("assembleKricApiTrips after midnight", () => {
+	it("emits 24h+ clocks for a train that runs entirely after midnight", () => {
+		const byStation = new Map<string, KricTimetableRow[]>([
+			["S1", [row("S1", "수서", "A901", "000000", "003000")]],
+			["S2", [row("S2", "성남", "A901", "003400", "003430")]],
+		]);
+		const [trip] = assembleKricApiTrips(byStation, "gtx-a");
+		expect(trip?.stops[0]?.depart).toBe("24:30:00");
+		expect(trip?.stops[1]?.arrive).toBe("24:34:00");
+		expect(trip?.stops[1]?.depart).toBe("24:34:30");
+	});
+
+	it("orders a trip crossing midnight with late stops last", () => {
+		const byStation = new Map<string, KricTimetableRow[]>([
+			["S1", [row("S1", "수서", "A902", "000000", "235800")]],
+			["S2", [row("S2", "성남", "A902", "000200", "000230")]],
+		]);
+		const [trip] = assembleKricApiTrips(byStation, "gtx-a");
+		expect(trip?.stops.map((s) => s.depart)).toEqual(["23:58:00", "24:02:30"]);
+	});
+});
+
+describe("gtxARailOprIsttCd", () => {
+	it("uses GX for the line and SR only for Dongtan X111", () => {
+		expect(gtxARailOprIsttCd("S1")).toBe("GX");
+		expect(gtxARailOprIsttCd("X111")).toBe("SR");
+	});
+});
+
 describe("fetchKricTimetable", () => {
 	it("passes the key and station params and returns the body rows", async () => {
 		let requested = "";
@@ -75,7 +105,7 @@ describe("fetchKricTimetable", () => {
 			{
 				dayCd: "8",
 				lnCd: "A",
-				railOprIsttCd: "SR",
+				railOprIsttCd: "GX",
 				serviceKey: "KEY",
 				stinCd: "S1",
 			},
@@ -98,7 +128,7 @@ describe("fetchKricTimetable", () => {
 				{
 					dayCd: "8",
 					lnCd: "A",
-					railOprIsttCd: "SR",
+					railOprIsttCd: "GX",
 					serviceKey: "BAD",
 					stinCd: "S1",
 				},

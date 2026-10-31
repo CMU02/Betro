@@ -10,6 +10,10 @@ import { fetchTimetableSources } from "./jobs/fetch-timetable-sources";
 import { osmDiscover } from "./jobs/osm-discover";
 import { resolveDatabaseUrl } from "./paths";
 import { resolveDataDir } from "./raw-store";
+import {
+	KRIC_MISSING_KEY_MESSAGE,
+	readKricServiceKey,
+} from "./sources/kric-api";
 
 const DEFAULT_STATION_XLSX_SEQ = 57;
 
@@ -83,7 +87,15 @@ const commands: Record<string, CommandHandler> = {
 		}
 		await fetchStationXlsx({ dataDir: resolveDataDir(process.env), seq });
 	},
-	"fetch:timetable-sources": async () => {
+	"fetch:timetable-sources": async (args) => {
+		const { values } = parseArgs({
+			args,
+			options: { "gtx-a": { type: "boolean" } },
+		});
+		if (values["gtx-a"] === true && !readKricServiceKey(process.env)) {
+			console.error(KRIC_MISSING_KEY_MESSAGE);
+			process.exit(1);
+		}
 		await fetchTimetableSources({ dataDir: resolveDataDir(process.env) });
 	},
 	"osm:discover": async () => {
