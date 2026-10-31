@@ -37,6 +37,8 @@ export interface Trip {
 export interface SourceStop {
 	arrive: string | null;
 	depart: string | null;
+	/** 어댑터가 원본에서 본 문제(예: "duplicate-stop"). Task 8이 StopTime.qualityFlags로 옮긴다. */
+	qualityFlags?: string[];
 	seq: number;
 	station: { code?: string; name?: string };
 }

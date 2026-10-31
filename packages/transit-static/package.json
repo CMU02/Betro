@@ -16,7 +16,9 @@
     "@turf/helpers": "^7.4.0",
     "@turf/length": "^7.4.0",
     "@turf/nearest-point-on-line": "^7.4.0",
+    "csv-parse": "^7.0.3",
     "drizzle-orm": "catalog:",
+    "iconv-lite": "^0.7.3",
     "read-excel-file": "^9.3.14",
     "zod": "catalog:"
   },
