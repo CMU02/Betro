@@ -2,9 +2,7 @@
   "version": "7",
   "dialect": "sqlite",
   "id": "4c3b399e-23d2-47b7-8c5a-e507601898e9",
-  "prevIds": [
-    "00000000-0000-0000-0000-000000000000"
-  ],
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
       "name": "account",
@@ -851,13 +849,9 @@
     {
       "table": "account",
       "name": "fk_account_user_id_user_id_fk",
-      "columns": [
-        "user_id"
-      ],
+      "columns": ["user_id"],
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -866,13 +860,9 @@
     {
       "table": "session",
       "name": "fk_session_user_id_user_id_fk",
-      "columns": [
-        "user_id"
-      ],
+      "columns": ["user_id"],
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -881,13 +871,9 @@
     {
       "table": "station_crosswalk",
       "name": "fk_station_crosswalk_batch_id_reference_batch_id_fk",
-      "columns": [
-        "batch_id"
-      ],
+      "columns": ["batch_id"],
       "tableTo": "reference_batch",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -896,13 +882,9 @@
     {
       "table": "track_shape",
       "name": "fk_track_shape_batch_id_reference_batch_id_fk",
-      "columns": [
-        "batch_id"
-      ],
+      "columns": ["batch_id"],
       "tableTo": "reference_batch",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -911,13 +893,9 @@
     {
       "table": "track_station",
       "name": "fk_track_station_track_shape_id_track_shape_id_fk",
-      "columns": [
-        "track_shape_id"
-      ],
+      "columns": ["track_shape_id"],
       "tableTo": "track_shape",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -926,90 +904,70 @@
     {
       "table": "account",
       "name": "account_pk",
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "entityType": "pks"
     },
     {
       "table": "session",
       "name": "session_pk",
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "entityType": "pks"
     },
     {
       "table": "user",
       "name": "user_pk",
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "entityType": "pks"
     },
     {
       "table": "verification",
       "name": "verification_pk",
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "entityType": "pks"
     },
     {
       "table": "reference_batch",
       "name": "reference_batch_pk",
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "entityType": "pks"
     },
     {
       "table": "station_crosswalk",
       "name": "station_crosswalk_pk",
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "entityType": "pks"
     },
     {
       "table": "track_shape",
       "name": "track_shape_pk",
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "entityType": "pks"
     },
     {
       "table": "track_station",
       "name": "track_station_pk",
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "entityType": "pks"
     },
     {
       "table": "session",
       "name": "session_token_unique",
-      "columns": [
-        "token"
-      ],
+      "columns": ["token"],
       "nameExplicit": false,
       "entityType": "uniques"
     },
     {
       "table": "user",
       "name": "user_email_unique",
-      "columns": [
-        "email"
-      ],
+      "columns": ["email"],
       "nameExplicit": false,
       "entityType": "uniques"
     }
