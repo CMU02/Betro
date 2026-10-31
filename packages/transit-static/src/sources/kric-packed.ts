@@ -70,7 +70,14 @@ const SERVICE_DAY_LABELS: Readonly<Record<string, readonly ServiceDay[]>> = {
 /** 시각 대신 배차 간격 설명만 있는 행(인천2 "운행시격", 에버라인 "운행간격"). */
 const HEADWAY_TEXT = /운행시격|운행간격/;
 /** "H:MM" 또는 "HH:MM". 신림선 원문에 한 번 있는 오타 ":0:59"처럼 앞에 붙은 ":" 하나는 떼고 읽는다. */
-const PACKED_TIME = /^:?(\d{1,2}:\d{2})$/;
+const PACKED_TIME = /^:?(\d{1,2}):(\d{2})$/;
+/**
+ * 이 출처는 자정 넘은 시각을 "0:02", "00:09"처럼 그날 0시 기준으로 쓴다(서비스일 기준 24:02가 아니다).
+ * 4개 노선 모두 첫차가 5시대이므로 이 시각 미만은 전날 서비스일의 막차 운행이다.
+ * 열차 전체가 자정 뒤에 다니면(신림 1375, 신분당 B296) normalizeTripTimes가 넘김을 볼 수 없어 여기서 24를 더한다.
+ */
+const LATE_NIGHT_CUTOFF_HOUR = 3;
+const HOURS_PER_DAY = 24;
 /** 빈 시각 표기(우이신설·신림 "001-:", 신분당 "D12-  :"). */
 const EMPTY_TIME = ":";
 
@@ -110,13 +117,25 @@ function parseStations(text: string): PackedStation[] | undefined {
 	return stations;
 }
 
-/** 시각 원문을 검사한다. 빈 표기는 null, 형식이 다르면 undefined. */
+/**
+ * 시각 원문을 서비스일 기준 "H:MM"으로 바꾼다. 빈 표기는 null, 형식이 다르면 undefined.
+ * LATE_NIGHT_CUTOFF_HOUR 미만의 시는 24를 더한다("0:02" -> "24:02").
+ */
 function packedTime(text: string): string | null | undefined {
 	const trimmed = text.trim();
 	if (trimmed === EMPTY_TIME || trimmed === "") {
 		return null;
 	}
-	return PACKED_TIME.exec(trimmed)?.[1];
+	const match = PACKED_TIME.exec(trimmed);
+	if (!match) {
+		return;
+	}
+	const [, hourText = "", minuteText = ""] = match;
+	const hour = Number(hourText);
+	if (hour >= LATE_NIGHT_CUTOFF_HOUR) {
+		return `${hourText}:${minuteText}`;
+	}
+	return `${hour + HOURS_PER_DAY}:${minuteText}`;
 }
 
 /** 시각 칸을 [순번, 시각 원문] 쌍으로 가른다. */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { parseClock } from "../timetable/clock";
 import type { KricRow } from "./kric-file";
 import { parseKricPacked } from "./kric-packed";
 
@@ -14,6 +15,7 @@ const SAMPLE: KricRow[] = JSON.parse(
 	)
 );
 
+const SECONDS_PER_DAY = 86_400;
 const SILLIM = "수도권 경량도시철도 신림선";
 const UI_SINSEOL = "수도권 경량도시철도 우이신설선";
 
@@ -77,11 +79,50 @@ describe("parseKricPacked", () => {
 	it("reads a Sillim time with a stray leading colon (':0:59' in the real file)", () => {
 		const trip = tripOf("sillim", "1383");
 		expect(trip?.stops[10]).toEqual({
-			arrive: "0:59",
+			arrive: "24:59",
 			depart: null,
 			seq: 11,
 			station: { name: "관악산" },
 		});
+	});
+
+	it("moves trains that run wholly after midnight past 24:00", () => {
+		const sillim = tripOf("sillim", "1383");
+		expect(sillim?.stops[0]?.depart).toBe("24:42");
+		const shinbundang = tripOf("shinbundang", "B296");
+		expect(shinbundang?.stops[0]).toEqual({
+			arrive: "24:09",
+			depart: "24:10",
+			seq: 1,
+			station: { name: "신사" },
+		});
+		expect(shinbundang?.stops.at(-1)?.depart).toBe("24:32");
+		const seconds = [sillim, shinbundang].flatMap((trip) =>
+			(trip?.stops ?? []).flatMap((stop) => [
+				parseClock(stop.arrive ?? ""),
+				parseClock(stop.depart ?? ""),
+			])
+		);
+		expect(
+			seconds.filter((sec) => sec !== null && sec < SECONDS_PER_DAY)
+		).toEqual([]);
+	});
+
+	it("writes the after-midnight part of a train that crosses midnight as 24:xx", () => {
+		const trip = tripOf("sillim", "1373");
+		expect(trip?.stops.map((stop) => [stop.arrive, stop.depart])).toEqual([
+			[null, "23:52"],
+			["23:53", "23:53"],
+			["23:54", "23:55"],
+			["23:56", "23:56"],
+			["23:58", "23:58"],
+			["23:59", "24:00"],
+			["24:01", "24:01"],
+			["24:02", "24:03"],
+			["24:04", "24:05"],
+			["24:07", "24:07"],
+			["24:09", null],
+		]);
 	});
 
 	it("marks an Airport train that skips intermediate stations as direct", () => {
