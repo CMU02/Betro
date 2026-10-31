@@ -26,6 +26,24 @@ export function resolveDatabaseUrl(
 	return pathToFileURL(join(REPO_ROOT, "local.db")).href;
 }
 
+const FILE_SCHEME = "file:";
+const FILE_URL_PREFIX = "file://";
+
+/**
+ * libsql DB URL이 가리키는 로컬 파일 경로. 파일이 아닌 URL(:memory:, libsql://, http(s)://)은 undefined.
+ * "file:///abs/local.db"는 fileURLToPath로, "file:./local.db"처럼 상대 경로는 libsql과 같이 cwd 기준으로 푼다.
+ */
+export function databaseFilePath(databaseUrl: string): string | undefined {
+	if (!databaseUrl.startsWith(FILE_SCHEME)) {
+		return undefined;
+	}
+	if (databaseUrl.startsWith(FILE_URL_PREFIX)) {
+		return fileURLToPath(databaseUrl);
+	}
+	const [relativePath = ""] = databaseUrl.slice(FILE_SCHEME.length).split("?");
+	return resolve(relativePath);
+}
+
 export function rawPath(
 	dataDir: string,
 	source: string,
