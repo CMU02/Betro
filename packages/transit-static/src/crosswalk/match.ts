@@ -14,6 +14,8 @@ export interface StationAlias {
 
 export interface MatchInput {
 	aliases: StationAlias[];
+	/** 범위 밖 노선 문자열. 매핑하지 않지만 unmappedRoutes에도 세지 않는다. */
+	ignoredRoutes?: readonly string[];
 	lineNames: SourceLineNameTable;
 	master: StationMasterRow[];
 	stations: RealtimeStationRow[];
@@ -68,7 +70,8 @@ function pushTo<K, V>(map: Map<K, V[]>, key: K, value: V): void {
 
 function indexMaster(
 	master: StationMasterRow[],
-	lineNames: SourceLineNameTable
+	lineNames: SourceLineNameTable,
+	ignoredRoutes: ReadonlySet<string>
 ): MasterIndex {
 	const byLine = new Map<LineKey, NameIndex>();
 	const byName: NameIndex = new Map();
@@ -82,6 +85,9 @@ function indexMaster(
 			lineNames
 		);
 		if (!lineKey) {
+			if (ignoredRoutes.has(record.route)) {
+				continue;
+			}
 			unmappedRoutes.set(
 				record.route,
 				(unmappedRoutes.get(record.route) ?? 0) + 1
@@ -192,7 +198,11 @@ function matchOne(
  * 맞추지 못한 역은 던지지 않고 unmatched로 돌려준다.
  */
 export function matchStations(input: MatchInput): MatchResult {
-	const index = indexMaster(input.master, input.lineNames);
+	const index = indexMaster(
+		input.master,
+		input.lineNames,
+		new Set(input.ignoredRoutes)
+	);
 	const aliases = aliasesByStatnId(input.aliases);
 	const rows: CrosswalkRow[] = [];
 	const unmatched: RealtimeStationRow[] = [];

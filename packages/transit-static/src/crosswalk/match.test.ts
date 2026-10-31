@@ -56,6 +56,19 @@ describe("matchStations", () => {
 		expect(r.rows[0]?.matchMethod).toBe("auto-shared");
 		expect(r.unmappedRoutes).toEqual([{ count: 1, route: "6호선" }]);
 	});
+	it("does not report ignored (out-of-scope) routes as unmapped", () => {
+		const r = matchStations({
+			aliases: [],
+			ignoredRoutes: ["인천1호선"],
+			lineNames,
+			master: [
+				m("1101", "계양", "인천1호선"),
+				m("4929", "운양", "김포골드라인"),
+			],
+			stations: [],
+		});
+		expect(r.unmappedRoutes).toEqual([{ count: 1, route: "김포골드라인" }]);
+	});
 	it("uses the manual alias table last", () => {
 		const r = matchStations({
 			aliases: [{ masterName: "원곡", statnId: "1001080176" }],

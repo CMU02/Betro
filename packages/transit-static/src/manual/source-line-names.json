@@ -1,4 +1,5 @@
 {
   "stationMasterRoute": {},
-  "stationSearchLineNum": {}
+  "stationSearchLineNum": {},
+  "ignoredRoutes": []
 }

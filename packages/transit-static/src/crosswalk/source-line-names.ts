@@ -11,7 +11,16 @@ export type SourceLineNameTable = Record<
 	Record<string, string>
 >;
 
-export const manualTable: SourceLineNameTable = sourceLineNames;
+/**
+ * 매뉴얼 파일(`manual/source-line-names.json`) 전체 형태.
+ * ignoredRoutes는 범위 밖 노선 문자열(예: 인천1호선)로, 매핑하지 않고 unmapped 집계에서도 뺀다.
+ * 역사마스터 ROUTE와 OA-121 LINE_NUM 양쪽에 같은 목록을 쓴다.
+ */
+export type ManualLineNameTable = SourceLineNameTable & {
+	ignoredRoutes?: string[];
+};
+
+export const manualTable: ManualLineNameTable = sourceLineNames;
 
 const LINE_KEYS: ReadonlySet<string> = new Set(
 	LINES.map((line) => line.lineKey)

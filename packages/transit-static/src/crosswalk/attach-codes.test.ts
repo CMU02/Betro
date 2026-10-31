@@ -89,4 +89,25 @@ describe("attachStationCodes", () => {
 		);
 		expect(r.unmappedLineNums).toEqual([{ count: 1, lineNum: "경부선" }]);
 	});
+	it("does not count ignored (out-of-scope) LINE_NUM values as unmapped", () => {
+		const r = attachStationCodes(
+			[row("1001000001", "line1", "부평")],
+			new Map([
+				[
+					"부평",
+					[
+						{
+							frCode: "I120",
+							lineNum: "인천선",
+							stationCd: "3120",
+							stationNm: "부평",
+						},
+					],
+				],
+			]),
+			lineNames,
+			["인천선"]
+		);
+		expect(r.unmappedLineNums).toEqual([]);
+	});
 });

@@ -15,12 +15,14 @@ export interface AttachCodesResult {
 
 function countUnmappedLineNums(
 	searchByName: Map<string, StationSearchRow[]>,
-	lineNames: SourceLineNameTable
+	lineNames: SourceLineNameTable,
+	ignoredRoutes: ReadonlySet<string>
 ): { lineNum: string; count: number }[] {
 	const counts = new Map<string, number>();
 	for (const candidates of searchByName.values()) {
 		for (const candidate of candidates) {
 			if (
+				!ignoredRoutes.has(candidate.lineNum) &&
 				mapSourceLineName(
 					"stationSearchLineNum",
 					candidate.lineNum,
@@ -38,11 +40,13 @@ function countUnmappedLineNums(
  * 역별 OA-121 검색 결과에서 같은 노선(lineKey)의 행을 골라 stationCd, frCode를 붙인다.
  * 조회 키는 xlsx 원문 역명이며, CrosswalkRow에서는 nameAliases[0]이 그 원문이다(toRow 참고).
  * 코드가 없어도 행은 버리지 않고 no-station-cd 플래그와 missingCodes로 표시한다.
+ * ignoredRoutes(범위 밖 노선 문자열)는 unmappedLineNums에 세지 않는다.
  */
 export function attachStationCodes(
 	rows: CrosswalkRow[],
 	searchByName: Map<string, StationSearchRow[]>,
-	lineNames: SourceLineNameTable
+	lineNames: SourceLineNameTable,
+	ignoredRoutes: readonly string[] = []
 ): AttachCodesResult {
 	const missingCodes: string[] = [];
 	const attached: CrosswalkRow[] = [];
@@ -74,6 +78,10 @@ export function attachStationCodes(
 	return {
 		missingCodes,
 		rows: attached,
-		unmappedLineNums: countUnmappedLineNums(searchByName, lineNames),
+		unmappedLineNums: countUnmappedLineNums(
+			searchByName,
+			lineNames,
+			new Set(ignoredRoutes)
+		),
 	};
 }
