@@ -108,3 +108,12 @@ OSM 데이터 자체의 오류로 갈래를 빼거나 경고를 남겨 둔 경�
 - korail.com 노선별 시간표 XLSX (`src/sources/korail-xlsx.ts`): **실제 파일 형식은 확인 필요.** 아직 실제 파일을 받지 못해 `src/sources/__fixtures__/korail-sample.xlsx`(평일·휴일 2시트)로만 테스트했다. 현재 가정: 시트 이름에 `평일`/`휴일`, 열 하나 = 열차 1편, 0행 `열차번호`, 1행 `방향`(상행/하행), 2행부터 `역명` + `HH:MM`. 실제 파일을 받으면 이 가정을 대조해 고정한다. 휴일 시트는 토요일로 복제한다(`holiday-copied`).
 - 공항철도 직통 CSV (`src/sources/airport-express-csv.ts`): 헤더 `direction,departStation,departTime,arriveStation,arriveTime`. `direction`은 `up`/`down`(또는 상행/하행). 정차는 서울역, 인천공항1터미널, 인천공항2터미널만 허용한다. 열차번호가 없어 `DIRECT-<direction>-<HHMM>`으로 만들고 `synthetic-train-no`를 표시한다.
 - GTX-A KRIC API (`src/sources/kric-api.ts`): `KRIC_SERVICE_KEY` 환경 변수가 필요하다. 키가 없어 실호출로 확인하지 못했고(키 대기), 노선 코드 `A`와 운영기관 코드(`GX`, 동탄 X111만 `SR`, 연구 보고서 코드표 기준)는 확인됐고 응답 필드명, `dayCd` 의미(8 평일, 7 토요일, 9 휴일)는 확인 필요다. `fetch:timetable-sources --gtx-a`는 키가 없으면 안내 후 exit 1 한다(실다운로드는 Task 11). 테스트는 `fetchImpl` 목으로만 한다.
+
+## 열차번호 매칭률 (Task 10)
+
+`bun transit report:match-rate [--service-day weekday|saturday|holiday]`는 `data/raw/realtime-sample/`의 노선별 최신 표본(`<lineKey>-<KST yyyymmddHHMM>.json`)을 현재 timetable 배치와 대조해 `data/reports/match-rate/`에 노선별 매칭률을 쓴다.
+
+- 규칙은 `src/realtime/train-no-rules.ts`의 `TRAIN_NO_RULES`(노선별 함수, 설계 §4.3)다. 신분당·GTX-A는 규칙이 없어(null) "시간표 없음"으로 넘기고 매칭률은 `-`(null)다. 그 요일 시간표가 없는 노선도 null이다.
+- 후보 번호 중 하나라도 같은 (노선, 서비스일) trip 번호에 있으면 매칭이다. 방향은 조건에 넣지 않는다(2호선은 성수에서 번호가 바뀐다). 9호선은 실시간 `directAt`(1 급행 / 0 일반)으로 `E`/`C` 접두 하나만 본다.
+- 1호선은 시간표 번호가 `K802`·`S902`처럼 접두를 달고 실시간은 `0802`라, 시간표 쪽 번호에도 같은 정규화(K/S 떼고 4자리 0 채움)를 건다(`timetableTrainNoKey`). 정규화하면 K·S 번호가 겹치는 열차가 있어(서울교통공사 CSV 2026-09-14판 986개 → 865개) 1호선 매칭률은 다소 후하게 나올 수 있다.
+- `--service-day`를 안 주면 표본 파일 이름의 날짜(KST) 요일로 정한다: 토요일 `saturday`, 일요일 `holiday`, 그 밖은 `weekday`. **공휴일은 판정하지 않는다**(평일 공휴일 표본은 `--service-day holiday`로 다시 돌린다). 자정~첫차 전 표본도 날짜 그대로의 요일로 본다.

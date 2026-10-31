@@ -1,4 +1,5 @@
 import { createDb } from "@Betro/db";
+import type { ServiceDay } from "@Betro/db/schema/transit";
 import { parseArgs } from "node:util";
 import { buildCrosswalk } from "./jobs/build-crosswalk";
 import { buildTimetable } from "./jobs/build-timetable";
@@ -10,6 +11,7 @@ import { fetchStationSearch } from "./jobs/fetch-station-search";
 import { fetchStationXlsx } from "./jobs/fetch-station-xlsx";
 import { fetchTimetableSources } from "./jobs/fetch-timetable-sources";
 import { osmDiscover } from "./jobs/osm-discover";
+import { reportMatchRate } from "./jobs/report-match-rate";
 import { resolveDatabaseUrl } from "./paths";
 import { resolveDataDir } from "./raw-store";
 import {
@@ -30,6 +32,11 @@ function requireApiKey(): string {
 	}
 	return key;
 }
+
+const SERVICE_DAYS: readonly string[] = ["weekday", "saturday", "holiday"];
+
+const isServiceDay = (value: string): value is ServiceDay =>
+	SERVICE_DAYS.includes(value);
 
 type CommandHandler = (args: string[]) => Promise<void>;
 
@@ -120,6 +127,23 @@ const commands: Record<string, CommandHandler> = {
 	},
 	"osm:discover": async () => {
 		await osmDiscover({ dataDir: resolveDataDir(process.env) });
+	},
+	"report:match-rate": async (args) => {
+		const { values } = parseArgs({
+			args,
+			options: { "service-day": { type: "string" } },
+		});
+		const serviceDay = values["service-day"];
+		if (serviceDay !== undefined && !isServiceDay(serviceDay)) {
+			throw new Error(
+				`invalid --service-day: ${serviceDay} (weekday|saturday|holiday)`
+			);
+		}
+		await reportMatchRate({
+			dataDir: resolveDataDir(process.env),
+			db: createDb({ DATABASE_URL: resolveDatabaseUrl(process.env) }),
+			serviceDay,
+		});
 	},
 };
 
