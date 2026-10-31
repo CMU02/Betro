@@ -45,7 +45,12 @@ bun transit build:tracks                    # 검증을 통과하면 DB에 적�
 ```
 
 - `build:tracks`는 `data/raw/osm/routes.json`, `src/manual/osm-routes.json`, DB의 현재 `station_crosswalk` 배치를 읽는다. 대응표를 먼저 적재해야 한다(`--dry-run`이어도 DB를 읽는다).
-- relation마다 way를 한 줄로 잇고(끝점이 1m 넘게 떨어지면 gap으로 실패), 같은 노선의 crosswalk 역을 선에 투영한다. 선에서 150m 안의 역만 그 선 위의 역으로 보고, 80m를 넘으면 경고한다.
+- relation마다 way를 한 줄로 잇고(끝점이 1m 넘게 떨어지면 gap으로 실패), 같은 노선의 crosswalk 역을 선 위에 놓는다. 닫힌 선(2호선 본선 고리)은 relation의 첫 정차 노드에서 시작하도록 돌린다.
+- 역 배치 우선순위(`track_station.anchor`에 남는다):
+  1. `osm-stop`: relation 정차 노드(ref → 이름·별칭 순으로 매칭)가 선 위 노드면 그 노드의 누적 거리. 정차 노드를 relation 순서대로 보며, 같은 노드를 두 번 지나면 앞 역 이후 첫 등장을 쓴다. 역사마스터 좌표와 2000m 넘게 떨어지면 오매칭으로 버린다(`stop-anchor-rejected`).
+  2. `osm-stop-projected`: 정차 노드가 선 밖(승강장 노드 등)이면 그 노드를 선에 투영해 150m 이내일 때 그 위치.
+  3. `station-master`: 정차 노드가 없거나 위 둘이 안 되면 역사마스터 좌표를 투영해 150m 이내일 때 그 위치.
+- `offsetM`은 역사마스터 좌표에서 역을 놓은 지점까지의 거리이고 80m를 넘으면 `station-offset` 경고를 낸다. `osm-stop`이면 선로 방향 차이(승강장 중심과 역사 좌표)까지 포함하므로 150~300m도 흔하다. 한 역에 정차 노드가 여럿 매칭되고 그중 150m 안의 것이 있으면, 150m 넘는 노드는 쓰지 않고 `stop-anchor-rejected`를 남긴다(OSM ref가 이웃 역으로 밀린 경우).
 - 다음 중 하나라도 있으면 실패(exit 1)하고 적재하지 않는다: stitch 실패(relation 없음, gap, 노드 없음), error 수준 검증 결과(OSM 정차 순서와 투영 순서가 다름, 선 위 역이 2개 미만), 자기 노선의 어떤 shape에도 올라가지 않은 역(미커버 역), crosswalk에 역이 있는데 shape가 없는 노선.
 - 적재는 한 트랜잭션으로 `reference_batch(kind="track")`를 새로 만들고 `track_shape`, `track_station`을 넣은 뒤 현재 배치로 바꾼다. OSM 원본, osm-routes.json, 현재 대응표 내용의 해시가 현재 배치와 같으면 다시 적재하지 않는다.
 
@@ -55,7 +60,7 @@ bun transit build:tracks                    # 검증을 통과하면 DB에 적�
 
 - `.md`: 사람이 읽는 보고서. 매칭 수(`매칭 N / M`), 매칭 방법별 건수, 공용역(auto-shared) 검토 목록, 미매칭 역, 매핑 안 된 노선 문자열, 범위 밖 노선, 코드 없는 역, 판 차이, 원본 manifest(파일명과 sha256).
 - `.json`: 같은 내용의 요약. 다른 도구에서 읽는 용도.
-- 선로 `.md`: 노선별 shape 수, shape마다 길이·역 수·warn 수, error 목록, stitch 실패, shape 없는 노선, 미커버 역(가장 가까운 선로까지 거리), 선로 투영 경고(`station-offset`, `short-gap`, `long-gap`), OSM stop 미매칭(`unmatched-osm-stop`). 경고는 사람이 훑어보고, OSM 오류로 판단되면 아래 "알려진 OSM 문제"에 적는다.
+- 선로 `.md`: 노선별 shape 수, shape마다 길이·역 수·배치 방식별 역 수(osm-stop / projected / master)·warn 수, error 목록, stitch 실패, shape 없는 노선, 미커버 역(가장 가까운 선로까지 거리), 버린 정차 노드(`stop-anchor-rejected`), 선로 투영 경고(`station-offset`, `short-gap`, `long-gap`), OSM stop 미매칭(`unmatched-osm-stop`). `.json`은 shape마다 `anchors` 집계와 `stopAnchorRejected` 목록을 담는다. 경고는 사람이 훑어보고, OSM 오류로 판단되면 아래 "알려진 OSM 문제"에 적는다.
 
 ## 매뉴얼 표 (`src/manual/`)
 
@@ -79,4 +84,16 @@ bun transit build:tracks                    # 검증을 통과하면 DB에 적�
 
 OSM 데이터 자체의 오류로 갈래를 빼거나 경고를 남겨 둔 경우 relation id와 증상을 적는다. 갈래를 빼서 생긴 미커버 역은 보고서에 그대로 드러나므로 숨길 수 없다.
 
-- (아직 없음)
+- `12623856` (경의·중앙선: 지평 → 문산): 멤버가 불완전해 실제 선은 지평~원덕 13.6km뿐이다. 용문~지평을 덮으려고 `jipyeong` 갈래로 넣었다. relation이 문산 방면이므로 `direction`은 `up`이다. `12623857`(문산 → 지평)은 용문~지평 way가 없어 쓰지 않는다.
+- `7919018` (8호선 모란 → 별내): 정차 노드 `ref`가 한 칸 밀려 있다(모란 노드 ref=826은 수진, 암사역사공원 노드 ref=808은 장자호수공원의 코드). 같은 역에 150m 안의 정차 노드가 따로 있어 밀린 노드는 `stop-anchor-rejected`로 버려지고, 모란·암사역사공원은 역사마스터 좌표로 놓인다.
+- `7533583`, `7533582` (우이신설선): stop 노드 287323400, 9459739653에 name 태그가 없어 `unmatched-osm-stop` 경고가 난다. `7533582`에는 `삼양` 이름·ref L06인 정차 노드가 둘 있고 하나는 역에서 674m 떨어져 있다(삼양사거리 위치로 보인다). 가까운 노드가 relation에서 먼저 나와 그쪽이 쓰이고, 삼양사거리는 역사마스터 좌표로 놓인다.
+- `12746498`, `12746493` (7호선): 정차 노드 이름이 `이수`, `자양`이라 crosswalk 이름(총신대입구, 뚝섬유원지)과 맞지 않아 `unmatched-osm-stop` 경고가 난다. 두 역은 역사마스터 좌표로 놓인다.
+- `14138331`, `14181832` (1호선 경부선): 평택지제 정차 노드가 있지만 crosswalk(xlsx seq57)에 역이 없어 `unmatched-osm-stop` 경고가 난다.
+- `18828088`, `18828089` (GTX-A 서울역~운정중앙), `14191876`, `14191877` (신림선): 노선 전체가 way 1개다. 형상 정밀도가 낮을 수 있다.
+- GTX-A 서울역~수서 구간 relation이 없어 `north`, `south` 두 갈래로 나눴다. 그 구간 선로는 그려지지 않는다.
+- 방향 미확정(실시간 API `updnLine` 실측 필요): 2호선 `seongsu`·`sinjeong` 지선, 경의중앙 `imjingang`·`seoul-station`, 6호선 응암순환 구간(`12080315`).
+
+## 알려진 한계
+
+- 6호선 응암 재통과: `12080315`(응암순환 → 신내)는 응암을 두 번 지나지만 shape에는 응암을 한 번(첫 통과, 0m)만 놓는다(`track_station`은 shape당 역 하나). 두 번째 통과는 2단계 실시간 매칭에서 처리한다.
+- 역사마스터 좌표가 선로에서 150m 넘게 떨어진 역(청산 718m, 인천공항2터미널 1149m, 청량리 경의중앙·경춘·수인분당 206~314m, 미사 243m, 임진강 216m, 옥수 182m, 세종왕릉 186m 등)은 OSM 정차 노드로 놓인다. 정차 노드가 없는 relation이 이런 역을 지나면 다시 미커버가 된다.
