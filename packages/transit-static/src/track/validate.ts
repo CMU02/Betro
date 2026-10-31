@@ -1,7 +1,6 @@
 import type { CrosswalkRow } from "../crosswalk/match";
 import { normalizeStationName } from "../crosswalk/normalize-name";
 import type { OsmNode } from "./osm-model";
-import { STATION_WARN_OFFSET_M } from "./project";
 
 export interface ShapeIssue {
 	code:
@@ -10,6 +9,7 @@ export interface ShapeIssue {
 		| "short-gap"
 		| "long-gap"
 		| "unmatched-osm-stop"
+		| "stop-anchor-rejected"
 		| "no-stations";
 	detail: string;
 	level: "error" | "warn";
@@ -17,7 +17,6 @@ export interface ShapeIssue {
 
 export interface ShapeStation {
 	distanceM: number;
-	offsetM: number;
 	statnId: string;
 }
 
@@ -50,6 +49,7 @@ function stopOrderIssue(
 	return undefined;
 }
 
+/** 역 수, OSM 정차 순서, 인접 역 간격을 검사한다. 선로와 역 좌표 사이 거리(station-offset)는 placeStations가 본다. */
 export function validateShape(args: {
 	medianGapM: number;
 	osmStopOrder: string[];
@@ -69,15 +69,6 @@ export function validateShape(args: {
 	const orderIssue = stopOrderIssue(stations, osmStopOrder);
 	if (orderIssue) {
 		issues.push(orderIssue);
-	}
-	for (const s of stations) {
-		if (s.offsetM > STATION_WARN_OFFSET_M) {
-			issues.push({
-				code: "station-offset",
-				detail: `${s.statnId} offset ${s.offsetM.toFixed(1)}m`,
-				level: "warn",
-			});
-		}
 	}
 	const sorted = [...stations].sort((a, b) => a.distanceM - b.distanceM);
 	for (let i = 1; i < sorted.length; i += 1) {

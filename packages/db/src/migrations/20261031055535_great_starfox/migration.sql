@@ -1,0 +1,1 @@
+ALTER TABLE `track_station` ADD `anchor` text NOT NULL;

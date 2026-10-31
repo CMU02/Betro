@@ -1,14 +1,19 @@
-import type { TrackDirection } from "@Betro/db/schema/transit";
+import type {
+	TrackDirection,
+	TrackStationAnchor,
+} from "@Betro/db/schema/transit";
 import type { CrosswalkRow } from "../crosswalk/match";
 import type { TrackShapeInput } from "../db/load";
 import { LINES, type LineKey } from "../lines";
+import { isClosed, type NodeLine, rotateToNode } from "./loop";
 import {
 	type OsmIndex,
 	type OsmNode,
 	stopNodesOf,
 	wayMembersOf,
 } from "./osm-model";
-import { lineLengthM, type ProjectionResult, projectStations } from "./project";
+import { type PlacementResult, placeStations } from "./place";
+import { lineLengthM } from "./project";
 import { type StitchResult, stitchWays } from "./stitch";
 import { matchOsmStops, type ShapeIssue, validateShape } from "./validate";
 
@@ -71,7 +76,7 @@ function median(values: number[]): number {
 	return ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
 }
 
-function adjacentGaps(onShape: ProjectionResult["onShape"]): number[] {
+function adjacentGaps(onShape: PlacementResult["onShape"]): number[] {
 	const gaps: number[] = [];
 	for (let i = 1; i < onShape.length; i += 1) {
 		const prev = onShape[i - 1];
@@ -96,11 +101,6 @@ function groupByLine(crosswalk: CrosswalkRow[]): Map<LineKey, CrosswalkRow[]> {
 	return byLine;
 }
 
-/** 순환선(2호선)처럼 같은 역이 처음과 끝에 다시 나오면 첫 번째만 순서 검사에 쓴다. */
-function firstOccurrences(statnIds: string[]): string[] {
-	return [...new Set(statnIds)];
-}
-
 interface Coverage {
 	covered: boolean;
 	nearestOffsetM: number;
@@ -109,11 +109,11 @@ interface Coverage {
 /** 역마다 자기 노선 shape 중 하나에 올라갔는지와 가장 가까운 offset을 누적한다. */
 function recordCoverage(
 	coverage: Map<string, Coverage>,
-	projection: ProjectionResult
+	placement: Pick<PlacementResult, "offShape" | "onShape">
 ): void {
 	const visits = [
-		...projection.onShape.map((s) => ({ ...s, on: true })),
-		...projection.offShape.map((s) => ({ ...s, on: false })),
+		...placement.onShape.map((s) => ({ ...s, on: true })),
+		...placement.offShape.map((s) => ({ ...s, on: false })),
 	];
 	for (const { offsetM, on, statnId } of visits) {
 		const prev = coverage.get(statnId);
@@ -137,6 +137,27 @@ function unmatchedStopIssues(
 		}));
 }
 
+/**
+ * 닫힌 선(2호선 본선 같은 고리)이면 relation 순서상 첫 정차 노드(노선 역과 매칭되고 선 위에 있는 것)에서
+ * 시작하도록 돌린다. 이음매가 첫 역 앞뒤에 걸려 첫 역이 끝으로 감기는 것을 막는다.
+ */
+function orientLoop(
+	line: NodeLine,
+	stops: OsmNode[],
+	lineStations: CrosswalkRow[]
+): NodeLine {
+	if (!isClosed(line.coords, line.nodeIds)) {
+		return line;
+	}
+	const matched = new Set(
+		matchOsmStops(stops, lineStations).map((m) => m.osmNodeId)
+	);
+	const first = stops.find(
+		(stop) => matched.has(stop.id) && line.nodeIds.includes(stop.id)
+	);
+	return first ? rotateToNode(line.coords, line.nodeIds, first.id) : line;
+}
+
 type ShapeOutcome =
 	| { ok: true; issues: ShapeIssue[]; shape: TrackShapeInput }
 	| { ok: false; reason: string };
@@ -155,28 +176,28 @@ function assembleRoute(
 	if (!stitched.ok) {
 		return { ok: false, reason: describeStitchFailure(stitched) };
 	}
-	const projection = projectStations(stitched.coords, lineStations);
-	recordCoverage(coverage, projection);
-
-	const onShapeIds = new Set(projection.onShape.map((s) => s.statnId));
 	const stops = stopNodesOf(rel, osm);
-	const matches = matchOsmStops(
+	const line = orientLoop(stitched, stops, lineStations);
+	const placement = placeStations({
+		closed: isClosed(line.coords, line.nodeIds),
+		coords: line.coords,
+		nodeIds: line.nodeIds,
+		stations: lineStations,
 		stops,
-		lineStations.filter((row) => onShapeIds.has(row.statnId))
-	);
-	const stopNodeByStation = new Map<string, number>();
-	for (const { osmNodeId, statnId } of matches) {
-		if (!stopNodeByStation.has(statnId)) {
-			stopNodeByStation.set(statnId, osmNodeId);
-		}
-	}
+	});
+	recordCoverage(coverage, placement);
+
 	const issues = [
 		...validateShape({
-			medianGapM: median(adjacentGaps(projection.onShape)),
-			osmStopOrder: firstOccurrences(matches.map((m) => m.statnId)),
-			stations: projection.onShape,
+			medianGapM: median(adjacentGaps(placement.onShape)),
+			osmStopOrder: placement.stopOrder,
+			stations: placement.onShape,
 		}),
-		...unmatchedStopIssues(stops, new Set(matches.map((m) => m.osmNodeId))),
+		...placement.issues,
+		...unmatchedStopIssues(
+			stops,
+			new Set(placement.matches.map((m) => m.osmNodeId))
+		),
 	];
 	return {
 		issues,
@@ -184,15 +205,16 @@ function assembleRoute(
 		shape: {
 			attribution: OSM_ATTRIBUTION,
 			branchKey: route.branchKey,
-			coords: stitched.coords,
+			coords: line.coords,
 			direction: route.direction,
-			lengthM: lineLengthM(stitched.coords),
+			lengthM: lineLengthM(line.coords),
 			lineKey: route.lineKey,
 			osmRelationId: route.osmRelationId,
-			stations: projection.onShape.map((s, seq) => ({
+			stations: placement.onShape.map((s, seq) => ({
+				anchor: s.anchor,
 				distanceM: s.distanceM,
 				offsetM: s.offsetM,
-				osmStopNodeId: stopNodeByStation.get(s.statnId),
+				osmStopNodeId: s.osmStopNodeId,
 				seq,
 				statnId: s.statnId,
 			})),
@@ -282,6 +304,27 @@ export function assembleTracks({
 
 const cell = (value: string): string => value.replace(PIPE, ESCAPED_PIPE);
 
+/** shape의 선 위 역을 배치 방식(anchor)별로 센다. */
+export function anchorCounts(
+	shape: Pick<TrackShapeInput, "stations">
+): Record<TrackStationAnchor, number> {
+	const counts: Record<TrackStationAnchor, number> = {
+		"osm-stop": 0,
+		"osm-stop-projected": 0,
+		"station-master": 0,
+	};
+	for (const station of shape.stations) {
+		counts[station.anchor] += 1;
+	}
+	return counts;
+}
+
+/** 모든 shape의 anchor 합계를 한 줄로 쓴다. */
+export function renderAnchorTotals(shapes: TrackShapeInput[]): string {
+	const totals = anchorCounts({ stations: shapes.flatMap((s) => s.stations) });
+	return `osm-stop ${totals["osm-stop"]} / projected ${totals["osm-stop-projected"]} / master ${totals["station-master"]}`;
+}
+
 function renderLineCounts(
 	shapes: TrackShapeInput[],
 	crosswalk: CrosswalkRow[]
@@ -310,13 +353,14 @@ function renderShapes(
 	return [
 		"## shape",
 		"",
-		"| lineKey | branchKey | 방향 | relation | 길이(km) | 역 수 | warn 수 | error 수 |",
-		"| --- | --- | --- | --- | --- | --- | --- | --- |",
+		"| lineKey | branchKey | 방향 | relation | 길이(km) | 역 수 | osm-stop | projected | master | warn 수 | error 수 |",
+		"| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
 		...shapes.map((s) => {
 			const list = byRelation.get(s.osmRelationId) ?? [];
 			const warns = list.filter((i) => i.level === "warn").length;
 			const errors = list.length - warns;
-			return `| ${s.lineKey} | ${cell(s.branchKey)} | ${s.direction} | ${s.osmRelationId} | ${(s.lengthM / METERS_PER_KM).toFixed(2)} | ${s.stations.length} | ${warns} | ${errors} |`;
+			const anchors = anchorCounts(s);
+			return `| ${s.lineKey} | ${cell(s.branchKey)} | ${s.direction} | ${s.osmRelationId} | ${(s.lengthM / METERS_PER_KM).toFixed(2)} | ${s.stations.length} | ${anchors["osm-stop"]} | ${anchors["osm-stop-projected"]} | ${anchors["station-master"]} | ${warns} | ${errors} |`;
 		}),
 		"",
 	];
@@ -365,6 +409,7 @@ function renderMarkdown(
 		"",
 		`ok: ${result.ok}`,
 		`shape: ${result.shapes.length}, 선 위 역(중복 포함): ${result.shapes.reduce((sum, s) => sum + s.stations.length, 0)}`,
+		`역 배치(anchor): ${renderAnchorTotals(result.shapes)}`,
 		`출처: ${OSM_ATTRIBUTION}`,
 		"",
 		...renderLineCounts(result.shapes, crosswalk),
@@ -388,9 +433,17 @@ function renderMarkdown(
 			)
 		),
 		...renderIssueList(
+			"stop-anchor-rejected",
+			result.issues,
+			(i) => i.code === "stop-anchor-rejected"
+		),
+		...renderIssueList(
 			"경고 (선로 투영)",
 			result.issues,
-			(i) => i.level === "warn" && i.code !== "unmatched-osm-stop"
+			(i) =>
+				i.level === "warn" &&
+				i.code !== "unmatched-osm-stop" &&
+				i.code !== "stop-anchor-rejected"
 		),
 		...renderIssueList(
 			"OSM stop 미매칭",

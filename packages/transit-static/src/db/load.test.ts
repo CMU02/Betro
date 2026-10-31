@@ -1,4 +1,8 @@
-import { referenceBatch, stationCrosswalk } from "@Betro/db/schema/transit";
+import {
+	referenceBatch,
+	stationCrosswalk,
+	trackStation,
+} from "@Betro/db/schema/transit";
 import { createTestDb } from "@Betro/db/test-db";
 import { describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
@@ -73,13 +77,23 @@ describe("loadTracks", () => {
 					lineKey: "line2",
 					osmRelationId: 1,
 					stations: [
-						{ distanceM: 0, offsetM: 3, seq: 0, statnId: "1002000211" },
+						{
+							anchor: "osm-stop-projected",
+							distanceM: 0,
+							offsetM: 3,
+							seq: 0,
+							statnId: "1002000211",
+						},
 					],
 				},
 			],
 			{}
 		);
 		expect(r.batchId).toBeGreaterThan(0);
+		const stations = await db.select().from(trackStation);
+		expect(stations.map((s) => [s.statnId, s.anchor])).toEqual([
+			["1002000211", "osm-stop-projected"],
+		]);
 	});
 });
 

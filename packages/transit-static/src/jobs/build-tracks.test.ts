@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { rawPath } from "../paths";
-import { loadBuildTracksInput } from "./build-tracks";
+import { loadBuildTracksInput, summaryOf } from "./build-tracks";
 
 const RUN_FETCH_OSM = /bun transit fetch:osm/;
 const RUN_BUILD_CROSSWALK = /bun transit build:crosswalk/;
@@ -32,5 +32,67 @@ describe("loadBuildTracksInput", () => {
 		await expect(loadBuildTracksInput(dataDir, db)).rejects.toThrow(
 			RUN_BUILD_CROSSWALK
 		);
+	});
+});
+
+describe("summaryOf", () => {
+	it("lists anchor counts per shape and the rejected stop anchors", () => {
+		const rejected = {
+			code: "stop-anchor-rejected",
+			detail: "S1 node 9 3000m from master",
+			level: "warn",
+		} as const;
+		const summary = summaryOf(
+			{
+				issues: [{ issues: [rejected], lineKey: "line2", osmRelationId: 1 }],
+				linesWithoutShape: [],
+				markdown: "",
+				ok: true,
+				shapes: [
+					{
+						attribution: "",
+						branchKey: "main",
+						coords: [],
+						direction: "up",
+						lengthM: 1,
+						lineKey: "line2",
+						osmRelationId: 1,
+						stations: [
+							{
+								anchor: "osm-stop",
+								distanceM: 0,
+								offsetM: 0,
+								seq: 0,
+								statnId: "S0",
+							},
+							{
+								anchor: "station-master",
+								distanceM: 1,
+								offsetM: 0,
+								seq: 1,
+								statnId: "S1",
+							},
+						],
+					},
+				],
+				stitchFailures: [],
+				uncoveredStations: [],
+			},
+			{},
+			true
+		);
+		expect(summary.shapes).toEqual([
+			expect.objectContaining({
+				anchors: {
+					"osm-stop": 1,
+					"osm-stop-projected": 0,
+					"station-master": 1,
+				},
+				stations: 2,
+			}),
+		]);
+		expect(summary.stopAnchorRejected).toEqual([
+			{ detail: rejected.detail, lineKey: "line2", osmRelationId: 1 },
+		]);
 	});
 });

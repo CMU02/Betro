@@ -16,11 +16,15 @@ const idx = indexOsm({
 		node(3, 127.02),
 		node(4, 127.03),
 		node(9, 127.5),
+		// 노드 4와 거의 같은 위치(1m 이내)에 있는 다른 노드
+		node(5, 127.030_005),
+		node(6, 127.04),
 		way(10, [1, 2]),
 		way(11, [2, 3]),
 		way(12, [4, 3]),
 		way(13, [9, 4]),
 		way(20, [2, 1]),
+		way(21, [5, 6]),
 	],
 });
 const w = (id: number) => {
@@ -40,8 +44,26 @@ describe("stitchWays", () => {
 				[127.01, 37.5],
 				[127.02, 37.5],
 			],
+			nodeIds: [1, 2, 3],
 			ok: true,
 		});
+	});
+	it("returns node ids parallel to coords, following reversed ways", () => {
+		const r = stitchWays([w(20), w(11), w(12)], idx);
+		expect(r.ok).toBe(true);
+		if (r.ok) {
+			expect(r.nodeIds).toEqual([1, 2, 3, 4]);
+			expect(r.nodeIds.length).toBe(r.coords.length);
+		}
+	});
+	it("keeps node ids aligned when a near-touching way drops its first point", () => {
+		const r = stitchWays([w(10), w(11), w(12), w(21)], idx);
+		expect(r.ok).toBe(true);
+		if (r.ok) {
+			expect(r.nodeIds).toEqual([1, 2, 3, 4, 6]);
+			expect(r.nodeIds.length).toBe(r.coords.length);
+			expect(r.coords.at(-1)).toEqual([127.04, 37.5]);
+		}
 	});
 	it("reverses a way whose end touches the current end", () => {
 		const r = stitchWays([w(10), w(11), w(12)], idx);

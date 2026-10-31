@@ -15,6 +15,11 @@ export type SourceManifest = Record<
 >;
 export type MatchMethod = "auto-same-line" | "auto-shared" | "manual-alias";
 export type TrackDirection = "up" | "down";
+/** 선 위 역 거리를 정한 방식. OSM 정차 노드(선 위) → 그 노드의 투영 → 역사마스터 좌표 투영 순으로 시도한다. */
+export type TrackStationAnchor =
+	| "osm-stop"
+	| "osm-stop-projected"
+	| "station-master";
 
 export const referenceBatch = sqliteTable("reference_batch", {
 	createdAt: integer("created_at", { mode: "timestamp_ms" })
@@ -91,6 +96,7 @@ export const trackShape = sqliteTable(
 export const trackStation = sqliteTable(
 	"track_station",
 	{
+		anchor: text("anchor").$type<TrackStationAnchor>().notNull(),
 		distanceM: real("distance_m").notNull(),
 		id: integer("id").primaryKey({ autoIncrement: true }),
 		offsetM: real("offset_m").notNull(),

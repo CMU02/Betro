@@ -28,17 +28,13 @@ describe("validateShape", () => {
 			issues.some((i) => i.code === "stop-order" && i.level === "error")
 		).toBe(true);
 	});
-	it("warns on large offsets and odd gaps", () => {
+	it("warns on odd gaps and leaves offsets to station placement", () => {
 		const issues = validateShape({
 			medianGapM: 1000,
 			osmStopOrder: [],
 			stations: [s("A", 0, 120), s("B", 100), s("C", 5000)],
 		});
-		expect(issues.map((i) => i.code).sort()).toEqual([
-			"long-gap",
-			"short-gap",
-			"station-offset",
-		]);
+		expect(issues.map((i) => i.code).sort()).toEqual(["long-gap", "short-gap"]);
 		expect(issues.every((i) => i.level === "warn")).toBe(true);
 	});
 	it("errors with fewer than two stations", () => {

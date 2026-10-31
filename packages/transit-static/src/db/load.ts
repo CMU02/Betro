@@ -5,6 +5,7 @@ import {
 	type SourceManifest,
 	stationCrosswalk,
 	type TrackDirection,
+	type TrackStationAnchor,
 	trackShape,
 	trackStation,
 } from "@Betro/db/schema/transit";
@@ -27,6 +28,7 @@ export type CrosswalkRowInput = Omit<
 };
 
 export interface TrackStationInput {
+	anchor: TrackStationAnchor;
 	distanceM: number;
 	offsetM: number;
 	osmStopNodeId?: number;
@@ -150,6 +152,7 @@ export async function loadTracks(
 				// biome-ignore lint/performance/noAwaitInLoops: statements in one transaction run one by one
 				await tx.insert(trackStation).values(
 					part.map((station) => ({
+						anchor: station.anchor,
 						distanceM: station.distanceM,
 						offsetM: station.offsetM,
 						osmStopNodeId: station.osmStopNodeId,

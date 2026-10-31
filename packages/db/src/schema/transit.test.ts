@@ -54,6 +54,7 @@ describe("transit schema", () => {
 			throw new Error("no shape");
 		}
 		await db.insert(trackStation).values({
+			anchor: "osm-stop",
 			distanceM: 0,
 			offsetM: 12.3,
 			seq: 0,
@@ -66,6 +67,7 @@ describe("transit schema", () => {
 			.where(eq(trackStation.trackShapeId, shape.id));
 		expect(found.length).toBe(1);
 		expect(found[0]?.statnId).toBe("1002000211");
+		expect(found[0]?.anchor).toBe("osm-stop");
 		const shapes = await db.select().from(trackShape);
 		expect(shapes[0]?.coords).toEqual([
 			[127.0, 37.5],

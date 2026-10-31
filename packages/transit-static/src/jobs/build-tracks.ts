@@ -13,8 +13,10 @@ import { writeReport } from "../reports";
 import {
 	type AssembleInput,
 	type AssembleResult,
+	anchorCounts,
 	assembleTracks,
 	type OsmRouteConfig,
+	renderAnchorTotals,
 } from "../track/assemble";
 import { indexOsm } from "../track/osm-model";
 import { osmRoutesSchema } from "./fetch-osm";
@@ -93,11 +95,12 @@ export async function loadBuildTracksInput(
 	return (await readTrackSources(dataDir, database)).input;
 }
 
-function summaryOf(
+/** 보고서 JSON. shape마다 anchor 집계를, 따로 stop-anchor-rejected 목록을 담는다. */
+export function summaryOf(
 	result: AssembleResult,
 	manifest: SourceManifest,
 	dryRun: boolean
-): Record<string, unknown> {
+) {
 	return {
 		dryRun,
 		issues: result.issues,
@@ -105,6 +108,7 @@ function summaryOf(
 		manifest,
 		ok: result.ok,
 		shapes: result.shapes.map((s) => ({
+			anchors: anchorCounts(s),
 			branchKey: s.branchKey,
 			direction: s.direction,
 			lengthM: s.lengthM,
@@ -113,6 +117,15 @@ function summaryOf(
 			stations: s.stations.length,
 		})),
 		stitchFailures: result.stitchFailures,
+		stopAnchorRejected: result.issues.flatMap((entry) =>
+			entry.issues
+				.filter((issue) => issue.code === "stop-anchor-rejected")
+				.map((issue) => ({
+					detail: issue.detail,
+					lineKey: entry.lineKey,
+					osmRelationId: entry.osmRelationId,
+				}))
+		),
 		uncoveredStations: result.uncoveredStations,
 	};
 }
@@ -153,7 +166,7 @@ export async function buildTracks({
 		.flatMap((entry) => entry.issues)
 		.filter((issue) => issue.level === "error").length;
 	console.log(
-		`ok: ${result.ok}\nshape: ${result.shapes.length}\nstitch 실패: ${result.stitchFailures.length}\nerror: ${errorCount}\n미커버 역: ${result.uncoveredStations.length}\nshape 없는 노선: ${result.linesWithoutShape.length}\nreport: ${report.mdPath}`
+		`ok: ${result.ok}\nshape: ${result.shapes.length}\n역 배치(anchor): ${renderAnchorTotals(result.shapes)}\nstitch 실패: ${result.stitchFailures.length}\nerror: ${errorCount}\n미커버 역: ${result.uncoveredStations.length}\nshape 없는 노선: ${result.linesWithoutShape.length}\nreport: ${report.mdPath}`
 	);
 	if (!result.ok) {
 		console.error(

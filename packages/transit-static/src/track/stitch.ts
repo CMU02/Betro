@@ -4,7 +4,12 @@ import type { OsmIndex, OsmWay } from "./osm-model";
 export type LngLat = [number, number];
 
 export type StitchResult =
-	| { ok: true; coords: LngLat[] }
+	| {
+			ok: true;
+			coords: LngLat[];
+			/** coords와 나란한 OSM 노드 id 열. 1m 허용 접합으로 뺀 점의 노드는 들어가지 않는다. */
+			nodeIds: number[];
+	  }
 	| {
 			ok: false;
 			reason: "gap" | "empty" | "missing-node";
@@ -116,5 +121,9 @@ export function stitchWays(ways: OsmWay[], idx: OsmIndex): StitchResult {
 		}
 		line.push(...joined.vertices);
 	}
-	return { coords: line.map((v) => v.coord), ok: true };
+	return {
+		coords: line.map((v) => v.coord),
+		nodeIds: line.map((v) => v.id),
+		ok: true,
+	};
 }
