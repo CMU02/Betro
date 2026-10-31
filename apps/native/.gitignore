@@ -45,3 +45,7 @@ uniwind-types.d.ts
 
 !.env.schema
 /src/env.ts
+
+# Firebase config (contains app identifiers, keep out of the public repo)
+google-services.json
+GoogleService-Info.plist
