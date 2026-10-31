@@ -100,3 +100,11 @@ OSM 데이터 자체의 오류로 갈래를 빼거나 경고를 남겨 둔 경�
 
 - 6호선 응암 재통과: `12080315`(응암순환 → 신내)는 응암을 두 번 지나지만 shape에는 응암을 한 번(첫 통과, 0m)만 놓는다(`track_station`은 shape당 역 하나). 두 번째 통과는 2단계 실시간 매칭에서 처리한다.
 - 역사마스터 좌표가 선로에서 150m 넘게 떨어진 역(청산 718m, 인천공항2터미널 1149m, 청량리 경의중앙·경춘·수인분당 206~314m, 미사 243m, 임진강 216m, 옥수 182m, 세종왕릉 186m 등)은 OSM 정차 노드로 놓인다. 정차 노드가 없는 relation이 이런 역을 지나면 다시 미커버가 된다.
+
+## 수동 투입 시간표 파일과 GTX-A KRIC API (Task 7)
+
+사람이 `data/manual/timetables/`에 넣는 파일은 자동 수집하지 않는다. 파일을 읽는 코드는 경로(또는 바이트)를 인자로 받는다.
+
+- korail.com 노선별 시간표 XLSX (`src/sources/korail-xlsx.ts`): **실제 파일 형식은 확인 필요.** 아직 실제 파일을 받지 못해 `src/sources/__fixtures__/korail-sample.xlsx`(평일·휴일 2시트)로만 테스트했다. 현재 가정: 시트 이름에 `평일`/`휴일`, 열 하나 = 열차 1편, 0행 `열차번호`, 1행 `방향`(상행/하행), 2행부터 `역명` + `HH:MM`. 실제 파일을 받으면 이 가정을 대조해 고정한다. 휴일 시트는 토요일로 복제한다(`holiday-copied`).
+- 공항철도 직통 CSV (`src/sources/airport-express-csv.ts`): 헤더 `direction,departStation,departTime,arriveStation,arriveTime`. `direction`은 `up`/`down`(또는 상행/하행). 정차는 서울역, 인천공항1터미널, 인천공항2터미널만 허용한다. 열차번호가 없어 `DIRECT-<direction>-<HHMM>`으로 만들고 `synthetic-train-no`를 표시한다.
+- GTX-A KRIC API (`src/sources/kric-api.ts`): `KRIC_SERVICE_KEY` 환경 변수가 필요하다. 키가 없어 실호출로 확인하지 못했고(키 대기), 노선·운영기관 코드(`A`, `SR`)와 응답 필드명, `dayCd` 의미(8 평일, 7 토요일, 9 휴일)는 모두 확인 필요다. 테스트는 `fetchImpl` 목으로만 한다.
