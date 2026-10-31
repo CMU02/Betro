@@ -290,11 +290,14 @@ function decodeHeaderBytes(value: string): string {
 }
 
 /** Content-Disposition의 파일명. 외부 값이므로 경로 부분을 버리고 이름만 남긴다. */
-function fileNameFromResponse(response: Response): string {
+export function fileNameFromResponse(
+	response: Response,
+	fallback: string = FALLBACK_FILE_NAME
+): string {
 	const header = response.headers.get("content-disposition");
 	const match = header ? FILENAME_PATTERN.exec(header) : null;
 	if (!match?.[1]) {
-		return FALLBACK_FILE_NAME;
+		return fallback;
 	}
 	let name = decodeHeaderBytes(match[1]);
 	try {
@@ -303,9 +306,7 @@ function fileNameFromResponse(response: Response): string {
 		// 퍼센트 인코딩이 아니면 그대로 쓴다.
 	}
 	const safe = basename(name.replaceAll("\\", "/")).trim();
-	return safe === "" || safe === "." || safe === ".."
-		? FALLBACK_FILE_NAME
-		: safe;
+	return safe === "" || safe === "." || safe === ".." ? fallback : safe;
 }
 
 /** 원본 CSV를 받아 data/raw/seoul-metro-timetable/<원본 파일명>에 그대로 저장한다. */
