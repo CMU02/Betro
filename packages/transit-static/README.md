@@ -21,7 +21,7 @@
 ```bash
 bun transit fetch:station-xlsx [--seq 57]   # 실시간도착_역정보 xlsx (키 불필요)
 bun transit fetch:station-master            # 역사마스터, 키 필요
-bun transit fetch:station-search            # 역명별 OA-121 검색, 키 필요. 하루 1,000건 한도. 중단되면 다시 실행하면 이어서 받는다
+bun transit fetch:station-search            # 역명별 OA-121 검색, 키 필요. 호출 횟수 제한 없음(1회 최대 1,000건). 중단되면 다시 실행하면 이어서 받는다
 bun transit build:crosswalk --dry-run       # 대응표를 만들고 보고서만 쓴다
 bun transit build:crosswalk                 # 검증을 통과하면 DB에 적재한다
 ```

@@ -807,7 +807,7 @@ Run:
 bun transit fetch:station-master
 bun transit fetch:station-search
 ```
-Expected: `station-master.json`(약 784행), `oa-121-station-search/` 아래 이름별 JSON(약 600개). 두 번째 명령은 하루 1,000건 한도 안에서 끝난다. 중단되면 다시 실행하면 이어서 받는다.
+Expected: `station-master.json`(약 784행), `oa-121-station-search/` 아래 이름별 JSON(약 600개). 일반 API는 호출 횟수 제한이 없다(1회 최대 1,000건, 2026-10-31 확인). 중단되면 다시 실행하면 이어서 받는다.
 
 - [ ] **Step 6: 매뉴얼 표 채우기**
 
