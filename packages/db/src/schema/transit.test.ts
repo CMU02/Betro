@@ -4,6 +4,8 @@ import { createTestDb } from "../test-db";
 import {
 	referenceBatch,
 	stationCrosswalk,
+	timetableStopTime,
+	timetableTrip,
 	trackShape,
 	trackStation,
 } from "./transit";
@@ -99,6 +101,85 @@ describe("transit schema", () => {
 		await db.insert(stationCrosswalk).values(row);
 		await expect(
 			(async () => await db.insert(stationCrosswalk).values(row))()
+		).rejects.toThrow();
+	});
+
+	it("timetable trip and stop time round-trip", async () => {
+		const db = await createTestDb();
+		const [batch] = await db
+			.insert(referenceBatch)
+			.values({ kind: "timetable", sourceManifest: {} })
+			.returning();
+		if (!batch) {
+			throw new Error("no batch");
+		}
+		const [trip] = await db
+			.insert(timetableTrip)
+			.values({
+				batchId: batch.id,
+				direction: "up",
+				express: "local",
+				lineKey: "line2",
+				qualityFlags: [],
+				serviceDay: "weekday",
+				serviceDaySource: "source",
+				source: "seoul-metro-csv",
+				sourceVersion: "2026-09-14",
+				trainNo: "2001",
+			})
+			.returning();
+		if (!trip) {
+			throw new Error("no trip");
+		}
+		await db.insert(timetableStopTime).values([
+			{
+				arriveSec: null,
+				departSec: 18_000,
+				qualityFlags: [],
+				seq: 0,
+				statnId: "1002000201",
+				tripId: trip.id,
+			},
+			{
+				arriveSec: 18_120,
+				departSec: 18_150,
+				qualityFlags: [],
+				seq: 1,
+				statnId: "1002000202",
+				tripId: trip.id,
+			},
+		]);
+		const rows = await db
+			.select()
+			.from(timetableStopTime)
+			.orderBy(timetableStopTime.seq);
+		expect(rows.map((r) => r.departSec)).toEqual([18_000, 18_150]);
+	});
+
+	it("rejects a duplicate trip key in one batch", async () => {
+		const db = await createTestDb();
+		const [batch] = await db
+			.insert(referenceBatch)
+			.values({ kind: "timetable", sourceManifest: {} })
+			.returning();
+		if (!batch) {
+			throw new Error("no batch");
+		}
+		const row: typeof timetableTrip.$inferInsert = {
+			batchId: batch.id,
+			direction: "down",
+			express: "local",
+			lineKey: "line2",
+			qualityFlags: [],
+			serviceDay: "weekday",
+			serviceDaySource: "source",
+			source: "seoul-metro-csv",
+			sourceVersion: "2026-09-14",
+			trainNo: "2001",
+		};
+		await db.insert(timetableTrip).values(row);
+		await expect(
+			(async () => await db.insert(timetableTrip).values(row))()
 		).rejects.toThrow();
 	});
 });

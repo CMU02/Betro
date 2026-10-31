@@ -1,14 +1,23 @@
 import { createDb } from "@Betro/db";
+import type { ServiceDay } from "@Betro/db/schema/transit";
 import { parseArgs } from "node:util";
 import { buildCrosswalk } from "./jobs/build-crosswalk";
+import { buildTimetable } from "./jobs/build-timetable";
 import { buildTracks } from "./jobs/build-tracks";
 import { fetchOsm } from "./jobs/fetch-osm";
+import { fetchRealtimeSample } from "./jobs/fetch-realtime-sample";
 import { fetchStationMaster } from "./jobs/fetch-station-master";
 import { fetchStationSearch } from "./jobs/fetch-station-search";
 import { fetchStationXlsx } from "./jobs/fetch-station-xlsx";
+import { fetchTimetableSources } from "./jobs/fetch-timetable-sources";
 import { osmDiscover } from "./jobs/osm-discover";
+import { reportMatchRate } from "./jobs/report-match-rate";
 import { resolveDatabaseUrl } from "./paths";
 import { resolveDataDir } from "./raw-store";
+import {
+	KRIC_MISSING_KEY_MESSAGE,
+	readKricServiceKey,
+} from "./sources/kric-api";
 
 const DEFAULT_STATION_XLSX_SEQ = 57;
 
@@ -23,6 +32,11 @@ function requireApiKey(): string {
 	}
 	return key;
 }
+
+const SERVICE_DAYS: readonly string[] = ["weekday", "saturday", "holiday"];
+
+const isServiceDay = (value: string): value is ServiceDay =>
+	SERVICE_DAYS.includes(value);
 
 type CommandHandler = (args: string[]) => Promise<void>;
 
@@ -40,6 +54,21 @@ const commands: Record<string, CommandHandler> = {
 			dataDir: resolveDataDir(process.env),
 			db,
 			dryRun,
+		});
+		if (!result.ok) {
+			process.exitCode = 1;
+		}
+	},
+	"build:timetable": async (args) => {
+		const { values } = parseArgs({
+			args,
+			options: { "dry-run": { type: "boolean" } },
+		});
+		// dry-run이어도 현재 crosswalk 배치를 DB에서 읽으므로 DB는 항상 연다.
+		const result = await buildTimetable({
+			dataDir: resolveDataDir(process.env),
+			db: createDb({ DATABASE_URL: resolveDatabaseUrl(process.env) }),
+			dryRun: values["dry-run"] === true,
 		});
 		if (!result.ok) {
 			process.exitCode = 1;
@@ -63,6 +92,9 @@ const commands: Record<string, CommandHandler> = {
 	"fetch:osm": async () => {
 		await fetchOsm({ dataDir: resolveDataDir(process.env) });
 	},
+	"fetch:realtime-sample": async () => {
+		await fetchRealtimeSample(resolveDataDir(process.env));
+	},
 	"fetch:station-master": async () => {
 		const key = requireApiKey();
 		await fetchStationMaster({ dataDir: resolveDataDir(process.env), key });
@@ -82,8 +114,36 @@ const commands: Record<string, CommandHandler> = {
 		}
 		await fetchStationXlsx({ dataDir: resolveDataDir(process.env), seq });
 	},
+	"fetch:timetable-sources": async (args) => {
+		const { values } = parseArgs({
+			args,
+			options: { "gtx-a": { type: "boolean" } },
+		});
+		if (values["gtx-a"] === true && !readKricServiceKey(process.env)) {
+			console.error(KRIC_MISSING_KEY_MESSAGE);
+			process.exit(1);
+		}
+		await fetchTimetableSources({ dataDir: resolveDataDir(process.env) });
+	},
 	"osm:discover": async () => {
 		await osmDiscover({ dataDir: resolveDataDir(process.env) });
+	},
+	"report:match-rate": async (args) => {
+		const { values } = parseArgs({
+			args,
+			options: { "service-day": { type: "string" } },
+		});
+		const serviceDay = values["service-day"];
+		if (serviceDay !== undefined && !isServiceDay(serviceDay)) {
+			throw new Error(
+				`invalid --service-day: ${serviceDay} (weekday|saturday|holiday)`
+			);
+		}
+		await reportMatchRate({
+			dataDir: resolveDataDir(process.env),
+			db: createDb({ DATABASE_URL: resolveDatabaseUrl(process.env) }),
+			serviceDay,
+		});
 	},
 };
 

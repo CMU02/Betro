@@ -6,15 +6,21 @@ import {
 	stationCrosswalk,
 	type TrackDirection,
 	type TrackStationAnchor,
+	timetableStopTime,
+	timetableTrip,
 	trackShape,
 	trackStation,
 } from "@Betro/db/schema/transit";
-import { and, asc, desc, eq, ne } from "drizzle-orm";
+import { and, asc, count, desc, eq, ne } from "drizzle-orm";
 import type { CrosswalkRow } from "../crosswalk/match";
 import { isLineKey, type LineKey } from "../lines";
+import type { Trip } from "../timetable/model";
 
 /** SQLite 바인딩 변수 한도 안에 머물도록 한 번에 넣는 행 수. */
 const INSERT_CHUNK_SIZE = 500;
+/** timetable_trip은 열이 많아 500행씩, 열이 적은 timetable_stop_time은 2,000행씩 넣는다. */
+const TRIP_CHUNK_SIZE = 500;
+const STOP_TIME_CHUNK_SIZE = 2000;
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
@@ -168,6 +174,87 @@ export async function loadTracks(
 	});
 }
 
+/** timetable_trip 유일 색인(배치 안에서)과 같은 열로 만든 키. */
+function tripKey(trip: {
+	direction: string;
+	lineKey: string;
+	serviceDay: string;
+	source: string;
+	trainNo: string;
+}): string {
+	return [
+		trip.source,
+		trip.lineKey,
+		trip.serviceDay,
+		trip.direction,
+		trip.trainNo,
+	].join("|");
+}
+
+/**
+ * 한 트랜잭션에서 timetable 배치를 만들고 trip(500행씩)과 stop_time(2,000행씩)을 넣은 뒤 현재 배치로 바꾼다.
+ * 다중 행 INSERT의 RETURNING 순서는 보장되지 않으므로 돌려받은 id는 trip 유일 키로 짝짓는다.
+ */
+export async function loadTimetable(
+	db: Database,
+	trips: readonly Trip[],
+	manifest: SourceManifest
+): Promise<{ batchId: number }> {
+	return await db.transaction(async (tx) => {
+		const batchId = await insertBatch(tx, "timetable", manifest);
+		for (const part of chunk(trips, TRIP_CHUNK_SIZE)) {
+			// biome-ignore lint/performance/noAwaitInLoops: chunks go in one by one inside the transaction
+			const inserted = await tx
+				.insert(timetableTrip)
+				.values(
+					part.map((trip) => ({
+						batchId,
+						destinationStatnId: trip.destinationStatnId,
+						direction: trip.direction,
+						express: trip.express,
+						lineKey: trip.lineKey,
+						originStatnId: trip.originStatnId,
+						qualityFlags: [...trip.qualityFlags],
+						serviceDay: trip.serviceDay,
+						serviceDaySource: trip.serviceDaySource,
+						source: trip.source,
+						sourceVersion: trip.sourceVersion,
+						trainNo: trip.trainNo,
+					}))
+				)
+				.returning({
+					direction: timetableTrip.direction,
+					id: timetableTrip.id,
+					lineKey: timetableTrip.lineKey,
+					serviceDay: timetableTrip.serviceDay,
+					source: timetableTrip.source,
+					trainNo: timetableTrip.trainNo,
+				});
+			const idByKey = new Map(inserted.map((row) => [tripKey(row), row.id]));
+			const stopRows = part.flatMap((trip) => {
+				const tripId = idByKey.get(tripKey(trip));
+				if (tripId === undefined) {
+					throw new Error(`timetable_trip ${tripKey(trip)} returned no id`);
+				}
+				return trip.stops.map((stop) => ({
+					arriveSec: stop.arriveSec,
+					departSec: stop.departSec,
+					qualityFlags: [...stop.qualityFlags],
+					seq: stop.seq,
+					statnId: stop.statnId,
+					tripId,
+				}));
+			});
+			for (const stops of chunk(stopRows, STOP_TIME_CHUNK_SIZE)) {
+				// biome-ignore lint/performance/noAwaitInLoops: statements in one transaction run one by one
+				await tx.insert(timetableStopTime).values(stops);
+			}
+		}
+		await makeCurrent(tx, "timetable", batchId);
+		return { batchId };
+	});
+}
+
 /**
  * 원본 manifest에 로직 버전 항목을 더한다. isCurrentManifest가 항목 전체를 비교하므로,
  * 버전만 올라가도 현재 배치와 다른 manifest가 되어 다음 실행에서 다시 적재된다.
@@ -218,9 +305,10 @@ export async function isCurrentManifest(
 	);
 }
 
-function toLineKey(value: string, statnId: string): LineKey {
+/** where: 오류 메시지에 쓸 행 이름(예: "station_crosswalk 1002000211"). */
+function toLineKey(value: string, where: string): LineKey {
 	if (!isLineKey(value)) {
-		throw new Error(`station_crosswalk ${statnId}: unknown line_key ${value}`);
+		throw new Error(`${where}: unknown line_key ${value}`);
 	}
 	return value;
 }
@@ -245,7 +333,7 @@ export async function loadCurrentCrosswalk(
 		coordSource: "station-master",
 		frCode: row.frCode ?? undefined,
 		lat: row.lat,
-		lineKey: toLineKey(row.lineKey, row.statnId),
+		lineKey: toLineKey(row.lineKey, `station_crosswalk ${row.statnId}`),
 		lng: row.lng,
 		matchMethod: row.matchMethod,
 		nameAliases: row.nameAliases,
@@ -254,5 +342,81 @@ export async function loadCurrentCrosswalk(
 		stationCd: row.stationCd ?? undefined,
 		statnId: row.statnId,
 		subwayId: row.subwayId,
+	}));
+}
+
+const currentTimetable = and(
+	eq(referenceBatch.kind, "timetable"),
+	eq(referenceBatch.isCurrent, true)
+);
+
+/** timetable 현재 배치의 노선별 trip 수. 현재 배치가 없거나 trip이 없는 노선은 빠진다. */
+export async function loadCurrentTripCounts(
+	db: Database
+): Promise<Partial<Record<LineKey, number>>> {
+	const rows = await db
+		.select({ lineKey: timetableTrip.lineKey, trips: count() })
+		.from(timetableTrip)
+		.innerJoin(referenceBatch, eq(timetableTrip.batchId, referenceBatch.id))
+		.where(currentTimetable)
+		.groupBy(timetableTrip.lineKey);
+	const counts: Partial<Record<LineKey, number>> = {};
+	for (const row of rows) {
+		counts[toLineKey(row.lineKey, `timetable_trip line ${row.lineKey}`)] =
+			row.trips;
+	}
+	return counts;
+}
+
+/**
+ * timetable 현재 배치의 trip을 정차(seq 순)와 함께 id 순으로 돌려준다. lineKey를 주면 그 노선만.
+ * 현재 배치가 없으면 빈 배열.
+ */
+export async function loadCurrentTrips(
+	db: Database,
+	lineKey?: LineKey
+): Promise<(Trip & { id: number })[]> {
+	const where = lineKey
+		? and(currentTimetable, eq(timetableTrip.lineKey, lineKey))
+		: currentTimetable;
+	const tripRows = await db
+		.select({ trip: timetableTrip })
+		.from(timetableTrip)
+		.innerJoin(referenceBatch, eq(timetableTrip.batchId, referenceBatch.id))
+		.where(where)
+		.orderBy(asc(timetableTrip.id));
+	const stopRows = await db
+		.select({ stop: timetableStopTime })
+		.from(timetableStopTime)
+		.innerJoin(timetableTrip, eq(timetableStopTime.tripId, timetableTrip.id))
+		.innerJoin(referenceBatch, eq(timetableTrip.batchId, referenceBatch.id))
+		.where(where)
+		.orderBy(asc(timetableStopTime.tripId), asc(timetableStopTime.seq));
+	const stopsByTrip = new Map<number, Trip["stops"]>();
+	for (const { stop } of stopRows) {
+		const stops = stopsByTrip.get(stop.tripId) ?? [];
+		stops.push({
+			arriveSec: stop.arriveSec,
+			departSec: stop.departSec,
+			qualityFlags: stop.qualityFlags,
+			seq: stop.seq,
+			statnId: stop.statnId,
+		});
+		stopsByTrip.set(stop.tripId, stops);
+	}
+	return tripRows.map(({ trip }) => ({
+		destinationStatnId: trip.destinationStatnId ?? undefined,
+		direction: trip.direction,
+		express: trip.express,
+		id: trip.id,
+		lineKey: toLineKey(trip.lineKey, `timetable_trip ${trip.id}`),
+		originStatnId: trip.originStatnId ?? undefined,
+		qualityFlags: trip.qualityFlags,
+		serviceDay: trip.serviceDay,
+		serviceDaySource: trip.serviceDaySource,
+		source: trip.source,
+		sourceVersion: trip.sourceVersion,
+		stops: stopsByTrip.get(trip.id) ?? [],
+		trainNo: trip.trainNo,
 	}));
 }
