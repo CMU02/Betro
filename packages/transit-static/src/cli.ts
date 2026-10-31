@@ -1,9 +1,11 @@
 import { createDb } from "@Betro/db";
 import { parseArgs } from "node:util";
 import { buildCrosswalk } from "./jobs/build-crosswalk";
+import { fetchOsm } from "./jobs/fetch-osm";
 import { fetchStationMaster } from "./jobs/fetch-station-master";
 import { fetchStationSearch } from "./jobs/fetch-station-search";
 import { fetchStationXlsx } from "./jobs/fetch-station-xlsx";
+import { osmDiscover } from "./jobs/osm-discover";
 import { resolveDatabaseUrl } from "./paths";
 import { resolveDataDir } from "./raw-store";
 
@@ -42,6 +44,9 @@ const commands: Record<string, CommandHandler> = {
 			process.exitCode = 1;
 		}
 	},
+	"fetch:osm": async () => {
+		await fetchOsm({ dataDir: resolveDataDir(process.env) });
+	},
 	"fetch:station-master": async () => {
 		const key = requireApiKey();
 		await fetchStationMaster({ dataDir: resolveDataDir(process.env), key });
@@ -60,6 +65,9 @@ const commands: Record<string, CommandHandler> = {
 			throw new Error(`invalid --seq: ${values.seq}`);
 		}
 		await fetchStationXlsx({ dataDir: resolveDataDir(process.env), seq });
+	},
+	"osm:discover": async () => {
+		await osmDiscover({ dataDir: resolveDataDir(process.env) });
 	},
 };
 
