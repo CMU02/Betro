@@ -1,6 +1,7 @@
 {
   "name": "Betro",
   "private": true,
+  "type": "module",
   "workspaces": {
     "packages": [
       "apps/*",
@@ -30,32 +31,36 @@
       "drizzle-orm": "1.0.0-rc.5"
     }
   },
-  "type": "module",
   "scripts": {
-    "dev": "turbo run dev",
+    "auth:generate": "cd apps/server && bun run auth:generate",
     "build": "turbo run build",
+    "check": "ultracite check",
     "check-types": "turbo run check-types",
-    "dev:native": "turbo run dev -F native --",
-    "dev:web": "turbo run dev -F web --",
-    "dev:server": "turbo run dev:bare -F fastify --",
-    "db:push": "turbo run db:push -F @Betro/db --",
-    "db:studio": "turbo run db:studio -F @Betro/db --",
     "db:generate": "turbo run db:generate -F @Betro/db --",
     "db:migrate": "turbo run db:migrate -F @Betro/db --",
+    "db:push": "turbo run db:push -F @Betro/db --",
+    "db:studio": "turbo run db:studio -F @Betro/db --",
+    "deploy:check": "bunx vercel deploy --dry",
     "deploy:server": "turbo run deploy -F @Betro/infra --",
-    "destroy": "turbo run destroy -F @Betro/infra --",
     "deploy:setup": "bunx vercel link",
-    "dev:vercel": "bunx vercel dev -L",
-    "env:preview": "tsx scripts/sync-vercel-env.ts preview",
-    "env:production": "tsx scripts/sync-vercel-env.ts production",
     "deploy:web": "bunx vercel deploy",
     "deploy:web:prod": "bunx vercel deploy --prod",
-    "deploy:check": "bunx vercel deploy --dry",
+    "destroy": "turbo run destroy -F @Betro/infra --",
+    "dev": "turbo run dev",
+    "dev:native": "turbo run dev -F native --",
+    "dev:server": "turbo run dev:bare -F fastify --",
+    "dev:vercel": "bunx vercel dev -L",
+    "dev:web": "turbo run dev -F web --",
     "env:generate": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./apps/native/ && varlock codegen --path ./packages/db/",
+    "env:preview": "tsx scripts/sync-vercel-env.ts preview",
+    "env:production": "tsx scripts/sync-vercel-env.ts production",
+    "fix": "ultracite fix",
     "postinstall": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./apps/native/ && varlock codegen --path ./packages/db/",
-    "auth:generate": "cd apps/server && bun run auth:generate",
-    "check": "ultracite check",
-    "fix": "ultracite fix"
+    "test": "bun test",
+    "transit": "bun --cwd packages/transit-static run cli"
+  },
+  "overrides": {
+    "@next/env": "npm:@varlock/nextjs-integration@1.2.2"
   },
   "dependencies": {
     "zod": "catalog:"
@@ -70,9 +75,6 @@
     "typescript": "^6.0.3",
     "ultracite": "8.0.0",
     "varlock": "catalog:"
-  },
-  "overrides": {
-    "@next/env": "npm:@varlock/nextjs-integration@1.2.2"
   },
   "packageManager": "bun@1.4.0"
 }

@@ -1,0 +1,28 @@
+{
+  "name": "@Betro/transit-static",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "cli": "bun run src/cli.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@Betro/db": "workspace:*",
+    "@libsql/client": "0.18.0",
+    "@turf/distance": "^7.4.0",
+    "@turf/helpers": "^7.4.0",
+    "@turf/length": "^7.4.0",
+    "@turf/nearest-point-on-line": "^7.4.0",
+    "drizzle-orm": "catalog:",
+    "read-excel-file": "^9.3.14",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@Betro/config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "^6.0.3"
+  }
+}
