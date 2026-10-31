@@ -1,9 +1,12 @@
+import { createTestDb } from "@Betro/db/test-db";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { CROSSWALK_MATCH_VERSION } from "../crosswalk/match";
+import { isCurrentManifest, loadCrosswalk } from "../db/load";
 import { rawPath } from "../paths";
-import { loadBuildCrosswalkInput } from "./build-crosswalk";
+import { crosswalkManifest, loadBuildCrosswalkInput } from "./build-crosswalk";
 
 const RUN_XLSX = /bun transit fetch:station-xlsx/;
 const RUN_MASTER = /bun transit fetch:station-master/;
@@ -40,5 +43,49 @@ describe("loadBuildCrosswalkInput", () => {
 			rawPath(dataDir, "oa-21232-station-master", "station-master.json")
 		);
 		await expect(loadBuildCrosswalkInput(dataDir)).rejects.toThrow(RUN_SEARCH);
+	});
+});
+
+describe("crosswalkManifest", () => {
+	const sources = { xlsx: { fileName: "stations-seq57.xlsx", sha256: "a" } };
+	const row = {
+		bldnId: "0150",
+		coordSource: "station-master",
+		lat: 37.556,
+		lineKey: "line1",
+		lng: 126.972,
+		matchMethod: "auto-same-line",
+		nameAliases: ["서울역"],
+		nameCanonical: "서울",
+		qualityFlags: [],
+		statnId: "1001000133",
+		subwayId: "1001",
+	} as const;
+	it("reloads when only the match version differs", async () => {
+		const db = await createTestDb();
+		await loadCrosswalk(
+			db,
+			[row],
+			crosswalkManifest(sources, CROSSWALK_MATCH_VERSION + 1)
+		);
+		expect(
+			await isCurrentManifest(
+				db,
+				"station_crosswalk",
+				crosswalkManifest(sources)
+			)
+		).toBe(false);
+	});
+	it("skips when the match version and sources are the same", async () => {
+		const db = await createTestDb();
+		await loadCrosswalk(db, [row], crosswalkManifest(sources));
+		expect(
+			await isCurrentManifest(
+				db,
+				"station_crosswalk",
+				crosswalkManifest(sources)
+			)
+		).toBe(true);
+		expect(crosswalkManifest(sources).matchVersion).toBeDefined();
 	});
 });

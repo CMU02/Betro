@@ -7,6 +7,12 @@ import {
 	type SourceLineNameTable,
 } from "./source-line-names";
 
+/**
+ * 역 대응표 매칭 로직의 버전. 매칭 결과가 달라지는 코드 변경마다 올린다.
+ * station_crosswalk 적재 manifest에 들어가므로, 올리면 원본이 같아도 다음 build:crosswalk가 다시 적재한다.
+ */
+export const CROSSWALK_MATCH_VERSION = 1;
+
 export interface StationAlias {
 	masterName: string;
 	statnId: string;

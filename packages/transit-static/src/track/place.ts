@@ -10,6 +10,13 @@ import {
 import type { LngLat } from "./stitch";
 import { matchOsmStops, type ShapeIssue, stopRefConflicts } from "./validate";
 
+/**
+ * 역 배치 로직의 버전. 배치 결과가 달라지는 코드 변경마다 올린다.
+ * track 적재 manifest에 들어가므로, 올리면 원본이 같아도 다음 build:tracks가 다시 적재한다.
+ * 1: 역사마스터 좌표 투영(Task 11), 2: OSM 정차 노드 기준 배치 + 이름 우선 매칭(Task 12).
+ */
+export const TRACK_PLACEMENT_VERSION = 2;
+
 /** OSM 정차 노드가 역사마스터 좌표에서 이 거리(미터)보다 멀면 이름 오매칭으로 보고 쓰지 않는다. */
 export const STOP_ANCHOR_MAX_OFFSET_M = 2000;
 

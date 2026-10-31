@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { isCurrentManifest, loadTracks } from "../db/load";
 import { rawPath } from "../paths";
-import { loadBuildTracksInput, summaryOf } from "./build-tracks";
+import { TRACK_PLACEMENT_VERSION } from "../track/place";
+import { loadBuildTracksInput, summaryOf, trackManifest } from "./build-tracks";
 
 const RUN_FETCH_OSM = /bun transit fetch:osm/;
 const RUN_BUILD_CROSSWALK = /bun transit build:crosswalk/;
@@ -94,5 +96,30 @@ describe("summaryOf", () => {
 		expect(summary.stopAnchorRejected).toEqual([
 			{ detail: rejected.detail, lineKey: "line2", osmRelationId: 1 },
 		]);
+	});
+});
+
+describe("trackManifest", () => {
+	const sources = {
+		osmRoutes: { fileName: "osm/routes.json", sha256: "abc" },
+	};
+	it("reloads when only the placement version differs", async () => {
+		const db = await createTestDb();
+		await loadTracks(
+			db,
+			[],
+			trackManifest(sources, TRACK_PLACEMENT_VERSION - 1)
+		);
+		expect(await isCurrentManifest(db, "track", trackManifest(sources))).toBe(
+			false
+		);
+	});
+	it("skips when the placement version and sources are the same", async () => {
+		const db = await createTestDb();
+		await loadTracks(db, [], trackManifest(sources));
+		expect(await isCurrentManifest(db, "track", trackManifest(sources))).toBe(
+			true
+		);
+		expect(trackManifest(sources).placementVersion).toBeDefined();
 	});
 });

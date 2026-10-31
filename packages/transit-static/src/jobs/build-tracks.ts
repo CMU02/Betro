@@ -4,6 +4,7 @@ import {
 	isCurrentManifest,
 	loadCurrentCrosswalk,
 	loadTracks,
+	withLogicVersion,
 } from "../db/load";
 import { isLineKey } from "../lines";
 import osmRoutesJson from "../manual/osm-routes.json";
@@ -19,6 +20,7 @@ import {
 	renderAnchorTotals,
 } from "../track/assemble";
 import { indexOsm } from "../track/osm-model";
+import { TRACK_PLACEMENT_VERSION } from "../track/place";
 import { osmRoutesSchema } from "./fetch-osm";
 
 const JOB_NAME = "build-tracks";
@@ -30,6 +32,19 @@ export type BuildTracksInput = AssembleInput;
 interface TrackSources {
 	input: BuildTracksInput;
 	manifest: SourceManifest;
+}
+
+/** track 적재 manifest: 원본 해시에 역 배치 로직 버전(placementVersion)을 더한다. */
+export function trackManifest(
+	sources: SourceManifest,
+	version: number = TRACK_PLACEMENT_VERSION
+): SourceManifest {
+	return withLogicVersion(
+		sources,
+		"placementVersion",
+		"track placement logic",
+		version
+	);
 }
 
 const contentHash = (value: unknown): string =>
@@ -68,7 +83,7 @@ async function readTrackSources(
 	const osm = indexOsm(JSON.parse(new TextDecoder().decode(raw.bytes)));
 	return {
 		input: { crosswalk, osm, routes },
-		manifest: {
+		manifest: trackManifest({
 			crosswalk: {
 				fileName: `station_crosswalk current (${crosswalk.length})`,
 				sha256: contentHash(crosswalk),
@@ -81,7 +96,7 @@ async function readTrackSources(
 				fileName: `${OSM_SOURCE}/${OSM_ROUTES_FILE}`,
 				sha256: raw.sha256,
 			},
-		},
+		}),
 	};
 }
 

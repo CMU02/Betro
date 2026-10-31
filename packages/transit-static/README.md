@@ -54,7 +54,7 @@ bun transit build:tracks                    # 검증을 통과하면 DB에 적�
 - `offsetM`은 역사마스터 좌표에서 역을 놓은 지점까지의 거리이고 80m를 넘으면 `station-offset` 경고를 낸다. `osm-stop`이면 선로 방향 차이(승강장 중심과 역사 좌표)까지 포함하므로 150~300m도 흔하다.
 - 정차 노드 매칭은 이름(정규화한 `nameCanonical`·`nameAliases`)이 먼저이고, 이름으로 못 찾을 때만 `ref` = `frCode`를 쓴다. 노드 이름이 같은 노선의 다른 역을 가리키는데 ref만 이 역의 frCode이면 그 ref 매칭은 버린다. 이름으로 맞은 노드의 ref가 그 역의 frCode를 담고 있지 않을 때도 노드는 쓰되 같은 경고를 낸다. 두 경우 모두 `stop-ref-conflict`(노드당 한 번)다. frCode 비교는 `;`로 나눈 여러 값과 앞자리 0 차이(`D08` = `D8`)를 같은 것으로 본다.
 - 다음 중 하나라도 있으면 실패(exit 1)하고 적재하지 않는다: stitch 실패(relation 없음, gap, 노드 없음), error 수준 검증 결과(OSM 정차 순서와 투영 순서가 다름, 선 위 역이 2개 미만), 자기 노선의 어떤 shape에도 올라가지 않은 역(미커버 역), crosswalk에 역이 있는데 shape가 없는 노선.
-- 적재는 한 트랜잭션으로 `reference_batch(kind="track")`를 새로 만들고 `track_shape`, `track_station`을 넣은 뒤 현재 배치로 바꾼다. OSM 원본, osm-routes.json, 현재 대응표 내용의 해시가 현재 배치와 같으면 다시 적재하지 않는다.
+- 적재는 한 트랜잭션으로 `reference_batch(kind="track")`를 새로 만들고 `track_shape`, `track_station`을 넣은 뒤 현재 배치로 바꾼다. OSM 원본, osm-routes.json, 현재 대응표 내용의 해시가 현재 배치와 같으면 다시 적재하지 않는다. manifest에는 로직 버전(track `placementVersion` = `TRACK_PLACEMENT_VERSION`, 대응표 `matchVersion` = `CROSSWALK_MATCH_VERSION`)도 들어가므로, 배치·매칭 결과가 달라지는 코드를 고칠 때 그 상수를 올리면 다음 실행에서 다시 적재된다.
 
 ## 보고서
 

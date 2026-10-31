@@ -8,9 +8,9 @@ import {
 	buildCrosswalk as computeCrosswalk,
 	countByMatchMethod,
 } from "../crosswalk/build";
-import type { StationAlias } from "../crosswalk/match";
+import { CROSSWALK_MATCH_VERSION, type StationAlias } from "../crosswalk/match";
 import { manualTable } from "../crosswalk/source-line-names";
-import { isCurrentManifest, loadCrosswalk } from "../db/load";
+import { isCurrentManifest, loadCrosswalk, withLogicVersion } from "../db/load";
 import stationAliasesJson from "../manual/station-aliases.json" with {
 	type: "json",
 };
@@ -137,6 +137,19 @@ async function readSearchResults(
 	};
 }
 
+/** station_crosswalk 적재 manifest: 원본 해시에 매칭 로직 버전(matchVersion)을 더한다. */
+export function crosswalkManifest(
+	sources: SourceManifest,
+	version: number = CROSSWALK_MATCH_VERSION
+): SourceManifest {
+	return withLogicVersion(
+		sources,
+		"matchVersion",
+		"crosswalk match logic",
+		version
+	);
+}
+
 function contentHash(value: unknown): string {
 	return sha256Hex(new TextEncoder().encode(JSON.stringify(value)));
 }
@@ -192,7 +205,7 @@ async function readCrosswalkSources(
 			searchByName: search.searchByName,
 			stations,
 		},
-		manifest: {
+		manifest: crosswalkManifest({
 			sourceLineNames: {
 				fileName: "manual/source-line-names.json",
 				sha256: contentHash(manualTable),
@@ -207,7 +220,7 @@ async function readCrosswalkSources(
 				sha256: search.sha256,
 			},
 			xlsx: { fileName: latestXlsx, sha256: xlsxRaw.sha256 },
-		},
+		}),
 		prevXlsxName: prevXlsx,
 	};
 }

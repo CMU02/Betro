@@ -168,6 +168,20 @@ export async function loadTracks(
 	});
 }
 
+/**
+ * 원본 manifest에 로직 버전 항목을 더한다. isCurrentManifest가 항목 전체를 비교하므로,
+ * 버전만 올라가도 현재 배치와 다른 manifest가 되어 다음 실행에서 다시 적재된다.
+ * SourceManifest 형태를 지키려고 버전은 sha256 칸에 `v<번호>`로 넣는다.
+ */
+export function withLogicVersion(
+	manifest: SourceManifest,
+	key: string,
+	label: string,
+	version: number
+): SourceManifest {
+	return { ...manifest, [key]: { fileName: label, sha256: `v${version}` } };
+}
+
 function sameManifest(a: SourceManifest, b: SourceManifest): boolean {
 	const keys = Object.keys(a);
 	if (keys.length !== Object.keys(b).length) {
