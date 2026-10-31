@@ -1,1 +1,7 @@
-[]
+[
+  { "statnId": "1006000610", "masterName": "응암" },
+  { "statnId": "1032000346", "masterName": "운정" },
+  { "statnId": "1063075318", "masterName": "화전" },
+  { "statnId": "1081037419", "masterName": "세종대왕릉" },
+  { "statnId": "1093004021", "masterName": "원곡" }
+]

@@ -66,7 +66,9 @@ bun transit build:tracks                    # 검증을 통과하면 DB에 적�
   - `stationSearchLineNum`: OA-121 `LINE_NUM` 문자열 → lineKey
   - `ignoredRoutes`: 범위 밖 노선 문자열(인천1호선, 김포골드라인 등). 매핑하지 않고 "범위 밖"으로 보고서에만 남긴다. 두 출처에 같은 목록을 쓴다.
   - 값은 `src/lines.ts`의 19개 lineKey 중 하나여야 한다. 1호선 구간명(경부선, 경인선, 경원선 등)과 2호선 지선은 각각 `line1`, `line2`로 보낸다.
+  - 현재 내용(xlsx seq57 기준): 역사마스터 ROUTE 34개, OA-121 LINE_NUM 19개를 매핑했다. 역사마스터 `경원선`은 경의중앙선 용산~청량리 역도 담고 있지만 `line1`로 보내며, 그 역들은 공용역(auto-shared)으로 맞춰진다. `ignoredRoutes`: 인천1호선·인천선, 인천2호선, 김포골드라인·김포도시철도, 에버라인선·용인경전철, 의정부선·의정부경전철.
 - `station-aliases.json`: `{ "statnId": "...", "masterName": "..." }` 배열. 이름이 달라 자동으로 못 맞춘 역에만 넣는다. `statnId`는 xlsx의 10자리 문자열 그대로 쓴다.
+  - 현재 5건: 응암순환(상선)→응암, 운정중앙→운정, 한국항공대→화전, 세종왕릉→세종대왕릉, 시우→원곡.
 - `osm-routes.json`: `{ "lineKey", "branchKey", "direction", "osmRelationId", "note"? }` 배열. 노선·갈래·방향마다 OSM route relation 하나.
   - 고르는 기준: `route=subway|train|light_rail`이고 route_master가 해당 노선인 relation. 실시간 역을 전부 덮는 것이 목표이므로 미커버 역이 사라질 때까지 갈래를 더한다(1호선 `gyeongbu`·`gyeongin`·`gyeongwon` 등, 5호선 `main`·`macheon`, 2호선 성수·신정지선 등).
   - `direction`: `up`은 실시간 API `updnLine=0`, `down`은 `1`. 2호선은 내선=`up`, 외선=`down`. relation의 `from`/`to` 태그로 판단하고 근거를 `note`에 적는다.
