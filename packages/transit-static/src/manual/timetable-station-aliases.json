@@ -1,1 +1,230 @@
-[]
+[
+  {
+    "lineKey": "line1",
+    "source": "seoul-metro-csv",
+    "sourceStation": "1723",
+    "statnId": "1001080164"
+  },
+  {
+    "lineKey": "line4",
+    "source": "seoul-metro-csv",
+    "sourceStation": "0405",
+    "statnId": null
+  },
+  {
+    "lineKey": "line4",
+    "source": "seoul-metro-csv",
+    "sourceStation": "0406",
+    "statnId": null
+  },
+  {
+    "lineKey": "line4",
+    "source": "seoul-metro-csv",
+    "sourceStation": "0408",
+    "statnId": null
+  },
+  {
+    "lineKey": "line7",
+    "source": "seoul-metro-csv",
+    "sourceStation": "2730",
+    "statnId": "1007000728"
+  },
+  {
+    "lineKey": "line7",
+    "source": "seoul-metro-csv",
+    "sourceStation": "2738",
+    "statnId": "1007000736"
+  },
+  {
+    "lineKey": "gyeongui-jungang",
+    "source": "kric-korail",
+    "sourceStation": "1양원",
+    "statnId": "1063075122"
+  },
+  {
+    "lineKey": "gyeongui-jungang",
+    "source": "kric-korail",
+    "sourceStation": "1양정",
+    "statnId": "1063075125"
+  },
+  {
+    "lineKey": "gyeongui-jungang",
+    "source": "kric-korail",
+    "sourceStation": "디엠시",
+    "statnId": "1063075316"
+  },
+  {
+    "lineKey": "gyeongui-jungang",
+    "source": "kric-korail",
+    "sourceStation": "항공대",
+    "statnId": "1063075318"
+  },
+  {
+    "lineKey": "gyeongui-jungang",
+    "source": "kric-korail",
+    "sourceStation": "홍대입",
+    "statnId": "1063075314"
+  },
+  {
+    "lineKey": "gyeongui-jungang",
+    "source": "kric-korail",
+    "sourceStation": "효창공",
+    "statnId": "1063075826"
+  },
+  {
+    "lineKey": "gyeongchun",
+    "source": "kric-korail",
+    "sourceStation": "평내호",
+    "statnId": "1067080128"
+  },
+  {
+    "lineKey": "suin-bundang",
+    "source": "kric-korail",
+    "sourceStation": "강남구",
+    "statnId": "1075075213"
+  },
+  {
+    "lineKey": "suin-bundang",
+    "source": "kric-korail",
+    "sourceStation": "남동인",
+    "statnId": "1075075264"
+  },
+  {
+    "lineKey": "suin-bundang",
+    "source": "kric-korail",
+    "sourceStation": "대모산",
+    "statnId": "1075075220"
+  },
+  {
+    "lineKey": "suin-bundang",
+    "source": "kric-korail",
+    "sourceStation": "로데오",
+    "statnId": "1075075212"
+  },
+  {
+    "lineKey": "suin-bundang",
+    "source": "kric-korail",
+    "sourceStation": "매탄권",
+    "statnId": "1075075242"
+  },
+  {
+    "lineKey": "suin-bundang",
+    "source": "kric-korail",
+    "sourceStation": "소래포",
+    "statnId": "1075075261"
+  },
+  {
+    "lineKey": "suin-bundang",
+    "source": "kric-korail",
+    "sourceStation": "수원시",
+    "statnId": "1075075243"
+  },
+  {
+    "lineKey": "suin-bundang",
+    "source": "kric-korail",
+    "sourceStation": "신길온",
+    "statnId": "1075075256"
+  },
+  {
+    "lineKey": "suin-bundang",
+    "source": "kric-korail",
+    "sourceStation": "신수원",
+    "statnId": "1075075245"
+  },
+  {
+    "lineKey": "suin-bundang",
+    "source": "kric-korail",
+    "sourceStation": "신인천",
+    "statnId": "1075075271"
+  },
+  {
+    "lineKey": "suin-bundang",
+    "source": "kric-korail",
+    "sourceStation": "인천논",
+    "statnId": "1075075262"
+  },
+  {
+    "lineKey": "seohae",
+    "source": "kric-korail",
+    "sourceStation": "부천종",
+    "statnId": "1093004009"
+  },
+  {
+    "lineKey": "seohae",
+    "source": "kric-korail",
+    "sourceStation": "시흥능",
+    "statnId": "1093004017"
+  },
+  {
+    "lineKey": "seohae",
+    "source": "kric-korail",
+    "sourceStation": "시흥대",
+    "statnId": "1093004012"
+  },
+  {
+    "lineKey": "seohae",
+    "source": "kric-korail",
+    "sourceStation": "시흥청",
+    "statnId": "1093004016"
+  },
+  {
+    "lineKey": "seohae",
+    "source": "kric-korail",
+    "sourceStation": "신김포",
+    "statnId": "1093004007"
+  },
+  {
+    "lineKey": "seohae",
+    "source": "kric-korail",
+    "sourceStation": "신소사",
+    "statnId": "1093004010"
+  },
+  {
+    "lineKey": "seohae",
+    "source": "kric-korail",
+    "sourceStation": "신신천",
+    "statnId": "1093004013"
+  },
+  {
+    "lineKey": "seohae",
+    "source": "kric-korail",
+    "sourceStation": "신신현",
+    "statnId": "1093004014"
+  },
+  {
+    "lineKey": "seohae",
+    "source": "kric-korail",
+    "sourceStation": "신초지",
+    "statnId": "1093004020"
+  },
+  {
+    "lineKey": "gyeonggang",
+    "source": "kric-korail",
+    "sourceStation": "경광주",
+    "statnId": "1081037413"
+  },
+  {
+    "lineKey": "gyeonggang",
+    "source": "kric-korail",
+    "sourceStation": "도예촌",
+    "statnId": "1081037416"
+  },
+  {
+    "lineKey": "gyeonggang",
+    "source": "kric-korail",
+    "sourceStation": "세종릉",
+    "statnId": "1081037419"
+  },
+  {
+    "lineKey": "gyeonggang",
+    "source": "kric-korail",
+    "sourceStation": "신이매",
+    "statnId": "1081037411"
+  },
+  {
+    "lineKey": "gyeonggang",
+    "source": "kric-korail",
+    "sourceStation": "신판교",
+    "statnId": "1081037409"
+  }
+]

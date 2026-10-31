@@ -58,6 +58,15 @@ describe("renderTimetableReport", () => {
 		];
 		const { summary, markdown } = renderTimetableReport({
 			dryRun: true,
+			excludedStations: [
+				{
+					code: "0405",
+					count: 3,
+					lineKey: "line4",
+					name: "진접",
+					source: "seoul-metro-csv",
+				},
+			],
 			issues,
 			lines: [],
 			linesWithoutTimetable: ["gtx-a"],
@@ -68,6 +77,11 @@ describe("renderTimetableReport", () => {
 			sourceVersions: {},
 			unresolvedStations: [],
 		});
+		expect(summary.excludedStations).toEqual([
+			expect.objectContaining({ code: "0405", count: 3 }),
+		]);
+		expect(markdown).toContain("## 대응표 범위 밖으로 뺀 역");
+		expect(markdown).toContain("| seoul-metro-csv | line4 | 0405 | 진접 | 3 |");
 		expect(summary.issueCounts).toEqual({
 			"non-monotonic": { error: 1, warn: 0 },
 			"segment-outlier": { error: 0, warn: REPORT_TOP_N },

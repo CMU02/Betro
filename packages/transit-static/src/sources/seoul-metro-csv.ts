@@ -148,6 +148,12 @@ function parseRow(record: CsvRecord, rowNumber: number): ParsedRow {
 	} catch (error) {
 		return { error: `${(error as Error).message} at row ${rowNumber}` };
 	}
+	// 원문 오류(예: 9호선 DAY C9247 신반포 도착 24:12:35 출발 24:12:00). 어느 쪽이 틀렸는지 알 수 없어 행을 버린다.
+	if (arrive.sec !== null && depart.sec !== null && depart.sec < arrive.sec) {
+		return {
+			error: `depart ${depart.raw} before arrive ${arrive.raw} at row ${rowNumber}`,
+		};
+	}
 	const orderSec = arrive.sec ?? depart.sec;
 	if (orderSec === null) {
 		return { error: `no arrive or depart time at row ${rowNumber}` };

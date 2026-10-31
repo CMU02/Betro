@@ -31,6 +31,8 @@ export interface LineReport {
 
 export interface TimetableReportInput {
 	dryRun: boolean;
+	/** timetable-station-aliases.json에서 statnId null로 뺀 대응표 범위 밖 역 */
+	excludedStations: UnresolvedStation[];
 	issues: TimetableIssue[];
 	lines: LineReport[];
 	linesWithoutTimetable: LineKey[];
@@ -138,12 +140,15 @@ function issuesSection(issues: TimetableIssue[]): string[] {
 	];
 }
 
-function unresolvedSection(unresolved: UnresolvedStation[]): string[] {
+function stationSection(
+	title: string,
+	unresolved: UnresolvedStation[]
+): string[] {
 	if (unresolved.length === 0) {
-		return ["## 대응표에 없는 역", "", "없음", ""];
+		return [title, "", "없음", ""];
 	}
 	return [
-		"## 대응표에 없는 역",
+		title,
 		"",
 		row(["출처", "노선", "코드", "역명", "빈도"]),
 		row(["---", "---", "---", "---", "---"]),
@@ -185,6 +190,7 @@ export function renderTimetableReport(input: TimetableReportInput): ReportBody {
 	const errorCount = input.issues.filter((i) => i.severity === "error").length;
 	const summary = {
 		dryRun: input.dryRun,
+		excludedStations: input.excludedStations,
 		freshness,
 		generatedAt: input.now.toISOString(),
 		issueCounts: countIssues(input.issues),
@@ -215,7 +221,11 @@ export function renderTimetableReport(input: TimetableReportInput): ReportBody {
 		...bulletList("## 토요일을 휴일로 복제한 노선", saturdayCopiedLines),
 		...freshnessSection(freshness),
 		...issuesSection(input.issues),
-		...unresolvedSection(input.unresolvedStations),
+		...stationSection("## 대응표에 없는 역", input.unresolvedStations),
+		...stationSection(
+			"## 대응표 범위 밖으로 뺀 역 (별칭 statnId null, ok에 영향 없음)",
+			input.excludedStations
+		),
 		...bulletList(
 			`## 출처 오류 (상위 ${sourceErrors.length}건, 전체 ${input.sourceErrors.length}건)`,
 			sourceErrors

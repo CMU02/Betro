@@ -138,6 +138,22 @@ describe("parseSeoulMetroCsv", () => {
 		expect(trips).toHaveLength(1);
 	});
 
+	it("drops a stop whose departure is earlier than its arrival (9호선 DAY C9247 신반포 in the 20260914 file)", () => {
+		const text = [
+			HEADER,
+			'407031,"9","4121",구반포,DAY,DOWN,"0",C9247,"24:14:00","24:14:25",중앙보훈병원,개화',
+			'407671,"9","4122",신반포,DAY,DOWN,"0",C9247,"24:12:35","24:12:00",중앙보훈병원,개화',
+			'408542,"9","4123",고속터미널,DAY,DOWN,"0",C9247,"24:10:20","24:10:50",중앙보훈병원,개화',
+		].join("\r\n");
+		const { trips, errors } = parseSeoulMetroCsv(text);
+		expect(errors).toEqual(["depart 24:12:00 before arrive 24:12:35 at row 3"]);
+		expect(trips).toHaveLength(1);
+		expect(trips[0]?.stops.map((s) => s.station.code)).toEqual([
+			"4123",
+			"4121",
+		]);
+	});
+
 	it("accepts the 'N호선' spelling of the line column", () => {
 		const text = [
 			HEADER,

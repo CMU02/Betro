@@ -194,6 +194,36 @@ describe("parseKricPacked", () => {
 		expect(skipped).toEqual([{ lineName: SILLIM, reason: "unknown-format" }]);
 	});
 
+	it("drops a row whose departure column runs backwards against the station order (신림 주말 1011)", () => {
+		/** 실제 파일의 신림선 주말+공휴일 1011 행. 출발 칸 시각이 역 순서와 반대로 줄어든다. */
+		const reversed: KricRow = {
+			arrive:
+				"001-:+002-6:21+003-6:22+004-6:24+005-6:26+006-6:27+007-6:29+008-6:30+009-6:32+010-6:35+011-6:37",
+			dataDate: "2025-09-23",
+			dayLabel: "주말+공휴일",
+			depart:
+				"001-6:40+002-6:35+003-6:33+004-6:31+005-6:29+006-6:28+007-6:26+008-6:24+009-6:23+010-6:21+011-:",
+			destination: "관악산",
+			lineName: SILLIM,
+			operator: "02-890-2227~8",
+			origin: "샛강",
+			raw: {},
+			serviceType: "일반",
+			stationName:
+				"001-샛강역+002-대방+003-서울지방병무청+004-보라매+005-보라매공원+006-보라매병원+007-당곡+008-신림+009-서원+010-서울대벤처타운+011-관악산",
+			trainNo: "1011",
+		};
+		const { errors, trips } = parseKricPacked([
+			reversed,
+			sampleRow(SILLIM, "1001"),
+		]);
+		expect(trips.some((t) => t.trainNo === "1011")).toBe(false);
+		expect(trips.some((t) => t.trainNo === "1001")).toBe(true);
+		expect(errors).toEqual([
+			"time-column-reversed sillim 주말+공휴일 1011: depart 칸 시각이 역 순서와 반대로 줄어듦(원문 오류)",
+		]);
+	});
+
 	it("reports an unknown day label and an unknown terminal as errors", () => {
 		const row = sampleRow(UI_SINSEOL, "1001");
 		const { errors, trips } = parseKricPacked([

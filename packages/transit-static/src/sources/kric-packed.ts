@@ -216,6 +216,32 @@ function parseStops(
 	}));
 }
 
+const MINUTES_PER_HOUR = 60;
+
+/** packedTime이 만든 "H:MM"(24 이상 가능)을 분으로. */
+function packedMinutes(time: string): number {
+	const [hour = "", minute = ""] = time.split(":");
+	return Number(hour) * MINUTES_PER_HOUR + Number(minute);
+}
+
+/**
+ * 시각 칸 하나가 역 순서와 반대로 줄어드는지. 비지 않은 시각이 처음부터 끝까지 늘지 않고 첫 시각이 끝 시각보다 늦으면 그렇다.
+ * 신림선 주말+공휴일 일부 행은 출발 칸이 이렇게 거꾸로 적혀 있다(원문 오류).
+ */
+function runsBackwards(times: (string | null)[]): boolean {
+	const minutes = times
+		.filter((time): time is string => time !== null)
+		.map(packedMinutes);
+	const [first] = minutes;
+	const last = minutes.at(-1);
+	if (first === undefined || last === undefined || first <= last) {
+		return false;
+	}
+	return minutes.every(
+		(value, index) => index === 0 || value <= (minutes[index - 1] ?? value)
+	);
+}
+
 function judgeDirection(
 	line: PackedLine,
 	origin: string,
@@ -300,6 +326,13 @@ function rowToTrips(row: KricRow, line: PackedLine): RowOutcome {
 	const stops = parseStops(row, line.timeLayout);
 	if (!stops) {
 		return { skip: "unknown-format" };
+	}
+	for (const column of ["arrive", "depart"] as const) {
+		if (runsBackwards(stops.map((stop) => stop[column]))) {
+			return {
+				error: `time-column-reversed ${line.lineKey} ${row.dayLabel} ${row.trainNo}: ${column} 칸 시각이 역 순서와 반대로 줄어듦(원문 오류)`,
+			};
+		}
 	}
 	const direction = judgeDirection(line, row.origin, row.destination);
 	if (!direction) {

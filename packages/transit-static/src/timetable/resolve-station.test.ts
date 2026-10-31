@@ -107,4 +107,47 @@ describe("createStationResolver", () => {
 		fresh.resolve({ ...input, name: "시청" });
 		expect(fresh.unresolved()).toEqual([{ ...input, count: 2 }]);
 	});
+
+	it("statnId가 null인 별칭은 대응표 범위 밖 역으로 빼고 unresolved가 아닌 excluded로 센다", () => {
+		const scoped = createStationResolver(crosswalk, [
+			{
+				lineKey: "line4",
+				source: "seoul-metro-csv",
+				sourceStation: "0405",
+				statnId: null,
+			},
+			{
+				lineKey: "line4",
+				source: "*",
+				sourceStation: "0406",
+				statnId: null,
+			},
+		]);
+		expect(
+			scoped.resolve({
+				code: "0406",
+				lineKey: "line4",
+				source: "seoul-metro-csv",
+			})
+		).toEqual({ method: "excluded" });
+		const input = {
+			code: "0405",
+			lineKey: "line4" as const,
+			name: "진접",
+			source: "seoul-metro-csv" as const,
+		};
+		expect(scoped.resolve(input)).toEqual({ method: "excluded" });
+		scoped.resolve(input);
+		expect(scoped.unresolved()).toEqual([]);
+		expect(scoped.excluded()).toEqual([
+			{
+				code: "0406",
+				count: 1,
+				lineKey: "line4",
+				name: undefined,
+				source: "seoul-metro-csv",
+			},
+			{ ...input, count: 2 },
+		]);
+	});
 });

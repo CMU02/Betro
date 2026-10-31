@@ -55,8 +55,13 @@ import {
 import { type TimetableIssue, validateTrips } from "../timetable/validate";
 
 const JOB_NAME = "build-timetable";
-/** 시간표 변환·검증 로직 버전. 바꾸면 원본이 같아도 다시 적재된다(manifest 키 timetableVersion). */
-export const TIMETABLE_LOGIC_VERSION = 1;
+/**
+ * 시간표 변환·검증 로직 버전. 바꾸면 원본이 같아도 다시 적재된다(manifest 키 timetableVersion).
+ * 2: 출발이 도착보다 이른 CSV 행과 시각 칸이 거꾸로 적힌 KRIC 묶음 행을 버리고, 대응표 범위 밖 역(별칭 statnId null)을 뺀다.
+ */
+export const TIMETABLE_LOGIC_VERSION = 2;
+/** 범위 밖 역을 빼고 남은 정차가 이보다 적으면 그 열차는 대응표 범위 안을 달리지 않는 것으로 보고 버린다. */
+const MIN_STOPS_IN_SCOPE = 2;
 const UNKNOWN_VERSION = "unknown";
 /** 공항철도 직통 CSV에는 요일 열이 없다. 직통 시각표가 요일과 무관하다고 보고 세 요일에 모두 넣는다. */
 const AIRPORT_EXPRESS_SERVICE_DAYS: readonly ServiceDay[] = [
@@ -95,7 +100,8 @@ const aliasesSchema = z.array(
 			"kric-api",
 		]),
 		sourceStation: z.string().min(1),
-		statnId: z.string().min(1),
+		/** null이면 대응표 범위 밖 역: 그 정차를 뺀다. */
+		statnId: z.string().min(1).nullable(),
 	})
 );
 
@@ -351,7 +357,11 @@ function createSourceLoader(
 	};
 }
 
-/** 역을 statn_id로 잇고 시각을 초로 바꾼다. 시각을 읽을 수 없으면 errors에 넣고 undefined. 해석 못 한 역은 빼고 resolver가 센다. */
+/**
+ * 역을 statn_id로 잇고 시각을 초로 바꾼다. 시각을 읽을 수 없으면 errors에 넣고 undefined.
+ * 해석 못 한 역은 빼고 resolver가 센다. 범위 밖 역(별칭 statnId null)도 빼고, 그 때문에 정차가
+ * MIN_STOPS_IN_SCOPE보다 적게 남으면 열차를 errors에 적고 버린다(진접선 안에서만 다니는 4호선 열차 등).
+ */
 function toTrip(
 	source: SourceTrip,
 	version: string,
@@ -360,6 +370,7 @@ function toTrip(
 ): Trip | undefined {
 	const { stops: sourceStops, sourceVersion, ...fields } = source;
 	const stops: StopTime[] = [];
+	let excludedStops = 0;
 	for (const stop of [...sourceStops].sort((a, b) => a.seq - b.seq)) {
 		const resolved = resolver.resolve({
 			code: stop.station.code,
@@ -368,6 +379,10 @@ function toTrip(
 			source: source.source,
 		});
 		if ("error" in resolved) {
+			continue;
+		}
+		if (resolved.method === "excluded") {
+			excludedStops += 1;
 			continue;
 		}
 		try {
@@ -384,6 +399,12 @@ function toTrip(
 			);
 			return undefined;
 		}
+	}
+	if (excludedStops > 0 && stops.length < MIN_STOPS_IN_SCOPE) {
+		errors.push(
+			`${source.source} ${source.lineKey} ${source.serviceDay} ${source.trainNo}: 대응표 범위 밖 역 ${excludedStops}곳을 빼고 정차가 ${stops.length}곳만 남아 버림`
+		);
+		return undefined;
 	}
 	const normalized = normalizeTripTimes(stops);
 	return {
@@ -438,6 +459,8 @@ function lineReport(resolved: ResolvedLineSources, trips: Trip[]): LineReport {
 }
 
 export interface BuildTimetableInput {
+	/** 역 별칭표. 기본은 manual/timetable-station-aliases.json. */
+	aliases?: StationAlias[];
 	dataDir: string;
 	db: Database;
 	dryRun: boolean;
@@ -448,6 +471,8 @@ export interface BuildTimetableInput {
 
 export interface BuildTimetableResult {
 	batchId?: number;
+	/** 별칭 statnId null로 뺀 대응표 범위 밖 역. ok에는 들어가지 않는다. */
+	excludedStations: UnresolvedStation[];
 	issues: TimetableIssue[];
 	linesWithoutTimetable: LineKey[];
 	loaded: boolean;
@@ -539,6 +564,7 @@ function byFrequency(unresolved: UnresolvedStation[]): UnresolvedStation[] {
  * ok이고 dryRun이 아니고 manifest가 현재 배치와 다르면 한 트랜잭션으로 적재한다.
  */
 export async function buildTimetable({
+	aliases = readAliases(),
 	dataDir,
 	db,
 	dryRun,
@@ -552,7 +578,6 @@ export async function buildTimetable({
 		);
 	}
 	const config = parseTimetableSourcesConfig(timetableSourcesJson);
-	const aliases = readAliases();
 	const resolvedLines = resolveSources(config, {
 		hasKricKey: readKricServiceKey(env) !== undefined,
 		manualFiles: await listManualFiles(dataDir),
@@ -569,6 +594,7 @@ export async function buildTimetable({
 		new Set(crosswalk.map((row) => row.statnId))
 	);
 	const unresolvedStations = byFrequency(collected.resolver.unresolved());
+	const excludedStations = byFrequency(collected.resolver.excluded());
 	const errorCount = issues.filter((i) => i.severity === "error").length;
 	const ok = errorCount === 0 && unresolvedStations.length === 0;
 	const tripsByLine = Object.fromEntries(
@@ -597,6 +623,7 @@ export async function buildTimetable({
 		JOB_NAME,
 		renderTimetableReport({
 			dryRun,
+			excludedStations,
 			issues,
 			lines: collected.lines,
 			linesWithoutTimetable,
@@ -610,6 +637,7 @@ export async function buildTimetable({
 		now
 	);
 	const result: BuildTimetableResult = {
+		excludedStations,
 		issues,
 		linesWithoutTimetable,
 		loaded: false,
@@ -621,7 +649,7 @@ export async function buildTimetable({
 		unresolvedStations,
 	};
 	console.log(
-		`ok: ${ok}\ntrip: ${trips.length}\nerror: ${errorCount}\nwarn: ${issues.length - errorCount}\n대응표에 없는 역: ${unresolvedStations.length}\n출처 오류: ${collected.sourceErrors.length}\n시간표 없는 노선: ${linesWithoutTimetable.join(", ") || "없음"}\nreport: ${reportPaths.mdPath}`
+		`ok: ${ok}\ntrip: ${trips.length}\nerror: ${errorCount}\nwarn: ${issues.length - errorCount}\n대응표에 없는 역: ${unresolvedStations.length}\n대응표 범위 밖으로 뺀 역: ${excludedStations.length}\n출처 오류: ${collected.sourceErrors.length}\n시간표 없는 노선: ${linesWithoutTimetable.join(", ") || "없음"}\nreport: ${reportPaths.mdPath}`
 	);
 	if (!ok) {
 		console.error(

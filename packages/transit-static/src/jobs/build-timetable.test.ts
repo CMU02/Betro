@@ -93,11 +93,11 @@ async function writeCsv(dataDir: string, dropSaturdayRow = true) {
 	await writeFile(path, await fixtureCsv(dropSaturdayRow));
 }
 
-async function seededDb(skipCode?: string): Promise<Database> {
+async function seededDb(...skipCodes: string[]): Promise<Database> {
 	const db = await createTestDb();
 	await loadCrosswalk(
 		db,
-		STATIONS.filter(([, code]) => code !== skipCode).map(crosswalkRow),
+		STATIONS.filter(([, code]) => !skipCodes.includes(code)).map(crosswalkRow),
 		{}
 	);
 	return db;
@@ -233,6 +233,70 @@ describe("buildTimetable", () => {
 			},
 		]);
 		expect(await timetableBatches(db)).toEqual([]);
+	});
+
+	it("drops stops at out-of-scope stations and keeps the rest of the trip", async () => {
+		await writeCsv(dataDir);
+		const db = await seededDb("0247");
+		const result = await buildTimetable({
+			aliases: [
+				{
+					lineKey: "line2",
+					source: "*",
+					sourceStation: "0247",
+					statnId: null,
+				},
+			],
+			dataDir,
+			db,
+			dryRun: false,
+			env: NO_KEY,
+			now: NOW,
+		});
+		expect(result.ok).toBe(true);
+		expect(result.unresolvedStations).toEqual([]);
+		expect(result.excludedStations).toEqual([
+			{
+				code: "0247",
+				count: 1,
+				lineKey: "line2",
+				name: "도림천",
+				source: "seoul-metro-csv",
+			},
+		]);
+		const line2 = await loadCurrentTrips(db, "line2");
+		const shuttle = line2.find((t) => t.trainNo === "5502");
+		expect(shuttle?.stops.map((s) => s.statnId)).toEqual([
+			"1002000234",
+			"1002000200",
+		]);
+		expect(await readFile(result.reportPaths.mdPath, "utf8")).toContain(
+			"## 대응표 범위 밖으로 뺀 역"
+		);
+	});
+
+	it("drops a trip left with fewer than two stops after out-of-scope stations are removed", async () => {
+		await writeCsv(dataDir);
+		const db = await seededDb("0247", "0200");
+		const result = await buildTimetable({
+			aliases: ["0247", "0200"].map((code) => ({
+				lineKey: "line2" as const,
+				source: "*" as const,
+				sourceStation: code,
+				statnId: null,
+			})),
+			dataDir,
+			db,
+			dryRun: true,
+			env: NO_KEY,
+			now: NOW,
+		});
+		expect(result.ok).toBe(true);
+		expect(result.issues.filter((i) => i.severity === "error")).toEqual([]);
+		expect(result.tripsByLine.line2).toBe(1);
+		expect(result.sourceErrors).toContainEqual(
+			expect.stringContaining("line2 weekday 5502")
+		);
 	});
 
 	it("only writes the report on a dry run", async () => {
