@@ -14,7 +14,8 @@ export interface TimetableIssue {
 		| "non-monotonic"
 		| "segment-outlier"
 		| "empty-trip"
-		| "duplicate-stop";
+		| "duplicate-stop"
+		| "duplicate-trip";
 	detail: string;
 	lineKey: LineKey;
 	serviceDay: ServiceDay;
@@ -175,9 +176,40 @@ function segmentOutliers(samples: SegmentSample[]): TimetableIssue[] {
 	return issues;
 }
 
+/** 적재 키(출처, 노선, 요일, 방향, 열차번호)가 겹치는 trip. timetable_trip 유일 색인에 걸리므로 키마다 error 1건. */
+function duplicateTrips(trips: Trip[]): TimetableIssue[] {
+	const groups = new Map<string, Trip[]>();
+	for (const trip of trips) {
+		const key = [
+			trip.source,
+			trip.lineKey,
+			trip.serviceDay,
+			trip.direction,
+			trip.trainNo,
+		].join(" ");
+		const group = groups.get(key);
+		if (group) {
+			group.push(trip);
+		} else {
+			groups.set(key, [trip]);
+		}
+	}
+	const issues: TimetableIssue[] = [];
+	for (const [key, group] of groups) {
+		const [first] = group;
+		if (first && group.length > 1) {
+			issues.push(
+				issueFor(first, "error", "duplicate-trip", `${key} x${group.length}`)
+			);
+		}
+	}
+	return issues;
+}
+
 /**
  * 24시 넘김 처리(normalizeTripTimes)를 마친 trip들을 검사한다.
- * error: 대응표에 없는 역, 시각 역행, 정차 1개 이하. warn: 같은 구간 중앙값 대비 소요시간 이상, 같은 역 중복 정차.
+ * error: 대응표에 없는 역, 시각 역행, 정차 1개 이하, 적재 키가 같은 trip.
+ * warn: 같은 구간 중앙값 대비 소요시간 이상, 같은 역 중복 정차.
  */
 export function validateTrips(
 	trips: Trip[],
@@ -191,5 +223,6 @@ export function validateTrips(
 		samples.push(...segmentSamples(trip, stops));
 	}
 	issues.push(...segmentOutliers(samples));
+	issues.push(...duplicateTrips(trips));
 	return issues;
 }

@@ -1,0 +1,47 @@
+{
+  "lines": {
+    "line1": { "primary": "seoul-metro-csv" },
+    "line2": { "primary": "seoul-metro-csv" },
+    "line3": { "primary": "seoul-metro-csv" },
+    "line4": { "primary": "seoul-metro-csv" },
+    "line5": { "primary": "seoul-metro-csv" },
+    "line6": { "primary": "seoul-metro-csv" },
+    "line7": { "primary": "seoul-metro-csv" },
+    "line8": { "primary": "seoul-metro-csv" },
+    "line9": { "primary": "seoul-metro-csv" },
+    "gyeongui-jungang": {
+      "manualFile": "korail-gyeongui-jungang.xlsx",
+      "primary": "korail-xlsx",
+      "secondary": ["kric-korail"]
+    },
+    "airport": {
+      "manualFile": "airport-express.csv",
+      "primary": "kric-packed",
+      "secondary": ["airport-express-csv"]
+    },
+    "gyeongchun": {
+      "manualFile": "korail-gyeongchun.xlsx",
+      "primary": "korail-xlsx",
+      "secondary": ["kric-korail"]
+    },
+    "suin-bundang": {
+      "manualFile": "korail-suin-bundang.xlsx",
+      "primary": "korail-xlsx",
+      "secondary": ["kric-korail"]
+    },
+    "shinbundang": { "primary": "kric-packed" },
+    "ui-sinseol": { "primary": "kric-packed" },
+    "seohae": {
+      "manualFile": "korail-seohae.xlsx",
+      "primary": "korail-xlsx",
+      "secondary": ["kric-korail"]
+    },
+    "gyeonggang": {
+      "manualFile": "korail-gyeonggang.xlsx",
+      "primary": "korail-xlsx",
+      "secondary": ["kric-korail"]
+    },
+    "gtx-a": { "primary": "kric-api" },
+    "sillim": { "primary": "kric-packed" }
+  }
+}

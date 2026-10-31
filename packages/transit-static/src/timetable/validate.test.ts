@@ -103,4 +103,24 @@ describe("validateTrips", () => {
 			severity: "warn",
 		});
 	});
+	it("errors once per extra trip that repeats the load key", () => {
+		const issues = validateTrips(
+			[
+				clean("2001", 18_000),
+				clean("2001", 20_000),
+				{ ...clean("2001", 22_000), direction: "down" },
+			],
+			known
+		);
+		expect(issues).toEqual([
+			{
+				code: "duplicate-trip",
+				detail: "seoul-metro-csv line2 weekday up 2001 x2",
+				lineKey: "line2",
+				serviceDay: "weekday",
+				severity: "error",
+				trainNo: "2001",
+			},
+		]);
+	});
 });
