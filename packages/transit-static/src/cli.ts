@@ -1,7 +1,10 @@
+import { createDb } from "@Betro/db";
 import { parseArgs } from "node:util";
+import { buildCrosswalk } from "./jobs/build-crosswalk";
 import { fetchStationMaster } from "./jobs/fetch-station-master";
 import { fetchStationSearch } from "./jobs/fetch-station-search";
 import { fetchStationXlsx } from "./jobs/fetch-station-xlsx";
+import { resolveDatabaseUrl } from "./paths";
 import { resolveDataDir } from "./raw-store";
 
 const DEFAULT_STATION_XLSX_SEQ = 57;
@@ -21,6 +24,24 @@ function requireApiKey(): string {
 type CommandHandler = (args: string[]) => Promise<void>;
 
 const commands: Record<string, CommandHandler> = {
+	"build:crosswalk": async (args) => {
+		const { values } = parseArgs({
+			args,
+			options: { "dry-run": { type: "boolean" } },
+		});
+		const dryRun = values["dry-run"] === true;
+		const db = dryRun
+			? undefined
+			: createDb({ DATABASE_URL: resolveDatabaseUrl(process.env) });
+		const result = await buildCrosswalk({
+			dataDir: resolveDataDir(process.env),
+			db,
+			dryRun,
+		});
+		if (!result.ok) {
+			process.exitCode = 1;
+		}
+	},
 	"fetch:station-master": async () => {
 		const key = requireApiKey();
 		await fetchStationMaster({ dataDir: resolveDataDir(process.env), key });
@@ -53,7 +74,12 @@ async function main(): Promise<void> {
 		);
 		process.exit(1);
 	}
-	await handler(rest);
+	try {
+		await handler(rest);
+	} catch (error) {
+		console.error(error instanceof Error ? error.message : String(error));
+		process.exit(1);
+	}
 }
 
 await main();
