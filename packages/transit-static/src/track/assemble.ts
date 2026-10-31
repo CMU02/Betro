@@ -438,12 +438,18 @@ function renderMarkdown(
 			(i) => i.code === "stop-anchor-rejected"
 		),
 		...renderIssueList(
+			"stop-ref-conflict",
+			result.issues,
+			(i) => i.code === "stop-ref-conflict"
+		),
+		...renderIssueList(
 			"경고 (선로 투영)",
 			result.issues,
 			(i) =>
 				i.level === "warn" &&
 				i.code !== "unmatched-osm-stop" &&
-				i.code !== "stop-anchor-rejected"
+				i.code !== "stop-anchor-rejected" &&
+				i.code !== "stop-ref-conflict"
 		),
 		...renderIssueList(
 			"OSM stop 미매칭",

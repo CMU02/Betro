@@ -242,7 +242,7 @@ describe("placeStations", () => {
 		expect(b?.anchor).toBe("osm-stop-projected");
 	});
 
-	it("skips a far stop node when the same station has another matched node within 150 m", () => {
+	it("anchors a stop node by its name and flags a ref that points to another station", () => {
 		// OSM ref가 한 칸 밀린 경우: 모란 노드(노드 1)의 ref가 수진의 frCode다.
 		const r = place(
 			[
@@ -257,10 +257,28 @@ describe("placeStations", () => {
 		expect(
 			r.onShape.map((s) => [s.statnId, s.anchor, s.osmStopNodeId])
 		).toEqual([
-			["MORAN", "station-master", undefined],
+			["MORAN", "osm-stop", 1],
 			["SUJIN", "osm-stop", 2],
 		]);
-		expect(r.issues.map((i) => i.code)).toEqual(["stop-anchor-rejected"]);
+		expect(r.issues.map((i) => i.code)).toEqual(["stop-ref-conflict"]);
+	});
+
+	it("lets a station whose ref-only node names another station fall through to its master coordinate", () => {
+		const r = place(
+			[{ ...stop(1, 127.0, LAT, "모란"), tags: { name: "모란", ref: "826" } }],
+			[
+				{ ...station("SUJIN", "수진", 127.01, LAT + 0.0002), frCode: "826" },
+				{ ...station("MORAN", "모란", 127.0, LAT), frCode: "827" },
+			]
+		);
+		expect(
+			r.onShape.map((s) => [s.statnId, s.anchor, s.osmStopNodeId])
+		).toEqual([
+			["MORAN", "osm-stop", 1],
+			["SUJIN", "station-master", undefined],
+		]);
+		expect(r.issues.map((i) => i.code)).toEqual(["stop-ref-conflict"]);
+		expect(r.issues[0]?.detail).toContain("SUJIN");
 	});
 
 	it("keeps relation order between two matched nodes that are both near the station", () => {

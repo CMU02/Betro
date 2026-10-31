@@ -143,6 +143,7 @@ describe("assembleTracks", () => {
 		});
 		expect(r.markdown).toContain("| osm-stop | projected | master |");
 		expect(r.markdown).toContain("## stop-anchor-rejected");
+		expect(r.markdown).toContain("## stop-ref-conflict");
 	});
 });
 

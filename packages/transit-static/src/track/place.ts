@@ -8,7 +8,7 @@ import {
 	STATION_WARN_OFFSET_M,
 } from "./project";
 import type { LngLat } from "./stitch";
-import { matchOsmStops, type ShapeIssue } from "./validate";
+import { matchOsmStops, type ShapeIssue, stopRefConflicts } from "./validate";
 
 /** OSM 정차 노드가 역사마스터 좌표에서 이 거리(미터)보다 멀면 이름 오매칭으로 보고 쓰지 않는다. */
 export const STOP_ANCHOR_MAX_OFFSET_M = 2000;
@@ -24,7 +24,7 @@ export interface PlacedStation {
 }
 
 export interface PlacementResult {
-	/** station-offset, stop-anchor-rejected 경고. */
+	/** stop-ref-conflict, stop-anchor-rejected, station-offset 경고. */
 	issues: ShapeIssue[];
 	/** 이 shape의 OSM 정차 노드 중 노선 역과 이어진 것(relation 순서). */
 	matches: { osmNodeId: number; statnId: string }[];
@@ -148,52 +148,18 @@ function rejectedStopIssue(
 	};
 }
 
-/**
- * 역사마스터 좌표에서 STATION_MAX_OFFSET_M 이내인 정차 노드가 하나라도 매칭된 역.
- * 이런 역은 그보다 먼 다른 정차 노드(OSM ref가 밀린 이웃 역 노드 등)로 놓지 않는다.
- */
-function stationsWithNearStop(
-	stops: OsmNode[],
-	statnIdByNode: Map<number, string>,
-	byStatnId: Map<string, CrosswalkRow>
-): Set<string> {
-	const near = new Set<string>();
-	for (const stop of stops) {
-		const station = byStatnId.get(statnIdByNode.get(stop.id) ?? "");
-		if (
-			station &&
-			metersBetween(masterOf(station), [stop.lon, stop.lat]) <=
-				STATION_MAX_OFFSET_M
-		) {
-			near.add(station.statnId);
-		}
-	}
-	return near;
-}
-
 type StopAttempt =
 	| { kind: "placed"; candidate: StopCandidate }
 	| { kind: "rejected"; reason: string }
 	| { kind: "none" };
 
-/**
- * 정차 노드 하나로 역을 놓아 본다(1·2단계). 같은 역에 150m 안의 다른 정차 노드가 있는데 이 노드가 150m 밖이거나,
- * 놓은 지점이 역사마스터 좌표에서 2000m 넘게 떨어지면 버린다.
- */
+/** 정차 노드 하나로 역을 놓아 본다(1·2단계). 놓은 지점이 역사마스터 좌표에서 2000m 넘게 떨어지면 버린다. */
 function anchorOnStop(
 	line: LineContext,
 	stop: OsmNode,
 	station: CrosswalkRow,
-	cursor: number,
-	hasNearStop: boolean
+	cursor: number
 ): StopAttempt {
-	const nodeOffsetM = metersBetween(masterOf(station), [stop.lon, stop.lat]);
-	if (hasNearStop && nodeOffsetM > STATION_MAX_OFFSET_M) {
-		return {
-			kind: "rejected",
-			reason: `${nodeOffsetM.toFixed(0)}m from master, another stop node is within ${STATION_MAX_OFFSET_M}m`,
-		};
-	}
 	const candidate = stopCandidate(line, stop, station, cursor);
 	if (!candidate) {
 		return { kind: "none" };
@@ -250,8 +216,7 @@ function stationOffsetIssue(s: PlacedStation): ShapeIssue | undefined {
  *    정차 노드는 relation 순서대로 보며, 같은 노드가 여러 번 나오면 커서 이후 첫 등장을 고른다.
  * 2. osm-stop-projected: 매칭된 노드가 선 위에 없으면 그 노드를 선에 투영(150m 이내).
  *    1·2단계는 역사마스터 좌표에서 2000m 넘게 떨어지면 버리고 stop-anchor-rejected를 남긴다.
- *    한 역에 서로 다른 정차 노드가 여럿 매칭되고 그중 150m 이내인 노드가 있으면, 150m 넘는 노드도
- *    stop-anchor-rejected로 버린다(가까운 노드끼리는 relation 순서를 따른다).
+ *    정차 노드 매칭은 이름 우선, ref 다음이다. 이름과 ref가 다른 역을 가리키면 stop-ref-conflict를 남긴다.
  * 3. station-master: 역사마스터 좌표를 선에 투영(150m 이내).
  * 셋 다 안 되면 offShape에 남는다.
  */
@@ -271,9 +236,8 @@ export function placeStations({
 	const byStatnId = new Map(stations.map((s) => [s.statnId, s]));
 	const matches = matchOsmStops(stops, stations);
 	const statnIdByNode = new Map(matches.map((m) => [m.osmNodeId, m.statnId]));
-	const nearStop = stationsWithNearStop(stops, statnIdByNode, byStatnId);
 	const placed = new Map<string, PlacedStation>();
-	const issues: ShapeIssue[] = [];
+	const issues: ShapeIssue[] = stopRefConflicts(stops, stations);
 	const stopOrder: string[] = [];
 	let cursor = 0;
 
@@ -282,13 +246,7 @@ export function placeStations({
 		if (!station || placed.has(station.statnId)) {
 			continue;
 		}
-		const attempt = anchorOnStop(
-			line,
-			stop,
-			station,
-			cursor,
-			nearStop.has(station.statnId)
-		);
+		const attempt = anchorOnStop(line, stop, station, cursor);
 		if (attempt.kind === "rejected") {
 			issues.push(rejectedStopIssue(station, stop, i, attempt.reason));
 		} else if (attempt.kind === "placed") {
