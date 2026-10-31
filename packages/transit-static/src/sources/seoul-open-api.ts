@@ -1,5 +1,7 @@
-// 서울 열린데이터광장 인증키 API(openapi.seoul.go.kr:8088)는 상류 문서가 안내하는 HTTP(평문) 엔드포인트를 쓴다.
-// 테스트가 URL 형태에 의존하므로 상수로 고정한다. (datafile.seoul.go.kr 등 다른 호스트는 HTTPS)
+// 서울 열린데이터광장 인증키 API(openapi.seoul.go.kr:8088)는 평문 HTTP만 가능하다.
+// 8088 포트는 TLS를 받지 않고(핸드셰이크 실패), 443 HTTPS는 시간 초과다. 2026-10-31 확인.
+// 키가 평문으로 전송되는 위험은 서버 측 수집 경로로만 한정한다(설계 문서 §4.2).
+// datafile.seoul.go.kr 등 다른 호스트는 HTTPS가 된다.
 const SEOUL_API_BASE = "http://openapi.seoul.go.kr:8088";
 
 const CODE_OK = "INFO-000";

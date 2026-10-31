@@ -31,7 +31,8 @@
       "!**/wrangler.jsonc",
       "!**/.source",
       "!**/convex/_generated",
-      "!data"
+      "!data",
+      "!**/migrations/**/snapshot.json"
     ]
   },
   "formatter": {
