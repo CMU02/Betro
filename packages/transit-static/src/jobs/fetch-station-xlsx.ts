@@ -3,7 +3,7 @@ import { stationXlsxUrl } from "../sources/station-xlsx";
 
 const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04] as const;
 
-function isZip(bytes: Uint8Array): boolean {
+export function isZip(bytes: Uint8Array): boolean {
 	return ZIP_MAGIC.every((byte, index) => bytes[index] === byte);
 }
 
