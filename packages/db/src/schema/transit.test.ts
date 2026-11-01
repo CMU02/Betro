@@ -2,6 +2,10 @@ import { describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "../test-db";
 import {
+	busRoute,
+	busRouteSegment,
+	busRouteShape,
+	busRouteStop,
 	referenceBatch,
 	stationCrosswalk,
 	timetableStopTime,
@@ -181,5 +185,82 @@ describe("transit schema", () => {
 		await expect(
 			(async () => await db.insert(timetableTrip).values(row))()
 		).rejects.toThrow();
+	});
+
+	it("bus route rows round-trip and cascade", async () => {
+		const db = await createTestDb();
+		const [batch] = await db
+			.insert(referenceBatch)
+			.values({ kind: "bus_route", sourceManifest: {} })
+			.returning();
+		if (!batch) {
+			throw new Error("no batch");
+		}
+		const [route] = await db
+			.insert(busRoute)
+			.values({
+				batchId: batch.id,
+				qualityFlags: ["warn"],
+				routeId: "100100290",
+				routeName: "6411",
+				routeType: "4",
+			})
+			.returning();
+		if (!route) {
+			throw new Error("no route");
+		}
+		await db.insert(busRouteShape).values({
+			attribution: "서울특별시 버스노선정보(공공데이터포털)",
+			busRouteId: route.id,
+			coords: [
+				[127.0, 37.5],
+				[127.01, 37.5],
+			],
+			lengthM: 884,
+		});
+		const stop: typeof busRouteStop.$inferInsert = {
+			apiSectDistM: 0,
+			arsId: "15227",
+			busRouteId: route.id,
+			directionName: "선릉역",
+			distanceM: 0,
+			lat: 37.5,
+			lng: 127.0,
+			name: "정류소",
+			offsetM: 3.2,
+			qualityFlags: [],
+			seq: 1,
+			stationId: "114000124",
+		};
+		await db.insert(busRouteStop).values([stop, { ...stop, seq: 2 }]);
+		await db.insert(busRouteSegment).values({
+			apiSectDistM: 880,
+			busRouteId: route.id,
+			endM: 884,
+			fromSeq: 1,
+			qualityFlags: ["a"],
+			startM: 0,
+			toSeq: 2,
+		});
+
+		const [shape] = await db.select().from(busRouteShape);
+		expect(shape?.coords).toEqual([
+			[127.0, 37.5],
+			[127.01, 37.5],
+		]);
+		const [segment] = await db.select().from(busRouteSegment);
+		expect(segment?.qualityFlags).toEqual(["a"]);
+		const [storedRoute] = await db.select().from(busRoute);
+		expect(storedRoute?.qualityFlags).toEqual(["warn"]);
+
+		await expect(
+			(async () => await db.insert(busRouteStop).values(stop))()
+		).rejects.toThrow();
+
+		await db.delete(referenceBatch).where(eq(referenceBatch.id, batch.id));
+		expect((await db.select().from(busRoute)).length).toBe(0);
+		expect((await db.select().from(busRouteShape)).length).toBe(0);
+		expect((await db.select().from(busRouteStop)).length).toBe(0);
+		expect((await db.select().from(busRouteSegment)).length).toBe(0);
 	});
 });

@@ -8,7 +8,11 @@ import {
 	uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
-export type ReferenceBatchKind = "station_crosswalk" | "track" | "timetable";
+export type ReferenceBatchKind =
+	| "station_crosswalk"
+	| "track"
+	| "timetable"
+	| "bus_route";
 export type SourceManifest = Record<
 	string,
 	{ fileName: string; sha256: string }
@@ -182,5 +186,96 @@ export const timetableStopTime = sqliteTable(
 	(table) => [
 		uniqueIndex("timetable_stop_time_trip_seq_idx").on(table.tripId, table.seq),
 		index("timetable_stop_time_statn_idx").on(table.statnId),
+	]
+);
+
+/** 버스 노선. `routeId`는 API의 문자열 busRouteId, 다른 버스 테이블은 `id`(정수)를 참조한다. */
+export const busRoute = sqliteTable(
+	"bus_route",
+	{
+		batchId: integer("batch_id")
+			.notNull()
+			.references(() => referenceBatch.id, { onDelete: "cascade" }),
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		qualityFlags: text("quality_flags", { mode: "json" })
+			.$type<string[]>()
+			.notNull(),
+		routeId: text("route_id").notNull(),
+		routeName: text("route_name").notNull(),
+		/** 원본 routeType 코드 문자열 */
+		routeType: text("route_type").notNull(),
+	},
+	(table) => [
+		uniqueIndex("bus_route_batch_route_idx").on(table.batchId, table.routeId),
+	]
+);
+
+export const busRouteShape = sqliteTable(
+	"bus_route_shape",
+	{
+		attribution: text("attribution").notNull(),
+		busRouteId: integer("bus_route_id")
+			.notNull()
+			.references(() => busRoute.id, { onDelete: "cascade" }),
+		coords: text("coords", { mode: "json" })
+			.$type<[number, number][]>()
+			.notNull(),
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		lengthM: real("length_m").notNull(),
+	},
+	(table) => [uniqueIndex("bus_route_shape_route_idx").on(table.busRouteId)]
+);
+
+export const busRouteStop = sqliteTable(
+	"bus_route_stop",
+	{
+		/** 원본 fullSectDist(m): 이전 정류소부터의 거리 */
+		apiSectDistM: integer("api_sect_dist_m").notNull(),
+		arsId: text("ars_id"),
+		busRouteId: integer("bus_route_id")
+			.notNull()
+			.references(() => busRoute.id, { onDelete: "cascade" }),
+		directionName: text("direction_name"),
+		/** 모양 위 거리(m) */
+		distanceM: real("distance_m").notNull(),
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		lat: real("lat").notNull(),
+		lng: real("lng").notNull(),
+		name: text("name").notNull(),
+		offsetM: real("offset_m").notNull(),
+		qualityFlags: text("quality_flags", { mode: "json" })
+			.$type<string[]>()
+			.notNull(),
+		seq: integer("seq").notNull(),
+		stationId: text("station_id").notNull(),
+	},
+	(table) => [
+		uniqueIndex("bus_route_stop_route_seq_idx").on(table.busRouteId, table.seq),
+		index("bus_route_stop_station_idx").on(table.stationId),
+	]
+);
+
+export const busRouteSegment = sqliteTable(
+	"bus_route_segment",
+	{
+		/** toSeq 정류소의 원본 fullSectDist(m) */
+		apiSectDistM: integer("api_sect_dist_m").notNull(),
+		busRouteId: integer("bus_route_id")
+			.notNull()
+			.references(() => busRoute.id, { onDelete: "cascade" }),
+		endM: real("end_m").notNull(),
+		fromSeq: integer("from_seq").notNull(),
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		qualityFlags: text("quality_flags", { mode: "json" })
+			.$type<string[]>()
+			.notNull(),
+		startM: real("start_m").notNull(),
+		toSeq: integer("to_seq").notNull(),
+	},
+	(table) => [
+		uniqueIndex("bus_route_segment_route_from_idx").on(
+			table.busRouteId,
+			table.fromSeq
+		),
 	]
 );
