@@ -16,7 +16,9 @@ export function PushNotifications() {
 		}
 	}, []);
 
-	const { permission, token } = usePushNotifications({ onForegroundMessage });
+	const { lastOpenedMessage, permission, token } = usePushNotifications({
+		onForegroundMessage,
+	});
 
 	useEffect(() => {
 		if (__DEV__ && permission === "granted" && token) {
@@ -24,6 +26,18 @@ export function PushNotifications() {
 			console.info("[push] FCM token", token);
 		}
 	}, [permission, token]);
+
+	useEffect(() => {
+		if (__DEV__ && lastOpenedMessage) {
+			// Confirms a tapped notification reached the hook state during device testing.
+			console.info(
+				"[push] opened notification",
+				lastOpenedMessage.id,
+				lastOpenedMessage.title,
+				lastOpenedMessage.body
+			);
+		}
+	}, [lastOpenedMessage]);
 
 	return null;
 }
