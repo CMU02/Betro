@@ -149,6 +149,7 @@ const commands: Record<string, CommandHandler> = {
 		});
 		if (
 			result.stoppedBy === "quota-exceeded" ||
+			result.stoppedBy === "rate-limited" ||
 			result.stoppedBy === "unauthorized"
 		) {
 			process.exitCode = 1;

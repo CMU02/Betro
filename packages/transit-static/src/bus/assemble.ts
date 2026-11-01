@@ -31,7 +31,10 @@ const MIN_SHAPE_LENGTH_M = 100;
 const MIN_SHAPE_POINTS = 2;
 /** 오류 detail에 보여 줄 파서 오류·seq 수. */
 const DETAIL_SAMPLE = 5;
-/** 원본을 읽은 상태로 응답 상태 코드를 알 수 없으므로, 저장된 원본은 HTTP 200으로 받은 것으로 본다(ok일 때만 저장함). */
+/**
+ * 원본을 읽은 상태로 응답 상태 코드를 알 수 없으므로, 저장된 원본은 HTTP 200으로 받은 것으로 본다.
+ * 수집 잡은 ok 본문과 노선 없음 표시 본문(headerCd 4, fetch-bus-routes ROUTE_NOT_FOUND_BODY)만 저장한다.
+ */
 const STORED_STATUS = 200;
 /** parseBusEnvelope가 msgHeader에서 만든 detail("headerCd N: headerMsg")만 본문 조각이 없다. */
 const HEADER_DETAIL = /^headerCd /;
@@ -64,7 +67,10 @@ export interface AssembledBusRoute {
 export interface BusAssembleResult {
 	excluded: { routeId: string; routeName: string; issues: BusIssue[] }[];
 	markdown: string;
-	/** 정류소 원본이 없거나, 범위 안인데 모양 원본이 없는 노선 ID(수집이 덜 끝남). */
+	/**
+	 * 정류소 원본이 없거나, 범위 안인데 모양 원본이 없는 노선 ID(수집이 덜 끝남).
+	 * API가 노선 없음으로 답한 노선은 표시 본문이 저장되므로 여기가 아니라 excluded(route-not-found)에 들어간다.
+	 */
 	missingRaw: string[];
 	ok: boolean;
 	outOfScope: number;
@@ -98,7 +104,8 @@ const sample = (values: readonly (string | number)[]): string =>
 		: values.join(", ");
 
 /**
- * 저장된 원본 본문을 봉투로 읽는다. ok가 아니면 bad-envelope 오류.
+ * 저장된 원본 본문을 봉투로 읽는다. 노선 없음(headerCd 4)이면 route-not-found, 그 밖에 ok가 아니면 bad-envelope 오류.
+ * route-not-found는 API가 끝까지 답한 결과이므로 missingRaw가 아니라 excluded로 가서 MIN_VALID_ROUTE_RATIO에 들어간다.
  * 조립 단계에는 키가 없어 가릴 수 없으므로, 본문 조각이 든 detail은 보고서에 넣지 않고 headerCd·headerMsg만 남긴다.
  */
 function readItems(
@@ -106,6 +113,9 @@ function readItems(
 	label: string
 ): { items: Record<string, unknown>[] } | { issue: BusIssue } {
 	const envelope = parseBusEnvelope(STORED_STATUS, body);
+	if (envelope.kind === "route-not-found") {
+		return { issue: error("route-not-found", `${label} headerCd 4`) };
+	}
 	if (envelope.kind !== "ok") {
 		const header =
 			"detail" in envelope && HEADER_DETAIL.test(envelope.detail)

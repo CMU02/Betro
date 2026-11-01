@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { rawPath } from "../paths";
 import { buildBusRoutes, busRouteManifest } from "./build-bus-routes";
+import { fetchBusRoutes } from "./fetch-bus-routes";
 
 const ROUTE = { routeId: "100100290", routeName: "6411", stopCount: 117 };
 
@@ -96,6 +97,70 @@ describe("buildBusRoutes", () => {
 		expect(result.ok).toBe(false);
 		expect(result.batchId).toBeUndefined();
 		expect(await db.select().from(referenceBatch)).toHaveLength(0);
+	});
+
+	it("treats a route the API reports as not found as excluded, not missing raw", async () => {
+		const gone = { routeId: "999999999", routeName: "폐선", stopCount: 10 };
+		const stations = await fixture("bus-stations-6411.json");
+		const path = await fixture("bus-path-6411.json");
+		const fetchImpl = ((input: string | URL | Request) => {
+			const url = new URL(String(input));
+			const routeId = url.searchParams.get("busRouteId");
+			const operation = url.pathname.split("/").at(-1);
+			if (routeId === gone.routeId) {
+				return Promise.resolve(
+					new Response(
+						JSON.stringify({
+							msgBody: { itemList: null },
+							msgHeader: { headerCd: "4", headerMsg: "결과가 없습니다." },
+						}),
+						{ status: 200 }
+					)
+				);
+			}
+			return Promise.resolve(
+				new Response(operation === "getStaionByRoute" ? stations : path, {
+					status: 200,
+				})
+			);
+		}) as unknown as typeof fetch;
+		const routes = [ROUTE, gone];
+		for (let run = 0; run < 2; run += 1) {
+			// biome-ignore lint/performance/noAwaitInLoops: 같은 dataDir에서 수집과 조립을 두 번 차례로 돌린다
+			const fetched = await fetchBusRoutes({
+				dataDir,
+				delayMs: 0,
+				fetchImpl,
+				key: "test-key",
+				retryDelaysMs: [0, 0, 0],
+				routes,
+			});
+			expect(fetched.notFound).toEqual([gone.routeId]);
+			const built = await buildBusRoutes({
+				dataDir,
+				db: await createTestDb(),
+				dryRun: true,
+				routes,
+			});
+			const summary = JSON.parse(await readFile(built.jsonPath, "utf8"));
+			expect(summary.missingRaw).toEqual([]);
+			expect(summary.loaded).toBe(1);
+			expect(summary.excluded).toEqual([
+				{
+					issues: [
+						{
+							code: "route-not-found",
+							detail: "getStaionByRoute headerCd 4",
+							level: "error",
+						},
+					],
+					routeId: gone.routeId,
+					routeName: gone.routeName,
+				},
+			]);
+			// 1/2만 적재 가능해 비율 기준(0.98)으로만 ok가 아니다.
+			expect(built.ok).toBe(false);
+		}
 	});
 
 	it("does not load on dry-run", async () => {

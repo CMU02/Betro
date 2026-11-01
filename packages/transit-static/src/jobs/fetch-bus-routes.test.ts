@@ -10,6 +10,7 @@ import {
 	BUS_PATH_SOURCE,
 	BUS_STATIONS_SOURCE,
 	fetchBusRoutes,
+	ROUTE_NOT_FOUND_BODY,
 } from "./fetch-bus-routes";
 
 const KEY = "a/b+c==";
@@ -298,6 +299,123 @@ describe("fetchBusRoutes", () => {
 			operation: "getStaionByRoute",
 			routeId: "100100003",
 		});
+		expect(result.stoppedBy).toBeNull();
+		expect(await readFile(stationsFile(dataDir, "100100002"), "utf8")).toBe(
+			ROUTE_NOT_FOUND_BODY
+		);
+		expect(existsSync(stationsFile(dataDir, "100100003"))).toBe(false);
+	});
+
+	it("saves a not-found marker so reruns skip the route until it goes stale", async () => {
+		const routes = [route("100100001"), route("100100002")];
+		const notFoundPath = (call: Call) =>
+			(call.busRouteId === "100100002" &&
+				call.operation === "getStaionByRoute") ||
+			(call.busRouteId === "100100001" && call.operation === "getRoutePath");
+		const responder = (call: Call) =>
+			notFoundPath(call)
+				? new Response(headerBody("4"), { status: 200 })
+				: normalResponder({})(call);
+		const run1 = await fetchBusRoutes({
+			dataDir,
+			delayMs: 0,
+			fetchImpl: fakeFetch(responder).fetchImpl,
+			key: KEY,
+			routes,
+		});
+		expect(run1.notFound).toEqual(["100100001", "100100002"]);
+		expect(run1.failed).toEqual([]);
+		expect(await readFile(pathFile(dataDir, "100100001"), "utf8")).toBe(
+			ROUTE_NOT_FOUND_BODY
+		);
+		expect(await readFile(stationsFile(dataDir, "100100002"), "utf8")).toBe(
+			ROUTE_NOT_FOUND_BODY
+		);
+		expect(existsSync(pathFile(dataDir, "100100002"))).toBe(false);
+
+		const second = fakeFetch(responder);
+		const run2 = await fetchBusRoutes({
+			dataDir,
+			delayMs: 0,
+			fetchImpl: second.fetchImpl,
+			key: KEY,
+			routes,
+		});
+		expect(second.calls).toEqual([]);
+		expect(run2.notFound).toEqual(["100100001", "100100002"]);
+		expect(run2.failed).toEqual([]);
+		expect(run2.skippedFresh).toEqual({ getRoutePath: 1, getStaionByRoute: 2 });
+	});
+
+	it("replaces a stale raw with the not-found marker when the route disappears", async () => {
+		const routes = [route("100100001")];
+		await fetchBusRoutes({
+			dataDir,
+			delayMs: 0,
+			fetchImpl: fakeFetch(normalResponder({})).fetchImpl,
+			key: KEY,
+			routes,
+		});
+		const now = Date.now();
+		const old = new Date(now - 8 * DAY_MS);
+		await utimes(stationsFile(dataDir, "100100001"), old, old);
+
+		const gone = fakeFetch(
+			() => new Response(headerBody("4"), { status: 200 })
+		);
+		const result = await fetchBusRoutes({
+			dataDir,
+			delayMs: 0,
+			fetchImpl: gone.fetchImpl,
+			key: KEY,
+			now: () => new Date(now),
+			routes,
+		});
+		expect(gone.calls).toEqual([
+			{ busRouteId: "100100001", operation: "getStaionByRoute" },
+		]);
+		expect(result.notFound).toEqual(["100100001"]);
+		expect(await readFile(stationsFile(dataDir, "100100001"), "utf8")).toBe(
+			ROUTE_NOT_FOUND_BODY
+		);
+	});
+
+	it("stops the operation when rate-limited responses outlast the retries", async () => {
+		const { calls, fetchImpl } = fakeFetch(
+			() => new Response(headerBody("8"), { status: 200 })
+		);
+		const result = await fetchBusRoutes({
+			dataDir,
+			delayMs: 0,
+			fetchImpl,
+			key: KEY,
+			retryDelaysMs: NO_RETRY_WAIT,
+			routes: [route("100100001"), route("100100002"), route("100100003")],
+		});
+		expect(calls).toHaveLength(4);
+		expect(result.stoppedBy).toBe("rate-limited");
+		expect(result.failed).toHaveLength(1);
+		expect(result.failed[0]).toMatchObject({
+			kind: "rate-limited",
+			operation: "getStaionByRoute",
+			routeId: "100100001",
+		});
+	});
+
+	it("keeps plain retryable failures per route without stopping", async () => {
+		const { calls, fetchImpl } = fakeFetch(
+			() => new Response(headerBody("6"), { status: 200 })
+		);
+		const result = await fetchBusRoutes({
+			dataDir,
+			delayMs: 0,
+			fetchImpl,
+			key: KEY,
+			retryDelaysMs: NO_RETRY_WAIT,
+			routes: [route("100100001"), route("100100002")],
+		});
+		expect(calls).toHaveLength(8);
+		expect(result.failed).toHaveLength(2);
 		expect(result.stoppedBy).toBeNull();
 	});
 

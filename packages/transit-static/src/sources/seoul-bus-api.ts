@@ -269,6 +269,7 @@ export function parseRoutePath(items: RawItem[]): {
 /**
  * 반환하는 bodyText는 가리지 않은 원문이다. kind가 "ok"일 때만 저장해야 하며,
  * 오류 응답 본문은 키를 되풀이할 수 있으므로 저장하거나 출력하지 않는다.
+ * (route-not-found는 원문 대신 fetch-bus-routes의 고정 본문을 저장한다.)
  */
 export async function fetchBusRouteOperation(options: {
 	operation: BusRouteOperation;

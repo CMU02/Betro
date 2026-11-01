@@ -261,10 +261,23 @@ describe("assembleBusRoute", () => {
 		).toContain("missing-path");
 	});
 
+	it("turns a saved route-not-found body into a route-not-found error, not missing raw", () => {
+		const raw = straightRaw("450");
+		const notFoundBody = JSON.stringify({
+			msgHeader: { headerCd: "4", headerMsg: "결과가 없습니다." },
+		});
+		const stations = assembleBusRoute({ ...raw, stationsBody: notFoundBody });
+		expect(stations.outOfScope).toBe(false);
+		expect(codesOf(stations.issues)).toEqual(["route-not-found"]);
+		const path = assembleBusRoute({ ...raw, pathBody: notFoundBody });
+		expect(path.route).toBeUndefined();
+		expect(codesOf(errorsOf(path.issues))).toEqual(["route-not-found"]);
+	});
+
 	it("rejects bad envelopes, empty stop lists and short shapes", () => {
 		const raw = straightRaw("500");
 		const badBody = JSON.stringify({
-			msgHeader: { headerCd: "4", headerMsg: "결과가 없습니다." },
+			msgHeader: { headerCd: "2", headerMsg: "기타 오류" },
 		});
 		expect(
 			codesOf(assembleBusRoute({ ...raw, stationsBody: badBody }).issues)
@@ -364,6 +377,33 @@ describe("assembleBusRoutes", () => {
 		expect(missing.missingRaw).toEqual([first.entry.routeId]);
 		expect(missing.excluded).toEqual([]);
 		expect(missing.ok).toBe(false);
+	});
+
+	it("counts route-not-found routes as excluded against the ratio", () => {
+		const notFoundBody = JSON.stringify({
+			msgHeader: { headerCd: "4", headerMsg: "결과가 없습니다." },
+		});
+		const withNotFound = (count: number) =>
+			inScope(IN_SCOPE_ROUTES).map((raw, i) => {
+				if (i >= count) {
+					return raw;
+				}
+				return i % 2 === 0
+					? { entry: raw.entry, stationsBody: notFoundBody }
+					: { ...raw, pathBody: notFoundBody };
+			});
+		const passing = assembleBusRoutes(withNotFound(2));
+		expect(passing.missingRaw).toEqual([]);
+		expect(passing.excluded.map((route) => route.routeId)).toEqual([
+			"1000",
+			"1001",
+		]);
+		expect(passing.excluded.map((route) => codesOf(route.issues))).toEqual([
+			["route-not-found"],
+			["route-not-found"],
+		]);
+		expect(passing.ok).toBe(true);
+		expect(assembleBusRoutes(withNotFound(3)).ok).toBe(false);
 	});
 
 	it("counts out-of-scope routes with a bad row as out of scope", () => {

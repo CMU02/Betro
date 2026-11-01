@@ -29,6 +29,20 @@ const DEFAULT_MAX_AGE_DAYS = 7;
 const DEFAULT_RETRY_DELAYS_MS: readonly number[] = [1000, 2000, 4000];
 const DAY_MS = 86_400_000;
 
+/**
+ * 노선 없음(headerCd 4) 응답 대신 저장하는 고정 본문. 응답 원문은 키를 되풀이할 수 있어 저장하지 않는다.
+ * 조립 단계는 이 본문을 route-not-found로 읽어 "아직 받지 않음"(missingRaw)과 구분한다.
+ * 이전에 받은 정상 원본이 있으면 이 본문으로 덮어써, 없어진 노선을 계속 적재하지 않게 한다.
+ */
+export const ROUTE_NOT_FOUND_BODY = JSON.stringify({
+	msgBody: { itemList: null },
+	msgHeader: {
+		headerCd: "4",
+		headerMsg: "route not found (saved by fetch-bus-routes)",
+		itemCount: 0,
+	},
+});
+
 const OPERATIONS: readonly BusRouteOperation[] = [
 	"getStaionByRoute",
 	"getRoutePath",
@@ -39,13 +53,22 @@ const SOURCE_BY_OPERATION: Record<BusRouteOperation, string> = {
 	getStaionByRoute: BUS_STATIONS_SOURCE,
 };
 
-type StopReason = "quota-exceeded" | "unauthorized" | "budget";
+/**
+ * rate-limited: 재시도를 다 써도 요청 제한 응답이면 그 오퍼레이션을 멈춘다.
+ * 한도 응답 형식이 확인되지 않아(조사 보고서 2장) 일일 한도 소진일 수 있으므로 남은 노선에 호출을 쓰지 않는다.
+ */
+export type StopReason =
+	| "quota-exceeded"
+	| "rate-limited"
+	| "unauthorized"
+	| "budget";
 
 // 결과에 남길 멈춤 이유가 여럿이면 더 심각한 쪽을 남긴다.
 const STOP_SEVERITY: Record<StopReason, number> = {
 	budget: 1,
-	"quota-exceeded": 2,
-	unauthorized: 3,
+	"quota-exceeded": 3,
+	"rate-limited": 2,
+	unauthorized: 4,
 };
 
 export interface FetchBusRoutesFailure {
@@ -115,6 +138,13 @@ async function isFresh(
 		}
 		throw error;
 	}
+}
+
+function isNotFoundBody(bytes: Uint8Array): boolean {
+	return (
+		parseBusEnvelope(200, new TextDecoder().decode(bytes)).kind ===
+		"route-not-found"
+	);
 }
 
 /** 저장된 정류소 원본에서 routeType을 읽는다. 읽을 수 없으면 undefined. */
@@ -245,9 +275,43 @@ class BusRouteFetcher {
 		return response;
 	}
 
+	private recordNotFound(routeId: string) {
+		if (!this.result.notFound.includes(routeId)) {
+			this.result.notFound.push(routeId);
+		}
+	}
+
+	/** 저장된 원본으로 결과를 정한다. 노선 없음 표시 파일이면 "not-found". */
+	private async stored(source: string, routeId: string): Promise<StepOutcome> {
+		const raw = await readRaw(this.options.dataDir, source, fileName(routeId));
+		if (!raw) {
+			return "missing";
+		}
+		if (isNotFoundBody(raw.bytes)) {
+			this.recordNotFound(routeId);
+			return "not-found";
+		}
+		return "available";
+	}
+
+	/** 본문을 저장한다. 내용이 같아 덮어쓰지 않았으면 수정 시각만 갱신해 다음 실행에서 신선한 파일로 본다. */
+	private async save(source: string, routeId: string, bodyText: string) {
+		const saved = await saveRaw(
+			this.options.dataDir,
+			source,
+			fileName(routeId),
+			new TextEncoder().encode(bodyText)
+		);
+		if (saved.unchanged) {
+			const touchedAt = this.options.now();
+			await utimes(saved.path, touchedAt, touchedAt);
+		}
+	}
+
 	/**
 	 * 한 오퍼레이션의 원본을 확보한다. 신선한 파일이 있으면 부르지 않는다.
 	 * 오퍼레이션이 멈췄거나 받지 못했으면 이전에 받은 (오래된) 파일이 있을 때만 "available".
+	 * 노선 없음 응답은 ROUTE_NOT_FOUND_BODY로 저장해, 다시 실행해도 신선한 동안은 부르지 않고 조립 단계도 알 수 있게 한다.
 	 */
 	async ensure(
 		operation: BusRouteOperation,
@@ -258,12 +322,9 @@ class BusRouteFetcher {
 		const path = rawPath(dataDir, source, fileName(routeId));
 		if (await isFresh(path, maxAgeDays * DAY_MS, now())) {
 			this.result.skippedFresh[operation] += 1;
-			return "available";
+			return await this.stored(source, routeId);
 		}
-		const existing = async (): Promise<StepOutcome> =>
-			(await readRaw(dataDir, source, fileName(routeId)))
-				? "available"
-				: "missing";
+		const existing = () => this.stored(source, routeId);
 		if (this.stopped[operation]) {
 			return await existing();
 		}
@@ -273,26 +334,14 @@ class BusRouteFetcher {
 		}
 		const { envelope, bodyText } = response;
 		switch (envelope.kind) {
-			case "ok": {
-				// 응답 본문을 그대로 저장한다. 내용이 같아 덮어쓰지 않았으면 수정 시각만 갱신해
-				// 다음 실행에서 신선한 파일로 본다.
-				const saved = await saveRaw(
-					dataDir,
-					source,
-					fileName(routeId),
-					new TextEncoder().encode(bodyText)
-				);
-				if (saved.unchanged) {
-					const touchedAt = now();
-					await utimes(saved.path, touchedAt, touchedAt);
-				}
+			case "ok":
+				// 응답 본문을 그대로 저장한다.
+				await this.save(source, routeId, bodyText);
 				this.result.fetched[operation] += 1;
 				return "available";
-			}
 			case "route-not-found":
-				if (!this.result.notFound.includes(routeId)) {
-					this.result.notFound.push(routeId);
-				}
+				await this.save(source, routeId, ROUTE_NOT_FOUND_BODY);
+				this.recordNotFound(routeId);
 				return "not-found";
 			case "unauthorized":
 				this.fail(routeId, operation, envelope);
@@ -301,6 +350,11 @@ class BusRouteFetcher {
 			case "quota-exceeded":
 				this.fail(routeId, operation, envelope);
 				this.stop(operation, "quota-exceeded");
+				return await existing();
+			case "rate-limited":
+				// callWithRetry가 재시도를 다 쓴 뒤에도 요청 제한이면 남은 노선에 호출을 쓰지 않는다.
+				this.fail(routeId, operation, envelope);
+				this.stop(operation, "rate-limited");
 				return await existing();
 			default:
 				this.fail(routeId, operation, envelope);
