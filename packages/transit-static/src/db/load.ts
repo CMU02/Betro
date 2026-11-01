@@ -1,5 +1,9 @@
 import type { Database } from "@Betro/db";
 import {
+	busRoute,
+	busRouteSegment,
+	busRouteShape,
+	busRouteStop,
 	type ReferenceBatchKind,
 	referenceBatch,
 	type SourceManifest,
@@ -12,6 +16,7 @@ import {
 	trackStation,
 } from "@Betro/db/schema/transit";
 import { and, asc, count, desc, eq, ne } from "drizzle-orm";
+import { type AssembledBusRoute, BUS_SHAPE_ATTRIBUTION } from "../bus/assemble";
 import type { CrosswalkRow } from "../crosswalk/match";
 import { isLineKey, type LineKey } from "../lines";
 import type { Trip } from "../timetable/model";
@@ -170,6 +175,80 @@ export async function loadTracks(
 			}
 		}
 		await makeCurrent(tx, "track", batchId);
+		return { batchId };
+	});
+}
+
+/**
+ * 한 트랜잭션에서 bus_route 배치를 만들고, 노선마다 bus_route → bus_route_shape → 정류소 → 구간 순으로 넣은 뒤 현재 배치로 바꾼다.
+ * 정류소와 구간은 500행씩 넣는다.
+ */
+export async function loadBusRoutes(
+	db: Database,
+	routes: readonly AssembledBusRoute[],
+	manifest: SourceManifest
+): Promise<{ batchId: number }> {
+	return await db.transaction(async (tx) => {
+		const batchId = await insertBatch(tx, "bus_route", manifest);
+		for (const route of routes) {
+			// biome-ignore lint/performance/noAwaitInLoops: each route id is needed for its child rows
+			const [inserted] = await tx
+				.insert(busRoute)
+				.values({
+					batchId,
+					qualityFlags: route.qualityFlags,
+					routeId: route.routeId,
+					routeName: route.routeName,
+					routeType: route.routeType,
+				})
+				.returning({ id: busRoute.id });
+			if (!inserted) {
+				throw new Error(
+					`bus_route insert for ${route.routeId} returned no row`
+				);
+			}
+			const busRouteId = inserted.id;
+			await tx.insert(busRouteShape).values({
+				attribution: BUS_SHAPE_ATTRIBUTION,
+				busRouteId,
+				coords: route.coords,
+				lengthM: route.lengthM,
+			});
+			for (const part of chunk(route.stops, INSERT_CHUNK_SIZE)) {
+				// biome-ignore lint/performance/noAwaitInLoops: statements in one transaction run one by one
+				await tx.insert(busRouteStop).values(
+					part.map((stop) => ({
+						apiSectDistM: stop.apiSectDistM,
+						arsId: stop.arsId,
+						busRouteId,
+						directionName: stop.directionName,
+						distanceM: stop.distanceM,
+						lat: stop.lat,
+						lng: stop.lng,
+						name: stop.name,
+						offsetM: stop.offsetM,
+						qualityFlags: [...stop.flags],
+						seq: stop.seq,
+						stationId: stop.stationId,
+					}))
+				);
+			}
+			for (const part of chunk(route.segments, INSERT_CHUNK_SIZE)) {
+				// biome-ignore lint/performance/noAwaitInLoops: statements in one transaction run one by one
+				await tx.insert(busRouteSegment).values(
+					part.map((segment) => ({
+						apiSectDistM: segment.apiSectDistM,
+						busRouteId,
+						endM: segment.endM,
+						fromSeq: segment.fromSeq,
+						qualityFlags: [...segment.flags],
+						startM: segment.startM,
+						toSeq: segment.toSeq,
+					}))
+				);
+			}
+		}
+		await makeCurrent(tx, "bus_route", batchId);
 		return { batchId };
 	});
 }

@@ -1,4 +1,8 @@
 import {
+	busRoute,
+	busRouteSegment,
+	busRouteShape,
+	busRouteStop,
 	referenceBatch,
 	stationCrosswalk,
 	timetableStopTime,
@@ -7,7 +11,9 @@ import {
 } from "@Betro/db/schema/transit";
 import { createTestDb } from "@Betro/db/test-db";
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
 import { eq } from "drizzle-orm";
+import { assembleBusRoute } from "../bus/assemble";
 import {
 	TIMETABLE_LOGIC_VERSION,
 	timetableManifest,
@@ -15,6 +21,7 @@ import {
 import type { Trip } from "../timetable/model";
 import {
 	isCurrentManifest,
+	loadBusRoutes,
 	loadCrosswalk,
 	loadCurrentCrosswalk,
 	loadCurrentTrips,
@@ -268,5 +275,43 @@ describe("timetableManifest", () => {
 			fileName: "timetable logic",
 			sha256: `v${TIMETABLE_LOGIC_VERSION}`,
 		});
+	});
+});
+
+describe("loadBusRoutes", () => {
+	const fixture = (name: string) =>
+		readFileSync(
+			new URL(`../sources/__fixtures__/${name}`, import.meta.url),
+			"utf8"
+		);
+	const assembled = () => {
+		const { route } = assembleBusRoute({
+			entry: { routeId: "100100290", routeName: "6411", stopCount: 117 },
+			pathBody: fixture("bus-path-6411.json"),
+			stationsBody: fixture("bus-stations-6411.json"),
+		});
+		if (!route) {
+			throw new Error("6411 fixture did not assemble");
+		}
+		return route;
+	};
+
+	it("writes all four tables and switches current batch", async () => {
+		const db = await createTestDb();
+		const route = assembled();
+		const first = await loadBusRoutes(db, [route], {
+			a: { fileName: "a", sha256: "1" },
+		});
+		expect(await db.select().from(busRoute)).toHaveLength(1);
+		expect(await db.select().from(busRouteShape)).toHaveLength(1);
+		expect(await db.select().from(busRouteStop)).toHaveLength(117);
+		expect(await db.select().from(busRouteSegment)).toHaveLength(116);
+		const second = await loadBusRoutes(db, [route], {
+			a: { fileName: "a", sha256: "2" },
+		});
+		const batches = await db.select().from(referenceBatch);
+		const current = (id: number) => batches.find((b) => b.id === id)?.isCurrent;
+		expect(current(first.batchId)).toBe(false);
+		expect(current(second.batchId)).toBe(true);
 	});
 });

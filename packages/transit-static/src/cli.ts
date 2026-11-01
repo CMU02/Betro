@@ -1,9 +1,12 @@
 import { createDb } from "@Betro/db";
 import type { ServiceDay } from "@Betro/db/schema/transit";
 import { parseArgs } from "node:util";
+import { buildBusRoutes } from "./jobs/build-bus-routes";
 import { buildCrosswalk } from "./jobs/build-crosswalk";
 import { buildTimetable } from "./jobs/build-timetable";
 import { buildTracks } from "./jobs/build-tracks";
+import { fetchBusRouteXlsx } from "./jobs/fetch-bus-route-xlsx";
+import { fetchBusRoutes } from "./jobs/fetch-bus-routes";
 import { fetchOsm } from "./jobs/fetch-osm";
 import { fetchRealtimeSample } from "./jobs/fetch-realtime-sample";
 import { fetchStationMaster } from "./jobs/fetch-station-master";
@@ -14,6 +17,7 @@ import { osmDiscover } from "./jobs/osm-discover";
 import { reportMatchRate } from "./jobs/report-match-rate";
 import { resolveDatabaseUrl } from "./paths";
 import { resolveDataDir } from "./raw-store";
+import { DEFAULT_BUS_ROUTE_XLSX_SEQ } from "./sources/bus-route-xlsx";
 import {
 	KRIC_MISSING_KEY_MESSAGE,
 	readKricServiceKey,
@@ -33,6 +37,9 @@ function requireApiKey(): string {
 	return key;
 }
 
+const BUS_MISSING_KEY_MESSAGE =
+	"DATA_GO_KR_API_KEY가 없습니다. 공공데이터포털에서 서울특별시_노선정보조회 서비스(15000193) 활용신청 후 받은 서비스키를 설정하세요.";
+
 const SERVICE_DAYS: readonly string[] = ["weekday", "saturday", "holiday"];
 
 const isServiceDay = (value: string): value is ServiceDay =>
@@ -41,6 +48,24 @@ const isServiceDay = (value: string): value is ServiceDay =>
 type CommandHandler = (args: string[]) => Promise<void>;
 
 const commands: Record<string, CommandHandler> = {
+	"build:bus-routes": async (args) => {
+		const { values } = parseArgs({
+			args,
+			options: { "dry-run": { type: "boolean" } },
+		});
+		const dryRun = values["dry-run"] === true;
+		const db = dryRun
+			? undefined
+			: createDb({ DATABASE_URL: resolveDatabaseUrl(process.env) });
+		const result = await buildBusRoutes({
+			dataDir: resolveDataDir(process.env),
+			db,
+			dryRun,
+		});
+		if (!result.ok) {
+			process.exitCode = 1;
+		}
+	},
 	"build:crosswalk": async (args) => {
 		const { values } = parseArgs({
 			args,
@@ -86,6 +111,46 @@ const commands: Record<string, CommandHandler> = {
 			dryRun: values["dry-run"] === true,
 		});
 		if (!result.ok) {
+			process.exitCode = 1;
+		}
+	},
+	"fetch:bus-route-xlsx": async (args) => {
+		const { values } = parseArgs({
+			args,
+			options: { seq: { type: "string" } },
+		});
+		const seq = Number(values.seq ?? DEFAULT_BUS_ROUTE_XLSX_SEQ);
+		if (!Number.isInteger(seq) || seq <= 0) {
+			throw new Error(`invalid --seq: ${values.seq}`);
+		}
+		await fetchBusRouteXlsx({ dataDir: resolveDataDir(process.env), seq });
+	},
+	"fetch:bus-routes": async (args) => {
+		const { values } = parseArgs({
+			args,
+			options: { "max-age-days": { type: "string" } },
+		});
+		const key = process.env.DATA_GO_KR_API_KEY;
+		if (!key) {
+			console.error(BUS_MISSING_KEY_MESSAGE);
+			process.exit(1);
+		}
+		const maxAgeDays =
+			values["max-age-days"] === undefined
+				? undefined
+				: Number(values["max-age-days"]);
+		if (maxAgeDays !== undefined && !(maxAgeDays >= 0)) {
+			throw new Error(`invalid --max-age-days: ${values["max-age-days"]}`);
+		}
+		const result = await fetchBusRoutes({
+			dataDir: resolveDataDir(process.env),
+			key,
+			maxAgeDays,
+		});
+		if (
+			result.stoppedBy === "quota-exceeded" ||
+			result.stoppedBy === "unauthorized"
+		) {
 			process.exitCode = 1;
 		}
 	},
