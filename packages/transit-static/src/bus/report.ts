@@ -1,17 +1,24 @@
 // assemble.ts가 이 모듈의 값을 쓰므로 여기서는 타입만 가져온다(import 순환 방지).
 import type { AssembledBusRoute, BusAssembleResult } from "./assemble";
+import {
+	AUTONOMOUS_PILOT_ROUTES,
+	AUTONOMOUS_ROUTE_NAME,
+	OUT_OF_SCOPE_ROUTE_ID_REASON,
+} from "./scope";
 
 /** 보고서 출처 줄. 계획의 인터페이스 이름(BUS_SHAPE_ATTRIBUTION)으로는 assemble.ts가 내보낸다. */
 export const REPORT_SHAPE_ATTRIBUTION =
 	"서울특별시 버스노선정보(공공데이터포털)";
 
-/** 오프셋·sect-dist-mismatch 표에 보여 줄 항목 수. */
+/** 오프셋·stop-off-shape 정류소·sect-dist-mismatch 표에 보여 줄 항목 수. */
 const TOP_N = 20;
 /** 원본 없는 노선 목록에 보여 줄 ID 수. 첫 수집 중에는 수백 개일 수 있다. */
 const MISSING_LIST_MAX = 50;
 const PIPE = /\|/g;
 const ESCAPED_PIPE = String.raw`\|`;
 const LINE_BREAK = /\r\n|\r|\n/g;
+/** sect-dist-mismatch 묶음마다 보여 줄 예시 노선 수. */
+const EXAMPLE_ROUTES_MAX = 3;
 
 type ReportInput = Omit<BusAssembleResult, "markdown">;
 
@@ -28,7 +35,7 @@ function renderSummary(result: ReportInput): string[] {
 		`ok: ${result.ok}`,
 		`엑셀 노선: ${total}`,
 		`범위 안: ${inScope} (적재 ${result.routes.length}, 제외 ${result.excluded.length})`,
-		`범위 밖: ${result.outOfScope}`,
+		`범위 밖: ${result.outOfScope} (유형 ${result.outOfScope - result.outOfScopeById.length}, ID ${result.outOfScopeById.length})`,
 		`원본 없음: ${result.missingRaw.length}`,
 		`정류소: ${result.routes.reduce((sum, r) => sum + r.stops.length, 0)}, 구간: ${result.routes.reduce((sum, r) => sum + r.segments.length, 0)}`,
 		`출처: ${REPORT_SHAPE_ATTRIBUTION}`,
@@ -55,6 +62,53 @@ function renderRouteTypes(result: ReportInput): string[] {
 		"| routeType | 노선 수 |",
 		"| --- | --- |",
 		...entries.map(([routeType, count]) => `| ${cell(routeType)} | ${count} |`),
+		"",
+	];
+}
+
+function renderOutOfScopeById(result: ReportInput): string[] {
+	const { outOfScopeById } = result;
+	if (outOfScopeById.length === 0) {
+		return ["## ID로 뺀 노선", "", "없음", ""];
+	}
+	return [
+		`## ID로 뺀 노선 (${outOfScopeById.length})`,
+		"",
+		"| 노선명 | ID | routeType | 사유 |",
+		"| --- | --- | --- | --- |",
+		...outOfScopeById.map(
+			(route) =>
+				`| ${cell(route.routeName)} | ${cell(route.routeId)} | ${cell(route.routeType)} | ${cell(OUT_OF_SCOPE_ROUTE_ID_REASON)} |`
+		),
+		"",
+	];
+}
+
+/**
+ * 범위 안 자율주행 시범버스(AUTONOMOUS_PILOT_ROUTES 또는 이름 패턴). 2026-11-02부터 범위에 넣으므로 목록으로만 보인다.
+ * 이름 패턴에 맞지만 AUTONOMOUS_PILOT_ROUTES에 없는 노선은 "새 노선"으로 표시해 목록 갱신을 검토하게 한다. ok는 바꾸지 않는다.
+ */
+function renderAutonomousReview(result: ReportInput): string[] {
+	const heading = "## 범위 안 자율주행 시범버스";
+	const pilots = [...result.routes, ...result.excluded]
+		.filter(
+			(route) =>
+				AUTONOMOUS_PILOT_ROUTES.has(route.routeId) ||
+				AUTONOMOUS_ROUTE_NAME.test(route.routeName)
+		)
+		.toSorted((a, b) => a.routeId.localeCompare(b.routeId));
+	if (pilots.length === 0) {
+		return [heading, "", "없음", ""];
+	}
+	return [
+		`${heading} (${pilots.length})`,
+		"",
+		"| 노선명 | ID | 목록 |",
+		"| --- | --- | --- |",
+		...pilots.map(
+			(route) =>
+				`| ${cell(route.routeName)} | ${cell(route.routeId)} | ${AUTONOMOUS_PILOT_ROUTES.has(route.routeId) ? "알려진 노선" : "새 노선"} |`
+		),
 		"",
 	];
 }
@@ -121,6 +175,68 @@ function renderWarningCounts(routes: readonly AssembledBusRoute[]): string[] {
 	];
 }
 
+interface OffShapeStation {
+	count: number;
+	maxOffsetM: number;
+	name: string;
+	routeIds: Set<string>;
+	routeNames: Set<string>;
+	stationId: string;
+}
+
+/** stop-off-shape를 정류소(stationId)별로 묶는다. issues에는 stationId가 없으므로 stops를 읽는다. */
+function renderStopOffShapeByStation(
+	routes: readonly AssembledBusRoute[]
+): string[] {
+	const groups = new Map<string, OffShapeStation>();
+	for (const route of routes) {
+		for (const stop of route.stops) {
+			if (!stop.flags.includes("stop-off-shape")) {
+				continue;
+			}
+			const group = groups.get(stop.stationId) ?? {
+				count: 0,
+				maxOffsetM: 0,
+				name: stop.name,
+				routeIds: new Set<string>(),
+				routeNames: new Set<string>(),
+				stationId: stop.stationId,
+			};
+			group.count += 1;
+			group.maxOffsetM = Math.max(group.maxOffsetM, stop.offsetM);
+			group.routeIds.add(route.routeId);
+			group.routeNames.add(route.routeName);
+			groups.set(stop.stationId, group);
+		}
+	}
+	const heading = `## stop-off-shape 정류소별 (${groups.size}개 정류소)`;
+	if (groups.size === 0) {
+		return [heading, "", "없음", ""];
+	}
+	const rows = [...groups.values()].toSorted(
+		(a, b) =>
+			b.count - a.count ||
+			b.maxOffsetM - a.maxOffsetM ||
+			a.stationId.localeCompare(b.stationId)
+	);
+	const rest = groups.size - TOP_N;
+	return [
+		heading,
+		"",
+		"| stationId | 정류소 | 경고 수 | 노선 수 | 최대 오프셋(m) | 노선 예시 |",
+		"| --- | --- | --- | --- | --- | --- |",
+		...rows.slice(0, TOP_N).map((group) => {
+			const examples = [...group.routeNames]
+				.toSorted((a, b) => a.localeCompare(b))
+				.slice(0, EXAMPLE_ROUTES_MAX)
+				.join(", ");
+			return `| ${cell(group.stationId)} | ${cell(group.name)} | ${group.count} | ${group.routeIds.size} | ${group.maxOffsetM.toFixed(1)} | ${cell(examples)} |`;
+		}),
+		...(rest > 0 ? [`- 외 ${rest}개 정류소`] : []),
+		"",
+	];
+}
+
 function renderTopOffsets(routes: readonly AssembledBusRoute[]): string[] {
 	const top = routes
 		.flatMap((route) => route.stops.map((stop) => ({ route, stop })))
@@ -142,31 +258,139 @@ function renderTopOffsets(routes: readonly AssembledBusRoute[]): string[] {
 	];
 }
 
-function renderTopMismatches(routes: readonly AssembledBusRoute[]): string[] {
-	const top = routes
-		.flatMap((route) =>
-			route.segments
-				.filter((segment) => segment.flags.includes("sect-dist-mismatch"))
-				.map((segment) => ({
-					diffM: Math.abs(segment.endM - segment.startM - segment.apiSectDistM),
-					route,
-					segment,
-				}))
-		)
-		.toSorted((a, b) => b.diffM - a.diffM)
-		.slice(0, TOP_N);
-	if (top.length === 0) {
-		return [`## sect-dist-mismatch 상위 ${TOP_N}개 구간`, "", "없음", ""];
+interface MismatchGroup {
+	apiSectDistM: number;
+	/** 같은 정류소 쌍의 경고 구간 예시. 노선명 순. */
+	examples: {
+		fromSeq: number;
+		routeId: string;
+		routeName: string;
+		toSeq: number;
+	}[];
+	fromName: string;
+	key: string;
+	maxDiffM: number;
+	maxLengthM: number;
+	minLengthM: number;
+	pairKey: string;
+	toName: string;
+}
+
+type RouteStop = AssembledBusRoute["stops"][number];
+
+function stopAt(
+	bySeq: ReadonlyMap<number, RouteStop>,
+	route: AssembledBusRoute,
+	seq: number
+): RouteStop {
+	const stop = bySeq.get(seq);
+	if (!stop) {
+		throw new Error(
+			`renderTopMismatches: route ${route.routeId} has no stop at seq ${seq}`
+		);
 	}
+	return stop;
+}
+
+/**
+ * 경고 구간을 (from stationId, to stationId, apiSectDistM)으로 묶고, 같은 정류소 쌍을 지나는 전체 노선 수를 함께 센다.
+ * 여러 노선이 같은 링크를 공유하면 한 줄로 보이고, "경고 노선 / 같은 구간 전체 노선"으로 링크 결함(16/16)과
+ * 한 노선만의 결함(1/11)을 가른다.
+ */
+function groupMismatches(routes: readonly AssembledBusRoute[]): {
+	flagged: number;
+	groups: MismatchGroup[];
+	routesByPair: Map<string, Set<string>>;
+} {
+	const groups = new Map<string, MismatchGroup>();
+	const routesByPair = new Map<string, Set<string>>();
+	let flagged = 0;
+	for (const route of routes) {
+		const bySeq = new Map(route.stops.map((stop) => [stop.seq, stop]));
+		for (const segment of route.segments) {
+			const from = stopAt(bySeq, route, segment.fromSeq);
+			const to = stopAt(bySeq, route, segment.toSeq);
+			const pairKey = `${from.stationId}>${to.stationId}`;
+			const onPair = routesByPair.get(pairKey) ?? new Set<string>();
+			onPair.add(route.routeId);
+			routesByPair.set(pairKey, onPair);
+			if (!segment.flags.includes("sect-dist-mismatch")) {
+				continue;
+			}
+			flagged += 1;
+			const lengthM = segment.endM - segment.startM;
+			const diffM = Math.abs(lengthM - segment.apiSectDistM);
+			const key = `${pairKey}>${segment.apiSectDistM}`;
+			const group = groups.get(key) ?? {
+				apiSectDistM: segment.apiSectDistM,
+				examples: [],
+				fromName: from.name,
+				key,
+				maxDiffM: 0,
+				maxLengthM: lengthM,
+				minLengthM: lengthM,
+				pairKey,
+				toName: to.name,
+			};
+			group.maxDiffM = Math.max(group.maxDiffM, diffM);
+			group.minLengthM = Math.min(group.minLengthM, lengthM);
+			group.maxLengthM = Math.max(group.maxLengthM, lengthM);
+			group.examples.push({
+				fromSeq: segment.fromSeq,
+				routeId: route.routeId,
+				routeName: route.routeName,
+				toSeq: segment.toSeq,
+			});
+			groups.set(key, group);
+		}
+	}
+	return { flagged, groups: [...groups.values()], routesByPair };
+}
+
+function lengthRange(group: MismatchGroup): string {
+	const min = group.minLengthM.toFixed(0);
+	const max = group.maxLengthM.toFixed(0);
+	return min === max ? min : `${min}–${max}`;
+}
+
+function exampleRoutes(group: MismatchGroup): string {
+	const examples = group.examples
+		.toSorted(
+			(a, b) => a.routeName.localeCompare(b.routeName) || a.fromSeq - b.fromSeq
+		)
+		.map((e) => `${e.routeName}(${e.fromSeq}→${e.toSeq})`);
+	const rest = examples.length - EXAMPLE_ROUTES_MAX;
+	const shown = examples.slice(0, EXAMPLE_ROUTES_MAX).join(", ");
+	return rest > 0 ? `${shown} 외 ${rest}` : shown;
+}
+
+function renderTopMismatches(routes: readonly AssembledBusRoute[]): string[] {
+	const heading = `## sect-dist-mismatch 상위 ${TOP_N}개 구간`;
+	const { flagged, groups, routesByPair } = groupMismatches(routes);
+	if (groups.length === 0) {
+		return [heading, "", "없음", ""];
+	}
+	const flaggedRoutes = (group: MismatchGroup): number =>
+		new Set(group.examples.map((e) => e.routeId)).size;
+	const top = groups
+		.toSorted(
+			(a, b) =>
+				b.maxDiffM - a.maxDiffM ||
+				b.examples.length - a.examples.length ||
+				a.key.localeCompare(b.key)
+		)
+		.slice(0, TOP_N);
 	return [
-		`## sect-dist-mismatch 상위 ${TOP_N}개 구간`,
+		heading,
 		"",
-		"| 노선명 | ID | 구간(seq) | 모양 길이(m) | API 거리(m) | 차이(m) |",
+		`정류소 쌍·API 거리 기준 묶음 ${groups.length}개 (경고 구간 ${flagged}개)`,
+		"",
+		"| 구간 | 모양 길이(m) | API 거리(m) | 차이(m) | 경고 노선 / 같은 구간 전체 노선 | 예시 노선 |",
 		"| --- | --- | --- | --- | --- | --- |",
-		...top.map(
-			({ route, segment, diffM }) =>
-				`| ${cell(route.routeName)} | ${cell(route.routeId)} | ${segment.fromSeq}→${segment.toSeq} | ${(segment.endM - segment.startM).toFixed(0)} | ${segment.apiSectDistM} | ${diffM.toFixed(0)} |`
-		),
+		...top.map((group) => {
+			const total = routesByPair.get(group.pairKey)?.size ?? 0;
+			return `| ${cell(`${group.fromName} → ${group.toName}`)} | ${lengthRange(group)} | ${group.apiSectDistM} | ${group.maxDiffM.toFixed(0)} | ${flaggedRoutes(group)}/${total} | ${cell(exampleRoutes(group))} |`;
+		}),
 		"",
 	];
 }
@@ -176,9 +400,12 @@ export function renderBusRouteReport(result: ReportInput): string {
 	return [
 		...renderSummary(result),
 		...renderRouteTypes(result),
+		...renderOutOfScopeById(result),
+		...renderAutonomousReview(result),
 		...renderExcluded(result),
 		...renderMissingRaw(result),
 		...renderWarningCounts(result.routes),
+		...renderStopOffShapeByStation(result.routes),
 		...renderTopOffsets(result.routes),
 		...renderTopMismatches(result.routes),
 	].join("\n");

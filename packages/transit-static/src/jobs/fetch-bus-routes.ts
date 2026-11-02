@@ -1,5 +1,5 @@
 import { stat, utimes } from "node:fs/promises";
-import { isInScopeRouteType } from "../bus/scope";
+import { isInScopeRoute } from "../bus/scope";
 import { rawPath } from "../paths";
 import { readRaw, saveRaw } from "../raw-store";
 import {
@@ -92,6 +92,8 @@ export interface FetchBusRoutesOptions {
 	callsPerOperation?: number;
 	dataDir: string;
 	delayMs?: number;
+	/** ID로 뺄 노선. 기본값은 scope.ts의 OUT_OF_SCOPE_ROUTE_IDS. */
+	excludedRouteIds?: ReadonlyMap<string, string>;
 	fetchImpl?: typeof fetch;
 	key: string;
 	maxAgeDays?: number;
@@ -171,8 +173,11 @@ class BusRouteFetcher {
 	};
 	private totalCalls = 0;
 	private readonly options: Required<
-		Omit<FetchBusRoutesOptions, "routes" | "fetchImpl">
-	> & { fetchImpl?: typeof fetch };
+		Omit<FetchBusRoutesOptions, "routes" | "fetchImpl" | "excludedRouteIds">
+	> & {
+		excludedRouteIds?: ReadonlyMap<string, string>;
+		fetchImpl?: typeof fetch;
+	};
 
 	constructor(options: FetchBusRoutesOptions, routeCount: number) {
 		this.options = {
@@ -180,6 +185,7 @@ class BusRouteFetcher {
 				options.callsPerOperation ?? BUS_CALLS_PER_OPERATION_PER_RUN,
 			dataDir: options.dataDir,
 			delayMs: options.delayMs ?? BUS_REQUEST_DELAY_MS,
+			excludedRouteIds: options.excludedRouteIds,
 			fetchImpl: options.fetchImpl,
 			key: options.key,
 			maxAgeDays: options.maxAgeDays ?? DEFAULT_MAX_AGE_DAYS,
@@ -382,7 +388,7 @@ class BusRouteFetcher {
 			});
 			return;
 		}
-		if (!isInScopeRouteType(routeType)) {
+		if (!isInScopeRoute(routeId, routeType, this.options.excludedRouteIds)) {
 			this.result.outOfScope += 1;
 			return;
 		}

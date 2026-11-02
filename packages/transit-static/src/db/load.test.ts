@@ -286,7 +286,12 @@ describe("loadBusRoutes", () => {
 		);
 	const assembled = () => {
 		const { route } = assembleBusRoute({
-			entry: { routeId: "100100290", routeName: "6411", stopCount: 117 },
+			entry: {
+				maxSeq: 117,
+				routeId: "100100290",
+				routeName: "6411",
+				stopCount: 117,
+			},
 			pathBody: fixture("bus-path-6411.json"),
 			stationsBody: fixture("bus-stations-6411.json"),
 		});

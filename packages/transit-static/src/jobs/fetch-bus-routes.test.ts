@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { AUTONOMOUS_PILOT_ROUTES } from "../bus/scope";
 import { rawPath } from "../paths";
 import type { BusRouteListEntry } from "../sources/bus-route-xlsx";
 import type { BusRouteOperation } from "../sources/seoul-bus-api";
@@ -92,7 +93,7 @@ function normalResponder(
 }
 
 function route(routeId: string): BusRouteListEntry {
-	return { routeId, routeName: `R${routeId}`, stopCount: 1 };
+	return { maxSeq: 1, routeId, routeName: `R${routeId}`, stopCount: 1 };
 }
 
 function stationsFile(dataDir: string, routeId: string): string {
@@ -165,6 +166,27 @@ describe("fetchBusRoutes", () => {
 			pathBody("100100001")
 		);
 		expect(existsSync(pathFile(dataDir, "100100002"))).toBe(false);
+	});
+
+	it("never fetches the path of a route excluded by ID", async () => {
+		const { calls, fetchImpl } = fakeFetch(
+			normalResponder({ "100000024": "3" })
+		);
+		const result = await fetchBusRoutes({
+			dataDir,
+			delayMs: 0,
+			excludedRouteIds: AUTONOMOUS_PILOT_ROUTES,
+			fetchImpl,
+			key: KEY,
+			routes: [route("100000024")],
+		});
+
+		expect(calls).toEqual([
+			{ busRouteId: "100000024", operation: "getStaionByRoute" },
+		]);
+		expect(result.outOfScope).toBe(1);
+		expect(result.fetched).toEqual({ getRoutePath: 0, getStaionByRoute: 1 });
+		expect(existsSync(pathFile(dataDir, "100000024"))).toBe(false);
 	});
 
 	it("skips fresh files and resumes after quota stop", async () => {

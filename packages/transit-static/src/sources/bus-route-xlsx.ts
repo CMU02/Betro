@@ -13,8 +13,11 @@ export function busRouteXlsxUrl(seq: number): string {
 }
 
 export interface BusRouteListEntry {
+	/** 노선의 가장 큰 순번. OA-1095는 (가상)/(미정차) 행을 일부 빼지만 순번은 그대로 두므로 행 수보다 클 수 있다. */
+	maxSeq: number;
 	routeId: string;
 	routeName: string;
+	/** 엑셀 행 수. */
 	stopCount: number;
 }
 
@@ -53,6 +56,7 @@ export function parseBusRouteRows(rows: unknown[][]): {
 	}
 
 	const byId = new Map<string, BusRouteListEntry>();
+	const errors: string[] = [];
 	for (const [i, row] of rows.entries()) {
 		if (i === 0) {
 			continue;
@@ -61,12 +65,21 @@ export function parseBusRouteRows(rows: unknown[][]): {
 		if (routeId === "") {
 			continue;
 		}
+		// 빈 칸·소수가 NaN이나 엉뚱한 최대 순번이 되어 모든 노선에 경고가 붙지 않게 명시적으로 막는다.
+		const seqText = cellToString(row[seqCol]);
+		const seq = seqText === "" ? Number.NaN : Number(seqText);
+		if (!Number.isInteger(seq) || seq < 1) {
+			errors.push(`row ${i + 1}: invalid 순번 ${seqText}`);
+			continue;
+		}
 		const existing = byId.get(routeId);
 		if (existing) {
 			existing.stopCount += 1;
+			existing.maxSeq = Math.max(existing.maxSeq, seq);
 			continue;
 		}
 		byId.set(routeId, {
+			maxSeq: seq,
 			routeId,
 			routeName: cellToString(row[nameCol]),
 			stopCount: 1,
@@ -75,7 +88,7 @@ export function parseBusRouteRows(rows: unknown[][]): {
 	const routes = [...byId.values()].sort((a, b) =>
 		a.routeId < b.routeId ? -1 : Number(a.routeId > b.routeId)
 	);
-	return { errors: [], routes };
+	return { errors, routes };
 }
 
 /** 첫 시트의 모든 행을 읽는다. */

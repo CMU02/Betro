@@ -8,7 +8,12 @@ import { rawPath } from "../paths";
 import { buildBusRoutes, busRouteManifest } from "./build-bus-routes";
 import { fetchBusRoutes } from "./fetch-bus-routes";
 
-const ROUTE = { routeId: "100100290", routeName: "6411", stopCount: 117 };
+const ROUTE = {
+	maxSeq: 117,
+	routeId: "100100290",
+	routeName: "6411",
+	stopCount: 117,
+};
 
 function fixture(name: string): Promise<string> {
 	return readFile(
@@ -100,7 +105,12 @@ describe("buildBusRoutes", () => {
 	});
 
 	it("treats a route the API reports as not found as excluded, not missing raw", async () => {
-		const gone = { routeId: "999999999", routeName: "폐선", stopCount: 10 };
+		const gone = {
+			maxSeq: 10,
+			routeId: "999999999",
+			routeName: "폐선",
+			stopCount: 10,
+		};
 		const stations = await fixture("bus-stations-6411.json");
 		const path = await fixture("bus-path-6411.json");
 		const fetchImpl = ((input: string | URL | Request) => {

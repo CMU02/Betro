@@ -19,6 +19,8 @@
 - 6411에서 **전역 최근접 투영은 순서가 3번 뒤로 간다**(같은 도로를 왕복). 직전 정류소 이후 창 `[cursor, cursor + 2×fullSectDist + 1000m]` 안에서만 찾으면 단조 증가하고, 오프셋 중앙값 6.5m·최대 24.5m, 구간 길이/`fullSectDist` 중앙값 1.001(0.41~1.51).
 - 응답 봉투: `{ comMsgHeader, msgHeader: { headerCd, headerMsg, itemCount }, msgBody: { itemList } }`, `resultType=json`. 잘못된 키는 HTTP 401 + JSON(조사 보고서 2장).
 - 6411 응답은 `packages/transit-static/src/sources/__fixtures__/bus-stations-6411.json`, `bus-path-6411.json`으로 이 계획과 함께 커밋한다(키 없음 확인, Biome으로 포맷만 바꿈. 내용은 원본과 같다).
+- **Task 8 실측 결과 (2026-11-01)**: 원본 718개 노선(`getStaionByRoute` 718, `getRoutePath` 471: 범위를 좁히기 전 유형 기준으로 받음, 원본 없음 0)으로 `build:bus-routes --dry-run`(로직 버전 2): `ok: true`, 적재 대상 416 노선(3: 145, 4: 242, 5: 2, 6: 13, 15: 14), 제외 0, 범위 밖 302(유형 291, 자율주행 ID 11), 정류소 31,785, 구간 31,369. warning: `sect-dist-mismatch` 240건(79개 노선, 정류소 쌍·API 거리 묶음 184개. 135건은 `sect-dist-scale` 노선), `stop-off-shape` 8(8), `xlsx-stop-count-mismatch` 7(7), `sect-dist-scale` 5(5: 2155, 9404, 7715, 702A, 702B), `window-miss` 1(9409), `zero-length-segment` 1(6516). 확인한 경고는 모두 원천 데이터 결함이고 투영 오류는 없었다(원인은 README "알려진 원천 데이터 문제(버스)"). 보고서 `data/reports/build-bus-routes/20261101T133958.md`.
+- **자율주행 시범버스 포함 (2026-11-02, 사용자 결정)**: 실제 승객을 태우는 노선이 있어 `OUT_OF_SCOPE_ROUTE_IDS`를 비우고 11개를 `AUTONOMOUS_PILOT_ROUTES` 목록으로만 남겼다(로직 버전 3). 적재 결과 batchId 2: 427 노선(3: 152, 4: 242, 5: 5, 6: 13, 15: 15), 범위 밖 291, 정류소 32,098, 구간 31,671, `sect-dist-mismatch` 241(80), 나머지 warning은 같다. batchId 1(416 노선)은 이전 배치로 남아 있다.
 
 ## Global Constraints
 
@@ -29,7 +31,7 @@
 - 개발계정 한도: 오퍼레이션별 하루 1,000건, KST 00시 초기화(조사 보고서 2장 FAQ). 수집 잡은 한 번 실행에 오퍼레이션별 최대 950건(`BUS_CALLS_PER_OPERATION_PER_RUN`)만 부르고, 이미 받은 원본은 다시 부르지 않아 다음 실행에서 이어받는다.
 - 정류소는 **seq(순번)로만** 잇는다. 순환·왕복 노선은 같은 정류소가 두 번 나올 수 있으므로 `station` ID로 조인하지 않는다(§4.2).
 - `getStaionByRoute.fullSectDist`는 m. (`getBusPosByRtid`의 km와 다르다. 이 단계는 위치 API를 쓰지 않는다.)
-- 범위: routeType `2`(마을), `7`(인천), `8`(경기), `9`(폐지)는 제외(`OUT_OF_SCOPE_ROUTE_TYPES`). 그 밖의 값(가이드에 없는 `15` 포함)은 포함하고 보고서에 유형별 개수를 낸다. 포함 노선 수의 기대치는 396(서울시 2026-01 현황). Task 8에서 실제 분포를 보고 이 목록을 확정한다.
+- 범위: routeType `1`(공항), `2`(마을), `7`, `8`, `9`, `10`(관광·한강버스 셔틀), `14`(한강버스 선박)은 제외, 자율주행 시범 노선 11개는 2026-11-02 결정으로 포함(`AUTONOMOUS_PILOT_ROUTES`, 다시 빼려면 `OUT_OF_SCOPE_ROUTE_IDS`에 넣음). 기점·종점이 서울 밖인지는 범위 기준이 아니다. 동행버스 서울01~10(기점이 경기)과 107, 441, 9707 같은 서울 면허 노선은 포함한다. 실측(2026-11-01 dry-run, OA-1095 20260902): 포함 416 ID (3:145, 4:242, 5:2, 6:13, 15:14). 출근/퇴근 쌍 14개(동행 10, 맞춤 8442·8762·8773·8775)를 한 노선으로 세면 402 노선. 서울시 공표 396(2026-01, 합계만 확인)과의 차이 +6은 A/B 분기 6쌍(110A/B, 702A/B, 750A/B, 5522A/B, 6640A/B, 7013A/B)을 한 노선으로 세면 맞지만, 이는 추정이고 기준월 차이(1월 대 9~11월)일 수도 있다. 380~420 판정은 시내버스 ID 수(416)로 한다. 자율주행 11개를 더한 적재 ID는 427.
 - 경고 기준값(§6.5, §14에 따라 실데이터로 조정 가능): 정류소-모양 오프셋 80m(`BUS_STOP_WARN_OFFSET_M`), 구간 길이와 `fullSectDist`의 비율이 0.5 미만 또는 2 초과이면서 차이가 100m 넘으면 경고.
 - 모양 출처는 공공데이터(getRoutePath)다. OSM이 아니므로 ODbL 표기를 붙이지 않는다. 출처 문자열은 `서울특별시 버스노선정보(공공데이터포털)`.
 
@@ -323,10 +325,10 @@ data/raw/bus-route-path/<busRouteId>.json      (getRoutePath 원본 그대로)
 
 이 작업은 실데이터를 보고 판단한다. 호출량: `getStaionByRoute` 약 718건, `getRoutePath` 범위 안 노선 수(약 400건). 계획 단계에서 이미 오늘 몇 건을 썼으므로 한 번에 끝나지 않으면 다음 날 다시 실행해 이어받는다.
 
-- [ ] **Step 1: 원본 수집** — `packages/db`에서 `bun run db:migrate`, 저장소 루트에서 `bun transit fetch:bus-route-xlsx`, `bun transit fetch:bus-routes`. 출력의 `stoppedBy`가 `null`이 될 때까지(필요하면 다음 날) 다시 실행한다. `failed`가 남으면 원인을 보고서에 적는다.
-- [ ] **Step 2: 범위 확정** — `bun transit build:bus-routes --dry-run` 보고서의 routeType별 개수로 범위 안 노선 수를 396과 비교한다. 380~420 밖이면 어떤 유형 코드가 차이를 만드는지 찾아 `OUT_OF_SCOPE_ROUTE_TYPES`를 고치고, 바꾼 코드와 근거(유형별 노선 예시)를 `scope.ts` 주석에 적는다. 바꾸면 `BUS_ROUTE_LOGIC_VERSION`을 올린다.
-- [ ] **Step 3: 경고 검토** — 제외 노선과 `stop-off-shape`·`window-miss`·`sect-dist-mismatch` 상위 항목을 몇 개 직접 열어 원인을 분류한다(원본 결함, 기준값 문제, 알고리즘 문제). 알고리즘 문제면 Task 5에 실패하는 테스트를 먼저 더하고 고친다. 기준값만 바꿀 때는 근거를 상수 주석에 적는다.
-- [ ] **Step 4: 실데이터 회귀 테스트** — `data/raw/bus-route-path/`가 있을 때만 도는 `describe.skipIf`(1단계 `assemble.integration.test.ts`와 같은 방식) 테스트: 6411과 순환 노선 1개(routeType 5)가 error 없이 조립되고 정류소 거리가 단조 증가.
-- [ ] **Step 5: 적재** — `bun transit build:bus-routes`. 출력의 `batchId`, 노선·정류소·구간 수를 확인. 다시 실행하면 "원본 해시가 현재 배치와 같아 다시 적재하지 않습니다".
-- [ ] **Step 6: README** — "버스 노선 명령 순서" 절: 키(`DATA_GO_KR_API_KEY`, 15000193 활용신청), 명령 3개, 한도와 이어받기, 범위 규칙, 경고 코드 뜻, 출처 표기.
-- [ ] **Step 7: 검증과 커밋** — 저장소 루트 `bun test`, 바뀐 파일 `bunx ultracite fix`. 커밋 `feat(transit-static): load Seoul bus routes and document the bus pipeline`.
+- [x] **Step 1: 원본 수집** — `packages/db`에서 `bun run db:migrate`, 저장소 루트에서 `bun transit fetch:bus-route-xlsx`, `bun transit fetch:bus-routes`. 출력의 `stoppedBy`가 `null`이 될 때까지(필요하면 다음 날) 다시 실행한다. `failed`가 남으면 원인을 보고서에 적는다.
+- [x] **Step 2: 범위 확정** — `bun transit build:bus-routes --dry-run` 보고서의 routeType별 개수로 범위 안 노선 수를 396과 비교한다. 380~420 밖이면 어떤 유형 코드가 차이를 만드는지 찾아 `OUT_OF_SCOPE_ROUTE_TYPES`를 고치고, 바꾼 코드와 근거(유형별 노선 예시)를 `scope.ts` 주석에 적는다. 바꾸면 `BUS_ROUTE_LOGIC_VERSION`을 올린다.
+- [x] **Step 3: 경고 검토** — 제외 노선과 `stop-off-shape`·`window-miss`·`sect-dist-mismatch` 상위 항목을 몇 개 직접 열어 원인을 분류한다(원본 결함, 기준값 문제, 알고리즘 문제). 알고리즘 문제면 Task 5에 실패하는 테스트를 먼저 더하고 고친다. 기준값만 바꿀 때는 근거를 상수 주석에 적는다.
+- [x] **Step 4: 실데이터 회귀 테스트** — `data/raw/bus-route-path/`가 있을 때만 도는 `describe.skipIf`(1단계 `assemble.integration.test.ts`와 같은 방식) 테스트: 6411과 순환 노선 1개(routeType 5)가 error 없이 조립되고 정류소 거리가 단조 증가.
+- [x] **Step 5: 적재** — `bun transit build:bus-routes`. 출력의 `batchId`, 노선·정류소·구간 수를 확인. 다시 실행하면 "원본 해시가 현재 배치와 같아 다시 적재하지 않습니다".
+- [x] **Step 6: README** — "버스 노선 명령 순서" 절: 키(`DATA_GO_KR_API_KEY`, 15000193 활용신청), 명령 3개, 한도와 이어받기, 범위 규칙, 경고 코드 뜻, 출처 표기.
+- [x] **Step 7: 검증과 커밋** — 저장소 루트 `bun test`, 바뀐 파일 `bunx ultracite fix`. 커밋 `feat(transit-static): load Seoul bus routes and document the bus pipeline`.

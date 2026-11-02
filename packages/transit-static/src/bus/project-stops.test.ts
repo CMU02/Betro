@@ -419,6 +419,36 @@ describe("buildSegments", () => {
 		expect(segments[1]?.flags).toEqual(["sect-dist-mismatch"]);
 	});
 
+	it("does not flag sect-dist-mismatch next to an off-shape stop", () => {
+		const line = [at(0, 0), at(2000, 0)];
+		// API 거리는 실제 정류소 위치(모양에서 300m 떨어짐)를 거쳐 간다.
+		const viaStop = Math.hypot(100, 300);
+		const stops = [
+			stop(1, at(500, 0), 0),
+			stop(2, at(600, 300), viaStop),
+			stop(3, at(700, 0), viaStop),
+		];
+		const projected = projectStopsForward(line, stops).stops;
+		expect(projected[1]?.flags).toEqual(["stop-off-shape"]);
+		const segments = buildSegments(stops, projected);
+		expect(segments.map((segment) => segment.flags)).toEqual([[], []]);
+	});
+
+	it("still flags a gross mismatch next to an off-shape stop", () => {
+		const line = [at(0, 0), at(2000, 0)];
+		const viaStop = Math.hypot(100, 300);
+		const stops = [
+			stop(1, at(500, 0), 0),
+			stop(2, at(600, 300), viaStop),
+			stop(3, at(700, 0), 5000),
+		];
+		const projected = projectStopsForward(line, stops).stops;
+		expect(projected[1]?.flags).toEqual(["stop-off-shape"]);
+		const segments = buildSegments(stops, projected);
+		expect(segments[0]?.flags).toEqual([]);
+		expect(segments[1]?.flags).toEqual(["sect-dist-mismatch"]);
+	});
+
 	it("does not flag a segment within tolerance", () => {
 		const line = [at(0, 0), at(2000, 0)];
 		const stops = [stop(1, at(0, 0), 0), stop(2, at(500, 0), 560)];

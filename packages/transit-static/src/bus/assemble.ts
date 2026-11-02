@@ -12,7 +12,7 @@ import {
 	projectStopsForward,
 } from "./project-stops";
 import { REPORT_SHAPE_ATTRIBUTION, renderBusRouteReport } from "./report";
-import { isInScopeRouteType } from "./scope";
+import { isInScopeRouteId, isInScopeRouteType } from "./scope";
 
 /**
  * 버스 노선 모양에 붙이는 출처 표기. 모양은 getRoutePath(공공데이터)에서만 가져온다. OSM이 아니므로 ODbL 표기를 붙이지 않는다.
@@ -20,8 +20,12 @@ import { isInScopeRouteType } from "./scope";
  */
 export const BUS_SHAPE_ATTRIBUTION = REPORT_SHAPE_ATTRIBUTION;
 
-/** 조립 결과가 바뀌는 코드 변경마다 올린다. manifest에 들어간다. */
-export const BUS_ROUTE_LOGIC_VERSION = 1;
+/**
+ * 조립 결과가 바뀌는 코드 변경마다 올린다. manifest에 들어간다.
+ * 2: Task 8 — 범위(공항·셔틀·한강버스 유형, 자율주행 시범 ID), xlsx 최대 순번 비교, off-shape 옆 구간 불일치 예외, sect-dist-scale.
+ * 3: 자율주행 시범버스 11개를 범위에 넣음(OUT_OF_SCOPE_ROUTE_IDS를 비움).
+ */
+export const BUS_ROUTE_LOGIC_VERSION = 3;
 
 /** 범위 안 노선 중 적재 가능한 노선이 이 비율 이상이어야 배치를 적재한다. */
 export const MIN_VALID_ROUTE_RATIO = 0.98;
@@ -39,6 +43,21 @@ const STORED_STATUS = 200;
 /** parseBusEnvelope가 msgHeader에서 만든 detail("headerCd N: headerMsg")만 본문 조각이 없다. */
 const HEADER_DETAIL = /^headerCd /;
 const WHITESPACE_RUN = /\s+/g;
+
+/*
+ * sect-dist-scale: 노선 전체 fullSectDist의 배율이 틀린 원천 결함.
+ * 2026-11 data, 471 routes: median shape/api is 0.498 for 2155, 0.502 for 9404, 0.553 for 7715,
+ * 0.682 for 702B and 0.686 for 702A; the next route is 0.991 (5513) and the highest is 1.016.
+ * Any cut from 0.70 to 0.95 gives the same 5 routes. The straight-line medians agree, so the cause is
+ * the source fullSectDist, not the projection. 짧은 노선은 중앙값이 흔들리므로 구간 수 하한을 둔다.
+ * 값을 반으로 줄인 오류도 같은 결함이므로 위아래 양쪽을 본다.
+ */
+/** 이 API 거리(미터) 이상인 구간만 배율 중앙값에 넣는다. */
+const SECT_SCALE_MIN_API_M = 100;
+/** 배율 중앙값을 믿는 최소 구간 수. */
+const SECT_SCALE_MIN_SEGMENTS = 5;
+const SECT_SCALE_LOW = 0.75;
+const SECT_SCALE_HIGH = 1 / SECT_SCALE_LOW;
 
 export interface BusRouteRaw {
 	entry: BusRouteListEntry;
@@ -64,6 +83,12 @@ export interface AssembledBusRoute {
 	stops: (BusRouteStationRow & ProjectedStop)[];
 }
 
+export interface OutOfScopeRouteById {
+	routeId: string;
+	routeName: string;
+	routeType: string;
+}
+
 export interface BusAssembleResult {
 	excluded: { routeId: string; routeName: string; issues: BusIssue[] }[];
 	markdown: string;
@@ -73,7 +98,10 @@ export interface BusAssembleResult {
 	 */
 	missingRaw: string[];
 	ok: boolean;
+	/** 범위 밖 노선 수(유형으로 뺀 노선 + ID로 뺀 노선). */
 	outOfScope: number;
+	/** routeType은 범위 안인데 OUT_OF_SCOPE_ROUTE_IDS로 뺀 노선. routeTypeCounts와 범위 안 수를 맞춰 보게 한다. */
+	outOfScopeById: OutOfScopeRouteById[];
 	routes: AssembledBusRoute[];
 	/** 정류소 원본을 읽은 모든 노선(범위 밖 포함)의 routeType별 개수. */
 	routeTypeCounts: Record<string, number>;
@@ -82,6 +110,8 @@ export interface BusAssembleResult {
 export interface AssembleBusRouteResult {
 	issues: BusIssue[];
 	outOfScope: boolean;
+	/** 범위 밖이면 무엇으로 뺐는지. routeType이 먼저다. */
+	outOfScopeBy?: "id" | "type";
 	route?: AssembledBusRoute;
 	/** 정류소 원본에서 읽은 첫 행(API 순서)의 routeType. fetch-bus-routes의 범위 판정과 같다. */
 	routeType?: string;
@@ -216,11 +246,47 @@ function projectionWarnings(
 	return issues;
 }
 
+function median(values: readonly number[]): number {
+	const sorted = values.toSorted((a, b) => a - b);
+	const mid = Math.floor(sorted.length / 2);
+	const upper = sorted[mid] ?? Number.NaN;
+	return sorted.length % 2 === 1
+		? upper
+		: ((sorted[mid - 1] ?? Number.NaN) + upper) / 2;
+}
+
+/** 노선 전체 fullSectDist가 모양과 다른 배율이면(예: 약 2배) sect-dist-scale 경고 하나. 구간 경고는 그대로 둔다. */
+function sectScaleWarnings(segments: readonly BusSegment[]): BusIssue[] {
+	const ratios = segments
+		.filter((segment) => segment.apiSectDistM >= SECT_SCALE_MIN_API_M)
+		.map((segment) => (segment.endM - segment.startM) / segment.apiSectDistM);
+	if (ratios.length < SECT_SCALE_MIN_SEGMENTS) {
+		return [];
+	}
+	const m = median(ratios);
+	return m < SECT_SCALE_LOW || m > SECT_SCALE_HIGH
+		? [
+				warning(
+					"sect-dist-scale",
+					`median shape/api ${m.toFixed(3)} over ${ratios.length} segments`
+				),
+			]
+		: [];
+}
+
 /**
  * 노선 하나의 원본(정류소·모양 본문)을 읽어 정류소를 모양 위에 투영하고 구간을 만든다.
  * error가 하나라도 있으면 route는 없다(적재에서 뺀다). 범위 밖 노선은 모양 원본 없이 outOfScope로 끝난다.
  */
-export function assembleBusRoute(raw: BusRouteRaw): AssembleBusRouteResult {
+export interface AssembleBusRouteOptions {
+	/** ID로 뺄 노선. 기본값은 scope.ts의 OUT_OF_SCOPE_ROUTE_IDS. */
+	excludedRouteIds?: ReadonlyMap<string, string>;
+}
+
+export function assembleBusRoute(
+	raw: BusRouteRaw,
+	options: AssembleBusRouteOptions = {}
+): AssembleBusRouteResult {
 	const { entry } = raw;
 	if (raw.stationsBody === undefined) {
 		return {
@@ -234,8 +300,12 @@ export function assembleBusRoute(raw: BusRouteRaw): AssembleBusRouteResult {
 	}
 	const { errors, routeType, rows } = stations;
 	const issues = routeTypeWarnings(rows, routeType);
+	// fetch-bus-routes의 isInScopeRoute와 같은 규칙. 보고서가 ID로 뺀 노선을 따로 보이도록 나눠 판정한다.
 	if (!isInScopeRouteType(routeType)) {
-		return { issues, outOfScope: true, routeType };
+		return { issues, outOfScope: true, outOfScopeBy: "type", routeType };
+	}
+	if (!isInScopeRouteId(entry.routeId, options.excludedRouteIds)) {
+		return { issues, outOfScope: true, outOfScopeBy: "id", routeType };
 	}
 	// 범위 안 노선은 행 하나라도 못 읽으면 seq로 잇는 구간이 틀어지므로 뺀다.
 	if (errors.length > 0) {
@@ -251,11 +321,13 @@ export function assembleBusRoute(raw: BusRouteRaw): AssembleBusRouteResult {
 			)
 		);
 	}
-	if (entry.stopCount !== rows.length) {
+	// OA-1095는 (가상)/(미정차) 행을 일부 빼지만 순번은 그대로 둔다(seq58: 471개 중 11개 노선, 918개 중 19행).
+	// 그래서 행 수가 아니라 최대 순번을 API 정류소 수와 비교한다. 엑셀 날짜 이후 노선이 바뀐 경우만 남는다.
+	if (entry.maxSeq !== rows.length) {
 		issues.push(
 			warning(
 				"xlsx-stop-count-mismatch",
-				`xlsx ${entry.stopCount} stops, api ${rows.length}`
+				`xlsx max seq ${entry.maxSeq} (${entry.stopCount} rows), api ${rows.length}`
 			)
 		);
 	}
@@ -297,6 +369,7 @@ export function assembleBusRoute(raw: BusRouteRaw): AssembleBusRouteResult {
 	});
 	const segments = buildSegments(rows, projection.stops);
 	issues.push(...projectionWarnings(stops, segments));
+	issues.push(...sectScaleWarnings(segments));
 	return {
 		issues,
 		outOfScope: false,
@@ -324,11 +397,13 @@ const isMissingRaw = (issue: BusIssue): boolean =>
  * 출처 일부 결함으로 전체를 막지 않되, 수집이 덜 된 배치가 현재 배치를 덮어쓰지 않게 한다.
  */
 export function assembleBusRoutes(
-	raws: readonly BusRouteRaw[]
+	raws: readonly BusRouteRaw[],
+	options: AssembleBusRouteOptions = {}
 ): BusAssembleResult {
 	const routes: AssembledBusRoute[] = [];
 	const excluded: BusAssembleResult["excluded"] = [];
 	const missingRaw: string[] = [];
+	const outOfScopeById: OutOfScopeRouteById[] = [];
 	const routeTypeCounts: Record<string, number> = {};
 	const seen = new Set<string>();
 	let outOfScope = 0;
@@ -339,13 +414,20 @@ export function assembleBusRoutes(
 			throw new Error(`assembleBusRoutes: duplicate routeId ${routeId}`);
 		}
 		seen.add(routeId);
-		const assembled = assembleBusRoute(raw);
+		const assembled = assembleBusRoute(raw, options);
 		if (assembled.routeType !== undefined) {
 			routeTypeCounts[assembled.routeType] =
 				(routeTypeCounts[assembled.routeType] ?? 0) + 1;
 		}
 		if (assembled.outOfScope) {
 			outOfScope += 1;
+			if (assembled.outOfScopeBy === "id") {
+				outOfScopeById.push({
+					routeId,
+					routeName,
+					routeType: assembled.routeType ?? "",
+				});
+			}
 		} else if (assembled.issues.some(isMissingRaw)) {
 			missingRaw.push(routeId);
 		} else if (assembled.route) {
@@ -368,6 +450,7 @@ export function assembleBusRoutes(
 		missingRaw,
 		ok,
 		outOfScope,
+		outOfScopeById,
 		routes,
 		routeTypeCounts,
 	};

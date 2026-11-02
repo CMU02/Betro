@@ -1,17 +1,42 @@
 import type { BusRouteStationRow } from "../sources/seoul-bus-api";
 
-/** 첫 정류소의 기대 범위: 앞 정상 정류소 없이 이 거리(미터, lengthM / 2 이하) 밖에 붙으면 비용을 더하고 window-miss. 6411은 약 619m. */
+/**
+ * 첫 정류소의 기대 범위: 앞 정상 정류소 없이 이 거리(미터, lengthM / 2 이하) 밖에 붙으면 비용을 더하고 window-miss. 6411은 약 619m.
+ * 실데이터(2026-11-01, 범위 안 471개): 첫 정류소 거리 중앙값 97m, p99 896m, 최대 1290m(707·9707).
+ * 이 값을 500m·1000m·무한대로 바꿔도 결과가 바뀌는 노선 0개(0m이면 2114 seq 1만 314→0).
+ * 이 분기는 짧은 합성 순환 테스트('short closed loop keeps the first stop near the start')만 고정한다.
+ */
 export const FIRST_STOP_WINDOW_M = 3000;
 /** `window-miss` 판정 창 `[앞 정상 거리, + 2 × apiSectDistM + WINDOW_SLACK_M]`의 여유(미터). */
 export const WINDOW_SLACK_M = 1000;
-/** 정류소와 모양 사이 오프셋이 이 거리(미터)를 넘으면 경고한다(§6.5). 후보 위치의 한계이기도 하다. */
+/**
+ * 정류소와 모양 사이 오프셋이 이 거리(미터)를 넘으면 경고한다(§6.5). 후보 위치의 한계이기도 하다.
+ * 실측(2026-11-01, 471개 노선 34,135개 정류소): 오프셋 중앙값 7.3m, p90 15.6m, p99 29.3m, 60~80m 7개.
+ * 80m 초과 86개(46개 노선)는 정류소 11곳에서 나오며 모두 원본 결함 또는 실제 거리다
+ * (인천공항T2 73, 터미널·가상 정류소 5, 우회 누락·좌표·순환 끝·순서 8).
+ * 60m로 낮추면 93개(52개 노선)로 늘고 배정은 그대로다. 100m로 올리면 81개(45개 노선)로 줄지만
+ * 줄어든 5개(광명종합터미널 81.1m ×2, 자유로IC(가상) 88.0m ×3)는 모두 실제 경고다.
+ * 또 후보 반경이 넓어져 606·661의 원미구청이 경고 없이 197m 옮겨진다.
+ */
 export const BUS_STOP_WARN_OFFSET_M = 80;
 
 const EARTH_RADIUS_M = 6_371_008.8;
 const DEG_TO_RAD = Math.PI / 180;
+/*
+ * sect-dist-mismatch 기준. 2026-11 dry-run, 471 routes / 33,664 segments: 99.16% inside 0.5–2, 92.7% inside 0.9–1.1.
+ * Loosening hides repeated API defects, e.g. 신촌오거리.2호선신촌역→이대역 API 836 m vs shape 389 m, ratio 0.466,
+ * flagged in 15/15 routes. Remaining warnings checked as API defects, not projection.
+ */
 const SECT_RATIO_MIN = 0.5;
 const SECT_RATIO_MAX = 2;
 const SECT_DIFF_MIN_M = 100;
+/**
+ * stop-off-shape 정류소는 모양 위 가장 가까운 점으로 옮겨지므로, 실제 위치를 거치는 도로 경로는
+ * 옮겨진 구간 길이와 최대 왕복 = 2 × offsetM만큼 다를 수 있다. 그 안의 불일치는 정류소 자신의 경고를 되풀이할 뿐이다
+ * (모양이 닿지 않는 회차·종점 정류소: 6516 백산초, 240/441 한강버스압구정선착장B, 6617 목동2차우성아파트,
+ * 5619 범일운수종점, 100 한성여객종점). 그보다 크면 API 값 자체가 틀린 것이므로 그대로 경고한다.
+ */
+const OFF_SHAPE_SECT_SLACK_FACTOR = 2;
 /** DP 비용: 오프셋 이 거리(미터)마다 1. */
 const OFFSET_SCALE_M = 20;
 /** DP 비용: 간격이 API 구간 거리 합과 이 거리(미터)만큼 다르면 1. */
@@ -412,7 +437,16 @@ export function buildSegments(
 		// apiSectDistM이 0이고 길이도 0이면 비율이 NaN이라 비교가 모두 false다(불일치로 보지 않음).
 		const ratio = lengthM / apiSectDistM;
 		const ratioOff = ratio < SECT_RATIO_MIN || ratio > SECT_RATIO_MAX;
-		if (ratioOff && Math.abs(lengthM - apiSectDistM) > SECT_DIFF_MIN_M) {
+		const diffM = Math.abs(lengthM - apiSectDistM);
+		const offShapeM = Math.max(
+			0,
+			...[from, to]
+				.filter((s) => s.flags.includes("stop-off-shape"))
+				.map((s) => s.offsetM)
+		);
+		const explainedByOffShape =
+			offShapeM > 0 && diffM <= OFF_SHAPE_SECT_SLACK_FACTOR * offShapeM;
+		if (ratioOff && diffM > SECT_DIFF_MIN_M && !explainedByOffShape) {
 			flags.push("sect-dist-mismatch");
 		}
 		segments.push({

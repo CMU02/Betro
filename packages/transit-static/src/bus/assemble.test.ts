@@ -8,12 +8,18 @@ import {
 	type BusRouteRaw,
 	MIN_VALID_ROUTE_RATIO,
 } from "./assemble";
+import { AUTONOMOUS_PILOT_ROUTES } from "./scope";
 
 const EARTH_RADIUS_M = 6_371_008.8;
 const LAT0 = 37.5;
 const LNG0 = 127.0;
 const DEG = Math.PI / 180;
-const ROUTE_6411 = { routeId: "100100290", routeName: "6411", stopCount: 117 };
+const ROUTE_6411 = {
+	maxSeq: 117,
+	routeId: "100100290",
+	routeName: "6411",
+	stopCount: 117,
+};
 const IN_SCOPE_ROUTES = 100;
 
 function fixture(name: string): string {
@@ -90,14 +96,33 @@ const STRAIGHT_PATH = pathBody([at(0), at(1000), at(2000)]);
 
 function straightRaw(
 	routeId: string,
-	options: { routeType?: string; stops?: SyntheticStop[] } = {}
+	options: {
+		routeName?: string;
+		routeType?: string;
+		stops?: SyntheticStop[];
+	} = {}
 ): BusRouteRaw {
 	const stops = options.stops ?? STRAIGHT_STOPS;
+	const routeName = options.routeName ?? `R${routeId}`;
 	return {
-		entry: { routeId, routeName: `R${routeId}`, stopCount: stops.length },
+		entry: {
+			maxSeq: stops.length,
+			routeId,
+			routeName,
+			stopCount: stops.length,
+		},
 		pathBody: STRAIGHT_PATH,
-		stationsBody: stationsBody(`R${routeId}`, options.routeType ?? "4", stops),
+		stationsBody: stationsBody(routeName, options.routeType ?? "4", stops),
 	};
+}
+
+/** 300m 간격 정류소 count개, 첫 정류소 뒤 모든 구간의 API 거리는 sect. */
+function evenStops(count: number, sect: number): SyntheticStop[] {
+	return Array.from({ length: count }, (_, i) => ({
+		sect: i === 0 ? 0 : sect,
+		seq: i + 1,
+		xM: i * 300,
+	}));
 }
 
 const errorsOf = (issues: readonly BusIssue[]): BusIssue[] =>
@@ -239,16 +264,106 @@ describe("assembleBusRoute", () => {
 		expect(codesOf(errorsOf(result.issues))).toContain("seq-not-contiguous");
 	});
 
-	it("warns on xlsx stop count mismatch", () => {
+	it("compares the xlsx max 순번, not its row count, with the API stop count", () => {
+		const assemble6411 = (entry: typeof ROUTE_6411) =>
+			assembleBusRoute({
+				entry,
+				pathBody: fixture("bus-path-6411.json"),
+				stationsBody: fixture("bus-stations-6411.json"),
+			});
+		// 가상 정류소 행 하나가 빠져도 순번이 117까지 있으면 경고하지 않는다.
+		const omittedRow = assemble6411({ ...ROUTE_6411, stopCount: 116 });
+		expect(codesOf(omittedRow.issues)).not.toContain(
+			"xlsx-stop-count-mismatch"
+		);
+
+		const changed = assemble6411({
+			...ROUTE_6411,
+			maxSeq: 116,
+			stopCount: 116,
+		});
+		expect(changed.route).toBeDefined();
+		expect(errorsOf(changed.issues)).toEqual([]);
+		expect(
+			changed.issues.find((issue) => issue.code === "xlsx-stop-count-mismatch")
+		).toEqual({
+			code: "xlsx-stop-count-mismatch",
+			detail: "xlsx max seq 116 (116 rows), api 117",
+			level: "warning",
+		});
+		expect(changed.route?.qualityFlags).toContain("xlsx-stop-count-mismatch");
+	});
+
+	it("keeps an autonomous pilot route in scope by default", () => {
+		const raw = straightRaw("100000024", {
+			routeName: "새벽A160",
+			routeType: "3",
+		});
+		const result = assembleBusRoute(raw);
+		expect(result.outOfScope).toBe(false);
+		expect(result.route?.routeId).toBe("100000024");
+	});
+
+	it("marks a listed route ID as out of scope without requiring a path", () => {
+		const raw = straightRaw("100000024", {
+			routeName: "새벽A160",
+			routeType: "3",
+		});
+		const result = assembleBusRoute(
+			{ ...raw, pathBody: undefined },
+			{ excludedRouteIds: AUTONOMOUS_PILOT_ROUTES }
+		);
+		expect(result.outOfScope).toBe(true);
+		expect(result.outOfScopeBy).toBe("id");
+		expect(result.route).toBeUndefined();
+		expect(errorsOf(result.issues)).toEqual([]);
+		expect(result.routeType).toBe("3");
+	});
+
+	it("warns sect-dist-scale when fullSectDist is about double", () => {
+		const doubled = assembleBusRoute(
+			straightRaw("710", { stops: evenStops(7, 600) })
+		);
+		expect(doubled.route).toBeDefined();
+		const scale = doubled.issues.filter(
+			(issue) => issue.code === "sect-dist-scale"
+		);
+		expect(scale).toEqual([
+			{
+				code: "sect-dist-scale",
+				detail: "median shape/api 0.500 over 6 segments",
+				level: "warning",
+			},
+		]);
+		expect(doubled.route?.qualityFlags).toContain("sect-dist-scale");
+
+		const matching = assembleBusRoute(
+			straightRaw("711", { stops: evenStops(7, 300) })
+		);
+		expect(codesOf(matching.issues)).not.toContain("sect-dist-scale");
+
+		// 구간이 SECT_SCALE_MIN_SEGMENTS보다 적으면 중앙값을 믿지 않는다.
+		const short = assembleBusRoute(
+			straightRaw("712", { stops: evenStops(4, 600) })
+		);
+		expect(short.route).toBeDefined();
+		expect(codesOf(short.issues)).not.toContain("sect-dist-scale");
+	});
+
+	it("warns sect-dist-scale when fullSectDist is about half", () => {
+		const halved = assembleBusRoute(
+			straightRaw("713", { stops: evenStops(7, 150) })
+		);
+		expect(codesOf(halved.issues)).toContain("sect-dist-scale");
+	});
+
+	it("does not warn sect-dist-scale on the 6411 fixture", () => {
 		const result = assembleBusRoute({
-			entry: { ...ROUTE_6411, stopCount: 116 },
+			entry: ROUTE_6411,
 			pathBody: fixture("bus-path-6411.json"),
 			stationsBody: fixture("bus-stations-6411.json"),
 		});
-		expect(result.route).toBeDefined();
-		expect(errorsOf(result.issues)).toEqual([]);
-		expect(codesOf(result.issues)).toContain("xlsx-stop-count-mismatch");
-		expect(result.route?.qualityFlags).toContain("xlsx-stop-count-mismatch");
+		expect(result.route?.qualityFlags).not.toContain("sect-dist-scale");
 	});
 
 	it("reports missing raw files", () => {
@@ -438,6 +553,55 @@ describe("assembleBusRoutes", () => {
 		expect(
 			assembleBusRoutes([straightRaw("9001", { routeType: "2" })]).ok
 		).toBe(false);
+	});
+
+	it("lists routes excluded by ID and marks new autonomous-looking names", () => {
+		const pilot = straightRaw("100000020", {
+			routeName: "청와대A01",
+			routeType: "5",
+		});
+		const lookalike = straightRaw("9100", {
+			routeName: "테스트A01",
+			routeType: "4",
+		});
+		const result = assembleBusRoutes(
+			[
+				...inScope(2),
+				{ ...pilot, pathBody: undefined },
+				lookalike,
+				{ ...straightRaw("9101", { routeType: "2" }), pathBody: undefined },
+			],
+			{ excludedRouteIds: AUTONOMOUS_PILOT_ROUTES }
+		);
+		expect(result.outOfScope).toBe(2);
+		expect(result.outOfScopeById).toEqual([
+			{ routeId: "100000020", routeName: "청와대A01", routeType: "5" },
+		]);
+		expect(result.excluded).toEqual([]);
+		expect(result.routes.map((route) => route.routeId)).toContain("9100");
+		expect(result.routeTypeCounts).toEqual({ "2": 1, "4": 3, "5": 1 });
+		expect(result.markdown).toContain("범위 밖: 2 (유형 1, ID 1)");
+		const byId = result.markdown.split("## ID로 뺀 노선")[1]?.split("## ")[0];
+		expect(byId).toContain("| 청와대A01 | 100000020 | 5 |");
+		const review = result.markdown
+			.split("## 범위 안 자율주행 시범버스")[1]
+			?.split("## ")[0];
+		expect(review).toContain("| 테스트A01 | 9100 | 새 노선 |");
+	});
+
+	it("loads autonomous pilots by default and lists them as known in the report", () => {
+		const pilot = straightRaw("100000020", {
+			routeName: "청와대A01",
+			routeType: "5",
+		});
+		const result = assembleBusRoutes([...inScope(2), pilot]);
+		expect(result.outOfScope).toBe(0);
+		expect(result.outOfScopeById).toEqual([]);
+		expect(result.routes.map((route) => route.routeId)).toContain("100000020");
+		const review = result.markdown
+			.split("## 범위 안 자율주행 시범버스")[1]
+			?.split("## ")[0];
+		expect(review).toContain("| 청와대A01 | 100000020 | 알려진 노선 |");
 	});
 
 	it("includes the rendered report", () => {
