@@ -8,11 +8,12 @@
   "scripts": {
     "build": "tsc -b",
     "check-types": "tsc -b",
-    "db:push": "drizzle-kit push",
+    "db:d1-migrations": "bun run scripts/build-d1-migrations.ts",
     "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "db:migrate:deploy": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio",
-    "db:migrate": "drizzle-kit migrate"
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@libsql/client": "0.18.0",
