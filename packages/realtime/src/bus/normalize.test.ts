@@ -7,7 +7,7 @@ import {
 	type BusPositionRow,
 	parseBusPositions,
 } from "../upstream/bus-position";
-import { normalizeBusPositions } from "./normalize";
+import { BUS_DISTANCE_MISMATCH_M, normalizeBusPositions } from "./normalize";
 
 const loadReference = (): BusReference => {
 	const routes = new Map<string, BusRouteRef>();
@@ -101,7 +101,7 @@ describe("normalizeBusPositions", () => {
 	});
 
 	it("flags distance mismatch", () => {
-		// 1213m 지점이어야 하는데 GPS는 약 1513m 지점(경도 127 + 1513/88800*... )
+		// 구간 거리는 1213m인데 GPS는 직선 위 약 1513m 지점(위도 37도에서 경도 1도 ≈ 88.9km)
 		const lngAt = (m: number) => 127 + m / 88_900;
 		const [far] = normalizeBusPositions(
 			"R",
@@ -119,6 +119,60 @@ describe("normalizeBusPositions", () => {
 			1
 		);
 		expect(near?.qualityFlags).not.toContain("distance-mismatch");
+	});
+
+	it("projects 6411 GPS near the segment distance on the round trip", () => {
+		const parsed = parseBusPositions(bus6411);
+		expect(parsed.ok).toBe(true);
+		if (!parsed.ok) {
+			return;
+		}
+		const obs = normalizeBusPositions(
+			"100100290",
+			parsed.rows,
+			loadReference(),
+			new Map(),
+			1
+		);
+		let compared = 0;
+		for (const o of obs) {
+			expect(o.qualityFlags).not.toContain("distance-mismatch");
+			if (o.shapeDistanceM !== null && o.gpsProjectedDistanceM !== null) {
+				expect(
+					Math.abs(o.gpsProjectedDistanceM - o.shapeDistanceM)
+				).toBeLessThan(BUS_DISTANCE_MISMATCH_M);
+				compared += 1;
+			}
+		}
+		expect(compared).toBe(obs.length);
+	});
+
+	it("leaves GPS projection null without a segment distance", () => {
+		const [o] = normalizeBusPositions(
+			"R",
+			[row({ sectOrd: 99 })],
+			lineRef(),
+			new Map(),
+			1
+		);
+		expect(o?.gpsProjectedDistanceM).toBeNull();
+	});
+
+	it("keeps rows with a malformed dataTm", () => {
+		const observedAt = kstToEpochMs("20261103130005");
+		const obs = normalizeBusPositions(
+			"R",
+			[row({ dataTm: "not-a-time", vehId: "V1" }), row({ vehId: "V2" })],
+			lineRef(),
+			new Map(),
+			observedAt
+		);
+		expect(obs).toHaveLength(2);
+		expect(obs[0]?.sourceAt).toBe(observedAt);
+		expect(obs[0]?.sourceAtRaw).toBe("not-a-time");
+		expect(obs[0]?.qualityFlags).toContain("bad-source-time");
+		expect(obs[1]?.sourceAt).toBe(kstToEpochMs("20261103130000"));
+		expect(obs[1]?.qualityFlags).not.toContain("bad-source-time");
 	});
 
 	it("handles zero, over, unknown segment and unknown route", () => {
