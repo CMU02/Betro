@@ -1,0 +1,5 @@
+# Copy to .dev.vars (gitignored) for `wrangler dev`. Never commit real values.
+# Generate a local secret with: openssl rand -base64 32
+BETTER_AUTH_SECRET=
+# Local dev overrides (optional)
+# BETTER_AUTH_URL=http://localhost:8787

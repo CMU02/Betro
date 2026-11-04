@@ -1,117 +1,55 @@
-import { appRouter } from "@Betro/api/routers/index";
-import fastifyCors from "@fastify/cors";
-import { OpenAPIHandler } from "@orpc/openapi/fastify";
-import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
-import { onError } from "@orpc/server";
-import { RPCHandler } from "@orpc/server/fastify";
-import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
-import Fastify from "fastify";
+import { createAuth, parseOrigins } from "@Betro/auth";
+import { createD1Db } from "@Betro/db";
+import type {
+	D1Database,
+	ExecutionContext,
+	ScheduledController,
+} from "@cloudflare/workers-types";
+import type { Hono } from "hono";
 
-import { createContext } from "./context";
-import { ENV } from "./env.server";
-import { auth } from "./services";
+import { createApp } from "./app";
 
-const baseCorsConfig = {
-  origin: ENV.CORS_ORIGIN,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  credentials: true,
-  maxAge: 86400,
+/** Worker 바인딩·변수·secret. vars는 wrangler.jsonc, secret은 `wrangler secret`/`.dev.vars`. */
+export interface Env {
+	API_HOST: string;
+	BETTER_AUTH_SECRET: string;
+	BETTER_AUTH_URL: string;
+	CORS_ORIGIN: string;
+	DB: D1Database;
+	STATUS_HOST: string;
+}
+
+let cachedApp: Hono | undefined;
+
+/** isolate당 한 번만 DB·인증·앱을 만든다. */
+function getApp(env: Env): Hono {
+	if (!cachedApp) {
+		const db = createD1Db(env.DB);
+		const auth = createAuth(env, db);
+		cachedApp = createApp({
+			apiHost: env.API_HOST,
+			auth,
+			corsOrigins: parseOrigins(env.CORS_ORIGIN),
+			db,
+			statusHost: env.STATUS_HOST,
+		});
+	}
+	return cachedApp;
+}
+
+export default {
+	fetch(
+		request: Request,
+		env: Env,
+		ctx: ExecutionContext
+	): Response | Promise<Response> {
+		return getApp(env).fetch(request, env, ctx);
+	},
+	async scheduled(
+		_controller: ScheduledController,
+		_env: Env,
+		_ctx: ExecutionContext
+	): Promise<void> {
+		// Task 12: 5분마다 수집기 healthCheck()를 부른다.
+	},
 };
-
-const rpcHandler = new RPCHandler(appRouter, {
-  interceptors: [
-    onError((error) => {
-      console.error(error);
-    }),
-  ],
-});
-
-const apiHandler = new OpenAPIHandler(appRouter, {
-  plugins: [
-    new OpenAPIReferencePlugin({
-      schemaConverters: [new ZodToJsonSchemaConverter()],
-    }),
-  ],
-  interceptors: [
-    onError((error) => {
-      console.error(error);
-    }),
-  ],
-});
-
-const fastify = Fastify({
-  logger: true,
-});
-
-fastify.register(fastifyCors, baseCorsConfig);
-
-fastify.register(async (rpcApp) => {
-  // Fully utilize oRPC features by letting oRPC parse the request body.
-  rpcApp.addContentTypeParser("*", (_, _payload, done) => {
-    done(null, undefined);
-  });
-
-  rpcApp.all("/rpc/*", async (request, reply) => {
-    const { matched } = await rpcHandler.handle(request, reply, {
-      context: await createContext(request.headers),
-      prefix: "/rpc",
-    });
-
-    if (!matched) {
-      reply.status(404).send();
-    }
-  });
-
-  rpcApp.all("/api-reference/*", async (request, reply) => {
-    const { matched } = await apiHandler.handle(request, reply, {
-      context: await createContext(request.headers),
-      prefix: "/api-reference",
-    });
-
-    if (!matched) {
-      reply.status(404).send();
-    }
-  });
-});
-
-fastify.route({
-  method: ["GET", "POST"],
-  url: "/api/auth/*",
-  async handler(request, reply) {
-    try {
-      const url = new URL(request.url, `http://${request.headers.host}`);
-      const headers = new Headers();
-      Object.entries(request.headers).forEach(([key, value]) => {
-        if (value) headers.append(key, value.toString());
-      });
-      const req = new Request(url.toString(), {
-        method: request.method,
-        headers,
-        body: request.body ? JSON.stringify(request.body) : undefined,
-      });
-      const response = await auth.handler(req);
-      reply.status(response.status);
-      response.headers.forEach((value, key) => reply.header(key, value));
-      reply.send(response.body ? await response.text() : null);
-    } catch (error) {
-      fastify.log.error({ err: error }, "Authentication Error:");
-      reply.status(500).send({
-        error: "Internal authentication error",
-        code: "AUTH_FAILURE",
-      });
-    }
-  },
-});
-
-fastify.get("/", async () => {
-  return "OK";
-});
-
-fastify.listen({ port: 3000, host: "0.0.0.0" }, (err) => {
-  if (err) {
-    fastify.log.error(err);
-    process.exit(1);
-  }
-  console.log("Server running on port 3000");
-});
