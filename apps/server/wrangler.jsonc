@@ -9,6 +9,12 @@
     { "pattern": "betro.cmu02-studio.com", "custom_domain": true },
     { "pattern": "betro-status.cmu02-studio.com", "custom_domain": true }
   ],
+  "durable_objects": {
+    "bindings": [{ "name": "COLLECTOR", "class_name": "Collector" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Collector"] }],
+  "r2_buckets": [{ "binding": "DATA", "bucket_name": "betro-data" }],
+  "triggers": { "crons": ["*/5 * * * *"] },
   "d1_databases": [
     {
       "binding": "DB",
@@ -21,6 +27,9 @@
     "BETTER_AUTH_URL": "https://betro.cmu02-studio.com",
     "CORS_ORIGIN": "http://localhost:8081",
     "API_HOST": "betro.cmu02-studio.com",
-    "STATUS_HOST": "betro-status.cmu02-studio.com"
+    "STATUS_HOST": "betro-status.cmu02-studio.com",
+    "COLLECTOR_MODE": "dev",
+    // 로컬 .dev.vars는 UPSTREAM_MODE=fixture로 덮어써서 상류를 부르지 않는다.
+    "UPSTREAM_MODE": "live"
   }
 }

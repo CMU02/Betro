@@ -10,19 +10,11 @@ import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getPath } from "hono/utils/url";
-
-export type SnapshotKind = "subway" | "bus";
+import type { CollectorClient } from "./collector/client";
+import type { SnapshotKind } from "./collector/core";
+import { renderStatusPage } from "./status-page";
 
 const SNAPSHOT_KINDS: readonly SnapshotKind[] = ["subway", "bus"];
-
-/**
- * 수집기(Durable Object)에 닿는 클라이언트. Task 12가 DO 스텁으로 채운다.
- * 이 인터페이스는 앱 라우트가 쓰는 최소 메서드만 둔다.
- */
-export interface CollectorClient {
-	snapshot: (kind: SnapshotKind) => Promise<{ etag: string; body: string }>;
-	status: () => Promise<unknown>;
-}
 
 export interface AppDeps {
 	apiHost: string;
@@ -41,6 +33,10 @@ const API_SCOPE = "/api-host";
 const STATUS_SCOPE = "/status-host";
 
 const PORT_SUFFIX = /:\d+$/;
+const WEAK_PREFIX = "W/";
+/** 상태 페이지는 스크립트·외부 자원을 쓰지 않는다(인라인 스타일만). */
+const STATUS_PAGE_CSP =
+	"default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
 function requestHostname(request: Request): string {
 	const header = request.headers.get("host");
@@ -52,6 +48,32 @@ function requestHostname(request: Request): string {
 
 function isSnapshotKind(value: string): value is SnapshotKind {
 	return (SNAPSHOT_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * `If-None-Match`가 이 ETag와 맞는가. 쉼표로 나눈 목록, 약한 비교(`W/` 무시), `*`를 받는다.
+ * `etag`는 따옴표를 포함한 형태(`"abc"`).
+ */
+export function ifNoneMatchMatches(
+	header: string | undefined,
+	etag: string
+): boolean {
+	if (!header) {
+		return false;
+	}
+	const opaque = etag.startsWith(WEAK_PREFIX)
+		? etag.slice(WEAK_PREFIX.length)
+		: etag;
+	return header.split(",").some((part) => {
+		const tag = part.trim();
+		if (tag === "*") {
+			return true;
+		}
+		return (
+			(tag.startsWith(WEAK_PREFIX) ? tag.slice(WEAK_PREFIX.length) : tag) ===
+			opaque
+		);
+	});
 }
 
 function logError(error: unknown): void {
@@ -126,7 +148,7 @@ function createApiRoutes(deps: AppDeps): Hono {
 			"Cache-Control": `public, max-age=${SNAPSHOT_MAX_AGE_SECONDS}`,
 			ETag: quotedEtag,
 		};
-		if (c.req.header("if-none-match") === quotedEtag) {
+		if (ifNoneMatchMatches(c.req.header("if-none-match"), quotedEtag)) {
 			return c.body(null, 304, headers);
 		}
 		return c.body(body, 200, {
@@ -150,14 +172,25 @@ function createStatusRoutes(deps: AppDeps): Hono {
 		return c.json(status);
 	});
 
-	// Task 12가 renderStatusPage(status) HTML로 바꾼다.
 	routes.get("/", async (c) => {
 		if (!deps.collector) {
 			return c.text("collector unavailable", 503);
 		}
 		const status = await deps.collector.status();
+		return c.html(renderStatusPage(status), 200, {
+			"Cache-Control": "no-store",
+			"Content-Security-Policy": STATUS_PAGE_CSP,
+		});
+	});
+
+	/** 수집 시작(한 번 수동으로 부른다). 이미 돌고 있으면 그대로 둔다. */
+	routes.post("/internal/collector/start", async (c) => {
+		if (!deps.collector) {
+			return c.text("collector unavailable", 503);
+		}
+		const result = await deps.collector.start();
 		c.header("Cache-Control", "no-store");
-		return c.json(status);
+		return c.json(result);
 	});
 
 	return routes;

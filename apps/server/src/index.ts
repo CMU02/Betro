@@ -1,27 +1,22 @@
 import { createAuth, parseOrigins } from "@Betro/auth";
 import { createD1Db } from "@Betro/db";
 import type {
-	D1Database,
 	ExecutionContext,
 	ScheduledController,
 } from "@cloudflare/workers-types";
 import type { Hono } from "hono";
 
 import { createApp } from "./app";
+import { collectorClient } from "./collector/client";
+import type { Env } from "./worker-env";
 
-/** Worker 바인딩·변수·secret. vars는 wrangler.jsonc, secret은 `wrangler secret`/`.dev.vars`. */
-export interface Env {
-	API_HOST: string;
-	BETTER_AUTH_SECRET: string;
-	BETTER_AUTH_URL: string;
-	CORS_ORIGIN: string;
-	DB: D1Database;
-	STATUS_HOST: string;
-}
+// biome-ignore lint/performance/noBarrelFile: wrangler는 Worker 진입점에서 Durable Object 클래스를 export해야 한다.
+export { Collector } from "./collector/durable-object";
+export type { Env } from "./worker-env";
 
 let cachedApp: Hono | undefined;
 
-/** isolate당 한 번만 DB·인증·앱을 만든다. */
+/** isolate당 한 번만 DB·인증·앱을 만든다. 수집기 스텁은 요청마다 새로 얻는다. */
 function getApp(env: Env): Hono {
 	if (!cachedApp) {
 		const db = createD1Db(env.DB);
@@ -29,6 +24,7 @@ function getApp(env: Env): Hono {
 		cachedApp = createApp({
 			apiHost: env.API_HOST,
 			auth,
+			collector: collectorClient(env),
 			corsOrigins: parseOrigins(env.CORS_ORIGIN),
 			db,
 			statusHost: env.STATUS_HOST,
@@ -45,11 +41,12 @@ export default {
 	): Response | Promise<Response> {
 		return getApp(env).fetch(request, env, ctx);
 	},
+	/** cron(5분마다): 수집기 상태를 보고 알림을 판단한다. 시작한 수집기의 멈춘 alarm도 다시 건다. */
 	async scheduled(
 		_controller: ScheduledController,
-		_env: Env,
+		env: Env,
 		_ctx: ExecutionContext
 	): Promise<void> {
-		// Task 12: 5분마다 수집기 healthCheck()를 부른다.
+		await collectorClient(env).healthCheck();
 	},
 };
