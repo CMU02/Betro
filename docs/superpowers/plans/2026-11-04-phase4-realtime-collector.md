@@ -461,7 +461,7 @@ apps/native/.env                   (사용자 로컬) EXPO_PUBLIC_SERVER_URL=htt
 - [ ] **Step 2: secret** — `SEOUL_OPEN_API_KEY`, `DATA_GO_KR_API_KEY`는 `packages/transit-static/.env`에서 표준입력으로 넣는다(화면 출력 없음). `FCM_SERVICE_ACCOUNT_JSON`(Firebase 콘솔 → 서비스 계정 → 새 비공개 키, 사용자가 받아 경로를 알려줌, 저장소 밖 보관), `ALERT_FCM_TOKEN`(사용자 기기 dev 빌드 로그의 `[push] FCM token`). Expected: `wrangler secret list`에 5개(`BETTER_AUTH_SECRET` 포함).
 - [ ] **Step 3: Cloudflare Access(사용자)** — 사용자에게 Zero Trust 대시보드에서 `betro-status.cmu02-studio.com` 자체 호스팅 앱을 만들고, 정책을 사용자 이메일 1개 허용으로 걸어 달라고 요청한다. Expected: 시크릿 창에서 상태 페이지가 로그인 화면으로 막힘, `https://betro.cmu02-studio.com/`은 그대로 `OK`.
 - [ ] **Step 4: 배포와 시작** — Run: `bunx wrangler deploy` → Access 로그인한 브라우저(또는 Access 서비스 토큰)로 `POST https://betro-status.cmu02-studio.com/internal/collector/start` / Expected: 5분 안에 상태 페이지 지하철·버스가 "정상", `wrangler tail`에 키가 없는 로그.
-- [ ] **Step 5: 알림 확인** — `wrangler secret put DATA_GO_KR_API_KEY`에 일부러 틀린 값을 넣어 401을 만들고 알림("Betro 키 오류")을 확인한 뒤 원래 값으로 되돌린다. 틀린 키 호출은 1~3건으로 끝난다. Expected: 휴대폰 알림 1회, 되돌린 뒤 다음 KST 날부터 버스 재개(그날은 멈춘 상태가 맞음 — 시험은 운행 끝 무렵에 한다).
+- [x] **Step 5: 알림 확인** — `wrangler secret put DATA_GO_KR_API_KEY`에 일부러 틀린 값을 넣어 401을 만들고 알림("Betro 키 오류")을 확인한 뒤 원래 값으로 되돌린다. 틀린 키 호출은 1~3건으로 끝난다. Expected: 휴대폰 알림 1회, 되돌린 뒤 다음 KST 날부터 버스 재개(그날은 멈춘 상태가 맞음 — 시험은 운행 끝 무렵에 한다).
 - [ ] **Step 6: 하루 운행** — 운행일 하나(05:00~01:00)를 그대로 둔다. 그동안 수집기 밖에서 실시간 오퍼레이션을 부르지 않는다. 다음날 `reports/<운행일>.json`을 R2에서 받는다. Expected: `ok: true`(멈춤 구간 없음, 호출 수 ≤ 1,000), 노선별 매칭률과 7호선 매칭률이 기록됨.
 - [ ] **Step 7: 확인 항목** — 완료 기준(4단계 설계 9장) 1~5를 하나씩 확인한다. 특히 R2에서 원본 몇 개를 받아 두 키 원문이 없는지 `grep`. 결과(일일 보고서 요약, 7호선 매칭률, R2 하루 용량, Workers 사용량)를 이 계획 문서 "계획 중 확인한 사실" 아래 "4단계 결과"로 적는다.
 - [ ] **Step 8: 문서** — `packages/realtime/README.md`(모듈 지도, 규칙, 플래그 목록), `apps/server/README.md`(로컬 개발 `.dev.vars`, `UPSTREAM_MODE`, 배포, secret, D1 마이그레이션, `publish:d1` 순서, 수집기 시작·중지, 상태 페이지, 비용 확인). 커밋: `docs: record phase 4 run and document the collector`
@@ -472,13 +472,13 @@ apps/native/.env                   (사용자 로컬) EXPO_PUBLIC_SERVER_URL=htt
 - Step 2: secret 5개(`secret_text`)를 첫 `wrangler deploy --secrets-file`로 넣었다. `BETTER_AUTH_SECRET`은 운영용으로 새로 만들었다(`.dev.vars` 값 아님). FCM 키는 gcloud로 만든 `firebase-adminsdk-fbsvc` 키(저장소 밖 `~/Documents/Betro-APNs/`).
 - Step 3: Access 앱 "Betro status"(팀 `wandering-recipe-46f0`), 정책 "Allow owner" = `hyeonjun1968@naver.com` 1개. 비로그인 요청은 Access 로그인으로 302, `https://betro.cmu02-studio.com/`은 `OK`, `www`·`cleanbreath` DNS 그대로. 터미널에서는 `cloudflared access curl`로 상태를 본다.
 - Step 4: `betro-server` 첫 배포(버전 5cd12c54, Task 3에서는 원격 D1 마이그레이션까지만 했고 Worker는 이때 처음 올라갔다). 20:18 KST `POST /internal/collector/start`. 5분 뒤 지하철·버스 `ok`, 실행 12건 모두 `ok`, tail 로그에 두 키(원문·URL 인코딩) 0건. 지하철 19개 노선 차량 확인, 매칭률은 대부분 1.0, 수인분당 0.77·경춘 0.84, 신분당·GTX-A는 `null`.
-- Step 5 (일부): 20:38 틀린 버스 키 → 20:39 `bus:100100290 auth status=401` 1건, `bus stopped for the day: auth`, `alert sent: Betro 키 오류`. 20:40 원래 키로 되돌림. 기기 수신은 확인하지 못했다(알림 대상 iOS 앱을 사용자가 지운 상태였음 → 다시 설치하고 토큰을 바꿔 확인).
+- Step 5 (일부): 20:38 틀린 버스 키 → 20:39 `bus:100100290 auth status=401` 1건, `bus stopped for the day: auth`, `alert sent: Betro 키 오류`. 20:40 원래 키로 되돌림. 기기 수신은 확인하지 못했다(알림 대상 iOS 앱을 사용자가 지운 상태였음 → 다시 설치하고 토큰을 바꿔 확인). 20:55쯤 iOS dev 빌드를 다시 설치하고 새 토큰(`emmE_CWl…`)으로 `ALERT_FCM_TOKEN`을 바꾼 뒤, 같은 서비스 계정·`fcmSendRequest`로 시험 메시지를 보냄 → OAuth 200, send 200, 사용자 기기 수신 확인.
 - R2 이력 (20:18~20:43, 약 25분): 객체 73개(`raw/subway-all` 20조각, `raw/bus-*` 17, `events/subway` 20, `events/bus` 16), raw 3.98 MB·events 0.30 MB(gzip). 풀어서 8,593줄 전부에 두 키 원문·URL 인코딩·시험용 틀린 키 0건. 요청 URL은 `serviceKey=<key>`로 남는다. 어림: raw 약 190 MB/운행일(30일 보관 ≈ 5.6 GB), events 약 14 MB/운행일(365일 ≈ 5 GB). 하루 운행 보고서로 다시 잰다.
 - 알게 된 점: 상태 페이지는 401로 그날 멈춘 소스를 따로 표시하지 않는다. 신선도 기준으로 `ok → delayed → stalled`가 되고, 멈춤 알림만 막는다. 단서는 `errorsToday.auth`뿐(후속 개선 후보).
 
 #### 이월 확인 항목 (시간이 지나야 확인 가능)
 
-- [ ] **2026-11-04 밤**: 다시 설치한 iOS dev 빌드의 새 FCM 토큰으로 `ALERT_FCM_TOKEN`을 바꾸고, 같은 서비스 계정으로 FCM 시험 메시지를 직접 보내 기기 수신을 확인한다(키를 다시 틀리게 넣지 않는다 — 11/5 하루 운행이 멈춘다).
+- [x] **2026-11-04 밤**: 다시 설치한 iOS dev 빌드의 새 FCM 토큰으로 `ALERT_FCM_TOKEN`을 바꾸고, 같은 서비스 계정으로 FCM 시험 메시지를 직접 보내 기기 수신을 확인한다(키를 다시 틀리게 넣지 않는다 — 11/5 하루 운행이 멈춘다).
 - [ ] **2026-11-05 05:00 이후**: 버스 수집 재개 확인(`cloudflared access curl …/status.json`에서 bus `usedToday` 증가, `errorsToday` 비어 있음). 되돌린 키가 맞는지도 이것으로 확인된다.
 - [ ] **2026-11-05 아침**: `reports/2026-11-04.json` 미리보기. 20:18부터의 반나절이고 버스가 401로 멈췄으므로 `ok: false`가 맞다. 형식, 노선별 매칭률, 호출 수 집계만 본다.
 - [ ] **2026-11-05 05:00 ~ 11-06 01:00**: Step 6 하루 운행. 그동안 수집기 밖에서 실시간 오퍼레이션을 부르지 않는다.
