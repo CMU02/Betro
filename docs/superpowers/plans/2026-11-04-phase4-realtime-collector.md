@@ -19,6 +19,7 @@
 - Cloudflare: 계정 `02b5df744e4fdc84c06d51d019b227f5`, Workers Paid. `cmu02-studio.com` zone이 같은 계정에 있다. 현재 wrangler OAuth 토큰 범위에 zone 권한이 보이지 않았다(Task 3에서 확인).
 - 2026-11-04 측정 Worker: `compatibility_date = "2025-11-01"`, DO `new_sqlite_classes`, `locationHint: "apac"` → KIX에서 두 API 모두 200(ALL 2,980행 0.6초).
 - Firebase 프로젝트 `betro-a77a2`, 앱 번들/패키지 `com.cmu02.betro`. 앱의 FCM 토큰은 dev 빌드 콘솔에 `[push] FCM token`으로 찍힌다.
+- **이 Mac 재적재 (2026-11-04)**: 실제로는 `local.db`에 2026-10-31 1~2단계 배치(crosswalk 3, track 4·5, timetable 6·7)가 이미 있었다. 마이그레이션 4개는 모두 적용 상태(새로 적용 0). 원본은 모두 있어 fetch는 하지 않았다. 다시 빌드한 결과 현재 배치: `station_crosswalk` **8**(696행, 매칭 696/696, 코드 없는 역 37), `track` **5** 유지(원본 해시가 같아 재적재 생략; shape 59, track_station 1,526 = osm-stop 1,509 + master 17, stitch 실패·미커버 역 0), `timetable` **9**(trip 19,745, stop_time 556,108, error 0, warn 1,587, 시간표 없는 노선 gtx-a), `bus_route` **2** 유지(노선 427, stop 32,098, segment 31,671, shape 427). 각 kind 현재 배치 1개. 이전 배치 1, 3, 4, 6, 7은 `is_current=0`으로 남아 있다.
 
 ## Global Constraints
 
