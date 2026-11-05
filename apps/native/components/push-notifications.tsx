@@ -1,13 +1,18 @@
 import { useCallback, useEffect } from "react";
 import { Alert } from "react-native";
 
+import { subscribeOptionsForLaunch } from "@/lib/push/push-launch";
 import type { PushMessage } from "@/lib/push/push-message";
 import { usePushNotifications } from "@/lib/push/use-push-notifications";
 
+const LAUNCH_OPTIONS = subscribeOptionsForLaunch();
+
 /**
- * Mounts FCM for the whole app: asks permission, fetches the token and shows foreground
- * messages as an alert (FCM does not render a banner while the app is open).
- * Renders nothing. Keep it inside the provider tree so navigation hooks work later.
+ * Mounts FCM for the whole app. It never asks for permission here (the onboarding
+ * permission screen does); when permission is already granted it fetches the token and
+ * shows foreground messages as an alert (FCM does not render a banner while the app is open).
+ * Renders nothing. The root layout remounts it when onboarding completes so a permission
+ * granted on that screen starts the subscription without a relaunch.
  */
 export function PushNotifications() {
 	const onForegroundMessage = useCallback((message: PushMessage) => {
@@ -16,9 +21,10 @@ export function PushNotifications() {
 		}
 	}, []);
 
-	const { lastOpenedMessage, permission, token } = usePushNotifications({
-		onForegroundMessage,
-	});
+	const { lastOpenedMessage, permission, token } = usePushNotifications(
+		{ onForegroundMessage },
+		LAUNCH_OPTIONS
+	);
 
 	useEffect(() => {
 		if (__DEV__ && permission === "granted" && token) {

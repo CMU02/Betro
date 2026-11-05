@@ -51,6 +51,12 @@
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "내 주변 역과 정류장을 바로 보여주기 위해 위치를 사용해요."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "ios": {
