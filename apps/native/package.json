@@ -4,14 +4,15 @@
   "private": true,
   "main": "index.ts",
   "scripts": {
-    "start": "expo start",
-    "dev": "expo start --clear",
     "android": "expo run:android",
+    "check-types": "tsc -b ../../packages/api && tsc --noEmit",
+    "dev": "expo start --clear",
+    "env:generate": "varlock codegen",
     "ios": "expo run:ios",
     "prebuild": "expo prebuild",
-    "web": "expo start --web",
-    "check-types": "tsc -b ../../packages/api && tsc --noEmit",
-    "env:generate": "varlock codegen"
+    "start": "expo start",
+    "theme:css": "bun scripts/generate-theme-css.ts",
+    "web": "expo start --web"
   },
   "dependencies": {
     "@Betro/api": "workspace:*",
