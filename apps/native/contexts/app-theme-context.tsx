@@ -8,13 +8,13 @@ import {
 } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
 
-type AppThemeContextType = {
+interface AppThemeContextType {
 	currentTheme: string;
-	isLight: boolean;
 	isDark: boolean;
-	themeMode: ThemePreference;
+	isLight: boolean;
 	setThemeMode: (mode: ThemePreference) => void;
-};
+	themeMode: ThemePreference;
+}
 
 const AppThemeContext = createContext<AppThemeContextType | undefined>(
 	undefined

@@ -47,6 +47,14 @@ it("regenerates both when only one value is stored", async () => {
 	expect(await store.getItem(INSTALL_SECRET_KEY)).toBe(id.secret);
 });
 
+it("regenerates both when only the secret is stored", async () => {
+	const store = memorySecureStore({ [INSTALL_SECRET_KEY]: "stale-secret" });
+	const id = await getOrCreateInstallIdentity(store, random);
+	expect(id.secret).toMatch(SECRET_PATTERN);
+	expect(await store.getItem(INSTALL_ID_KEY)).toBe(id.installId);
+	expect(await store.getItem(INSTALL_SECRET_KEY)).toBe(id.secret);
+});
+
 it("propagates storage errors instead of returning a partial identity", async () => {
 	const failing: SecureKeyValue = {
 		getItem: () => Promise.reject(new Error("keychain locked")),
