@@ -57,6 +57,19 @@
             "useFrameworks": "dynamic"
           }
         }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/NotoSansKR-Regular.ttf",
+            "./assets/fonts/NotoSansKR-Medium.ttf",
+            "./assets/fonts/NotoSansKR-Bold.ttf",
+            "./assets/fonts/NotoSansKR-Black.ttf",
+            "./assets/fonts/JetBrainsMono-Medium.ttf",
+            "./assets/fonts/JetBrainsMono-Bold.ttf"
+          ]
+        }
       ]
     ],
     "experiments": {
