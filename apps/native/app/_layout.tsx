@@ -15,17 +15,15 @@ import { queryClient } from "@/utils/orpc";
 Uniwind.setTheme(toUniwindTheme(appPreferences.get().themeMode));
 
 export const unstable_settings = {
-	anchor: "(drawer)",
+	anchor: "(tabs)",
 };
+
+const STACK_SCREEN_OPTIONS = { headerShown: false } as const;
 
 function StackLayout() {
 	return (
-		<Stack screenOptions={{}}>
-			<Stack.Screen name="(drawer)" options={{ headerShown: false }} />
-			<Stack.Screen
-				name="modal"
-				options={{ presentation: "modal", title: "Modal" }}
-			/>
+		<Stack screenOptions={STACK_SCREEN_OPTIONS}>
+			<Stack.Screen name="(tabs)" />
 		</Stack>
 	);
 }

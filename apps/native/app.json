@@ -42,9 +42,9 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#f5f6f8",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#0b0e15"
           }
         }
       ],
@@ -54,7 +54,8 @@
         "expo-build-properties",
         {
           "ios": {
-            "useFrameworks": "dynamic"
+            "useFrameworks": "dynamic",
+            "deploymentTarget": "17.2"
           }
         }
       ],
