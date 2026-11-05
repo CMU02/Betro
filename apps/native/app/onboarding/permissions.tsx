@@ -1,4 +1,3 @@
-import { useRouter } from "expo-router";
 import { cn } from "heroui-native";
 import {
 	BellIcon,
@@ -219,7 +218,6 @@ function PermissionCard({
 
 /** Figma 02 권한(12:3140). "계속"과 "나중에" 모두 온보딩을 끝내고 지도로 간다. */
 export default function PermissionsScreen() {
-	const router = useRouter();
 	const insets = useSafeAreaInsets();
 	const [permissions, setPermissions] =
 		useState<PermissionsState>(INITIAL_STATE);
@@ -295,11 +293,14 @@ export default function PermissionsScreen() {
 		press("notifications", notificationsAction);
 	}, [press, notificationsAction]);
 
-	/** 권한 결과와 상관없이(`canSkipToApp`) 온보딩을 끝낸다. 다시 켜도 권한 창은 뜨지 않는다. */
+	/**
+	 * 권한 결과와 상관없이 온보딩을 끝낸다. 다시 켜도 권한 창은 뜨지 않는다.
+	 * 화면 이동은 하지 않는다: 저장하면 루트의 `Stack.Protected` guard가 바뀌고 expo-router가 탭으로
+	 * 보낸다. 같은 틱에 `router.replace`를 부르면 guard가 아직 닫혀 있어 처리되지 않는다.
+	 */
 	const finish = useCallback(() => {
 		completeOnboarding(appPreferences);
-		router.replace("/");
-	}, [router]);
+	}, []);
 
 	/** Figma처럼 아직 허용하지 않은 첫 카드의 버튼만 강조한다. */
 	const emphasizeLocation = permissions.location !== "granted";

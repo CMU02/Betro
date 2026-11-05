@@ -33,10 +33,12 @@ const INTRO =
 
 function ProviderRow({ provider }: { provider: DataProvider }) {
 	const handlePress = useCallback(() => {
-		Linking.openURL(provider.url);
+		// 열 수 있는 브라우저가 없으면 아무 일도 하지 않는다.
+		Linking.openURL(provider.url).catch(() => undefined);
 	}, [provider.url]);
 	return (
 		<ListRow
+			accessibilityRole="link"
 			icon={ProviderIcon}
 			onPress={handlePress}
 			subtitle={provider.subtitle}

@@ -7,7 +7,6 @@ import {
 } from "@/lib/preferences/preferences-store";
 
 import {
-	canSkipToApp,
 	completeOnboarding,
 	permissionButtonAction,
 	shouldShowOnboarding,
@@ -30,11 +29,9 @@ it("shows onboarding until it is completed", () => {
 	).toBe(false);
 });
 
-it("completes onboarding even when both permissions are denied", () => {
+// "계속"과 "나중에"는 권한 결과와 상관없이 앱으로 간다: 완료 처리는 권한 상태를 받지 않는다.
+it("completes onboarding without looking at permissions, even when both are denied", () => {
 	const store = createPreferencesStore(memoryKv());
-	expect(canSkipToApp({ location: "denied", notifications: "denied" })).toBe(
-		true
-	);
 	completeOnboarding(store);
 	expect(shouldShowOnboarding(store.get())).toBe(false);
 });

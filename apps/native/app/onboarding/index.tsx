@@ -62,11 +62,13 @@ function FeatureRow({ Icon, label }: Feature) {
 	);
 }
 
+/** Figma의 페이지 점. 온보딩은 한 장뿐이라 장식으로만 두고 스크린리더에서는 숨긴다. */
 function PageDots() {
 	return (
 		<View
-			accessibilityLabel="1 / 3"
+			accessibilityElementsHidden
 			className="flex-row items-center justify-center gap-1.5"
+			importantForAccessibility="no-hide-descendants"
 		>
 			<View className="h-1.5 w-5 rounded-full bg-accent-primary" />
 			<View className="size-1.5 rounded-full bg-border-strong" />

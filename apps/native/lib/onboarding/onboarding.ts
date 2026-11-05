@@ -8,14 +8,6 @@ export interface PermissionsState {
 	notifications: PermissionStatus;
 }
 
-/**
- * 권한 화면의 "계속"과 "나중에"는 권한 결과와 상관없이 앱으로 간다.
- * 권한이 없어도 지도는 볼 수 있어야 하므로 이 규칙을 이름으로 남긴다.
- */
-export function canSkipToApp(_state: PermissionsState): true {
-	return true;
-}
-
 /** 권한 카드 버튼을 눌렀을 때 할 일. */
 export type PermissionButtonAction = "request" | "openSettings" | "none";
 
@@ -36,6 +28,10 @@ export function permissionButtonAction(
 		: "request";
 }
 
+/**
+ * 권한 화면의 "계속"과 "나중에"가 부른다. 권한이 없어도 지도는 볼 수 있어야 하므로
+ * 권한 상태를 받지 않고 항상 끝낸다.
+ */
 export function completeOnboarding(store: PreferencesStore): void {
 	store.update({ onboardingCompleted: true });
 }

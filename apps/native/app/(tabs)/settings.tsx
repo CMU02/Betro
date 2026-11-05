@@ -74,7 +74,7 @@ function ThemeOption({
 	return (
 		<Pressable
 			accessibilityRole="radio"
-			accessibilityState={{ selected }}
+			accessibilityState={{ checked: selected }}
 			className={cn(
 				"h-full flex-1 items-center justify-center rounded-sm",
 				selected && "bg-bg-surface-raised"
@@ -103,6 +103,7 @@ function ThemeRow() {
 				<AppText variant="bodyMStrong">테마</AppText>
 			</View>
 			<View
+				accessibilityLabel="테마"
 				accessibilityRole="radiogroup"
 				className="h-9 flex-row gap-0.5 rounded-md bg-bg-control p-[3px]"
 			>

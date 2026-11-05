@@ -15,6 +15,8 @@ const KNOB_SIZE = 27;
 const TRACK_PADDING = 2;
 const KNOB_TRAVEL = TRACK_WIDTH - KNOB_SIZE - TRACK_PADDING * 2;
 const KNOB_ANIMATION_MS = 150;
+/** 31pt 트랙 위아래로 9씩 늘려 터치 영역이 Android 권장 48dp를 넘게 한다. */
+const TOUCH_SLOP = 9;
 const KNOB_STYLE = {
 	backgroundColor: TOGGLE_KNOB_COLOR,
 	boxShadow: ELEVATION.toggleKnob,
@@ -50,7 +52,7 @@ function AndroidToggle({ accessibilityLabel, onChange, value }: ToggleProps) {
 				"h-[31px] w-[51px] justify-center rounded-full p-0.5",
 				value ? "bg-accent-primary" : "bg-bg-control"
 			)}
-			hitSlop={8}
+			hitSlop={TOUCH_SLOP}
 			onPress={handlePress}
 		>
 			<Animated.View

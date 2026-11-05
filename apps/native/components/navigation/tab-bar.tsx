@@ -81,6 +81,10 @@ function toTabItems({
 	});
 }
 
+/**
+ * Figma는 반투명 `bg-glass` 위에 블러가 깔린 유리 알약이다. 지금은 뒤에 지도가 없어 반투명 배경만 쓰고,
+ * 지도 화면을 붙이는 3단계 전에 expo-blur `BlurView`(또는 iOS 26 glass)를 배경으로 깐다.
+ */
 function IosTabBar(props: BottomTabBarProps) {
 	const items = toTabItems(props);
 	const reportHeight = useContext(BottomTabBarHeightCallbackContext);

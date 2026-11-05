@@ -3,12 +3,14 @@ import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
+import { appCrashSink } from "@/lib/crash/app-crash-reporting";
+import { reportError } from "@/lib/crash/crash-reporting";
 import { ENV } from "../src/env";
 
 export const queryClient = new QueryClient({
 	queryCache: new QueryCache({
 		onError: (error) => {
-			console.log(error);
+			reportError(appCrashSink, error, "query");
 		},
 	}),
 });

@@ -333,7 +333,7 @@ it("propagates storage errors instead of returning a partial identity", async ()
 - Consumes: `AppText`(Task 2), 토큰 클래스(Task 1)
 - Produces:
   - `TABS: readonly { name: "index" | "favorites" | "commute" | "settings"; label: string; icon: "map" | "star" | "route" | "settings" }[]` = 지도(map), 즐겨찾기(star), 출퇴근(route), 설정(settings) 순
-  - `<TabBar {...BottomTabBarProps}>` — iOS는 Figma `TabBar / Platform=iOS`(노드 5:39, 떠 있는 유리 알약, 활성 탭은 `bg-bg-control` 위 accent 아이콘·라벨), Android는 `Platform=Android`(노드 5:139, 화면 너비 바, 활성 탭 아이콘 뒤 `bg-accent-soft` 알약). `accessibilityRole="tab"`, `accessibilityState={{ selected }}`.
+  - `<TabBar {...BottomTabBarProps}>` — iOS는 Figma `TabBar / Platform=iOS`(노드 5:39, 떠 있는 유리 알약 `bg-bg-glass`, 활성 탭은 `bg-bg-hover` 위 accent 아이콘·라벨. 지도 화면을 붙이는 3단계 전에 expo-blur `BlurView`(또는 iOS 26 glass)를 배경으로 깐다), Android는 `Platform=Android`(노드 5:139, 화면 너비 바, 활성 탭 아이콘 뒤 `bg-accent-soft` 알약). `accessibilityRole="tab"`, `accessibilityState={{ selected }}`.
   - `<Screen title?: string; scroll?: boolean; children>` — safe area, `bg-bg-canvas`, 큰 제목(Title/1 또는 Figma `LargeTitle`)
   - 라우트: `/`(지도), `/favorites`, `/commute`, `/settings`. 지도·즐겨찾기·출퇴근은 이 계획에서 제목만 있는 자리 화면이다(3·2·4단계 계획에서 채움).
 
@@ -355,23 +355,22 @@ it("lists the four MVP tabs in order", () => {
 
 **Files:**
 - Create: `apps/native/app/onboarding/_layout.tsx`, `apps/native/app/onboarding/index.tsx`(01), `apps/native/app/onboarding/permissions.tsx`(02), `apps/native/lib/onboarding/onboarding.ts`, `apps/native/lib/onboarding/onboarding.test.ts`, `apps/native/lib/permissions/permissions.ts`(어댑터), `apps/native/assets/images/onboarding-map.png`
-- Modify: `apps/native/app/_layout.tsx`, `apps/native/components/push-notifications.tsx`, `apps/native/lib/push/use-push-notifications.ts`, `apps/native/lib/push/push-messaging.ts`, `apps/native/app.json`(`expo-location` 플러그인), `apps/native/package.json`(`expo-location`)
+- Modify: `apps/native/app/_layout.tsx`, `apps/native/components/push-notifications.tsx`, `apps/native/lib/push/use-push-notifications.ts`, `apps/native/lib/push/push-messaging.ts`, `apps/native/app.json`(`expo-location` 플러그인). Create `apps/native/lib/push/push-launch.ts`·`push-launch.test.ts`(react-native를 import하는 `push-messaging.ts`는 bun이 로드하지 못해 순수 함수를 분리), `apps/native/package.json`(`expo-location`)
 
 **Interfaces:**
 - Consumes: `appPreferences`, `usePreferences`(Task 3), `AppText`, `Screen`
 - Produces:
   - `type PermissionStatus = "granted" | "denied" | "undetermined"`
   - `interface PermissionsState { location: PermissionStatus; notifications: PermissionStatus }`
-  - `canSkipToApp(state: PermissionsState): true` — "계속"과 "나중에" 모두 앱으로 간다는 규칙을 이름으로 남김(권한 여부와 무관)
-  - `completeOnboarding(store: PreferencesStore): void` — `onboardingCompleted: true` 저장
+  - `completeOnboarding(store: PreferencesStore): void` — `onboardingCompleted: true` 저장. 권한 상태를 받지 않으므로 "계속"과 "나중에"는 권한 결과와 상관없이 앱으로 간다(처음 계획한 `canSkipToApp(): true`는 앱 코드에서 쓸 곳이 없어 빼고 이 규칙을 테스트 이름으로 남김)
   - `shouldShowOnboarding(prefs: Preferences): boolean`
-  - `subscribeOptionsForLaunch(): { requestPermission: false }` (`lib/push/push-messaging.ts`, 순수 함수) — `usePushNotifications`는 이 옵션을 받아 앱 시작 시 권한을 요청하지 않고, 이미 허용된 경우에만 토큰 조회·구독한다. 권한 요청은 02 권한 화면에서만.
+  - `subscribeOptionsForLaunch(): { requestPermission: false }` (`lib/push/push-launch.ts`, 순수 함수. 같은 파일의 `PushSubscribeOptions`, `permissionStepFor(options): "request" | "check"`도 쓴다) — `usePushNotifications`는 이 옵션을 받아 앱 시작 시 권한을 요청하지 않고, 이미 허용된 경우에만 토큰 조회·구독한다. 권한 요청은 02 권한 화면에서만.
   - 어댑터 `requestLocationPermission(): Promise<PermissionStatus>`, `requestNotificationPermission(): Promise<PermissionStatus>`, `getPermissionsState(): Promise<PermissionsState>`
   - 루트: `<Stack.Protected guard={!shouldShowOnboarding(prefs)}>`에 `(tabs)`, `guard={shouldShowOnboarding(prefs)}`에 `onboarding`
 
 화면 세부:
 - 01 온보딩(Figma 12:1580): 배경은 `MapCanvas` 인스턴스(12:1581)를 화면 너비에 맞춰 3배로 내보낸 PNG(`onboarding-map.png`, Figma MCP `get_screenshot` 또는 `download_assets`)와 아래로 `bg-bg-canvas`로 사라지는 그라데이션. 로고, 제목, 부제, 기능 3줄(Lucide 아이콘 `Zap`, `Route`, `Box`. 두 번째 줄은 문구가 바뀌어 Figma의 `Bell` 대신 `Route`), 페이지 점, "시작하기"(→ `/onboarding/permissions`). 온보딩·권한 화면은 Figma처럼 항상 다크로 그린다(`<ScopedTheme theme="dark">`, uniwind 1.13).
-- 02 권한(12:3140): 위치·알림 카드의 "허용" 버튼은 각 권한을 요청하고, 허용되면 버튼이 "허용됨"(비활성)으로 바뀐다. "계속"과 "나중에"는 둘 다 `completeOnboarding` 후 `router.replace("/")`.
+- 02 권한(12:3140): 위치·알림 카드의 "허용" 버튼은 각 권한을 요청하고, 허용되면 버튼이 "허용됨"(비활성)으로 바뀐다. "계속"과 "나중에"는 둘 다 `completeOnboarding`만 한다. 이동은 루트 `Stack.Protected` guard가 바뀔 때 expo-router가 탭으로 보낸다(같은 틱에 `router.replace("/")`를 부르면 guard가 아직 닫혀 있어 처리되지 않는다).
 - `app.json`: `["expo-location", { "locationWhenInUsePermission": "내 주변 역과 정류장을 바로 보여주기 위해 위치를 사용해요." }]`
 
 - [ ] **Step 1: 실패하는 테스트** — `onboarding.test.ts`
@@ -381,15 +380,14 @@ it("shows onboarding until it is completed", () => {
 	expect(shouldShowOnboarding(DEFAULT_PREFERENCES)).toBe(true);
 	expect(shouldShowOnboarding({ ...DEFAULT_PREFERENCES, onboardingCompleted: true })).toBe(false);
 });
-it("completes onboarding even when both permissions are denied", () => {
+it("completes onboarding without looking at permissions, even when both are denied", () => {
 	const store = createPreferencesStore(memoryKv());
-	expect(canSkipToApp({ location: "denied", notifications: "denied" })).toBe(true);
 	completeOnboarding(store);
 	expect(shouldShowOnboarding(store.get())).toBe(false);
 });
 ```
 
-`lib/push/push-messaging.test.ts`(새 파일, 기존 `push-message.test.ts` 옆)에 시작 시 요청하지 않는 규칙을 고정한다: `subscribeOptionsForLaunch()`가 `{ requestPermission: false }`를 돌려준다(`push-messaging.ts`에 순수 함수로 추가, `use-push-notifications.ts`가 이 값을 쓴다).
+`lib/push/push-launch.test.ts`(새 파일, 기존 `push-message.test.ts` 옆)에 시작 시 요청하지 않는 규칙을 고정한다: `subscribeOptionsForLaunch()`가 `{ requestPermission: false }`를 돌려준다(`push-launch.ts`에 순수 함수로 추가, `use-push-notifications.ts`가 이 값을 쓴다).
 
 - [ ] **Step 2: 실패 확인** — Run: `bun test apps/native/lib/onboarding apps/native/lib/push` / Expected: FAIL
 - [ ] **Step 3: 구현** — 순수 모듈, 권한 어댑터, 두 화면, 루트 보호 라우트, `PushNotifications`가 시작 시 권한을 요청하지 않게 변경(이미 허용된 경우에만 토큰 조회·구독), `bun add expo-location`, 온보딩 이미지 내보내기
