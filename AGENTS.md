@@ -12,6 +12,14 @@ Biome (the underlying engine) provides robust linting and formatting. Most issue
 
 ---
 
+## Design Source
+
+- **Figma (Betro App UI)**: https://www.figma.com/design/MiS0r5xYKVht3Pc7YXMXpP/Betro-App-UI
+  - Pages: `Foundations` (color/dimension/transit variables), `Components`, `iOS`, `Android`
+  - App UI must follow this file: reuse its variables (Color modes Dark/Light, Dimension, Transit) and components instead of hardcoding values.
+
+---
+
 ## Core Principles
 
 Write code that is **accessible, performant, type-safe, and maintainable**. Focus on clarity and explicit intent over brevity.
