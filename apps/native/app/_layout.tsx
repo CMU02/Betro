@@ -4,10 +4,15 @@ import { Stack } from "expo-router";
 import { HeroUINativeProvider } from "heroui-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import { Uniwind } from "uniwind";
 
 import { PushNotifications } from "@/components/push-notifications";
 import { AppThemeProvider } from "@/contexts/app-theme-context";
+import { appPreferences } from "@/lib/preferences/app-preferences";
+import { toUniwindTheme } from "@/lib/preferences/preferences";
 import { queryClient } from "@/utils/orpc";
+
+Uniwind.setTheme(toUniwindTheme(appPreferences.get().themeMode));
 
 export const unstable_settings = {
 	anchor: "(drawer)",
