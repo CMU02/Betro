@@ -33,7 +33,7 @@
         "@tanstack/react-query": "catalog:",
         "@varlock/expo-integration": "1.2.2",
         "expo": "~58.0.12",
-        "expo-application": "^58.1.2",
+        "expo-application": "~58.1.2",
         "expo-build-properties": "~58.0.12",
         "expo-constants": "~58.0.12",
         "expo-crypto": "~58.0.7",

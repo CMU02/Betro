@@ -121,6 +121,22 @@ export default function SettingsTab() {
 			mapQuality: preferences.mapQuality === "high3d" ? "standard" : "high3d",
 		});
 	}, [preferences.mapQuality, update]);
+	const toggle3dBuildings = useCallback(
+		(value: boolean) => update({ show3dBuildings: value }),
+		[update]
+	);
+	const toggleSmoothMotion = useCallback(
+		(value: boolean) => update({ smoothVehicleMotion: value }),
+		[update]
+	);
+	const toggleDataSaver = useCallback(
+		(value: boolean) => update({ dataSaver: value }),
+		[update]
+	);
+	const toggleLiveActivity = useCallback(
+		(value: boolean) => update({ commuteLiveActivityEnabled: value }),
+		[update]
+	);
 	const openDataSources = useCallback(() => {
 		router.push("/settings/data-sources");
 	}, [router]);
@@ -145,7 +161,7 @@ export default function SettingsTab() {
 						icon={BoxTileIcon}
 						title="3D 건물"
 						trailing={{
-							onChange: (value) => update({ show3dBuildings: value }),
+							onChange: toggle3dBuildings,
 							type: "toggle",
 							value: preferences.show3dBuildings,
 						}}
@@ -156,7 +172,7 @@ export default function SettingsTab() {
 						subtitle="위치를 보간해 자연스럽게 움직여요"
 						title="부드러운 차량 이동"
 						trailing={{
-							onChange: (value) => update({ smoothVehicleMotion: value }),
+							onChange: toggleSmoothMotion,
 							type: "toggle",
 							value: preferences.smoothVehicleMotion,
 						}}
@@ -166,7 +182,7 @@ export default function SettingsTab() {
 						icon={ZapTileIcon}
 						title="데이터 절약 모드"
 						trailing={{
-							onChange: (value) => update({ dataSaver: value }),
+							onChange: toggleDataSaver,
 							type: "toggle",
 							value: preferences.dataSaver,
 						}}
@@ -177,8 +193,7 @@ export default function SettingsTab() {
 						icon={BellTileIcon}
 						title="출퇴근 잠금화면 안내"
 						trailing={{
-							onChange: (value) =>
-								update({ commuteLiveActivityEnabled: value }),
+							onChange: toggleLiveActivity,
 							type: "toggle",
 							value: preferences.commuteLiveActivityEnabled,
 						}}
