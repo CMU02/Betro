@@ -193,7 +193,7 @@ describe("colorToken", () => {
 
 텍스트 스타일(Figma, 글꼴 크기/줄 높이/자간 %): Display/L Black 32/40 −2%, Title/1 Bold 24/32 −1.5%, Title/2 Bold 20/28 −1%, Title/3 Bold 17/24 −0.5%, Body/L Regular 16/24 −0.3%, Body/M Regular 15/22 −0.3%, Body/M Strong Medium 15/22 −0.3%, Body/S Regular 14/20 −0.2%, Label/M Medium 14/20 −0.2%, Label/S Medium 13/18 −0.2%, Caption Medium 12/16 0, Micro Bold 11/14 +1%, Data/XL JetBrains Mono Bold 28/32 −2%, Data/L Mono Bold 18/24 −1%, Data/M Mono Medium 14/20 0, Data/S Mono Medium 12/16 0. 자간 px = 크기 × % / 100, 소수 둘째 자리 반올림.
 
-폰트 서브셋(Noto Sans KR 정적 TTF 한 굵기가 약 6MB라 그대로 넣지 않는다): 대상 글자 = U+0020–007E, U+00A0–00FF, U+2010–2027, U+2030–205E, U+2190–21FF, U+3000–303F, U+3131–318E, 그리고 U+AC00–D7A3 중 `euc-kr`로 인코딩되는 2,350자(KS X 1001). JetBrains Mono는 U+0020–007E, U+00A0–00FF, U+2010–2027, U+2190–21FF만. 원본은 devDependency 패키지의 정적 TTF(`400Regular`, `500Medium`, `700Bold`, `900Black` / `500Medium`, `700Bold`). 출력 파일 이름이 곧 RN `fontFamily`이므로 위 이름을 그대로 쓴다.
+폰트 서브셋(Noto Sans KR 정적 TTF 한 굵기가 약 6MB라 그대로 넣지 않는다): 대상 글자 = U+0020–007E, U+00A0–00FF, U+2010–2027, U+2030–205E, U+2190–21FF, U+3000–303F, U+3131–318E, 그리고 U+AC00–D7A3 중 `euc-kr`로 인코딩되는 2,350자(KS X 1001; Python `euc-kr`이 UHC 확장 글자까지 인코딩하므로 KS X 1001 바이트 영역(0xB0A1–0xC8FE)으로 한 번 더 거른다). Noto 범위에는 ℃ 등을 위해 U+2100–214F도 추가한다. JetBrains Mono는 U+0020–007E, U+00A0–00FF, U+2010–2027, U+2190–21FF만. 원본은 devDependency 패키지의 정적 TTF(`400Regular`, `500Medium`, `700Bold`, `900Black` / `500Medium`, `700Bold`). 출력 파일 이름이 곧 RN `fontFamily`이므로 위 이름을 그대로 쓴다.
 
 - [ ] **Step 1: 실패하는 테스트** — `typography.test.ts`
 
