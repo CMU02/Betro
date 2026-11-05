@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { BoxIcon, RouteIcon, ZapIcon } from "lucide-react-native";
 import { useCallback } from "react";
-import { Image, View } from "react-native";
+import { Image, Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { withUniwind } from "uniwind";
 
@@ -26,7 +26,12 @@ const FADE_LAYER_TOPS = Array.from(
 	(_, index) =>
 		`${((FADE_START + FADE_STEP * index) / MAP_HEIGHT) * 100}%` as const
 );
-/** 상태 표시줄(54pt) 아래 12pt에 로고. */
+/**
+ * iOS(12:1580)는 로고가 지도 위 왼쪽 위에 있고, Android(12:3338)는 제목 바로 위에 있으며
+ * 제목 둘째 줄을 강조색으로 쓴다.
+ */
+const IS_ANDROID_LAYOUT = Platform.OS === "android";
+/** 상태 표시줄(54pt) 아래 12pt에 로고(iOS). */
 const LOGO_GAP_BELOW_STATUS_BAR = 12;
 /** 마지막 버튼과 홈 인디케이터 사이 간격. */
 const ACTIONS_GAP_ABOVE_HOME_INDICATOR = 8;
@@ -70,6 +75,24 @@ function PageDots() {
 	);
 }
 
+function Headline() {
+	if (!IS_ANDROID_LAYOUT) {
+		return (
+			<AppText accessibilityRole="header" variant="displayL">
+				{"서울의 지하철과 버스를,\n실시간 3D로"}
+			</AppText>
+		);
+	}
+	return (
+		<AppText accessibilityRole="header" variant="displayL">
+			{"서울의 지하철과 버스를,\n"}
+			<AppText className="text-text-accent" variant="displayL">
+				실시간 3D로
+			</AppText>
+		</AppText>
+	);
+}
+
 function MapBackdrop() {
 	return (
 		<View
@@ -105,25 +128,28 @@ export default function OnboardingScreen() {
 	return (
 		<View className="flex-1 bg-bg-canvas">
 			<MapBackdrop />
-			<View
-				className="px-4"
-				style={{ paddingTop: insets.top + LOGO_GAP_BELOW_STATUS_BAR }}
-			>
-				<Logo />
-			</View>
+			{IS_ANDROID_LAYOUT ? null : (
+				<View
+					className="px-4"
+					style={{ paddingTop: insets.top + LOGO_GAP_BELOW_STATUS_BAR }}
+				>
+					<Logo />
+				</View>
+			)}
 			<View
 				className="flex-1 justify-end gap-7 px-4"
 				style={{
 					paddingBottom: insets.bottom + ACTIONS_GAP_ABOVE_HOME_INDICATOR,
 				}}
 			>
-				<View className="gap-3">
-					<AppText accessibilityRole="header" variant="displayL">
-						{"서울의 지하철과 버스를,\n실시간 3D로"}
-					</AppText>
-					<AppText className="text-text-secondary" variant="bodyL">
-						지금 달리는 차량이 어디쯤 있는지 한눈에 보여드려요.
-					</AppText>
+				<View className="gap-4">
+					{IS_ANDROID_LAYOUT ? <Logo /> : null}
+					<View className="gap-3">
+						<Headline />
+						<AppText className="text-text-secondary" variant="bodyL">
+							지금 달리는 차량이 어디쯤 있는지 한눈에 보여드려요.
+						</AppText>
+					</View>
 				</View>
 				<View className="gap-3">
 					{FEATURES.map((feature) => (

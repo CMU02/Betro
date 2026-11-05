@@ -27,6 +27,16 @@ describe("renderThemeCss", () => {
 		expect(block("dark")).toContain("--danger: #ff6b6b;");
 	});
 
+	it("keeps Betro values for token names HeroUI also defines inline", () => {
+		// HeroUI의 `@theme inline static`이 --color-accent-soft를 accent 15% 혼합색으로 덮으므로
+		// 유틸리티가 테마별 Betro 값을 가리키도록 다시 정의한다.
+		expect(block("dark")).toContain("--betro-accent-soft: #26330a;");
+		expect(block("light")).toContain("--betro-accent-soft: #f0fbc8;");
+		expect(css).toContain(
+			"@theme inline {\n\t--color-accent-soft: var(--betro-accent-soft);\n}"
+		);
+	});
+
 	it("writes transit colors and radii once, outside variants", () => {
 		expect(css).toContain("--color-transit-line-2: #00a84d;");
 		expect(css).toContain("--color-transit-bus-trunk: #0068b7;");

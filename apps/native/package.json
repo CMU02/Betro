@@ -21,6 +21,7 @@
     "@orpc/client": "catalog:",
     "@orpc/tanstack-query": "catalog:",
     "@react-native-firebase/app": "^27.1.0",
+    "@react-native-firebase/crashlytics": "27.1.0",
     "@react-native-firebase/messaging": "^27.1.0",
     "@tanstack/react-query": "catalog:",
     "@varlock/expo-integration": "1.2.2",
@@ -70,5 +71,14 @@
     "@types/react": "~19.3.0",
     "babel-preset-expo": "~58.0.16",
     "typescript": "~6.0.3"
+  },
+  "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": [
+          "expo-sqlite"
+        ]
+      }
+    }
   }
 }

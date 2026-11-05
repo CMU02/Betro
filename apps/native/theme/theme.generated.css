@@ -63,6 +63,7 @@
 			--surface-tertiary-foreground: #f5f6f8;
 			--warning: #ffc145;
 			--warning-foreground: #0b0e15;
+			--betro-accent-soft: #26330a;
 		}
 		@variant light {
 			--color-accent-pressed: #a9d916;
@@ -126,6 +127,7 @@
 			--surface-tertiary-foreground: #0b0e15;
 			--warning: #a86f00;
 			--warning-foreground: #0b0e15;
+			--betro-accent-soft: #f0fbc8;
 		}
 	}
 }
@@ -160,4 +162,8 @@
 	--radius-sm: 8px;
 	--radius-xl: 20px;
 	--radius-xs: 6px;
+}
+
+@theme inline {
+	--color-accent-soft: var(--betro-accent-soft);
 }

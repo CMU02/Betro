@@ -1,11 +1,10 @@
 import { ChevronRightIcon } from "lucide-react-native";
 import type { ComponentType } from "react";
-import { Pressable, Switch, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { withUniwind } from "uniwind";
 
 import { AppText } from "@/components/ui/app-text";
-import { useAppTheme } from "@/contexts/app-theme-context";
-import { colorToken } from "@/theme/tokens";
+import { Toggle } from "@/components/ui/toggle";
 
 const StyledChevron = withUniwind(ChevronRightIcon);
 
@@ -15,7 +14,7 @@ export type ListRowTrailing =
 	| { type: "chevron" }
 	| { type: "none" }
 	| { type: "toggle"; value: boolean; onChange: (value: boolean) => void }
-	| { type: "value"; text: string };
+	| { type: "value"; text: string; chevron?: boolean };
 
 /** `withUniwind`로 감싼 Lucide 아이콘. */
 export type ListRowIcon = ComponentType<{
@@ -38,26 +37,25 @@ function Trailing({
 	title: string;
 	trailing: ListRowTrailing;
 }) {
-	const { isDark } = useAppTheme();
-	const mode = isDark ? "dark" : "light";
 	switch (trailing.type) {
 		case "chevron":
 			return <StyledChevron colorClassName="accent-icon-secondary" size={20} />;
 		case "value":
 			return (
-				<AppText className="text-text-secondary" variant="labelM">
-					{trailing.text}
-				</AppText>
+				<>
+					<AppText className="text-text-secondary" variant="labelM">
+						{trailing.text}
+					</AppText>
+					{trailing.chevron ? (
+						<StyledChevron colorClassName="accent-icon-secondary" size={20} />
+					) : null}
+				</>
 			);
 		case "toggle":
 			return (
-				<Switch
+				<Toggle
 					accessibilityLabel={title}
-					onValueChange={trailing.onChange}
-					trackColor={{
-						false: colorToken("bg/control", mode),
-						true: colorToken("accent/primary", mode),
-					}}
+					onChange={trailing.onChange}
 					value={trailing.value}
 				/>
 			);

@@ -41,6 +41,17 @@ const HEROUI_MAP = {
 	"--warning-foreground": "text/on-accent",
 } as const satisfies Record<string, ColorTokenName>;
 
+/**
+ * HeroUI가 `@theme inline static`으로 같은 이름을 정의하는 토큰. 그대로 두면 `bg-accent-soft`가
+ * HeroUI의 "accent 15% 혼합색"으로 그려지므로, 테마별 값을 `--betro-*` 변수에 두고
+ * `@theme inline`으로 유틸리티가 그 변수를 가리키게 한다.
+ */
+const HEROUI_INLINE_COLLISIONS = [
+	"accent/soft",
+] as const satisfies readonly ColorTokenName[];
+
+const cssName = (name: ColorTokenName): string => name.replace("/", "-");
+
 function renderVariant(mode: ThemeMode): string {
 	const colors = (Object.keys(COLOR_TOKENS) as ColorTokenName[]).map(
 		(name) =>
@@ -49,7 +60,16 @@ function renderVariant(mode: ThemeMode): string {
 	const heroui = Object.entries(HEROUI_MAP).map(
 		([variable, token]) => `\t\t\t${variable}: ${colorToken(token, mode)};`
 	);
-	return [`\t\t@variant ${mode} {`, ...colors, ...heroui, "\t\t}"].join("\n");
+	const collisions = HEROUI_INLINE_COLLISIONS.map(
+		(name) => `\t\t\t--betro-${cssName(name)}: ${colorToken(name, mode)};`
+	);
+	return [
+		`\t\t@variant ${mode} {`,
+		...colors,
+		...heroui,
+		...collisions,
+		"\t\t}",
+	].join("\n");
 }
 
 export function renderThemeCss(): string {
@@ -71,6 +91,12 @@ export function renderThemeCss(): string {
 		"@theme {",
 		...transit,
 		...radii,
+		"}",
+		"",
+		"@theme inline {",
+		...HEROUI_INLINE_COLLISIONS.map(
+			(name) => `\t--color-${cssName(name)}: var(--betro-${cssName(name)});`
+		),
 		"}",
 		"",
 	].join("\n");

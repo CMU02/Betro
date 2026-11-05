@@ -4,6 +4,7 @@ import { cn } from "heroui-native";
 import {
 	BellIcon,
 	BoxIcon,
+	BugIcon,
 	InfoIcon,
 	MapIcon,
 	MoonIcon,
@@ -19,8 +20,10 @@ import { AppText } from "@/components/ui/app-text";
 import { ListDivider, ListRow } from "@/components/ui/list-row";
 import { Screen } from "@/components/ui/screen";
 import { useAppTheme } from "@/contexts/app-theme-context";
+import { triggerTestCrash } from "@/lib/crash/app-crash-reporting";
 import type { ThemePreference } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
+import { ELEVATION } from "@/theme/tokens";
 
 const MoonTileIcon = withUniwind(MoonIcon);
 const MapTileIcon = withUniwind(MapIcon);
@@ -30,12 +33,16 @@ const ZapTileIcon = withUniwind(ZapIcon);
 const BellTileIcon = withUniwind(BellIcon);
 const ShieldTileIcon = withUniwind(ShieldCheckIcon);
 const InfoTileIcon = withUniwind(InfoIcon);
+const BugTileIcon = withUniwind(BugIcon);
 
 const THEME_OPTIONS: { label: string; mode: ThemePreference }[] = [
 	{ label: "다크", mode: "dark" },
 	{ label: "라이트", mode: "light" },
 	{ label: "시스템", mode: "system" },
 ];
+
+/** Figma `Segmented`의 선택된 칸은 `Elevation/1 Floating` 그림자로 떠 있다. */
+const SELECTED_SEGMENT_STYLE = { boxShadow: ELEVATION.floating } as const;
 
 const MAP_QUALITY_LABEL = { high3d: "고화질 3D", standard: "표준" } as const;
 
@@ -73,6 +80,7 @@ function ThemeOption({
 				selected && "bg-bg-surface-raised"
 			)}
 			onPress={handlePress}
+			style={selected ? SELECTED_SEGMENT_STYLE : undefined}
 		>
 			<AppText
 				className={selected ? "text-text-primary" : "text-text-secondary"}
@@ -152,6 +160,7 @@ export default function SettingsTab() {
 						onPress={toggleMapQuality}
 						title="지도 품질"
 						trailing={{
+							chevron: true,
 							text: MAP_QUALITY_LABEL[preferences.mapQuality],
 							type: "value",
 						}}
@@ -216,6 +225,17 @@ export default function SettingsTab() {
 						}}
 					/>
 				</Section>
+				{__DEV__ ? (
+					<Section title="개발">
+						<ListRow
+							icon={BugTileIcon}
+							onPress={triggerTestCrash}
+							subtitle="개발 빌드에서만 보여요. 누르면 앱이 바로 종료돼요"
+							title="크래시 시험"
+							trailing={{ type: "none" }}
+						/>
+					</Section>
+				) : null}
 			</View>
 		</Screen>
 	);

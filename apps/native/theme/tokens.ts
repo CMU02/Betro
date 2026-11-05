@@ -74,6 +74,20 @@ export const RADII = {
 	xs: 6,
 } as const satisfies Record<string, number>;
 
+/** Figma `Toggle`(4:125)의 손잡이. 두 테마 모두 흰색이다(Android 기본 손잡이는 테마 강조색). */
+export const TOGGLE_KNOB_COLOR = "#ffffff";
+
+/**
+ * RN `boxShadow` 값. `floating`은 Figma `Elevation/1 Floating` 효과(검정 18%·28% 두 겹)로,
+ * 선택된 세그먼트처럼 면 위에 떠 있는 요소에 쓴다.
+ */
+export const ELEVATION = {
+	floating:
+		"0px 1px 2px 0px rgba(0, 0, 0, 0.18), 0px 6px 18px 0px rgba(0, 0, 0, 0.28)",
+	/** Figma `Toggle` 손잡이 그림자: 검정 25%, 아래로 2, 흐림 4. */
+	toggleKnob: "0px 2px 4px 0px rgba(0, 0, 0, 0.25)",
+} as const;
+
 export function colorToken(name: ColorTokenName, mode: ThemeMode): string {
 	return COLOR_TOKENS[name][mode];
 }

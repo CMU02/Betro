@@ -1,7 +1,13 @@
 import { useRouter } from "expo-router";
-import { BellIcon, LocateFixedIcon, MapPinIcon } from "lucide-react-native";
+import { cn } from "heroui-native";
+import {
+	BellIcon,
+	LocateFixedIcon,
+	MapPinIcon,
+	ShieldCheckIcon,
+} from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { AppState, Linking, ScrollView, View } from "react-native";
+import { AppState, Linking, Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { withUniwind } from "uniwind";
 
@@ -25,9 +31,16 @@ import { withAlpha } from "@/theme/tokens";
 const StyledBellIcon = withUniwind(BellIcon);
 const StyledLocateFixedIcon = withUniwind(LocateFixedIcon);
 const StyledMapPinIcon = withUniwind(MapPinIcon);
+const StyledShieldCheckIcon = withUniwind(ShieldCheckIcon);
 
-/** 상태 표시줄(54pt) 아래 32pt에서 본문이 시작한다. */
-const CONTENT_GAP_BELOW_STATUS_BAR = 32;
+/**
+ * iOS(12:3140)는 원 세 겹 그림과 두 줄 설명, Android(12:4888)는 방패 아이콘 타일과 한 줄 설명을 쓰고
+ * "설정에서 언제든…" 안내를 버튼 위로 내린다.
+ */
+const IS_ANDROID_LAYOUT = Platform.OS === "android";
+/** 본문 시작: iOS는 상태 표시줄(54pt) 아래 32pt, Android는 상태 표시줄(40dp) 아래 128dp(화면 위 168). */
+const CONTENT_GAP_BELOW_STATUS_BAR = IS_ANDROID_LAYOUT ? 128 : 32;
+const SHIELD_ICON_SIZE = 32;
 /** 마지막 버튼과 홈 인디케이터 사이 간격. */
 const FOOTER_GAP_ABOVE_HOME_INDICATOR = 8;
 const BADGE_ICON_SIZE = 20;
@@ -92,6 +105,59 @@ function Illustration() {
 	);
 }
 
+/** Figma Android 02 권한의 머리(12:4897~12:4905): 64dp 방패 타일, 제목, 한 줄 설명. */
+function AndroidIntro() {
+	return (
+		<View className="gap-6">
+			<View className="size-16 items-center justify-center rounded-xl bg-accent-soft">
+				<StyledShieldCheckIcon
+					colorClassName="accent-text-accent"
+					size={SHIELD_ICON_SIZE}
+				/>
+			</View>
+			<View className="gap-2">
+				<AppText accessibilityRole="header" variant="title1">
+					{"더 정확한 안내를 위해\n권한이 필요해요"}
+				</AppText>
+				<AppText className="text-text-secondary" variant="bodyM">
+					꼭 필요한 권한만 요청하고, 안내 외의 용도로는 쓰지 않아요.
+				</AppText>
+			</View>
+		</View>
+	);
+}
+
+function IosIntro() {
+	return (
+		<>
+			<Illustration />
+			<View className="gap-2">
+				<AppText accessibilityRole="header" variant="title1">
+					{"더 정확한 안내를 위해\n권한이 필요해요"}
+				</AppText>
+				<AppText className="text-text-secondary" variant="bodyM">
+					{
+						"꼭 필요한 두 가지만 요청해요.\n허용하지 않아도 지도는 그대로 볼 수 있어요."
+					}
+				</AppText>
+			</View>
+		</>
+	);
+}
+
+const SETTINGS_HINT = "설정에서 언제든 바꿀 수 있어요";
+
+/** 카드 설명. iOS는 Figma처럼 두 줄로 끊고, Android는 한 줄로 둔다. */
+const CARD_DESCRIPTIONS = IS_ANDROID_LAYOUT
+	? {
+			location: "내 주변 역과 정류장을 바로 보여줘요",
+			notifications: "출퇴근 시간에 잠금화면에 도착 정보를 띄워요",
+		}
+	: {
+			location: "내 주변 역과 정류장을\n바로 보여줘요",
+			notifications: "출퇴근 시간에 잠금화면에\n도착 정보를 띄워요",
+		};
+
 interface PermissionCardProps {
 	action: PermissionButtonAction;
 	description: string;
@@ -119,11 +185,18 @@ function PermissionCard({
 	const Icon = icon === "location" ? StyledMapPinIcon : StyledBellIcon;
 	return (
 		<View className="flex-row items-center gap-3 rounded-lg bg-bg-surface-raised p-4">
-			<View className="size-11 items-center justify-center rounded-md bg-accent-soft">
+			<View
+				className={cn(
+					"items-center justify-center rounded-md bg-accent-soft",
+					IS_ANDROID_LAYOUT ? "size-10" : "size-11"
+				)}
+			>
 				<Icon colorClassName="accent-text-accent" size={BADGE_ICON_SIZE} />
 			</View>
 			<View className="flex-1 gap-0.5">
-				<AppText variant="title3">{title}</AppText>
+				<AppText variant={IS_ANDROID_LAYOUT ? "bodyMStrong" : "title3"}>
+					{title}
+				</AppText>
 				<AppText className="text-text-secondary" variant="bodyS">
 					{description}
 				</AppText>
@@ -234,26 +307,19 @@ export default function PermissionsScreen() {
 	return (
 		<View className="flex-1 bg-bg-canvas">
 			<ScrollView
-				contentContainerClassName="gap-7 px-4"
+				contentContainerClassName={cn(
+					"px-4",
+					IS_ANDROID_LAYOUT ? "gap-8" : "gap-7"
+				)}
 				contentContainerStyle={{
 					paddingTop: insets.top + CONTENT_GAP_BELOW_STATUS_BAR,
 				}}
 			>
-				<Illustration />
-				<View className="gap-2">
-					<AppText accessibilityRole="header" variant="title1">
-						{"더 정확한 안내를 위해\n권한이 필요해요"}
-					</AppText>
-					<AppText className="text-text-secondary" variant="bodyM">
-						{
-							"꼭 필요한 두 가지만 요청해요.\n허용하지 않아도 지도는 그대로 볼 수 있어요."
-						}
-					</AppText>
-				</View>
+				{IS_ANDROID_LAYOUT ? <AndroidIntro /> : <IosIntro />}
 				<View className="gap-3">
 					<PermissionCard
 						action={locationAction}
-						description={"내 주변 역과 정류장을\n바로 보여줘요"}
+						description={CARD_DESCRIPTIONS.location}
 						emphasized={emphasizeLocation}
 						icon="location"
 						onPress={pressLocation}
@@ -262,7 +328,7 @@ export default function PermissionsScreen() {
 					/>
 					<PermissionCard
 						action={notificationsAction}
-						description={"출퇴근 시간에 잠금화면에\n도착 정보를 띄워요"}
+						description={CARD_DESCRIPTIONS.notifications}
 						emphasized={!emphasizeLocation}
 						icon="notifications"
 						onPress={pressNotifications}
@@ -270,9 +336,11 @@ export default function PermissionsScreen() {
 						title="알림"
 					/>
 				</View>
-				<AppText className="text-center text-text-tertiary" variant="caption">
-					설정에서 언제든 바꿀 수 있어요
-				</AppText>
+				{IS_ANDROID_LAYOUT ? null : (
+					<AppText className="text-center text-text-tertiary" variant="caption">
+						{SETTINGS_HINT}
+					</AppText>
+				)}
 			</ScrollView>
 			<View
 				className="gap-2 px-4 pt-4"
@@ -280,6 +348,14 @@ export default function PermissionsScreen() {
 					paddingBottom: insets.bottom + FOOTER_GAP_ABOVE_HOME_INDICATOR,
 				}}
 			>
+				{IS_ANDROID_LAYOUT ? (
+					<AppText
+						className="mb-2 text-center text-text-tertiary"
+						variant="caption"
+					>
+						{SETTINGS_HINT}
+					</AppText>
+				) : null}
 				<AppButton label="계속" onPress={finish} />
 				<AppButton label="나중에" onPress={finish} variant="ghost" />
 			</View>
