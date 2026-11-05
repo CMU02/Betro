@@ -49,7 +49,7 @@ interface TabItem {
 	selected: boolean;
 }
 
-function useTabItems({
+function toTabItems({
 	descriptors,
 	emitter,
 	navigateToTab,
@@ -82,7 +82,7 @@ function useTabItems({
 }
 
 function IosTabBar(props: BottomTabBarProps) {
-	const items = useTabItems(props);
+	const items = toTabItems(props);
 	const reportHeight = useContext(BottomTabBarHeightCallbackContext);
 	const bottom = Math.max(
 		props.insets.bottom + IOS_BAR_GAP_ABOVE_HOME_INDICATOR,
@@ -136,7 +136,7 @@ function IosTabBar(props: BottomTabBarProps) {
 }
 
 function AndroidTabBar(props: BottomTabBarProps) {
-	const items = useTabItems(props);
+	const items = toTabItems(props);
 	const reportHeight = useContext(BottomTabBarHeightCallbackContext);
 
 	const handleLayout = useCallback(
