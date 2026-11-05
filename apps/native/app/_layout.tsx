@@ -31,6 +31,7 @@ function StackLayout() {
 			<Stack screenOptions={STACK_SCREEN_OPTIONS}>
 				<Stack.Protected guard={!showOnboarding}>
 					<Stack.Screen name="(tabs)" />
+					<Stack.Screen name="settings/data-sources" />
 				</Stack.Protected>
 				<Stack.Protected guard={showOnboarding}>
 					<Stack.Screen name="onboarding" />

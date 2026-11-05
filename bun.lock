@@ -33,6 +33,7 @@
         "@tanstack/react-query": "catalog:",
         "@varlock/expo-integration": "1.2.2",
         "expo": "~58.0.12",
+        "expo-application": "^58.1.2",
         "expo-build-properties": "~58.0.12",
         "expo-constants": "~58.0.12",
         "expo-crypto": "~58.0.7",
@@ -1563,6 +1564,8 @@
     "execa": ["execa@10.2.1", "", { "dependencies": { "@sindresorhus/merge-streams": "^4.0.0", "figures": "^6.1.0", "get-stream": "^9.0.1", "human-signals": "^8.0.1", "is-plain-obj": "^4.1.0", "is-stream": "^4.0.1", "npm-run-path": "^6.0.0", "pretty-ms": "^9.3.1", "signal-exit": "^4.1.0", "strip-final-newline": "^4.0.0", "which-command": "^0.1.0", "yoctocolors": "^2.2.0" } }, "sha512-/Bofl3ZBh2Q4/PG0W63qFzP5vDAypi8Zc90UWTBzaDNIYiX7apPOd0N6L8hG8CojUdq4V51adu8BObP+iVsSTw=="],
 
     "expo": ["expo@58.0.21", "", { "dependencies": { "@babel/runtime": "^7.20.0", "@expo/cli": "^58.1.17", "@expo/config": "~58.0.9", "@expo/config-plugins": "~58.0.11", "@expo/devtools": "~58.0.2", "@expo/dom-webview": "~58.0.2", "@expo/fingerprint": "^0.21.7", "@expo/local-build-cache-provider": "^58.0.9", "@expo/log-box": "^58.0.13", "@expo/log-box-utils": "^58.0.2", "@expo/metro": "~58.0.0", "@expo/metro-config": "~58.0.19", "@ungap/structured-clone": "^1.3.0", "babel-preset-expo": "~58.0.22", "expo-asset": "~58.0.19", "expo-constants": "~58.0.14", "expo-file-system": "~58.0.13", "expo-font": "~58.0.11", "expo-keep-awake": "~58.0.3", "expo-modules-autolinking": "~58.0.16", "expo-modules-cli": "~0.4.0", "expo-modules-core": "~58.0.28", "pretty-format": "^29.7.0", "react-refresh": "^0.14.2", "whatwg-url-minimum": "^0.2.0" }, "peerDependencies": { "@expo/metro-runtime": "*", "react": "*", "react-dom": "*", "react-native": "*", "react-native-web": "*", "react-native-webview": "*" }, "optionalPeers": ["@expo/metro-runtime", "react-dom", "react-native-web", "react-native-webview"], "bin": { "expo": "bin/cli", "fingerprint": "bin/fingerprint", "expo-modules": "bin/modules", "expo-modules-autolinking": "bin/autolinking" } }, "sha512-2Q8jp0fKLrDMou4aKWZ5V2cCVfcwOScuV8GBMkogiXIv7bCwwN4CIkUIq5QsX7DHXJxbruXLTXEgrp6J+iF4YA=="],
+
+    "expo-application": ["expo-application@58.1.2", "", { "peerDependencies": { "expo": "*" } }, "sha512-WYFdNHGaxe/j69oYREhK0cKsKYszuIuz399WXYCP+M1grfO+FCWB/RbuMgaXJsLWlzqhNjA/zLgfJ+33FwrQvw=="],
 
     "expo-asset": ["expo-asset@58.0.19", "", { "dependencies": { "@expo/image-utils": "^0.12.6", "expo-constants": "~58.0.14" }, "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-9tYdhiPUJKA3OjnQQJtcP4Yrdc9TPR1JQXTomcLdDSV4XgHSXRpsnp5zsIfM6S/y30QsBFHS6G3WIBaocCiPtA=="],
 
