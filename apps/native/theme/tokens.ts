@@ -77,3 +77,33 @@ export const RADII = {
 export function colorToken(name: ColorTokenName, mode: ThemeMode): string {
 	return COLOR_TOKENS[name][mode];
 }
+
+const OPAQUE_HEX = /^#[0-9a-f]{6}$/i;
+const ALPHA_CHANNEL_MAX = 255;
+
+/**
+ * 불투명 토큰에 알파 채널을 붙인 8자리 hex(`#rrggbbaa`). 그림자처럼 Figma 효과가
+ * 토큰 색의 일부 불투명도를 쓸 때 쓴다. 이미 알파가 있거나 hex가 아닌 토큰은
+ * 조용히 잘못된 색을 만들지 않도록 예외를 던진다.
+ */
+export function withAlpha(
+	name: ColorTokenName,
+	mode: ThemeMode,
+	opacity: number
+): string {
+	if (!(opacity >= 0 && opacity <= 1)) {
+		throw new Error(
+			`withAlpha: opacity must be between 0 and 1, got ${opacity}`
+		);
+	}
+	const color = colorToken(name, mode);
+	if (!OPAQUE_HEX.test(color)) {
+		throw new Error(
+			`withAlpha: token ${name} (${mode}) is ${color}, not a six-digit hex`
+		);
+	}
+	const alpha = Math.round(opacity * ALPHA_CHANNEL_MAX)
+		.toString(16)
+		.padStart(2, "0");
+	return `${color}${alpha}`;
+}

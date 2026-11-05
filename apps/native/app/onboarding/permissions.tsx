@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { BellIcon, LocateFixedIcon, MapPinIcon } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { AppState, Linking, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { withUniwind } from "uniwind";
 
@@ -9,8 +9,10 @@ import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
 import {
 	completeOnboarding,
+	type PermissionButtonAction,
 	type PermissionStatus,
 	type PermissionsState,
+	permissionButtonAction,
 } from "@/lib/onboarding/onboarding";
 import {
 	getPermissionsState,
@@ -18,7 +20,7 @@ import {
 	requestNotificationPermission,
 } from "@/lib/permissions/permissions";
 import { appPreferences } from "@/lib/preferences/app-preferences";
-import { colorToken } from "@/theme/tokens";
+import { withAlpha } from "@/theme/tokens";
 
 const StyledBellIcon = withUniwind(BellIcon);
 const StyledLocateFixedIcon = withUniwind(LocateFixedIcon);
@@ -31,9 +33,9 @@ const FOOTER_GAP_ABOVE_HOME_INDICATOR = 8;
 const BADGE_ICON_SIZE = 20;
 const CORE_ICON_SIZE = 26;
 /** Figma 효과 `Glow/Accent`: accent/primary 55% 불투명, 반경 18. */
-const ACCENT_GLOW_ALPHA_HEX = "8c";
+const ACCENT_GLOW_OPACITY = 0.55;
 const CORE_GLOW_STYLE = {
-	boxShadow: `0 0 18px 0 ${colorToken("accent/primary", "dark")}${ACCENT_GLOW_ALPHA_HEX}`,
+	boxShadow: `0 0 18px 0 ${withAlpha("accent/primary", "dark", ACCENT_GLOW_OPACITY)}`,
 } as const;
 
 const INITIAL_STATE: PermissionsState = {
@@ -42,6 +44,11 @@ const INITIAL_STATE: PermissionsState = {
 };
 
 type PermissionKind = keyof PermissionsState;
+
+const NOT_REQUESTED: Record<PermissionKind, boolean> = {
+	location: false,
+	notifications: false,
+};
 
 const REQUESTS: Record<PermissionKind, () => Promise<PermissionStatus>> = {
 	location: requestLocationPermission,
@@ -86,26 +93,29 @@ function Illustration() {
 }
 
 interface PermissionCardProps {
+	action: PermissionButtonAction;
 	description: string;
 	emphasized: boolean;
 	icon: "location" | "notifications";
-	onRequest: () => void;
+	onPress: () => void;
 	pending: boolean;
-	status: PermissionStatus;
 	title: string;
 }
 
-/** Figma `PermissionCard`(12:3180, 12:3200). 허용되면 버튼이 "허용됨"으로 바뀌고 비활성이 된다. */
+/**
+ * Figma `PermissionCard`(12:3180, 12:3200). 허용되면 버튼이 "허용됨"으로 바뀌고 비활성이 된다.
+ * 거부된 뒤에는 같은 "허용" 버튼이 설정 앱을 연다(시스템 창이 다시 뜨지 않으므로).
+ */
 function PermissionCard({
+	action,
 	description,
 	emphasized,
 	icon,
-	onRequest,
+	onPress,
 	pending,
-	status,
 	title,
 }: PermissionCardProps) {
-	const granted = status === "granted";
+	const granted = action === "none";
 	const Icon = icon === "location" ? StyledMapPinIcon : StyledBellIcon;
 	return (
 		<View className="flex-row items-center gap-3 rounded-lg bg-bg-surface-raised p-4">
@@ -119,10 +129,14 @@ function PermissionCard({
 				</AppText>
 			</View>
 			<AppButton
-				accessibilityHint={`${title} 권한을 요청해요`}
+				accessibilityHint={
+					action === "openSettings"
+						? `설정 앱에서 ${title} 권한을 켤 수 있어요`
+						: `${title} 권한을 요청해요`
+				}
 				disabled={granted || pending}
 				label={granted ? "허용됨" : "허용"}
-				onPress={onRequest}
+				onPress={onPress}
 				size="medium"
 				variant={emphasized && !granted ? "primary" : "secondary"}
 			/>
@@ -137,20 +151,33 @@ export default function PermissionsScreen() {
 	const [permissions, setPermissions] =
 		useState<PermissionsState>(INITIAL_STATE);
 	const [pending, setPending] = useState<PermissionKind | null>(null);
+	/** 이번 화면에서 시스템 창으로 요청했는지. 요청 뒤 거부면 다음 누름은 설정 앱으로 보낸다. */
+	const [requested, setRequested] =
+		useState<Record<PermissionKind, boolean>>(NOT_REQUESTED);
 
+	/** 처음 열 때와 설정 앱에서 돌아올 때 현재 권한을 다시 읽는다. 창은 띄우지 않는다. */
 	useEffect(() => {
 		let cancelled = false;
-		getPermissionsState()
-			.then((state) => {
-				if (!cancelled) {
-					setPermissions(state);
-				}
-			})
-			.catch(() => {
-				// 상태를 못 읽으면 두 카드 모두 "허용"으로 둔다. 눌러서 다시 요청할 수 있다.
-			});
+		const refresh = () => {
+			getPermissionsState()
+				.then((state) => {
+					if (!cancelled) {
+						setPermissions(state);
+					}
+				})
+				.catch(() => {
+					// 상태를 못 읽으면 지금 표시를 그대로 둔다. 눌러서 다시 요청할 수 있다.
+				});
+		};
+		refresh();
+		const subscription = AppState.addEventListener("change", (state) => {
+			if (state === "active") {
+				refresh();
+			}
+		});
 		return () => {
 			cancelled = true;
+			subscription.remove();
 		};
 	}, []);
 
@@ -159,6 +186,7 @@ export default function PermissionsScreen() {
 		try {
 			const status = await REQUESTS[kind]();
 			setPermissions((previous) => ({ ...previous, [kind]: status }));
+			setRequested((previous) => ({ ...previous, [kind]: true }));
 		} catch {
 			// 시스템 창을 띄우지 못해도 온보딩은 계속할 수 있다.
 		} finally {
@@ -166,12 +194,33 @@ export default function PermissionsScreen() {
 		}
 	}, []);
 
-	const requestLocation = useCallback(() => {
-		request("location").catch(() => undefined);
-	}, [request]);
-	const requestNotifications = useCallback(() => {
-		request("notifications").catch(() => undefined);
-	}, [request]);
+	const locationAction = permissionButtonAction(
+		permissions.location,
+		requested.location
+	);
+	const notificationsAction = permissionButtonAction(
+		permissions.notifications,
+		requested.notifications
+	);
+
+	const press = useCallback(
+		(kind: PermissionKind, action: PermissionButtonAction) => {
+			if (action === "openSettings") {
+				Linking.openSettings().catch(() => undefined);
+				return;
+			}
+			if (action === "request") {
+				request(kind).catch(() => undefined);
+			}
+		},
+		[request]
+	);
+	const pressLocation = useCallback(() => {
+		press("location", locationAction);
+	}, [press, locationAction]);
+	const pressNotifications = useCallback(() => {
+		press("notifications", notificationsAction);
+	}, [press, notificationsAction]);
 
 	/** 권한 결과와 상관없이(`canSkipToApp`) 온보딩을 끝낸다. 다시 켜도 권한 창은 뜨지 않는다. */
 	const finish = useCallback(() => {
@@ -203,21 +252,21 @@ export default function PermissionsScreen() {
 				</View>
 				<View className="gap-3">
 					<PermissionCard
+						action={locationAction}
 						description={"내 주변 역과 정류장을\n바로 보여줘요"}
 						emphasized={emphasizeLocation}
 						icon="location"
-						onRequest={requestLocation}
+						onPress={pressLocation}
 						pending={pending === "location"}
-						status={permissions.location}
 						title="위치"
 					/>
 					<PermissionCard
+						action={notificationsAction}
 						description={"출퇴근 시간에 잠금화면에\n도착 정보를 띄워요"}
 						emphasized={!emphasizeLocation}
 						icon="notifications"
-						onRequest={requestNotifications}
+						onPress={pressNotifications}
 						pending={pending === "notifications"}
-						status={permissions.notifications}
 						title="알림"
 					/>
 				</View>

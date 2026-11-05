@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { PushSubscribeOptions } from "./push-launch";
+import { type PushSubscribeOptions, permissionStepFor } from "./push-launch";
 import type { PushMessage } from "./push-message";
 import {
 	getPushPermissionStatus,
@@ -42,16 +42,17 @@ export function usePushNotifications(
 	const [state, setState] = useState<PushNotificationsState>(INITIAL_STATE);
 	const { onForegroundMessage, onNotificationOpened, onTokenRefresh } =
 		handlers;
-	const { requestPermission } = options;
+	const permissionStep = permissionStepFor(options);
 
 	useEffect(() => {
 		let cancelled = false;
 		let unsubscribe: (() => void) | null = null;
 
 		const start = async () => {
-			const status = requestPermission
-				? await requestPushPermission()
-				: await getPushPermissionStatus();
+			const status =
+				permissionStep === "request"
+					? await requestPushPermission()
+					: await getPushPermissionStatus();
 			if (cancelled) {
 				return;
 			}
@@ -97,7 +98,7 @@ export function usePushNotifications(
 		onForegroundMessage,
 		onNotificationOpened,
 		onTokenRefresh,
-		requestPermission,
+		permissionStep,
 	]);
 
 	return state;

@@ -33,6 +33,7 @@ const LABEL_BY_VARIANT: Record<AppButtonVariant, string> = {
 
 /** Figma `Button`(4:109). 비활성일 때는 글자를 흐리게 하고 누를 수 없다. */
 export function AppButton({
+	accessibilityState,
 	className,
 	disabled,
 	label,
@@ -43,7 +44,10 @@ export function AppButton({
 	return (
 		<Pressable
 			accessibilityRole="button"
-			accessibilityState={{ disabled: Boolean(disabled) }}
+			accessibilityState={{
+				...accessibilityState,
+				disabled: Boolean(disabled),
+			}}
 			className={cn(
 				"flex-row items-center justify-center",
 				CONTAINER_BY_SIZE[size],
