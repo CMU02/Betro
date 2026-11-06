@@ -477,3 +477,9 @@ it("records errors with context", () => {
 - [ ] **Step 5: 기기 빌드와 화면 확인** — Run: `cd apps/native && bunx expo prebuild --clean && bunx expo run:ios --device "iPhone 16"`, 이어서 Android 에뮬레이터(`bunx expo run:android`, 에뮬레이터가 없으면 사용자에게 실기기 연결을 요청) / Expected: 첫 실행에 온보딩 → 권한 → 지도 탭. 각 화면(온보딩, 권한, 탭 4개, 설정 다크·라이트, 데이터 출처)을 `xcrun simctl io booted screenshot`·`adb exec-out screencap -p`로 찍어 Figma 프레임과 나란히 비교하고, 차이를 고친다. 확인 항목: Noto Sans KR가 실제로 쓰였는지(시스템 폰트 아님), 테마 "시스템"에서 기기 다크 모드 전환을 바로 따라가는지, 테마를 "라이트"로 바꾸고 앱을 다시 켰을 때 첫 화면부터 라이트인지, 권한 "나중에" 뒤 재실행 시 권한 요청이 뜨지 않는지, 설치 ID가 재실행 뒤에도 같은지(개발 로그).
 - [ ] **Step 6: 크래시 수집 연결 확인(사용자)** — `EXPO_PUBLIC_SENTRY_DSN`을 넣은 개발 빌드에서 설정의 "크래시 시험"으로 테스트 예외와 네이티브 크래시를 보내고, Sentry `betro-native` 프로젝트에 `development` 환경으로 들어왔는지 확인한다. Expected: 둘 다 보임. 소스맵 업로드는 출시 준비(MVP 5단계)의 release 빌드에서 확인한다.
 - [ ] **Step 7: 커밋** — `feat(native): add crash reporting and install identity bootstrap`
+
+---
+
+## 알려진 문제 (실기기 확인, 2026-11-06)
+
+- **Android 첫 실행의 시스템 바 색**: Galaxy S20 Ultra(Android 13, 3버튼 내비게이션)에서 앱을 처음 설치해 온보딩을 거친 그 실행 동안에만, 라이트 테마 화면의 상태 표시줄(때로 하단 바도) 아이콘이 밝은 색으로 남는다. 앱을 다시 켜면 이후에는 테마 전환까지 정상이다. JS 쪽 값(`SystemBars`의 `lightContent`)은 맞게 바뀌는 것을 로그로 확인했고, `react-native-screens`의 `statusBarStyle`을 Android에서 빼도 같다. 네이티브에서 무엇이 덮는지(첫 실행에만 있는 권한 요청, 스플래시 종료, `react-native-keyboard-controller`의 StatusBar 대체 모듈 등)는 아직 찾지 못했다. 출시 준비(MVP 5단계) 전까지 고친다.
