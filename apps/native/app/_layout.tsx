@@ -6,7 +6,7 @@ import { type ErrorBoundaryProps, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { HeroUINativeProvider } from "heroui-native";
 import { useEffect, useMemo } from "react";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { Uniwind } from "uniwind";
@@ -55,30 +55,29 @@ startInstallIdentity();
 
 /**
  * iOS는 Info.plist의 UIViewControllerBasedStatusBarAppearance가 켜져 있어 화면(뷰 컨트롤러)이 상태 표시줄 글자색을 정한다.
- * expo-status-bar 값은 iOS에서 화면이 바뀌면 덮이므로, 내비게이터 옵션으로도 앱 테마를 넘긴다.
+ * expo-status-bar 값은 iOS에서 화면이 바뀌면 덮이므로, iOS에서는 내비게이터 옵션으로도 같은 값을 넘긴다.
+ * Android는 expo-status-bar만 쓴다(react-native-screens 옵션까지 두면 두 쪽이 같은 창 속성을 번갈아 덮는다).
  */
-const DARK_STACK_SCREEN_OPTIONS = {
-	headerShown: false,
-	statusBarStyle: "light",
-} as const;
-/** 온보딩은 테마와 상관없이 다크라서 상태 표시줄 글자를 항상 밝게 둔다(부모 스택 옵션이 안쪽 값을 덮지 않게). */
-const ONBOARDING_SCREEN_OPTIONS = { statusBarStyle: "light" } as const;
-const LIGHT_STACK_SCREEN_OPTIONS = {
-	headerShown: false,
-	statusBarStyle: "dark",
-} as const;
+const IS_IOS = Platform.OS === "ios";
+const LIGHT_CONTENT_SCREEN_OPTIONS = IS_IOS
+	? ({ headerShown: false, statusBarStyle: "light" } as const)
+	: ({ headerShown: false } as const);
+const DARK_CONTENT_SCREEN_OPTIONS = IS_IOS
+	? ({ headerShown: false, statusBarStyle: "dark" } as const)
+	: ({ headerShown: false } as const);
 
 /**
  * 상태 표시줄 글자색과 Android 내비게이션 바 버튼색을 기기 테마가 아니라 앱 테마(다크·라이트 고정 포함)에 맞춘다.
- * Android는 앱 테마를 따로 따라가지 않으므로 명시해야 한다. 온보딩은 자기 StatusBar·NavigationBar로 덮는다.
+ * 온보딩은 테마와 상관없이 다크라서 항상 밝은 글자·버튼을 쓴다. 화면마다 따로 두면 마운트 순서에 따라
+ * 앱 테마 값이 온보딩 값을 덮으므로(Android에서 확인), 이 한 곳에서만 정한다.
  * NavigationBar는 Android 밖에서는 아무것도 하지 않는다. style은 StatusBar처럼 버튼(내용) 색이다: `light`가 밝은 버튼.
  */
-function ThemedStatusBar() {
-	const { isDark } = useAppTheme();
+function SystemBars({ lightContent }: { lightContent: boolean }) {
+	const style = lightContent ? "light" : "dark";
 	return (
 		<>
-			<StatusBar style={isDark ? "light" : "dark"} />
-			<NavigationBar style={isDark ? "light" : "dark"} />
+			<StatusBar style={style} />
+			<NavigationBar style={style} />
 		</>
 	);
 }
@@ -91,13 +90,15 @@ function StackLayout() {
 	const [preferences] = usePreferences();
 	const { isDark } = useAppTheme();
 	const showOnboarding = shouldShowOnboarding(preferences);
+	const lightContent = showOnboarding || isDark;
 	const screenOptions = useMemo(
-		() => (isDark ? DARK_STACK_SCREEN_OPTIONS : LIGHT_STACK_SCREEN_OPTIONS),
-		[isDark]
+		() =>
+			lightContent ? LIGHT_CONTENT_SCREEN_OPTIONS : DARK_CONTENT_SCREEN_OPTIONS,
+		[lightContent]
 	);
 	return (
 		<>
-			<ThemedStatusBar />
+			<SystemBars lightContent={lightContent} />
 			<PushNotifications key={showOnboarding ? "onboarding" : "app"} />
 			<Stack screenOptions={screenOptions}>
 				<Stack.Protected guard={!showOnboarding}>
@@ -105,7 +106,7 @@ function StackLayout() {
 					<Stack.Screen name="settings/data-sources" />
 				</Stack.Protected>
 				<Stack.Protected guard={showOnboarding}>
-					<Stack.Screen name="onboarding" options={ONBOARDING_SCREEN_OPTIONS} />
+					<Stack.Screen name="onboarding" />
 				</Stack.Protected>
 			</Stack>
 		</>
