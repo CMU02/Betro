@@ -61,6 +61,8 @@ const DARK_STACK_SCREEN_OPTIONS = {
 	headerShown: false,
 	statusBarStyle: "light",
 } as const;
+/** 온보딩은 테마와 상관없이 다크라서 상태 표시줄 글자를 항상 밝게 둔다(부모 스택 옵션이 안쪽 값을 덮지 않게). */
+const ONBOARDING_SCREEN_OPTIONS = { statusBarStyle: "light" } as const;
 const LIGHT_STACK_SCREEN_OPTIONS = {
 	headerShown: false,
 	statusBarStyle: "dark",
@@ -69,14 +71,14 @@ const LIGHT_STACK_SCREEN_OPTIONS = {
 /**
  * 상태 표시줄 글자색과 Android 내비게이션 바 버튼색을 기기 테마가 아니라 앱 테마(다크·라이트 고정 포함)에 맞춘다.
  * Android는 앱 테마를 따로 따라가지 않으므로 명시해야 한다. 온보딩은 자기 StatusBar·NavigationBar로 덮는다.
- * NavigationBar는 Android 밖에서는 아무것도 하지 않는다. `dark`가 "어두운 바 + 밝은 버튼"이다.
+ * NavigationBar는 Android 밖에서는 아무것도 하지 않는다. style은 StatusBar처럼 버튼(내용) 색이다: `light`가 밝은 버튼.
  */
 function ThemedStatusBar() {
 	const { isDark } = useAppTheme();
 	return (
 		<>
 			<StatusBar style={isDark ? "light" : "dark"} />
-			<NavigationBar style={isDark ? "dark" : "light"} />
+			<NavigationBar style={isDark ? "light" : "dark"} />
 		</>
 	);
 }
@@ -103,7 +105,7 @@ function StackLayout() {
 					<Stack.Screen name="settings/data-sources" />
 				</Stack.Protected>
 				<Stack.Protected guard={showOnboarding}>
-					<Stack.Screen name="onboarding" />
+					<Stack.Screen name="onboarding" options={ONBOARDING_SCREEN_OPTIONS} />
 				</Stack.Protected>
 			</Stack>
 		</>

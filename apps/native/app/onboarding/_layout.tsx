@@ -16,7 +16,7 @@ export default function OnboardingLayout() {
 	return (
 		<ScopedTheme theme="dark">
 			<StatusBar style="light" />
-			<NavigationBar style="dark" />
+			<NavigationBar style="light" />
 			<Stack screenOptions={SCREEN_OPTIONS} />
 		</ScopedTheme>
 	);
