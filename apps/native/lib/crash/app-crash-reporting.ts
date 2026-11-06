@@ -1,38 +1,50 @@
 import {
-	crash,
-	getCrashlytics,
-	log,
-	recordError,
-	setAttribute,
-	setCrashlyticsCollectionEnabled,
-} from "@react-native-firebase/crashlytics";
+	captureException,
+	getClient,
+	init,
+	nativeCrash,
+	setUser,
+} from "@sentry/react-native";
 
 import type { CrashSink } from "./crash-reporting";
 
-function ignoreRejection(promise: Promise<unknown>): void {
-	promise.catch(() => {
-		// 속성·수집 설정 실패는 다음 실행에 다시 시도하므로 무시한다.
-	});
-}
-
-/** Crashlytics를 감싼 기록 도구. `context`는 로그 한 줄과 JS 오류 이름으로 남긴다. */
+/**
+ * Sentry를 감싼 기록 도구. `context`는 태그로 남겨 Sentry에서 걸러 볼 수 있게 한다.
+ * `start`가 불리지 않았으면(DSN 없음) Sentry 호출은 아무것도 보내지 않는다.
+ */
 export const appCrashSink: CrashSink = {
 	recordError: (error, context) => {
-		const crashlytics = getCrashlytics();
-		if (context) {
-			log(crashlytics, `context: ${context}`);
-		}
-		recordError(crashlytics, error, context);
+		captureException(error, context ? { tags: { context } } : undefined);
 	},
-	setAttribute: (key, value) => {
-		ignoreRejection(setAttribute(getCrashlytics(), key, value));
+	setInstallId: (installId) => {
+		setUser({ id: installId });
 	},
-	setCollectionEnabled: (enabled) => {
-		ignoreRejection(setCrashlyticsCollectionEnabled(getCrashlytics(), enabled));
+	start: ({ dsn, environment }) => {
+		init({
+			dsn,
+			enableAutoSessionTracking: true,
+			environment,
+			replaysOnErrorSampleRate: 0,
+			replaysSessionSampleRate: 0,
+			sendDefaultPii: false,
+			tracesSampleRate: 0,
+		});
 	},
 };
 
-/** 개발 빌드에서 네이티브 크래시를 일부러 일으킨다(설정의 "크래시 시험" 행). */
-export function triggerTestCrash(): void {
-	crash(getCrashlytics());
+/** Sentry가 시작됐는지(DSN이 있어 `init`이 끝났는지). 설정의 "크래시 시험" 안내에 쓴다. */
+export function isCrashReportingActive(): boolean {
+	return getClient() !== undefined;
+}
+
+/** 개발 빌드의 "크래시 시험": JS 예외 하나를 Sentry로 보낸다(앱은 계속 동작). */
+export function sendTestException(): void {
+	captureException(new Error("Betro 크래시 시험: 테스트 예외"), {
+		tags: { context: "crash-test" },
+	});
+}
+
+/** 개발 빌드의 "크래시 시험": 네이티브 크래시를 일부러 일으킨다. 앱이 바로 종료된다. */
+export function triggerNativeCrash(): void {
+	nativeCrash();
 }

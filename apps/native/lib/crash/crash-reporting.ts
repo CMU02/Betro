@@ -1,8 +1,16 @@
-/** 크래시 수집 도구(Crashlytics 등)를 감싼 최소 인터페이스. 테스트에서는 가짜로 바꾼다. */
+export type CrashEnvironment = "development" | "production";
+
+export interface CrashReportingConfig {
+	dsn: string;
+	environment: CrashEnvironment;
+}
+
+/** 크래시 수집 도구(Sentry 등)를 감싼 최소 인터페이스. 테스트에서는 가짜로 바꾼다. */
 export interface CrashSink {
 	recordError: (error: Error, context?: string) => void;
-	setAttribute: (key: string, value: string) => void;
-	setCollectionEnabled: (enabled: boolean) => void;
+	/** 설치 ID만 사용자 식별자로 남긴다(개인정보 없음). */
+	setInstallId: (installId: string) => void;
+	start: (config: CrashReportingConfig) => void;
 }
 
 function describeValue(value: unknown): string {
@@ -27,12 +35,38 @@ export function toError(value: unknown): Error {
 	return new Error(describeValue(value));
 }
 
-/** 개발 빌드에서는 수집을 끄고, release 빌드에서만 켠다. */
+/**
+ * DSN이 있으면 개발·release 빌드 모두 수집하고, 환경 이름으로 둘을 나눈다. DSN이 없으면 `null`.
+ */
+export function resolveCrashReportingConfig(opts: {
+	dsn: string | undefined;
+	isDev: boolean;
+}): CrashReportingConfig | null {
+	const dsn = opts.dsn?.trim();
+	if (!dsn) {
+		return null;
+	}
+	return { dsn, environment: opts.isDev ? "development" : "production" };
+}
+
+/**
+ * 수집 도구를 시작한다. 시작했으면 `true`. DSN이 없거나 시작에 실패해도 앱은 그대로 동작한다.
+ */
 export function configureCrashReporting(
 	sink: CrashSink,
-	opts: { isDev: boolean }
-): void {
-	sink.setCollectionEnabled(!opts.isDev);
+	opts: { dsn: string | undefined; isDev: boolean }
+): boolean {
+	const config = resolveCrashReportingConfig(opts);
+	if (!config) {
+		return false;
+	}
+	try {
+		sink.start(config);
+		return true;
+	} catch {
+		// 수집 도구가 시작하지 못해도 앱을 멈추게 해서는 안 된다.
+		return false;
+	}
 }
 
 /** 오류를 기록한다. 기록 도구가 실패해도 호출부로 예외를 올리지 않는다. */

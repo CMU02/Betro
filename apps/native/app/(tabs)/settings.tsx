@@ -13,14 +13,18 @@ import {
 	ZapIcon,
 } from "lucide-react-native";
 import { type ReactNode, useCallback } from "react";
-import { Pressable, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 import { withUniwind } from "uniwind";
 
 import { AppText } from "@/components/ui/app-text";
 import { ListDivider, ListRow } from "@/components/ui/list-row";
 import { Screen } from "@/components/ui/screen";
 import { useAppTheme } from "@/contexts/app-theme-context";
-import { triggerTestCrash } from "@/lib/crash/app-crash-reporting";
+import {
+	isCrashReportingActive,
+	sendTestException,
+	triggerNativeCrash,
+} from "@/lib/crash/app-crash-reporting";
 import type { ThemePreference } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
 import { ELEVATION } from "@/theme/tokens";
@@ -119,6 +123,22 @@ function ThemeRow() {
 			</View>
 		</View>
 	);
+}
+
+/** 개발 빌드 전용: Sentry로 테스트 예외를 보내거나 네이티브 크래시를 일으킨다. */
+function openCrashTest(): void {
+	const message = isCrashReportingActive()
+		? "Sentry로 보낼 시험을 고르세요."
+		: "Sentry DSN이 없어 아무것도 보내지 않아요. .env에 EXPO_PUBLIC_SENTRY_DSN을 넣고 Metro를 다시 시작하세요.";
+	Alert.alert("크래시 시험", message, [
+		{ style: "cancel", text: "취소" },
+		{ onPress: sendTestException, text: "테스트 예외 보내기" },
+		{
+			onPress: triggerNativeCrash,
+			style: "destructive",
+			text: "네이티브 크래시",
+		},
+	]);
 }
 
 /** 설정 탭(Figma 12). 로그인이 없는 게스트 구성이라 프로필·로그아웃은 없다. */
@@ -230,8 +250,8 @@ export default function SettingsTab() {
 					<Section title="개발">
 						<ListRow
 							icon={BugTileIcon}
-							onPress={triggerTestCrash}
-							subtitle="개발 빌드에서만 보여요. 누르면 앱이 바로 종료돼요"
+							onPress={openCrashTest}
+							subtitle="개발 빌드에서만 보여요. 테스트 예외나 네이티브 크래시를 보내요"
 							title="크래시 시험"
 							trailing={{ type: "none" }}
 						/>

@@ -1,4 +1,5 @@
 import "@/global.css";
+import { wrap } from "@sentry/react-native";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { type ErrorBoundaryProps, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -24,10 +25,14 @@ import { shouldShowOnboarding } from "@/lib/onboarding/onboarding";
 import { appPreferences } from "@/lib/preferences/app-preferences";
 import { toUniwindTheme } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
+import { ENV } from "@/src/env";
 import { queryClient } from "@/utils/orpc";
 
 Uniwind.setTheme(toUniwindTheme(appPreferences.get().themeMode));
-configureCrashReporting(appCrashSink, { isDev: __DEV__ });
+configureCrashReporting(appCrashSink, {
+	dsn: ENV.EXPO_PUBLIC_SENTRY_DSN,
+	isDev: __DEV__,
+});
 
 /**
  * 설치 ID를 읽거나 만든다. 실패하면 기록만 하고 앱은 계속 쓰며, 다음 실행에 다시 시도한다.
@@ -35,7 +40,7 @@ configureCrashReporting(appCrashSink, { isDev: __DEV__ });
 async function startInstallIdentity(): Promise<void> {
 	try {
 		const identity = await ensureInstallIdentity();
-		appCrashSink.setAttribute("installId", identity.installId);
+		appCrashSink.setInstallId(identity.installId);
 		if (__DEV__) {
 			// 재실행 뒤에도 같은 값인지 기기 확인에서 본다.
 			console.info("[device] installId", identity.installId);
@@ -107,7 +112,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 	);
 }
 
-export default function Layout() {
+function Layout() {
 	return (
 		<QueryClientProvider client={queryClient}>
 			<GestureHandlerRootView style={{ flex: 1 }}>
@@ -122,3 +127,6 @@ export default function Layout() {
 		</QueryClientProvider>
 	);
 }
+
+/** Sentry가 시작되지 않았으면(DSN 없음) 감싸도 아무것도 보내지 않는다. */
+export default wrap(Layout);

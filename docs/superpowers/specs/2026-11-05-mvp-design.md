@@ -270,7 +270,7 @@ Cloudflare (betro.cmu02-studio.com)
 
 - Figma 변수(Color Dark/Light, Dimension, Transit)를 코드 토큰으로 옮기고, 폰트(Noto Sans KR, JetBrains Mono)를 넣습니다.
 - 기존 템플릿을 정리합니다: Drawer 구조를 하단 탭 4개로 바꾸고, `sign-in`·`sign-up`·`privateData` 예제와 "BETTER T STACK" 화면을 뺍니다. 서버의 better-auth는 남겨 둬도 되지만 앱에서는 호출하지 않습니다.
-- 크래시 수집 도구를 붙입니다(7.2의 크래시 0 확인용). 도구는 구현자가 정합니다.
+- 크래시 수집 도구를 붙입니다(7.2의 크래시 0 확인용). 도구는 Sentry로 정했습니다(Firebase는 FCM 푸시에만 씁니다).
 
 ### 5.10 확장 대비 원칙 **[사용자 결정]**
 
@@ -365,7 +365,7 @@ MVP는 크기가 커서 하위 프로젝트로 나눠 각각 구현 계획을 �
 - iOS 위젯 확장을 Expo에 넣는 도구, Android 네이티브 모듈 구성
 - 네이버 지도 React Native 라이브러리
 - 기기 저장소 종류, 참조 데이터 묶음의 배포·갱신 방식
-- 크래시 수집 도구
+- 크래시 수집 도구(Sentry로 정함)
 - 환승 경로의 진행 표시 노드 구성(4.3)
 - 도보 시간 기본값(구간 사이 직선 거리 기준 등)
 - 행동 안내 문구의 정확한 표현과 표시 조건(4.3)

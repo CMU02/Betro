@@ -6,7 +6,7 @@
 
 **Architecture:** 디자인 토큰은 `apps/native/theme/tokens.ts` 하나가 원본이고, 생성 스크립트가 uniwind/HeroUI용 CSS(`theme.generated.css`)를 만든다. 순수 로직(토큰 렌더링, 환경설정 파싱, 설치 ID, 온보딩 진입 판단, 권한 단계)은 react-native를 import하지 않는 파일에 두고 `bun test`로 검증하며, 화면은 그 위에 얇게 얹는다. 화면 확인은 iOS 시뮬레이터와 Android 에뮬레이터 스크린샷을 Figma와 비교한다.
 
-**Tech Stack:** Expo SDK 58, expo-router 58 (Stack.Protected, Tabs), React Native 0.88, uniwind 1.13 + heroui-native 1, lucide-react-native, expo-sqlite/kv-store, expo-secure-store, expo-crypto, expo-location, @react-native-firebase/messaging·crashlytics 27.1.0, bun test, fonttools(`uvx`, 폰트 서브셋용).
+**Tech Stack:** Expo SDK 58, expo-router 58 (Stack.Protected, Tabs), React Native 0.88, uniwind 1.13 + heroui-native 1, lucide-react-native, expo-sqlite/kv-store, expo-secure-store, expo-crypto, expo-location, @react-native-firebase/messaging 27.1.0, @sentry/react-native 8, bun test, fonttools(`uvx`, 폰트 서브셋용).
 
 **Spec:** `docs/superpowers/specs/2026-11-05-mvp-design.md` (8장의 1단계 "앱 기반", 4.1·4.4·5.2·5.9)
 
@@ -435,17 +435,17 @@ it("explains all four position states", () => {
 
 **Files:**
 - Create: `apps/native/lib/crash/crash-reporting.ts`, `apps/native/lib/crash/crash-reporting.test.ts`, `apps/native/lib/crash/app-crash-reporting.ts`
-- Modify: `apps/native/app/_layout.tsx`(ErrorBoundary export, 설치 ID 생성), `apps/native/app/(tabs)/settings.tsx`(개발 빌드 전용 "크래시 시험" 행), `apps/native/app.json`(`@react-native-firebase/crashlytics` 플러그인), `apps/native/package.json`(`@react-native-firebase/crashlytics@27.1.0`)
+- Modify: `apps/native/app/_layout.tsx`(ErrorBoundary export, 설치 ID 생성), `apps/native/app/(tabs)/settings.tsx`(개발 빌드 전용 "크래시 시험" 행), `apps/native/app.json`(`@sentry/react-native/expo`·`./plugins/with-sentry-upload-guard` 플러그인), `apps/native/package.json`(`@sentry/react-native`), `apps/native/metro.config.js`(`getSentryExpoConfig`), `apps/native/.env.schema`(`EXPO_PUBLIC_SENTRY_DSN`, 빌드용 `SENTRY_ORG`·`SENTRY_PROJECT`·`SENTRY_AUTH_TOKEN`)
 
 **Interfaces:**
 - Consumes: `ensureInstallIdentity`(Task 3)
 - Produces:
-  - `interface CrashSink { recordError(error: Error, context?: string): void; setAttribute(key: string, value: string): void; setCollectionEnabled(enabled: boolean): void }`
+  - `interface CrashSink { recordError(error: Error, context?: string): void; setInstallId(installId: string): void; start(config: CrashReportingConfig): void }`
   - `toError(value: unknown): Error` — 문자열·객체도 `Error`로 바꿔 기록
-  - `configureCrashReporting(sink: CrashSink, opts: { isDev: boolean }): void` — 개발 빌드에서는 수집 끔
+  - `configureCrashReporting(sink: CrashSink, opts: { dsn: string | undefined; isDev: boolean }): boolean` — DSN이 있으면 개발 빌드에서도 수집(환경 `development`/`production`), DSN이 없으면 시작하지 않음
   - `reportError(sink: CrashSink, value: unknown, context: string): void`
-  - `appCrashSink: CrashSink`(`app-crash-reporting.ts`, Crashlytics 래핑)
-  - 루트 `_layout.tsx`에서 `export function ErrorBoundary`(expo-router)로 화면 오류를 기록하고 "다시 시도" 버튼을 보여줌. 시작 시 `ensureInstallIdentity()`를 부르고, 실패하면 `reportError(..., "install-identity")`만 하고 앱은 계속(다음 실행에 다시 시도). 성공하면 `setAttribute("installId", id.installId)`.
+  - `appCrashSink: CrashSink`(`app-crash-reporting.ts`, Sentry 래핑: `sendDefaultPii` 끔, 리플레이 없음, `tracesSampleRate` 0, 세션 추적 켬)
+  - 루트 `_layout.tsx`에서 `export function ErrorBoundary`(expo-router)로 화면 오류를 기록하고 "다시 시도" 버튼을 보여줌. 시작 시 `ensureInstallIdentity()`를 부르고, 실패하면 `reportError(..., "install-identity")`만 하고 앱은 계속(다음 실행에 다시 시도). 성공하면 `setInstallId(id.installId)`(Sentry `setUser({ id })`). 루트 레이아웃은 `Sentry.wrap`으로 감싼다.
 
 - [ ] **Step 1: 실패하는 테스트** — `crash-reporting.test.ts`
 
@@ -456,21 +456,24 @@ it("turns any thrown value into an Error", () => {
 	const e = new Error("x");
 	expect(toError(e)).toBe(e);
 });
-it("disables collection in dev builds", () => {
-	const calls: boolean[] = [];
-	configureCrashReporting({ recordError() {}, setAttribute() {}, setCollectionEnabled: (v) => calls.push(v) }, { isDev: true });
-	expect(calls).toEqual([false]);
+it("collects in dev builds under the development environment", () => {
+	const starts: CrashReportingConfig[] = [];
+	configureCrashReporting({ recordError() {}, setInstallId() {}, start: (c) => starts.push(c) }, { dsn: DSN, isDev: true });
+	expect(starts).toEqual([{ dsn: DSN, environment: "development" }]);
+});
+it("does not start without a DSN", () => {
+	expect(resolveCrashReportingConfig({ dsn: undefined, isDev: false })).toBeNull();
 });
 it("records errors with context", () => {
 	const recorded: [string, string | undefined][] = [];
-	reportError({ recordError: (e, c) => recorded.push([e.message, c]), setAttribute() {}, setCollectionEnabled() {} }, "nope", "install-identity");
+	reportError({ recordError: (e, c) => recorded.push([e.message, c]), setInstallId() {}, start() {} }, "nope", "install-identity");
 	expect(recorded).toEqual([["nope", "install-identity"]]);
 });
 ```
 
 - [ ] **Step 2: 실패 확인** — Run: `bun test apps/native/lib/crash` / Expected: FAIL
-- [ ] **Step 3: 구현** — 순수 모듈, Crashlytics 어댑터, 루트 연결, 설정의 개발 전용 행(`__DEV__`일 때만, 누르면 `crashlytics().crash()`), `bun add @react-native-firebase/crashlytics@27.1.0`, `app.json` 플러그인 추가
+- [ ] **Step 3: 구현** — 순수 모듈, Sentry 어댑터, 루트 연결, 설정의 개발 전용 행(`__DEV__`일 때만, 테스트 예외 보내기 또는 `Sentry.nativeCrash()`), `bunx expo install @sentry/react-native`, `app.json` 플러그인 추가. `SENTRY_AUTH_TOKEN`이 없으면 release 빌드는 소스맵 업로드를 건너뛴다(`with-sentry-upload-guard`).
 - [ ] **Step 4: 통과 확인** — Run: `bun test apps/native && cd apps/native && bun run check-types && cd ../.. && bunx ultracite check apps/native` / Expected: PASS
 - [ ] **Step 5: 기기 빌드와 화면 확인** — Run: `cd apps/native && bunx expo prebuild --clean && bunx expo run:ios --device "iPhone 16"`, 이어서 Android 에뮬레이터(`bunx expo run:android`, 에뮬레이터가 없으면 사용자에게 실기기 연결을 요청) / Expected: 첫 실행에 온보딩 → 권한 → 지도 탭. 각 화면(온보딩, 권한, 탭 4개, 설정 다크·라이트, 데이터 출처)을 `xcrun simctl io booted screenshot`·`adb exec-out screencap -p`로 찍어 Figma 프레임과 나란히 비교하고, 차이를 고친다. 확인 항목: Noto Sans KR가 실제로 쓰였는지(시스템 폰트 아님), 테마 "시스템"에서 기기 다크 모드 전환을 바로 따라가는지, 테마를 "라이트"로 바꾸고 앱을 다시 켰을 때 첫 화면부터 라이트인지, 권한 "나중에" 뒤 재실행 시 권한 요청이 뜨지 않는지, 설치 ID가 재실행 뒤에도 같은지(개발 로그).
-- [ ] **Step 6: 크래시 수집 연결 확인(사용자)** — 사용자에게 Firebase 콘솔 Crashlytics에서 iOS·Android 앱이 "SDK 연결됨"으로 보이는지 확인을 요청한다. Expected: 두 앱 모두 연결됨. 실제 크래시 기록 확인은 개발 빌드에서 수집을 끄므로 출시 준비(MVP 5단계)의 release 빌드에서 한다.
+- [ ] **Step 6: 크래시 수집 연결 확인(사용자)** — `EXPO_PUBLIC_SENTRY_DSN`을 넣은 개발 빌드에서 설정의 "크래시 시험"으로 테스트 예외와 네이티브 크래시를 보내고, Sentry `betro-native` 프로젝트에 `development` 환경으로 들어왔는지 확인한다. Expected: 둘 다 보임. 소스맵 업로드는 출시 준비(MVP 5단계)의 release 빌드에서 확인한다.
 - [ ] **Step 7: 커밋** — `feat(native): add crash reporting and install identity bootstrap`
