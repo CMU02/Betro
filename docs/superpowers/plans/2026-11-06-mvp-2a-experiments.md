@@ -4,7 +4,7 @@
 
 **Goal:** MVP 설계 9장의 실험 6개를 해서, 출퇴근 세로 조각(2-C~2-F)의 설계가 갈리는 질문에 측정값으로 답한다.
 
-**Architecture:** 실험 코드는 모두 버리는 코드입니다. Task마다 `feat/mvp-commute-design`에서 `spike/mvp2-<이름>` 브랜치를 만들어 그 위에서 만들고, 병합하지 않습니다(참고용으로 로컬에 남김). 작업 브랜치에는 결과 문서 `docs/research/2026-11-06-mvp2-experiments.md`만 커밋합니다. 각 실험은 통과 기준을 미리 정해 두고, 결과·측정값·재현 방법·2-C~2-F에 미치는 결정을 같은 형식으로 적습니다. 실험 코드에는 테스트를 쓰지 않습니다. 대신 각 Task의 확인 단계가 기준입니다.
+**Architecture:** 실험 코드는 모두 버리는 코드입니다. Task마다 작업 브랜치에서 `spike/mvp2-<이름>` 브랜치를 만들어 그 위에서 만들고, 병합하지 않습니다(참고용으로 로컬에 남김). 작업 브랜치에는 결과 문서 `docs/research/2026-11-06-mvp2-experiments.md`만 커밋합니다. 각 실험은 통과 기준을 미리 정해 두고, 결과·측정값·재현 방법·2-C~2-F에 미치는 결정을 같은 형식으로 적습니다. 실험 코드에는 테스트를 쓰지 않습니다. 대신 각 Task의 확인 단계가 기준입니다.
 
 **Tech Stack:** Cloudflare Workers(wrangler, workers.dev 임시 배포), WebCrypto(ES256·RS256 JWT), APNs HTTP/2, FCM HTTP v1, ActivityKit(iOS 17.2+ push-to-start), `@bacons/apple-targets`(위젯 확장, 1순위), Expo 로컬 모듈(Swift·Kotlin), `@react-native-firebase/messaging` 27.1, Android `Notification.ProgressStyle`(API 36), curl `--http2`, bun 스크립트.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- 작업 브랜치는 `feat/mvp-commute-design`(워크트리 `.claude/worktrees/mvp-commute`)이다. 실험 브랜치는 `spike/mvp2-<이름>`이고 push하거나 병합하지 않는다.
+- 작업 브랜치는 develop에서 만든 `docs/mvp2-experiments`(워크트리 `.claude/worktrees/mvp2-experiments`)이고, PR은 develop으로 보낸다. 실험 브랜치는 `spike/mvp2-<이름>`이고 push하거나 병합하지 않는다.
 - 커밋 메시지에 AI 서명이나 출처 표기를 넣지 않는다.
 - **비밀값**
   - `~/Documents/Betro-APNs/`의 파일만 쓴다: `AuthKey_HFSD7YXX9N.p8`, `betro-a77a2-fcm-service-account.json`.
@@ -29,7 +29,7 @@
   - 다른 오퍼레이션도 실험마다 호출 수를 세어 결과에 적는다.
 - 실기기
   - iPhone 16 Pro(iOS 27.2, UDID `00008140-00145C103CBB001C`)를 쓴다.
-  - Android는 Android 16 실기기(가능하면 삼성)가 필요하다. Task 5 전에 사용자에게 받는다.
+  - Android 실기기는 Galaxy S20 Ultra(Android 13, 시리얼 `R3CN20S850J`)다. Android 16 전용 기능(ProgressStyle, promoted 알림)은 에뮬레이터(API 36)로 따로 본다(Task 5).
 - 앱 빌드는 로컬(`cd apps/native && bun run ios -- --device`, `bun run android`)로 한다. `eas.json`이 없으므로 EAS 빌드는 이번 범위 밖이다.
 - 결과 문서의 각 실험 절은 같은 순서로 쓴다: `질문 / 기준 / 결과(통과·실패·부분) / 측정값 / 재현 방법 / 2-C~2-F에 주는 결정`.
 
@@ -45,7 +45,7 @@
 
 ## 실행 순서
 
-Task 1 → 2 → 3 → 4 → 5 → 7을 먼저 하고, Task 6은 4단계(`feat/phase4-realtime-collector`)가 develop에 병합된 뒤에 한다. Task 3이 Task 4의 선행이다. 나머지는 서로 독립이다. Task 1의 활용신청 승인(Step 2)을 기다리는 동안 Task 2부터 진행한다.
+2-B(문구 키)를 먼저 끝낸다. 외부 승인이 필요 없고 작업량이 작다. 그동안 Task 1 Step 2의 활용신청을 사용자에게 먼저 요청해 승인 대기 시간을 겹친다. 그 뒤 Task 1 → 2 → 3 → 4 → 5 → 7을 하고, Task 6은 4단계(`feat/phase4-realtime-collector`)가 develop에 병합된 뒤에 한다. Task 3이 Task 4의 선행이다. 나머지는 서로 독립이다. Task 1의 활용신청 승인(Step 2)을 기다리는 동안 Task 2부터 진행한다.
 
 2-B(문구 키, `2026-11-06-mvp-2b-message-catalog.md`)와는 파일이 겹치지 않는다. 다만 Task 3·5의 실험 브랜치는 2-B 이전 코드에서 갈라져도 된다(병합하지 않으므로).
 
@@ -70,7 +70,7 @@ Task 1 → 2 → 3 → 4 → 5 → 7을 먼저 하고, Task 6은 4단계(`feat/p
 
 - [ ] **Step 1: 서울 쪽 근거 정리(API 호출 없음)**
   - `packages/transit-static/src/bus/scope.ts` 주석("7·8·9 값이 2026-09 데이터에 없다")을 확인한다.
-  - 최신 OA-1095 노선 마스터(`bus-route-xlsx.ts`가 읽는 파일)에서 서울을 오가는 경기 노선 번호 3개를 찾는다. 예: M버스 1개, 직행좌석 1개, 경기 시내버스 1개.
+  - 최신 OA-1095 노선 마스터(`jobs/fetch-bus-route-xlsx.ts`가 받고 `bus/assemble.ts`가 읽는 파일)에서 서울을 오가는 경기 노선 번호 3개를 찾는다. 예: M버스 1개, 직행좌석 1개, 경기 시내버스 1개.
   - Expected: 마스터에 없음. 결과 문서에 "서울 API로는 경기·인천 노선 ID를 얻을 수 없음"을 근거와 함께 적는다. 있으면 그 ID로 질문 1을 다시 판단한다.
 - [ ] **Step 2: 활용신청(사용자)**
   - 공공데이터포털에서 다음 데이터셋을 찾아 ID와 오퍼레이션 목록, 개발계정 한도를 적는다.
@@ -103,7 +103,7 @@ Task 1 → 2 → 3 → 4 → 5 → 7을 먼저 하고, Task 6은 4단계(`feat/p
 - [ ] **Step 7: 커밋**
 
 ```bash
-git switch feat/mvp-commute-design
+git switch docs/mvp2-experiments
 git add docs/research/2026-11-06-mvp2-experiments.md
 git commit -m "docs(research): record Gyeonggi and Incheon bus data experiment"
 ```
@@ -164,8 +164,8 @@ git commit -m "docs(research): record Gyeonggi and Incheon bus data experiment"
 - Modify: `docs/research/2026-11-06-mvp2-experiments.md` ("3. 위젯 확장 빌드")
 - 실험 코드(`spike/mvp2-live-activity`):
   - `apps/native/targets/commute-activity/`: SwiftUI, `expo-target.config.js`
-  - `apps/native/modules/commute-activity/`: Expo 로컬 모듈(Swift)
-  - `app.json`: 플러그인과 `NSSupportsLiveActivities`, `NSSupportsLiveActivitiesFrequentUpdates`
+  - `apps/native/modules/commute-activity/`: Expo 로컬 모듈(Swift). 배치와 설정 파일은 `modules/system-bars`와 같은 방식이다.
+  - `app.config.ts`: `plugins`에 플러그인, `ios.infoPlist`에 `NSSupportsLiveActivities`, `NSSupportsLiveActivitiesFrequentUpdates`
 
 **질문**: 지금 앱(Expo 58, RN 0.88, `useFrameworks: dynamic`, Firebase)에 ActivityKit 위젯 확장을 넣고, prebuild와 기기 빌드가 반복해서 되는가?
 
@@ -253,7 +253,7 @@ git commit -m "docs(research): record Gyeonggi and Incheon bus data experiment"
 
 ### Task 5: Android 절전 상태에서 FCM 데이터 메시지로 Live Update 갱신 (9장 4행)
 
-**선행**: 사용자에게 Android 실기기를 받는다. 가능하면 Android 16이고 삼성 기기다. Android 16이 아니면 ProgressStyle 확인만 에뮬레이터(API 36)로 따로 한다.
+**선행**: 절전 시나리오(Step 3)는 Galaxy S20 Ultra(Android 13)로 한다. 이 기기는 Android 16이 아니므로 Step 1의 API 36 분기와 Step 4 화면 확인은 에뮬레이터(API 36)로 한다. 결과 문서에 기기별로 나눠 적고, Android 16 실기기가 생기면 Step 4를 다시 한다.
 
 **Files:**
 - Modify: `docs/research/2026-11-06-mvp2-experiments.md` ("5. Android 갱신")
@@ -292,7 +292,7 @@ git commit -m "docs(research): record Gyeonggi and Incheon bus data experiment"
   - 끝나면 최대 간격과 누락 seq를 계산한다.
   - Expected: A~E는 기준 통과, F는 기록만 한다.
 - [ ] **Step 4: 화면 확인**
-  - Android 16에서 상태바 칩과 잠금화면 표시를 확인한다(스크린샷).
+  - 에뮬레이터(API 36)에서 상태바 칩과 잠금화면 표시를 확인한다(스크린샷). S20 Ultra에서는 일반 ongoing 알림이 같은 ID로 갱신되는지만 본다.
   - promoted ongoing 승격 조건(채널 중요도, 권한)이 막히면 그 이유를 적는다.
 - [ ] **Step 5: 결과**
   - 시나리오별 표(최대 간격, 누락, 지연 중앙값)를 만든다.
@@ -304,7 +304,7 @@ git commit -m "docs(research): record Gyeonggi and Incheon bus data experiment"
 
 ### Task 6: `dev` 한도로 맞출 수 있는 도착 정확도 (9장 5행)
 
-**선행**: 4단계가 develop에 병합되고, 이 워크트리가 develop을 받아 수집기 코드(`packages/realtime`)와 문서(`packages/realtime/README.md`, `apps/server/README.md`)를 볼 수 있어야 한다.
+**선행**(2026-11-06 기준 미충족: 4단계 브랜치 `feat/phase4-realtime-collector`는 로컬에만 있고 develop에 병합되지 않았다): 4단계가 develop에 병합되고, 이 워크트리가 develop을 받아 수집기 코드(`packages/realtime`)와 문서(`packages/realtime/README.md`, `apps/server/README.md`)를 볼 수 있어야 한다.
 
 **Files:**
 - Modify: `docs/research/2026-11-06-mvp2-experiments.md` ("6. 도착 정확도 기준선")
