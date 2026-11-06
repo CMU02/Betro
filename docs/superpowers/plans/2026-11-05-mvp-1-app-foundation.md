@@ -482,4 +482,8 @@ it("records errors with context", () => {
 
 ## 알려진 문제 (실기기 확인, 2026-11-06)
 
-- **Android 첫 실행의 시스템 바 색**: Galaxy S20 Ultra(Android 13, 3버튼 내비게이션)에서 앱을 처음 설치해 온보딩을 거친 그 실행 동안에만, 라이트 테마 화면의 상태 표시줄(때로 하단 바도) 아이콘이 밝은 색으로 남는다. 앱을 다시 켜면 이후에는 테마 전환까지 정상이다. JS 쪽 값(`SystemBars`의 `lightContent`)은 맞게 바뀌는 것을 로그로 확인했고, `react-native-screens`의 `statusBarStyle`을 Android에서 빼도 같다. 네이티브에서 무엇이 덮는지(첫 실행에만 있는 권한 요청, 스플래시 종료, `react-native-keyboard-controller`의 StatusBar 대체 모듈 등)는 아직 찾지 못했다. 출시 준비(MVP 5단계) 전까지 고친다.
+- **Android 시스템 바 색이 고정됨 (해결, 2026-11-06)**: Galaxy S20 Ultra(Android 13)에서 앱이 한 번이라도 백그라운드에 갔다 오면(권한 창, 홈 버튼 등) 그때의 상태 표시줄·내비게이션 바 색이 고정되어, 이후 테마를 바꿔도 따라가지 않았다. 첫 실행에서만 보인 것은 권한 창이 앱 포커스를 빼앗기 때문이었다.
+  - 원인: 복귀할 때 창에 `PRIVATE_FLAG_APPEARANCE_CONTROLLED`가 켜진다(`adb shell dumpsys window windows`의 `pfl`에 0x04000000). 그 뒤 Android는 레거시 `systemUiVisibility`를 무시하고 `setSystemBarsAppearance` 값만 쓴다. androidx core 1.18의 `WindowInsetsControllerCompat`는 Android 11~14에서 `Window`로 만들면 레거시 플래그만 바꾸므로, 이를 쓰는 `react-native-keyboard-controller`의 StatusBar 대체 모듈과 `expo-navigation-bar`가 모두 효과를 잃었다. 플래그를 켜는 주체는 찾지 못했다(`KeyboardProvider`를 빼도 켜지고, 설정 앱은 켜지지 않는다).
+  - 해결: Android에서는 로컬 모듈 `apps/native/modules/system-bars`가 API 30 이상에서 `setSystemBarsAppearance`를 직접 부르고 레거시 플래그도 같은 값으로 맞춘다. 루트 레이아웃의 `SystemBars`가 Android에서 이 모듈을 쓰고, iOS는 그대로 expo-status-bar를 쓴다.
+  - 확인(Release 빌드): 권한 둘 다 허용한 첫 실행, 다크·라이트 전환, 홈 → 복귀 뒤 전환(두 번), 재실행, 데이터 출처 화면. 모두 앱 테마를 따랐다.
+  - 주의: RN `Modal` 등 별도 창을 쓰게 되면 그 창의 바 색은 이 모듈이 정하지 않는다. 그때 다시 본다.

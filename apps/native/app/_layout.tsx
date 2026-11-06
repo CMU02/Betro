@@ -1,7 +1,6 @@
 import "@/global.css";
 import { wrap } from "@sentry/react-native";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { NavigationBar } from "expo-navigation-bar";
 import { type ErrorBoundaryProps, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { HeroUINativeProvider } from "heroui-native";
@@ -26,6 +25,7 @@ import { shouldShowOnboarding } from "@/lib/onboarding/onboarding";
 import { appPreferences } from "@/lib/preferences/app-preferences";
 import { toUniwindTheme } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
+import { setAndroidSystemBarsContent } from "@/modules/system-bars";
 import { ENV } from "@/src/env";
 import { queryClient } from "@/utils/orpc";
 
@@ -56,7 +56,7 @@ startInstallIdentity();
 /**
  * iOS는 Info.plist의 UIViewControllerBasedStatusBarAppearance가 켜져 있어 화면(뷰 컨트롤러)이 상태 표시줄 글자색을 정한다.
  * expo-status-bar 값은 iOS에서 화면이 바뀌면 덮이므로, iOS에서는 내비게이터 옵션으로도 같은 값을 넘긴다.
- * Android는 expo-status-bar만 쓴다(react-native-screens 옵션까지 두면 두 쪽이 같은 창 속성을 번갈아 덮는다).
+ * Android는 아래 `SystemBars`만 정한다(react-native-screens 옵션까지 두면 두 쪽이 같은 창 속성을 번갈아 덮는다).
  */
 const IS_IOS = Platform.OS === "ios";
 const LIGHT_CONTENT_SCREEN_OPTIONS = IS_IOS
@@ -70,16 +70,19 @@ const DARK_CONTENT_SCREEN_OPTIONS = IS_IOS
  * 상태 표시줄 글자색과 Android 내비게이션 바 버튼색을 기기 테마가 아니라 앱 테마(다크·라이트 고정 포함)에 맞춘다.
  * 온보딩은 테마와 상관없이 다크라서 항상 밝은 글자·버튼을 쓴다. 화면마다 따로 두면 마운트 순서에 따라
  * 앱 테마 값이 온보딩 값을 덮으므로(Android에서 확인), 이 한 곳에서만 정한다.
- * NavigationBar는 Android 밖에서는 아무것도 하지 않는다. style은 StatusBar처럼 버튼(내용) 색이다: `light`가 밝은 버튼.
+ * Android는 expo-status-bar·expo-navigation-bar 대신 로컬 모듈로 정한다. 두 라이브러리가 쓰는 androidx 경로는
+ * 앱이 백그라운드에서 돌아온 뒤 무시되어 바 색이 고정됐다(modules/system-bars 참고).
  */
 function SystemBars({ lightContent }: { lightContent: boolean }) {
-	const style = lightContent ? "light" : "dark";
-	return (
-		<>
-			<StatusBar style={style} />
-			<NavigationBar style={style} />
-		</>
-	);
+	useEffect(() => {
+		if (IS_IOS) {
+			return;
+		}
+		setAndroidSystemBarsContent(lightContent).catch((error: unknown) => {
+			reportError(appCrashSink, error, "system-bars");
+		});
+	}, [lightContent]);
+	return IS_IOS ? <StatusBar style={lightContent ? "light" : "dark"} /> : null;
 }
 
 /**
