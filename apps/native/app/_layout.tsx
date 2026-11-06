@@ -5,7 +5,7 @@ import { NavigationBar } from "expo-navigation-bar";
 import { type ErrorBoundaryProps, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { HeroUINativeProvider } from "heroui-native";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -53,7 +53,18 @@ async function startInstallIdentity(): Promise<void> {
 
 startInstallIdentity();
 
-const STACK_SCREEN_OPTIONS = { headerShown: false } as const;
+/**
+ * iOS는 Info.plist의 UIViewControllerBasedStatusBarAppearance가 켜져 있어 화면(뷰 컨트롤러)이 상태 표시줄 글자색을 정한다.
+ * expo-status-bar 값은 iOS에서 화면이 바뀌면 덮이므로, 내비게이터 옵션으로도 앱 테마를 넘긴다.
+ */
+const DARK_STACK_SCREEN_OPTIONS = {
+	headerShown: false,
+	statusBarStyle: "light",
+} as const;
+const LIGHT_STACK_SCREEN_OPTIONS = {
+	headerShown: false,
+	statusBarStyle: "dark",
+} as const;
 
 /**
  * 상태 표시줄 글자색과 Android 내비게이션 바 버튼색을 기기 테마가 아니라 앱 테마(다크·라이트 고정 포함)에 맞춘다.
@@ -76,12 +87,17 @@ function ThemedStatusBar() {
  */
 function StackLayout() {
 	const [preferences] = usePreferences();
+	const { isDark } = useAppTheme();
 	const showOnboarding = shouldShowOnboarding(preferences);
+	const screenOptions = useMemo(
+		() => (isDark ? DARK_STACK_SCREEN_OPTIONS : LIGHT_STACK_SCREEN_OPTIONS),
+		[isDark]
+	);
 	return (
 		<>
 			<ThemedStatusBar />
 			<PushNotifications key={showOnboarding ? "onboarding" : "app"} />
-			<Stack screenOptions={STACK_SCREEN_OPTIONS}>
+			<Stack screenOptions={screenOptions}>
 				<Stack.Protected guard={!showOnboarding}>
 					<Stack.Screen name="(tabs)" />
 					<Stack.Screen name="settings/data-sources" />

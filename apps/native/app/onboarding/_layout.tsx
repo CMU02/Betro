@@ -9,6 +9,7 @@ import { colorToken } from "@/theme/tokens";
 const SCREEN_OPTIONS = {
 	contentStyle: { backgroundColor: colorToken("bg/canvas", "dark") },
 	headerShown: false,
+	statusBarStyle: "light",
 } as const;
 
 export default function OnboardingLayout() {
