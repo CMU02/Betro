@@ -1,3 +1,4 @@
+import { BlurView } from "expo-blur";
 import {
 	BottomTabBarHeightCallbackContext,
 	type BottomTabBarProps,
@@ -14,9 +15,10 @@ import {
 	type LayoutChangeEvent,
 	Platform,
 	Pressable,
+	StyleSheet,
 	View,
 } from "react-native";
-import { withUniwind } from "uniwind";
+import { useUniwind, withUniwind } from "uniwind";
 
 import { AppText } from "@/components/ui/app-text";
 
@@ -82,10 +84,13 @@ function toTabItems({
 }
 
 /**
- * Figma는 반투명 `bg-glass` 위에 블러가 깔린 유리 알약이다. 지금은 뒤에 지도가 없어 반투명 배경만 쓰고,
- * 지도 화면을 붙이는 3단계 전에 expo-blur `BlurView`(또는 iOS 26 glass)를 배경으로 깐다.
+ * Figma `TabBar / Platform=iOS`(5:39)는 backdrop-blur 12 위에 반투명 `bg-glass`를 얹은 유리 알약이다.
+ * CSS blur 12px는 UIKit 블러 강도로 대략 25~30에 해당한다.
  */
+const IOS_BLUR_INTENSITY = 30;
+
 function IosTabBar(props: BottomTabBarProps) {
+	const { theme } = useUniwind();
 	const items = toTabItems(props);
 	const reportHeight = useContext(BottomTabBarHeightCallbackContext);
 	const bottom = Math.max(
@@ -100,9 +105,15 @@ function IosTabBar(props: BottomTabBarProps) {
 	return (
 		<View
 			accessibilityRole="tablist"
-			className="absolute right-4 left-4 h-16 flex-row items-center rounded-full border border-border-subtle bg-bg-glass px-1.5"
+			className="absolute right-4 left-4 h-16 flex-row items-center overflow-hidden rounded-full border border-border-subtle bg-bg-glass px-1.5"
 			style={{ bottom }}
 		>
+			<BlurView
+				intensity={IOS_BLUR_INTENSITY}
+				pointerEvents="none"
+				style={StyleSheet.absoluteFill}
+				tint={theme === "dark" ? "dark" : "light"}
+			/>
 			{items.map((item) => {
 				const Icon = TAB_ICONS[item.icon];
 				return (

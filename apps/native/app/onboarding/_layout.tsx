@@ -1,3 +1,4 @@
+import { NavigationBar } from "expo-navigation-bar";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ScopedTheme } from "uniwind";
@@ -14,6 +15,7 @@ export default function OnboardingLayout() {
 	return (
 		<ScopedTheme theme="dark">
 			<StatusBar style="light" />
+			<NavigationBar style="dark" />
 			<Stack screenOptions={SCREEN_OPTIONS} />
 		</ScopedTheme>
 	);

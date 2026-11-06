@@ -333,7 +333,7 @@ it("propagates storage errors instead of returning a partial identity", async ()
 - Consumes: `AppText`(Task 2), 토큰 클래스(Task 1)
 - Produces:
   - `TABS: readonly { name: "index" | "favorites" | "commute" | "settings"; label: string; icon: "map" | "star" | "route" | "settings" }[]` = 지도(map), 즐겨찾기(star), 출퇴근(route), 설정(settings) 순
-  - `<TabBar {...BottomTabBarProps}>` — iOS는 Figma `TabBar / Platform=iOS`(노드 5:39, 떠 있는 유리 알약 `bg-bg-glass`, 활성 탭은 `bg-bg-hover` 위 accent 아이콘·라벨. 지도 화면을 붙이는 3단계 전에 expo-blur `BlurView`(또는 iOS 26 glass)를 배경으로 깐다), Android는 `Platform=Android`(노드 5:139, 화면 너비 바, 활성 탭 아이콘 뒤 `bg-accent-soft` 알약). `accessibilityRole="tab"`, `accessibilityState={{ selected }}`.
+  - `<TabBar {...BottomTabBarProps}>` — iOS는 Figma `TabBar / Platform=iOS`(노드 5:39, 떠 있는 유리 알약 `bg-bg-glass`, 활성 탭은 `bg-bg-hover` 위 accent 아이콘·라벨. 알약 안쪽에 expo-blur `BlurView`(강도 30, tint는 해석된 테마)를 깔고 그 위에 `bg-bg-glass`·`border-border-subtle`을 얹는다), Android는 `Platform=Android`(노드 5:139, 화면 너비 바, 활성 탭 아이콘 뒤 `bg-accent-soft` 알약). `accessibilityRole="tab"`, `accessibilityState={{ selected }}`.
   - `<Screen title?: string; scroll?: boolean; children>` — safe area, `bg-bg-canvas`, 큰 제목(Title/1 또는 Figma `LargeTitle`)
   - 라우트: `/`(지도), `/favorites`, `/commute`, `/settings`. 지도·즐겨찾기·출퇴근은 이 계획에서 제목만 있는 자리 화면이다(3·2·4단계 계획에서 채움).
 

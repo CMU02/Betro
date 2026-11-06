@@ -62,21 +62,6 @@ function FeatureRow({ Icon, label }: Feature) {
 	);
 }
 
-/** Figma의 페이지 점. 온보딩은 한 장뿐이라 장식으로만 두고 스크린리더에서는 숨긴다. */
-function PageDots() {
-	return (
-		<View
-			accessibilityElementsHidden
-			className="flex-row items-center justify-center gap-1.5"
-			importantForAccessibility="no-hide-descendants"
-		>
-			<View className="h-1.5 w-5 rounded-full bg-accent-primary" />
-			<View className="size-1.5 rounded-full bg-border-strong" />
-			<View className="size-1.5 rounded-full bg-border-strong" />
-		</View>
-	);
-}
-
 function Headline() {
 	if (!IS_ANDROID_LAYOUT) {
 		return (
@@ -158,7 +143,6 @@ export default function OnboardingScreen() {
 						<FeatureRow key={feature.label} {...feature} />
 					))}
 				</View>
-				<PageDots />
 				<AppButton label="시작하기" onPress={goToPermissions} />
 			</View>
 		</View>

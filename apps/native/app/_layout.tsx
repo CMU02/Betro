@@ -1,6 +1,7 @@
 import "@/global.css";
 import { wrap } from "@sentry/react-native";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { NavigationBar } from "expo-navigation-bar";
 import { type ErrorBoundaryProps, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { HeroUINativeProvider } from "heroui-native";
@@ -55,12 +56,18 @@ startInstallIdentity();
 const STACK_SCREEN_OPTIONS = { headerShown: false } as const;
 
 /**
- * 상태 표시줄 글자색을 기기 테마가 아니라 앱 테마(다크·라이트 고정 포함)에 맞춘다.
- * Android는 앱 테마를 따로 따라가지 않으므로 명시해야 한다. 온보딩은 자기 StatusBar로 덮는다.
+ * 상태 표시줄 글자색과 Android 내비게이션 바 버튼색을 기기 테마가 아니라 앱 테마(다크·라이트 고정 포함)에 맞춘다.
+ * Android는 앱 테마를 따로 따라가지 않으므로 명시해야 한다. 온보딩은 자기 StatusBar·NavigationBar로 덮는다.
+ * NavigationBar는 Android 밖에서는 아무것도 하지 않는다. `dark`가 "어두운 바 + 밝은 버튼"이다.
  */
 function ThemedStatusBar() {
 	const { isDark } = useAppTheme();
-	return <StatusBar style={isDark ? "light" : "dark"} />;
+	return (
+		<>
+			<StatusBar style={isDark ? "light" : "dark"} />
+			<NavigationBar style={isDark ? "dark" : "light"} />
+		</>
+	);
 }
 
 /**
