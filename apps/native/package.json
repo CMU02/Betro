@@ -17,6 +17,7 @@
   "dependencies": {
     "@Betro/api": "workspace:*",
     "@expo/metro-runtime": "~58.0.17",
+    "@mj-studio/react-native-naver-map": "^2.10.0",
     "@orpc/client": "catalog:",
     "@orpc/tanstack-query": "catalog:",
     "@react-native-firebase/app": "^27.1.0",
