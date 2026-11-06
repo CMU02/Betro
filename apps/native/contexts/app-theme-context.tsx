@@ -1,55 +1,59 @@
-import React, { createContext, useCallback, useContext, useMemo } from "react";
+import type React from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
 import { Uniwind, useUniwind } from "uniwind";
 
-type ThemeName = "light" | "dark";
+import {
+	type ThemePreference,
+	toUniwindTheme,
+} from "@/lib/preferences/preferences";
+import { usePreferences } from "@/lib/preferences/use-preferences";
 
-type AppThemeContextType = {
-  currentTheme: string;
-  isLight: boolean;
-  isDark: boolean;
-  setTheme: (theme: ThemeName) => void;
-  toggleTheme: () => void;
-};
+interface AppThemeContextType {
+	currentTheme: string;
+	isDark: boolean;
+	isLight: boolean;
+	setThemeMode: (mode: ThemePreference) => void;
+	themeMode: ThemePreference;
+}
 
-const AppThemeContext = createContext<AppThemeContextType | undefined>(undefined);
+const AppThemeContext = createContext<AppThemeContextType | undefined>(
+	undefined
+);
 
-export const AppThemeProvider = ({ children }: { children: React.ReactNode }) => {
-  const { theme } = useUniwind();
+export const AppThemeProvider = ({
+	children,
+}: {
+	children: React.ReactNode;
+}) => {
+	const { theme } = useUniwind();
+	const [{ themeMode }, update] = usePreferences();
 
-  const isLight = useMemo(() => {
-    return theme === "light";
-  }, [theme]);
+	useEffect(() => {
+		Uniwind.setTheme(toUniwindTheme(themeMode));
+	}, [themeMode]);
 
-  const isDark = useMemo(() => {
-    return theme === "dark";
-  }, [theme]);
+	const value = useMemo(
+		() => ({
+			currentTheme: theme,
+			isDark: theme === "dark",
+			isLight: theme === "light",
+			setThemeMode: (mode: ThemePreference) => update({ themeMode: mode }),
+			themeMode,
+		}),
+		[theme, themeMode, update]
+	);
 
-  const setTheme = useCallback((newTheme: ThemeName) => {
-    Uniwind.setTheme(newTheme);
-  }, []);
-
-  const toggleTheme = useCallback(() => {
-    Uniwind.setTheme(theme === "light" ? "dark" : "light");
-  }, [theme]);
-
-  const value = useMemo(
-    () => ({
-      currentTheme: theme,
-      isLight,
-      isDark,
-      setTheme,
-      toggleTheme,
-    }),
-    [theme, isLight, isDark, setTheme, toggleTheme],
-  );
-
-  return <AppThemeContext.Provider value={value}>{children}</AppThemeContext.Provider>;
+	return (
+		<AppThemeContext.Provider value={value}>
+			{children}
+		</AppThemeContext.Provider>
+	);
 };
 
 export function useAppTheme() {
-  const context = useContext(AppThemeContext);
-  if (!context) {
-    throw new Error("useAppTheme must be used within AppThemeProvider");
-  }
-  return context;
+	const context = useContext(AppThemeContext);
+	if (!context) {
+		throw new Error("useAppTheme must be used within AppThemeProvider");
+	}
+	return context;
 }

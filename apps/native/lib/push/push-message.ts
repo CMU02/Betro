@@ -3,6 +3,8 @@ import type {
 	RemoteMessage,
 } from "@react-native-firebase/messaging";
 
+import type { PermissionStatus } from "@/lib/onboarding/onboarding";
+
 /** FCM payload normalised for app code: every field present, data values always strings. */
 export interface PushMessage {
 	body: string | null;
@@ -25,6 +27,19 @@ const AUTHORIZED_STATUSES: ReadonlySet<PushAuthorizationStatus> =
 
 export function isPushAuthorized(status: PushAuthorizationStatus): boolean {
 	return AUTHORIZED_STATUSES.has(status);
+}
+
+/** NOT_DETERMINED(-1) */
+const NOT_DETERMINED_STATUS: PushAuthorizationStatus = -1;
+
+/** Firebase 권한 상태를 앱의 세 가지 권한 상태로 바꾼다. */
+export function toPermissionStatus(
+	status: PushAuthorizationStatus
+): PermissionStatus {
+	if (isPushAuthorized(status)) {
+		return "granted";
+	}
+	return status === NOT_DETERMINED_STATUS ? "undetermined" : "denied";
 }
 
 export function toPushMessage(message: RemoteMessage): PushMessage {
