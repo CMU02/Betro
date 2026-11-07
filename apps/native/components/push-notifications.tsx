@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from "react";
 import { Alert } from "react-native";
-
+import { t } from "@/lib/i18n/t";
 import { subscribeOptionsForLaunch } from "@/lib/push/push-launch";
 import type { PushMessage } from "@/lib/push/push-message";
 import { usePushNotifications } from "@/lib/push/use-push-notifications";
@@ -17,7 +17,10 @@ const LAUNCH_OPTIONS = subscribeOptionsForLaunch();
 export function PushNotifications() {
 	const onForegroundMessage = useCallback((message: PushMessage) => {
 		if (message.title || message.body) {
-			Alert.alert(message.title ?? "알림", message.body ?? undefined);
+			Alert.alert(
+				message.title ?? t("push.defaultTitle"),
+				message.body ?? undefined
+			);
 		}
 	}, []);
 

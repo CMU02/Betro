@@ -1,3 +1,5 @@
+import type { MessageKey } from "@/lib/i18n/translate";
+
 /** 하단 탭 4개. 순서가 곧 화면 순서이고, `name`은 `app/(tabs)/` 안의 라우트 파일 이름이다. */
 
 export type TabName = "index" | "favorites" | "commute" | "settings";
@@ -7,13 +9,13 @@ export type TabIconName = "map" | "star" | "route" | "settings";
 
 export interface TabSpec {
 	icon: TabIconName;
-	label: string;
+	labelKey: MessageKey;
 	name: TabName;
 }
 
 export const TABS: readonly TabSpec[] = [
-	{ icon: "map", label: "지도", name: "index" },
-	{ icon: "star", label: "즐겨찾기", name: "favorites" },
-	{ icon: "route", label: "출퇴근", name: "commute" },
-	{ icon: "settings", label: "설정", name: "settings" },
+	{ icon: "map", labelKey: "tabs.map", name: "index" },
+	{ icon: "star", labelKey: "tabs.favorites", name: "favorites" },
+	{ icon: "route", labelKey: "tabs.commute", name: "commute" },
+	{ icon: "settings", labelKey: "tabs.settings", name: "settings" },
 ] as const;

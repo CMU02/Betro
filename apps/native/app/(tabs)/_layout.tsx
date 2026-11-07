@@ -2,6 +2,7 @@ import { type BottomTabBarProps, Tabs } from "expo-router/js-tabs";
 
 import { TabBar } from "@/components/navigation/tab-bar";
 import { TABS } from "@/components/navigation/tabs";
+import { t } from "@/lib/i18n/t";
 
 const SCREEN_OPTIONS = { headerShown: false } as const;
 
@@ -14,7 +15,7 @@ export default function TabsLayout() {
 				<Tabs.Screen
 					key={tab.name}
 					name={tab.name}
-					options={{ title: tab.label }}
+					options={{ title: t(tab.labelKey) }}
 				/>
 			))}
 		</Tabs>

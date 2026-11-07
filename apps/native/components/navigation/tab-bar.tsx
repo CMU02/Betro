@@ -21,7 +21,7 @@ import {
 import { useUniwind, withUniwind } from "uniwind";
 
 import { AppText } from "@/components/ui/app-text";
-
+import { t } from "@/lib/i18n/t";
 import { TABS, type TabIconName } from "./tabs";
 
 /** Lucide 아이콘에 `colorClassName="accent-…"`로 토큰 색을 입힌다. */
@@ -64,7 +64,7 @@ function toTabItems({
 		return {
 			icon: spec?.icon ?? "map",
 			key: route.key,
-			label: spec?.label ?? title ?? route.name,
+			label: spec ? t(spec.labelKey) : (title ?? route.name),
 			onLongPress: () => {
 				emitter.emit({ target: route.key, type: "tabLongPress" });
 			},

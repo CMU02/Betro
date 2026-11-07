@@ -21,6 +21,7 @@ import {
 	reportError,
 } from "@/lib/crash/crash-reporting";
 import { ensureInstallIdentity } from "@/lib/device/app-install-identity";
+import { t } from "@/lib/i18n/t";
 import { shouldShowOnboarding } from "@/lib/onboarding/onboarding";
 import { appPreferences } from "@/lib/preferences/app-preferences";
 import { toUniwindTheme } from "@/lib/preferences/preferences";
@@ -129,13 +130,13 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 			<View className="flex-1 items-center justify-center gap-6 px-6">
 				<View className="items-center gap-2">
 					<AppText accessibilityRole="header" variant="title2">
-						화면을 그리지 못했어요
+						{t("errorBoundary.title")}
 					</AppText>
 					<AppText className="text-center text-text-secondary" variant="bodyM">
-						잠시 후 다시 시도해 주세요.
+						{t("errorBoundary.body")}
 					</AppText>
 				</View>
-				<AppButton label="다시 시도" onPress={retry} />
+				<AppButton label={t("errorBoundary.retry")} onPress={retry} />
 			</View>
 		</Screen>
 	);

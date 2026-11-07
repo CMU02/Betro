@@ -25,6 +25,8 @@ import {
 	sendTestException,
 	triggerNativeCrash,
 } from "@/lib/crash/app-crash-reporting";
+import { t } from "@/lib/i18n/t";
+import type { MessageKey } from "@/lib/i18n/translate";
 import type { ThemePreference } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
 import { ELEVATION } from "@/theme/tokens";
@@ -39,16 +41,19 @@ const ShieldTileIcon = withUniwind(ShieldCheckIcon);
 const InfoTileIcon = withUniwind(InfoIcon);
 const BugTileIcon = withUniwind(BugIcon);
 
-const THEME_OPTIONS: { label: string; mode: ThemePreference }[] = [
-	{ label: "다크", mode: "dark" },
-	{ label: "라이트", mode: "light" },
-	{ label: "시스템", mode: "system" },
+const THEME_OPTIONS: { labelKey: MessageKey; mode: ThemePreference }[] = [
+	{ labelKey: "settings.theme.dark", mode: "dark" },
+	{ labelKey: "settings.theme.light", mode: "light" },
+	{ labelKey: "settings.theme.system", mode: "system" },
 ];
 
 /** Figma `Segmented`의 선택된 칸은 `Elevation/1 Floating` 그림자로 떠 있다. */
 const SELECTED_SEGMENT_STYLE = { boxShadow: ELEVATION.floating } as const;
 
-const MAP_QUALITY_LABEL = { high3d: "고화질 3D", standard: "표준" } as const;
+const MAP_QUALITY_LABEL_KEY = {
+	high3d: "settings.mapQuality.high3d",
+	standard: "settings.mapQuality.standard",
+} as const satisfies Record<string, MessageKey>;
 
 function Section({ children, title }: { children: ReactNode; title: string }) {
 	return (
@@ -104,17 +109,17 @@ function ThemeRow() {
 				<View className="size-10 items-center justify-center rounded-md bg-bg-control">
 					<MoonTileIcon colorClassName="accent-icon-primary" size={20} />
 				</View>
-				<AppText variant="bodyMStrong">테마</AppText>
+				<AppText variant="bodyMStrong">{t("settings.theme.title")}</AppText>
 			</View>
 			<View
-				accessibilityLabel="테마"
+				accessibilityLabel={t("settings.theme.title")}
 				accessibilityRole="radiogroup"
 				className="h-9 flex-row gap-0.5 rounded-md bg-bg-control p-[3px]"
 			>
 				{THEME_OPTIONS.map((option) => (
 					<ThemeOption
 						key={option.mode}
-						label={option.label}
+						label={t(option.labelKey)}
 						mode={option.mode}
 						onSelect={setThemeMode}
 						selected={option.mode === themeMode}
@@ -128,15 +133,15 @@ function ThemeRow() {
 /** 개발 빌드 전용: Sentry로 테스트 예외를 보내거나 네이티브 크래시를 일으킨다. */
 function openCrashTest(): void {
 	const message = isCrashReportingActive()
-		? "Sentry로 보낼 시험을 고르세요."
-		: "Sentry DSN이 없어 아무것도 보내지 않아요. .env에 EXPO_PUBLIC_SENTRY_DSN을 넣고 Metro를 다시 시작하세요.";
-	Alert.alert("크래시 시험", message, [
-		{ style: "cancel", text: "취소" },
-		{ onPress: sendTestException, text: "테스트 예외 보내기" },
+		? t("settings.crashTest.messageActive")
+		: t("settings.crashTest.messageInactive");
+	Alert.alert(t("settings.crashTest.title"), message, [
+		{ style: "cancel", text: t("settings.crashTest.cancel") },
+		{ onPress: sendTestException, text: t("settings.crashTest.sendException") },
 		{
 			onPress: triggerNativeCrash,
 			style: "destructive",
-			text: "네이티브 크래시",
+			text: t("settings.crashTest.nativeCrash"),
 		},
 	]);
 }
@@ -171,25 +176,25 @@ export default function SettingsTab() {
 	}, [router]);
 
 	return (
-		<Screen scroll title="설정">
+		<Screen scroll title={t("tabs.settings")}>
 			<View className="gap-5 px-4 pb-6">
-				<Section title="화면">
+				<Section title={t("settings.sections.display")}>
 					<ThemeRow />
 					<ListDivider />
 					<ListRow
 						icon={MapTileIcon}
 						onPress={toggleMapQuality}
-						title="지도 품질"
+						title={t("settings.mapQuality.title")}
 						trailing={{
 							chevron: true,
-							text: MAP_QUALITY_LABEL[preferences.mapQuality],
+							text: t(MAP_QUALITY_LABEL_KEY[preferences.mapQuality]),
 							type: "value",
 						}}
 					/>
 					<ListDivider />
 					<ListRow
 						icon={BoxTileIcon}
-						title="3D 건물"
+						title={t("settings.buildings3d.title")}
 						trailing={{
 							onChange: toggle3dBuildings,
 							type: "toggle",
@@ -199,8 +204,8 @@ export default function SettingsTab() {
 					<ListDivider />
 					<ListRow
 						icon={RouteTileIcon}
-						subtitle="위치를 보간해 자연스럽게 움직여요"
-						title="부드러운 차량 이동"
+						subtitle={t("settings.smoothMotion.subtitle")}
+						title={t("settings.smoothMotion.title")}
 						trailing={{
 							onChange: toggleSmoothMotion,
 							type: "toggle",
@@ -210,7 +215,7 @@ export default function SettingsTab() {
 					<ListDivider />
 					<ListRow
 						icon={ZapTileIcon}
-						title="데이터 절약 모드"
+						title={t("settings.dataSaver.title")}
 						trailing={{
 							onChange: toggleDataSaver,
 							type: "toggle",
@@ -218,10 +223,10 @@ export default function SettingsTab() {
 						}}
 					/>
 				</Section>
-				<Section title="알림">
+				<Section title={t("settings.sections.notifications")}>
 					<ListRow
 						icon={BellTileIcon}
-						title="출퇴근 잠금화면 안내"
+						title={t("settings.commuteLockScreen.title")}
 						trailing={{
 							onChange: toggleLiveActivity,
 							type: "toggle",
@@ -229,17 +234,17 @@ export default function SettingsTab() {
 						}}
 					/>
 				</Section>
-				<Section title="정보">
+				<Section title={t("settings.sections.about")}>
 					<ListRow
 						icon={ShieldTileIcon}
 						onPress={openDataSources}
-						title="데이터 출처"
+						title={t("settings.dataSources.title")}
 						trailing={{ type: "chevron" }}
 					/>
 					<ListDivider />
 					<ListRow
 						icon={InfoTileIcon}
-						title="버전"
+						title={t("settings.version.title")}
 						trailing={{
 							text: nativeApplicationVersion ?? "-",
 							type: "value",
@@ -247,12 +252,12 @@ export default function SettingsTab() {
 					/>
 				</Section>
 				{__DEV__ ? (
-					<Section title="개발">
+					<Section title={t("settings.sections.developer")}>
 						<ListRow
 							icon={BugTileIcon}
 							onPress={openCrashTest}
-							subtitle="개발 빌드에서만 보여요. 테스트 예외나 네이티브 크래시를 보내요"
-							title="크래시 시험"
+							subtitle={t("settings.crashTest.subtitle")}
+							title={t("settings.crashTest.title")}
 							trailing={{ type: "none" }}
 						/>
 					</Section>

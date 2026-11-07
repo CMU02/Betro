@@ -1,15 +1,16 @@
 import { expect, it } from "bun:test";
 
+import { t } from "@/lib/i18n/t";
 import { TABS } from "./tabs";
 
 it("lists the four MVP tabs in order", () => {
-	expect(TABS.map((t) => t.label)).toEqual([
+	expect(TABS.map((tab) => t(tab.labelKey))).toEqual([
 		"지도",
 		"즐겨찾기",
 		"출퇴근",
 		"설정",
 	]);
-	expect(TABS.map((t) => t.name)).toEqual([
+	expect(TABS.map((tab) => tab.name)).toEqual([
 		"index",
 		"favorites",
 		"commute",
@@ -18,5 +19,10 @@ it("lists the four MVP tabs in order", () => {
 });
 
 it("pairs each tab with its Lucide icon name", () => {
-	expect(TABS.map((t) => t.icon)).toEqual(["map", "star", "route", "settings"]);
+	expect(TABS.map((tab) => tab.icon)).toEqual([
+		"map",
+		"star",
+		"route",
+		"settings",
+	]);
 });

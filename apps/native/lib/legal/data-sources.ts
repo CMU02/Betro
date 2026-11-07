@@ -1,62 +1,64 @@
+import type { MessageKey } from "@/lib/i18n/translate";
+
 export type StatusKind = "live" | "estimated" | "delayed" | "ended";
 
+/** 문구는 키로 들고, 화면이 그릴 때 `t`로 바꾼다. `labelKey`는 출퇴근 잠금화면 태그(2-F)도 쓴다. */
 export interface StatusLegendItem {
-	description: string;
+	descriptionKey: MessageKey;
 	kind: StatusKind;
-	label: string;
+	labelKey: MessageKey;
 }
 
 export interface DataProvider {
-	subtitle: string;
-	title: string;
+	subtitleKey: MessageKey;
+	titleKey: MessageKey;
 	url: string;
 }
 
 export const STATUS_LEGEND: StatusLegendItem[] = [
 	{
-		description: "실시간 위치 API로 확인된 위치",
+		descriptionKey: "dataSources.status.live.description",
 		kind: "live",
-		label: "실시간",
+		labelKey: "dataSources.status.live.label",
 	},
 	{
-		description: "역 도착 신호와 시간표로 계산한 위치",
+		descriptionKey: "dataSources.status.estimated.description",
 		kind: "estimated",
-		label: "시간표 추정",
+		labelKey: "dataSources.status.estimated.label",
 	},
 	{
-		description: "운영 기관 지연 정보 반영",
+		descriptionKey: "dataSources.status.delayed.description",
 		kind: "delayed",
-		label: "지연",
+		labelKey: "dataSources.status.delayed.label",
 	},
 	{
-		description: "운행이 끝났거나 정보가 없어요",
+		descriptionKey: "dataSources.status.ended.description",
 		kind: "ended",
-		label: "운행 종료",
+		labelKey: "dataSources.status.ended.label",
 	},
 ];
 
 export const DATA_PROVIDERS: DataProvider[] = [
 	{
-		subtitle: "서울 열린데이터광장 · 실시간 지하철 도착·역 정보",
-		title: "서울특별시",
+		subtitleKey: "dataSources.providers.seoul.subtitle",
+		titleKey: "dataSources.providers.seoul.title",
 		url: "https://data.seoul.go.kr",
 	},
 	{
-		subtitle: "버스 위치·노선·정류소, 서울교통공사 시간표",
-		title: "공공데이터포털",
+		subtitleKey: "dataSources.providers.dataGoKr.subtitle",
+		titleKey: "dataSources.providers.dataGoKr.title",
 		url: "https://www.data.go.kr",
 	},
 	{
-		subtitle: "철도산업정보센터 · 광역철도 시간표",
-		title: "국가철도공단",
+		subtitleKey: "dataSources.providers.kric.subtitle",
+		titleKey: "dataSources.providers.kric.title",
 		url: "https://data.kric.go.kr",
 	},
 	{
-		subtitle: "선로·지도 형상 (ODbL)",
-		title: "© OpenStreetMap contributors",
+		subtitleKey: "dataSources.providers.openStreetMap.subtitle",
+		titleKey: "dataSources.providers.openStreetMap.title",
 		url: "https://www.openstreetmap.org/copyright",
 	},
 ];
 
-export const DATA_SOURCES_FOOTNOTE =
-	"공공누리 제1유형 · 갱신 주기는 노선과 시간대에 따라 달라요";
+export const DATA_SOURCES_FOOTNOTE_KEY: MessageKey = "dataSources.footnote";

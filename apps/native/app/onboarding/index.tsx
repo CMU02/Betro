@@ -8,6 +8,7 @@ import { withUniwind } from "uniwind";
 import { Logo } from "@/components/brand/logo";
 import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
+import { t } from "@/lib/i18n/t";
 
 const ONBOARDING_MAP = require("@/assets/images/onboarding-map.png");
 
@@ -41,22 +42,22 @@ const ICON_SIZE = 20;
 const FEATURES = [
 	{
 		Icon: withUniwind(ZapIcon),
-		label: "실시간 위치와 시간표 추정을 구분해서 보여줘요",
+		labelKey: "onboarding.features.realtime",
 	},
-	{ Icon: withUniwind(RouteIcon), label: "출퇴근 길을 잠금화면에서" },
-	{ Icon: withUniwind(BoxIcon), label: "다크·라이트 3D 지도" },
+	{ Icon: withUniwind(RouteIcon), labelKey: "onboarding.features.lockScreen" },
+	{ Icon: withUniwind(BoxIcon), labelKey: "onboarding.features.map3d" },
 ] as const;
 
 type Feature = (typeof FEATURES)[number];
 
-function FeatureRow({ Icon, label }: Feature) {
+function FeatureRow({ Icon, labelKey }: Feature) {
 	return (
 		<View className="flex-row items-center gap-3">
 			<View className="size-10 items-center justify-center rounded-md bg-accent-soft">
 				<Icon colorClassName="accent-text-accent" size={ICON_SIZE} />
 			</View>
 			<AppText className="flex-1" variant="bodyMStrong">
-				{label}
+				{t(labelKey)}
 			</AppText>
 		</View>
 	);
@@ -66,15 +67,15 @@ function Headline() {
 	if (!IS_ANDROID_LAYOUT) {
 		return (
 			<AppText accessibilityRole="header" variant="displayL">
-				{"서울의 지하철과 버스를,\n실시간 3D로"}
+				{`${t("onboarding.headline.lead")}\n${t("onboarding.headline.accent")}`}
 			</AppText>
 		);
 	}
 	return (
 		<AppText accessibilityRole="header" variant="displayL">
-			{"서울의 지하철과 버스를,\n"}
+			{`${t("onboarding.headline.lead")}\n`}
 			<AppText className="text-text-accent" variant="displayL">
-				실시간 3D로
+				{t("onboarding.headline.accent")}
 			</AppText>
 		</AppText>
 	);
@@ -134,16 +135,16 @@ export default function OnboardingScreen() {
 					<View className="gap-3">
 						<Headline />
 						<AppText className="text-text-secondary" variant="bodyL">
-							지금 달리는 차량이 어디쯤 있는지 한눈에 보여드려요.
+							{t("onboarding.body")}
 						</AppText>
 					</View>
 				</View>
 				<View className="gap-3">
 					{FEATURES.map((feature) => (
-						<FeatureRow key={feature.label} {...feature} />
+						<FeatureRow key={feature.labelKey} {...feature} />
 					))}
 				</View>
-				<AppButton label="시작하기" onPress={goToPermissions} />
+				<AppButton label={t("onboarding.start")} onPress={goToPermissions} />
 			</View>
 		</View>
 	);
