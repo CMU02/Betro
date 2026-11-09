@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    # Branch protection requires this check by name. Rename it there too if it changes.
+    name: Lint, types, tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history so Biome can diff against the base branch
+          # (and so a later SonarQube scan gets blame data).
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      # Dependency lifecycle scripts stay off; only our own postinstall (varlock env codegen) runs.
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Generate env types
+        run: bun run postinstall
+
+      # Older scaffold code still has Ultracite issues, so PRs only gate the files they touch.
+      - name: Lint changed files
+        if: github.event_name == 'pull_request'
+        run: bunx biome ci --changed --since=origin/${{ github.base_ref }} --no-errors-on-unmatched
+
+      - name: Type check
+        run: bun run check-types
+
+      - name: Test with coverage
+        run: bun test --coverage --coverage-reporter=lcov --coverage-reporter=text
+
+      # Kept for a later SonarQube Cloud step. See docs/ci.md.
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          if-no-files-found: ignore
+          retention-days: 14
