@@ -32,8 +32,12 @@ jobs:
         with:
           bun-version-file: package.json
 
+      # Dependency lifecycle scripts stay off; only our own postinstall (varlock env codegen) runs.
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Generate env types
+        run: bun run postinstall
 
       # Older scaffold code still has Ultracite issues, so PRs only gate the files they touch.
       - name: Lint changed files
