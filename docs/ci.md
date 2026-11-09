@@ -25,14 +25,21 @@
 - `renderThemeCss > matches the committed generated file`: `core.autocrlf=true`로 체크아웃된 CRLF 파일과 비교해서 생긴다.
 - `screens and components contain no hard-coded Korean copy`: 제외 정규식이 `/` 경로만 보는데 Windows glob은 `\`를 돌려준다.
 
-## 다음 단계: SonarQube Cloud 붙이기
+## SonarQube Cloud
 
-협업자가 생기거나 커버리지·복잡도를 수치로 관리하고 싶어지면 붙인다. CI가 이미 `coverage/lcov.info`를 만들고 히스토리 전체를 체크아웃하므로 아래만 하면 된다.
+### 지금 상태 (2026-11-09)
 
-1. [SonarQube Cloud](https://sonarcloud.io)에 GitHub로 로그인하고 `CMU02` 조직을 가져온다.
-   - **플랜 주의:** Free 플랜은 `main`을 대상으로 하는 PR만 분석한다. 이 저장소는 `develop`으로 PR을 보내므로, 공개 저장소용 OSS 플랜(브랜치·PR 분석 무제한)을 쓰거나 Sonar 프로젝트의 메인 브랜치를 `develop`으로 바꾼다. OSS 플랜이 라이선스 파일을 요구하는지는 가입할 때 확인한다(지금 저장소에는 LICENSE가 없다).
-2. `CMU02/Betro` 프로젝트를 만들고 분석 방식으로 **GitHub Actions**를 고른다. Automatic Analysis는 끈다(CI 분석과 같이 켜 둘 수 없다).
-3. 화면에 나온 조직 키와 프로젝트 키를 확인한다(보통 `cmu02`, `CMU02_Betro`).
+SonarQube Cloud가 **Automatic Analysis**로 연결돼 있다(조직 `cmu02`, 프로젝트 `CMU02_Betro`, 공개). PR마다 `SonarCloud Code Analysis` 체크가 붙고, `develop` 대상 PR도 분석된다. 브랜치 보호의 필수 체크는 아니라서 실패해도 머지는 막히지 않는다.
+
+Automatic Analysis는 SonarCloud가 코드를 직접 가져가 분석하므로 **테스트 커버리지가 없다**. 커버리지까지 보려면 아래 절차로 CI 분석으로 바꾼다.
+
+### 다음 단계: CI 분석으로 바꾸기
+
+협업자가 생기거나 커버리지·복잡도를 수치로 관리하고 싶어지면 바꾼다. CI가 이미 `coverage/lcov.info`를 만들고 히스토리 전체를 체크아웃하므로 아래만 하면 된다.
+
+1. SonarQube Cloud 프로젝트 설정 › Analysis Method에서 **Automatic Analysis를 끈다**. CI 분석과 같이 켜 둘 수 없다.
+2. 분석 방식으로 **GitHub Actions**를 고른다.
+3. 조직 키 `cmu02`와 프로젝트 키 `CMU02_Betro`가 화면과 같은지 확인한다.
 4. 토큰을 만들어 저장소 시크릿으로 넣는다. 값이 화면이나 셸 기록에 남지 않도록 입력 프롬프트를 쓴다.
 
    ```sh
