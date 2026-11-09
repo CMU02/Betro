@@ -39,7 +39,7 @@ export function isCrashReportingActive(): boolean {
 
 /** 개발 빌드의 "크래시 시험": JS 예외 하나를 Sentry로 보낸다(앱은 계속 동작). */
 export function sendTestException(): void {
-	captureException(new Error("Betro 크래시 시험: 테스트 예외"), {
+	captureException(new Error("Betro crash test: test exception"), {
 		tags: { context: "crash-test" },
 	});
 }

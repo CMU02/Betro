@@ -12,6 +12,7 @@ import { withUniwind } from "uniwind";
 
 import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
+import { t } from "@/lib/i18n/t";
 import {
 	completeOnboarding,
 	type PermissionButtonAction,
@@ -116,10 +117,10 @@ function AndroidIntro() {
 			</View>
 			<View className="gap-2">
 				<AppText accessibilityRole="header" variant="title1">
-					{"더 정확한 안내를 위해\n권한이 필요해요"}
+					{t("permissions.intro.title")}
 				</AppText>
 				<AppText className="text-text-secondary" variant="bodyM">
-					꼭 필요한 권한만 요청하고, 안내 외의 용도로는 쓰지 않아요.
+					{t("permissions.intro.android.body")}
 				</AppText>
 			</View>
 		</View>
@@ -132,30 +133,26 @@ function IosIntro() {
 			<Illustration />
 			<View className="gap-2">
 				<AppText accessibilityRole="header" variant="title1">
-					{"더 정확한 안내를 위해\n권한이 필요해요"}
+					{t("permissions.intro.title")}
 				</AppText>
 				<AppText className="text-text-secondary" variant="bodyM">
-					{
-						"꼭 필요한 두 가지만 요청해요.\n허용하지 않아도 지도는 그대로 볼 수 있어요."
-					}
+					{t("permissions.intro.ios.body")}
 				</AppText>
 			</View>
 		</>
 	);
 }
 
-const SETTINGS_HINT = "설정에서 언제든 바꿀 수 있어요";
-
 /** 카드 설명. iOS는 Figma처럼 두 줄로 끊고, Android는 한 줄로 둔다. */
-const CARD_DESCRIPTIONS = IS_ANDROID_LAYOUT
-	? {
-			location: "내 주변 역과 정류장을 바로 보여줘요",
-			notifications: "출퇴근 시간에 잠금화면에 도착 정보를 띄워요",
-		}
-	: {
-			location: "내 주변 역과 정류장을\n바로 보여줘요",
-			notifications: "출퇴근 시간에 잠금화면에\n도착 정보를 띄워요",
-		};
+const CARD_DESCRIPTION_KEYS = IS_ANDROID_LAYOUT
+	? ({
+			location: "permissions.purpose.android.location",
+			notifications: "permissions.purpose.android.notifications",
+		} as const)
+	: ({
+			location: "permissions.purpose.ios.location",
+			notifications: "permissions.purpose.ios.notifications",
+		} as const);
 
 interface PermissionCardProps {
 	action: PermissionButtonAction;
@@ -203,11 +200,13 @@ function PermissionCard({
 			<AppButton
 				accessibilityHint={
 					action === "openSettings"
-						? `설정 앱에서 ${title} 권한을 켤 수 있어요`
-						: `${title} 권한을 요청해요`
+						? t("permissions.row.openSettings", { title })
+						: t("permissions.row.request", { title })
 				}
 				disabled={granted || pending}
-				label={granted ? "허용됨" : "허용"}
+				label={
+					granted ? t("permissions.row.allowed") : t("permissions.row.allow")
+				}
 				onPress={onPress}
 				size="medium"
 				variant={emphasized && !granted ? "primary" : "secondary"}
@@ -320,26 +319,26 @@ export default function PermissionsScreen() {
 				<View className="gap-3">
 					<PermissionCard
 						action={locationAction}
-						description={CARD_DESCRIPTIONS.location}
+						description={t(CARD_DESCRIPTION_KEYS.location)}
 						emphasized={emphasizeLocation}
 						icon="location"
 						onPress={pressLocation}
 						pending={pending === "location"}
-						title="위치"
+						title={t("permissions.location.title")}
 					/>
 					<PermissionCard
 						action={notificationsAction}
-						description={CARD_DESCRIPTIONS.notifications}
+						description={t(CARD_DESCRIPTION_KEYS.notifications)}
 						emphasized={!emphasizeLocation}
 						icon="notifications"
 						onPress={pressNotifications}
 						pending={pending === "notifications"}
-						title="알림"
+						title={t("permissions.notifications.title")}
 					/>
 				</View>
 				{IS_ANDROID_LAYOUT ? null : (
 					<AppText className="text-center text-text-tertiary" variant="caption">
-						{SETTINGS_HINT}
+						{t("permissions.settingsHint")}
 					</AppText>
 				)}
 			</ScrollView>
@@ -354,11 +353,15 @@ export default function PermissionsScreen() {
 						className="mb-2 text-center text-text-tertiary"
 						variant="caption"
 					>
-						{SETTINGS_HINT}
+						{t("permissions.settingsHint")}
 					</AppText>
 				) : null}
-				<AppButton label="계속" onPress={finish} />
-				<AppButton label="나중에" onPress={finish} variant="ghost" />
+				<AppButton label={t("permissions.continue")} onPress={finish} />
+				<AppButton
+					label={t("permissions.later")}
+					onPress={finish}
+					variant="ghost"
+				/>
 			</View>
 		</View>
 	);

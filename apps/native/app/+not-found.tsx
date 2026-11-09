@@ -3,6 +3,7 @@ import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { Screen } from "@/components/ui/screen";
+import { t } from "@/lib/i18n/t";
 
 export default function NotFoundScreen() {
 	return (
@@ -10,10 +11,10 @@ export default function NotFoundScreen() {
 			<Stack.Screen options={{ headerShown: false }} />
 			<Screen>
 				<View className="flex-1 items-center justify-center gap-4 px-6">
-					<AppText variant="title2">페이지를 찾을 수 없어요</AppText>
+					<AppText variant="title2">{t("notFound.title")}</AppText>
 					<Link href="/" replace>
 						<AppText className="text-text-accent" variant="labelM">
-							지도로 돌아가기
+							{t("notFound.backToMap")}
 						</AppText>
 					</Link>
 				</View>
