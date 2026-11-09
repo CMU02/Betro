@@ -195,3 +195,78 @@ Worker가 보낸 알림이 iPhone에 5초 안에 도착하고, 응답이 200과 
   - 400 `TopicDisallowed`: 설정 오류이므로 경보만 남긴다.
 - **환경 구분**: sandbox 토큰을 운영 호스트로 보내면 `BadDeviceToken`이 온다. 그래서 등록할 때 토큰마다 환경(개발 빌드는 sandbox, 배포 빌드는 운영)을 함께 저장한다. 그러지 않으면 정상 토큰을 지우게 된다.
 - 호출 수: APNs 7회(로컬 2, Worker 5), FCM 1회.
+
+## 3. 위젯 확장 빌드
+
+실험일: 2026-11-09(월) 19:00~19:35 KST. 실험 코드는 로컬 브랜치 `spike/mvp2-live-activity`(병합·push 안 함)에 있고, Task 4가 이어 쓴다.
+
+### 질문
+
+지금 앱(Expo 58, RN 0.88, `useFrameworks: dynamic`, Firebase)에 ActivityKit 위젯 확장을 넣고, prebuild와 기기 빌드가 반복해서 되는가?
+
+### 기준
+
+- `npx expo prebuild --clean` 뒤 기기 빌드가 성공한다.
+- 앱에서 시작한 Live Activity가 잠금화면과 다이내믹 아일랜드에 보인다.
+- prebuild를 다시 해도 확장이 유지된다.
+
+### 결과: 통과
+
+- `@bacons/apple-targets` 5.0.0으로 위젯 확장을 넣었다. 1순위 도구로 끝까지 됐으므로 `expo-live-activity`는 쓰지 않았다.
+- `prebuild --clean`을 세 번 했고, 매번 `CommuteActivityWidget.appex`가 앱에 들어간 채로 기기 빌드가 성공했다.
+- iPhone 16 Pro에서 앱 버튼으로 시작한 Activity가 잠금화면 카드와 다이내믹 아일랜드(compact: `M5107` / `3`)에 보였다.
+- Firebase, `useFrameworks: dynamic`과의 충돌은 없었다.
+
+### 막힌 점과 해결
+
+1. **확장 프로비저닝**: 확장 번들 ID `com.cmu02.betro.commute-activity`의 개발 프로파일이 없어 서명에서 멈췄다.
+   - Xcode에 Apple 계정이 로그인되어 있지 않았다(`No Accounts`). 사용자가 로그인한 뒤 `xcodebuild … -allowProvisioningUpdates`로 빌드하자, 자동 서명이 App ID와 프로파일을 만들었다.
+   - `bun run ios`(`expo run:ios`)는 이 옵션을 넘기지 않는다. 그래서 확장을 처음 넣을 때는 Xcode에서 한 번 빌드하거나 `xcodebuild`를 직접 써야 한다.
+   - 앱 설정에 `ios.appleTeamId`(`5JKMP6D4C5`)를 넣었다.
+2. **모듈 이름 충돌**: 확장 타깃 이름을 `CommuteActivity`로 두었더니 로컬 모듈 Pod의 Swift 모듈 이름과 같아졌다. 그 결과 `ExpoModulesProvider.swift`에서 `cannot find 'CommuteActivityModule' in scope`가 났다.
+   - 확장 이름을 `CommuteActivityWidget`으로 바꿨다.
+   - 첫 빌드가 남긴 `CommuteActivity.swiftmodule`이 빌드 폴더에 남아 같은 오류가 이어졌다. derived data를 비우고 나서 해결됐다.
+3. **공유 파일**: apple-targets의 `_shared` 폴더는 앱 타깃과 확장에만 링크된다. Expo 로컬 모듈은 별도 Pod라서 그 파일을 보지 못한다.
+   - 원본 `targets/commute-activity/CommuteActivityAttributes.swift` 하나를 두고, `modules/commute-activity/ios/`에는 심볼릭 링크로 넣었다. CocoaPods가 링크를 따라 컴파일했다.
+   - 결과적으로 두 모듈에 같은 소스의 `CommuteActivityAttributes` 타입이 각각 생기지만, ActivityKit은 문제없이 같은 Activity로 다뤘다.
+4. **JS 값 변환**: 상태를 `[String: Any]`로 받았더니 `stopsAway`가 0으로 나왔다. JS 숫자는 Double이라 `as? Int`가 실패했다. 모듈 입력을 Expo `Record`(`@Field var stopsAway: Int`)로 바꿔 해결했다.
+
+### 측정값
+
+| 항목 | 값 |
+|---|---|
+| `prebuild --clean -p ios`(Pod 설치 포함) | 73초, 57초, 63초 |
+| 기기 Debug 빌드, derived data 비운 상태 | 219초 |
+| 기기 Debug 빌드, prebuild 직후 증분 | 176초 |
+| Activity 시작(`startLocal`) → 업데이트 토큰 이벤트 | 약 1.2초 |
+| push-to-start 토큰 | 관찰을 시작하자 바로 옴. 160자 hex. 앱 재설치(덮어쓰기) 뒤에도 같은 값 |
+| Activity 업데이트 토큰 | Activity마다 다름. 160자 hex |
+
+### 재현 방법
+
+- `apps/native/targets/commute-activity/`
+  - `expo-target.config.js`: `type: "widget"`, `name: "CommuteActivityWidget"`, `deploymentTarget: "17.2"`, 프레임워크 SwiftUI·WidgetKit·ActivityKit
+  - `CommuteActivityAttributes.swift`: 정적 값 `routeLabel`. `ContentState`는 `stage`, `stopsAway`, `etaEpoch`, `status`
+  - `CommuteLiveActivity.swift`: 잠금화면 텍스트 네 줄, 다이내믹 아일랜드
+- `apps/native/modules/commute-activity/`
+  - Swift 모듈 `CommuteActivity`
+  - `startLocal(routeLabel, state)`: activity id를 돌려준다
+  - `areActivitiesEnabled()`
+  - 이벤트 `onPushToStartToken`, `onActivityToken`
+- `app.config.ts`
+  - `plugins`에 `@bacons/apple-targets`
+  - `ios.appleTeamId`
+  - `ios.infoPlist`에 `NSSupportsLiveActivities`, `NSSupportsLiveActivitiesFrequentUpdates`
+- 빌드: `npx expo prebuild --clean -p ios` 뒤 `xcodebuild -workspace ios/Betro.xcworkspace -scheme Betro -configuration Debug -destination id=<UDID> -allowProvisioningUpdates DEVELOPMENT_TEAM=5JKMP6D4C5 build`로 빌드하고, `xcrun devicectl device install app`으로 설치한다.
+
+### 2-F에 주는 결정
+
+- **확장 도구**: `@bacons/apple-targets`를 쓴다. 확장 타깃 이름은 로컬 모듈 이름과 겹치지 않게 `…Widget`으로 짓는다.
+- **공유 파일 배치**: Activity 정의는 `targets/<확장>/` 아래 파일 하나를 원본으로 두고, 로컬 모듈에는 심볼릭 링크로 넣는다. 타입 이름 `CommuteActivityAttributes`가 push-to-start의 `attributes-type` 값이 된다.
+- **모듈 API 모양**
+  - `startLocal(routeLabel, state)`: id를 돌려준다
+  - `areActivitiesEnabled()`
+  - 이벤트 `onPushToStartToken({token})`, `onActivityToken({activityId, token})`
+  - 상태는 `Record`로 받는다. 2-F에서는 `update`와 `end`를 더한다.
+  - 토큰 이벤트는 관찰을 시작하자마자, 이미 있는 Activity까지 포함해 다시 온다. 그래서 서버에 보낼 때는 바뀐 경우만 보낸다.
+- **빌드 절차**: 새 확장이나 새 번들 ID를 추가한 직후 첫 빌드에는 Xcode 계정 로그인과 `-allowProvisioningUpdates`가 필요하다. 그 뒤에는 `expo run:ios`로도 된다.
