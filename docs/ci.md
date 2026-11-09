@@ -6,7 +6,7 @@
 |---|---|---|
 | CI | `.github/workflows/ci.yml` | `develop`·`main` 대상 PR과 push에서 실행. 린트(PR에서 바뀐 파일만) → 타입 체크 → 테스트 + 커버리지(lcov). 커버리지는 `coverage-lcov` 아티팩트로 14일 보관 |
 | 브랜치 보호 | GitHub 설정 (`develop`, `main`) | PR로만 머지, `Lint, types, tests` 체크 통과 필수, force push·삭제 금지. 관리자는 급할 때 우회할 수 있다 |
-| CodeQL | GitHub 기본 설정(default setup) | JavaScript/TypeScript와 Actions 보안 분석. PR과 기본 브랜치 push, 매주 실행 |
+| CodeQL | GitHub 기본 설정(default setup) | JavaScript/TypeScript 보안 분석. PR과 기본 브랜치 push, 매주 실행. 워크플로우 파일이 `main`에 들어간 뒤 저장소 설정에서 `Actions` 언어도 추가한다(그 전에는 API가 "언어가 없다"며 거부한다) |
 | Dependabot | `.github/dependabot.yml` + 저장소 설정 | 취약점 알림과 보안 업데이트 PR. Bun 의존성은 매주 월요일(minor·patch는 PR 하나로 묶음), Actions는 매월. 대상 브랜치는 `develop` |
 | Secret scanning | 저장소 설정 | 커밋된 키 탐지와 push protection(키가 든 push를 막음) |
 
