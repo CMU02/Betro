@@ -270,3 +270,92 @@ Worker가 보낸 알림이 iPhone에 5초 안에 도착하고, 응답이 200과 
   - 상태는 `Record`로 받는다. 2-F에서는 `update`와 `end`를 더한다.
   - 토큰 이벤트는 관찰을 시작하자마자, 이미 있는 Activity까지 포함해 다시 온다. 그래서 서버에 보낼 때는 바뀐 경우만 보낸다.
 - **빌드 절차**: 새 확장이나 새 번들 ID를 추가한 직후 첫 빌드에는 Xcode 계정 로그인과 `-allowProvisioningUpdates`가 필요하다. 그 뒤에는 `expo run:ios`로도 된다.
+
+## 4. push-to-start와 업데이트 토큰
+
+실험일: 2026-11-09(월) 19:45~20:25 KST. 실험 코드는 로컬 브랜치 `spike/mvp2-live-activity`에 있다. 시나리오 E는 아직 하지 않았다(아래).
+
+### 질문
+
+- 앱이 꺼진 상태에서 서버가 정한 시각에 Live Activity가 뜨는가?
+- 업데이트 토큰이 서버에 제때 오는가?
+
+### 기준
+
+- 시나리오마다 2회, 합계 10회 모두 시작 푸시 뒤 10초 안에 잠금화면에 뜬다.
+- 업데이트 토큰이 10회 모두 시작 뒤 60초 안에 `/token`에 도착한다.
+
+### 결과: 부분(A~D 8/8 통과, E 미실시)
+
+- 시나리오 A~D 8회 모두 Live Activity가 떴고, 업데이트 토큰이 왔다.
+- 표시 시간은 확인할 수 있었던 7회 모두 5초 안이었다. B2는 캡처가 늦어 화면으로는 재지 못했다.
+- 업데이트 토큰은 8회 모두 4초 안에 왔다. 기준 60초보다 훨씬 빠르다.
+- 앱이 꺼져 있어도 시작 푸시를 받으면 iOS가 앱을 백그라운드로 깨운다. 이때 JS 없이 네이티브 코드(`ExpoAppDelegateSubscriber`)가 토큰을 서버로 보낼 수 있었다.
+- 시나리오 E(앱을 마지막으로 연 지 8시간 이상)는 다음 날 아침에 한다. 출시 기준 7.1의 20/20 판단에는 E 2회가 필요하다.
+
+### 측정값
+
+모든 시도는 Worker `/send` → APNs sandbox로 보냈다.
+- 헤더: `apns-push-type: liveactivity`, `apns-topic: com.cmu02.betro.push-type.liveactivity`, `apns-priority: 10`
+- 본문: `event: "start"`, `attributes-type: "CommuteActivityAttributes"`, `alert` 포함
+
+"표시"는 보낸 뒤 처음으로 카드가 보인 캡처의 시각이다. 캡처 간격이 약 0.6~1.4초라 실제 표시는 그보다 이르다. "토큰"은 Worker가 업데이트 토큰을 받은 시각이다.
+
+| # | 상태 | 앱 깨움 | 표시 | 토큰 |
+|---|---|---|---|---|
+| A1 | 앱 스와이프 종료, 잠김 | 백그라운드 실행 | ≤4.0초(첫 캡처) | 3.4초 |
+| A2 | 앱 스와이프 종료, 잠김 | 백그라운드 실행 | 4.7초(3.3초 캡처엔 없음) | 2.4초 |
+| B1 | 재부팅 → 한 번 해제 → 잠금 | 이미 떠 있음(재부팅 뒤 사전 실행으로 보임) | ≤4.7초(첫 캡처) | 3.3초 |
+| B2 | 재부팅 → 한 번 해제 → 잠금 | 백그라운드 실행 | 캡처가 35초 늦어 재지 못함. 기기 기록상 2.6초에 Activity 있음 | 3.1초 |
+| C1 | 저전력 모드, 잠김(미러링 중) | 백그라운드 | 미러링의 다이내믹 아일랜드와 Mac 메뉴 막대에 표시. 기기 기록상 1.6초에 생성 | 2.5초 |
+| C2 | 저전력 모드, 잠김(미러링 중) | 백그라운드 | 약 1~2초(Mac 메뉴 막대) | 2.2초 |
+| D1 | 방해금지, 잠김 | 백그라운드 | 2.6초(2.0초 캡처엔 없음) | 2.2초 |
+| D2 | 방해금지, 잠김 | 백그라운드 | ≤2.7초(첫 캡처) | 3.2초 |
+| E1·E2 | 마지막 실행 8시간 이상 | | 미실시 | |
+
+- 방해금지에서는 화면이 켜지거나 소리가 나지 않았다. 그래도 카드는 잠금화면에 떴다.
+- iPhone 미러링 중에는 본체 화면이 꺼져 `devicectl` 캡처가 검게 나온다. 대신 미러링 창과 Mac 메뉴 막대에 Live Activity가 보였다. 미러링에서는 제어 센터를 열 수 없어서, 방해금지는 사용자가 본체에서 켰다.
+
+**갱신과 종료** (A1의 Activity, 잠김 상태)
+
+| 항목 | 결과 |
+|---|---|
+| `event: "update"` 30초 간격 10회, 우선순위 10과 5를 번갈아 | 10회 모두 반영. 두 우선순위 모두 보낸 뒤 약 1.5~2.1초 캡처에 새 값이 보였다. 이 짧은 시험에서는 우선순위 5도 늦지 않았다 |
+| `event: "end"`, `dismissal-date: now` | 3초 뒤 캡처에서 카드가 사라졌다 |
+
+**토큰 회전과 옛 토큰**
+
+| 경우 | 결과 |
+|---|---|
+| push-to-start 토큰, 앱 재설치(덮어쓰기) 뒤 | 같은 값(`808c3b3d…`) |
+| push-to-start 토큰, 재부팅 뒤(두 번) | 같은 값 |
+| push-to-start 토큰, 앱 삭제 뒤 재설치 | 하지 않았다. 앱 데이터를 지우기 때문이다 |
+| 업데이트 토큰 | Activity마다 새 값이다. 앱을 다시 띄울 때마다 같은 Activity의 같은 토큰이 다시 보고된다 |
+| 끝난 Activity의 업데이트 토큰으로 `update` | 200(조용히 버려짐, 에러 없음) |
+| 한 글자를 바꾼 업데이트 토큰 | 400 `BadDeviceToken` |
+
+- 호출 수: APNs 시작 8회, 갱신 10회, 종료 8회, 옛 토큰 3회.
+
+### 재현 방법
+
+- 앱: Release 빌드(개발 서명, `aps-environment: development`).
+- 로컬 모듈 `CommuteActivity`
+  - `CommuteActivityAppDelegate`(`appDelegateSubscribers`)가 앱 시작 때 `CommuteTokenReporter`를 켠다.
+  - `CommuteTokenReporter`는 `pushToStartTokenUpdates`, `activityUpdates`, 각 Activity의 `pushTokenUpdates`를 관찰한다. 바뀔 때마다 `URLSession`으로 Worker `/token`에 POST하고, 이때 `beginBackgroundTask`로 전송 시간을 확보한다.
+- Worker `betro-spike-apns`
+  - `/token`: 받은 시각과 함께 `console.log`로 남기고, `wrangler tail --format json`으로 파일에 받았다.
+  - `/send`: APNs에 보낸다.
+  - 실험 뒤 지웠다.
+- 잠금화면 확인: 보낸 직후 `xcrun devicectl device capture screenshot`을 6번 찍었다. 미러링 중일 때는 Mac 화면을 캡처했다.
+- Cloudflare가 Python `urllib`의 기본 User-Agent 요청을 403으로 막아서 `user-agent: betro-spike/1`을 붙였다.
+
+### 2-C와 2-F에 주는 결정
+
+- **보조 경로**: A~D에서는 "시작 직전 로컬 알림으로 앱을 깨우는 보조 경로"가 필요 없었다. E 결과를 보고 최종 판단한다.
+- **토큰 등록 API 모양**: `POST /devices/{installId}/activity-tokens`
+  - 본문: `{ kind: "pushToStart" | "activity", token, activityId?, route?, env: "sandbox" | "production", reportedAt }`
+  - 같은 값이 여러 번 오므로 `(installId, kind, activityId)`로 덮어쓴다(멱등).
+  - 앱은 JS가 아니라 네이티브 AppDelegate 구독자에서 보낸다. 백그라운드로 깨어난 짧은 시간에도 보내야 하기 때문이다.
+- **Activity 수명은 서버가 관리한다.** APNs는 끝난 Activity의 토큰에도 200을 돌려준다. 그래서 서버가 `end`를 보낸 Activity의 토큰은 바로 지우고, 그 뒤에는 보내지 않는다.
+- **토큰이 늦을 때 서버가 할 일**: 시작 푸시 뒤 업데이트 토큰이 오지 않으면 30초 간격으로 기다린다. 60초가 지나도 없으면 같은 노선의 시작 푸시를 한 번 다시 보내지 않는다. 중복 Activity가 생기기 때문이다. 대신 그 세션을 "갱신 불가"로 기록하고 일반 알림으로 바꾼다. 이번 측정에서는 토큰이 모두 4초 안에 왔다.
+- **우선순위**: 우선순위 5도 짧은 시험에서는 바로 반영됐다. 다만 iOS가 우선순위 10의 하루 예산을 제한하므로, 2-C는 "몇 정거장 전" 변화와 도착 임박만 10으로 보내고 나머지는 5로 보낸다.
