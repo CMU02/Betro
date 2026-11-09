@@ -359,3 +359,100 @@ Worker가 보낸 알림이 iPhone에 5초 안에 도착하고, 응답이 200과 
 - **Activity 수명은 서버가 관리한다.** APNs는 끝난 Activity의 토큰에도 200을 돌려준다. 그래서 서버가 `end`를 보낸 Activity의 토큰은 바로 지우고, 그 뒤에는 보내지 않는다.
 - **토큰이 늦을 때 서버가 할 일**: 시작 푸시 뒤 업데이트 토큰이 오지 않으면 30초 간격으로 기다린다. 60초가 지나도 없으면 같은 노선의 시작 푸시를 한 번 다시 보내지 않는다. 중복 Activity가 생기기 때문이다. 대신 그 세션을 "갱신 불가"로 기록하고 일반 알림으로 바꾼다. 이번 측정에서는 토큰이 모두 4초 안에 왔다.
 - **우선순위**: 우선순위 5도 짧은 시험에서는 바로 반영됐다. 다만 iOS가 우선순위 10의 하루 예산을 제한하므로, 2-C는 "몇 정거장 전" 변화와 도착 임박만 10으로 보내고 나머지는 5로 보낸다.
+
+## 5. Android 갱신
+
+실험일: 2026-11-09(월) 20:30~23:43 KST. 실험 코드는 로컬 브랜치 `spike/mvp2-android-update`에 있다.
+
+- 절전 시나리오는 Galaxy S20 Ultra(Android 13, One UI)로 했다.
+- 진행 중 알림의 Android 16 표시(ProgressStyle, 승격)는 에뮬레이터 두 개로 봤다: API 36.0(Android 16), API 36.1(Android 16 QPR1).
+
+### 질문
+
+앱이 꺼지고 Doze나 절전 상태일 때도 높은 우선순위 FCM 데이터 메시지로 진행 중 알림을 만들고 갱신할 수 있는가?
+
+### 기준
+
+- 각 시나리오 30분 동안 60초 간격으로 보낸 메시지가 기기에 반영된 시각 사이 간격이 2분을 넘지 않는다.
+- 출시 기준 7.1 "끊김 0"을 위한 사전 확인이다.
+
+### 결과: 통과(A~E 기준 통과, 삼성 "절전 앱" 미실시)
+
+- A~E 다섯 시나리오 모두 30분 동안 30회를 다 받았고, 최대 간격은 60초였다. 기준(2분)을 넘은 적이 없다.
+- 지연은 최대 0.7초였다. Doze(C)와 rare 버킷(D)과 절전 모드(E)에서도 늦어지지 않았다.
+- F(강제 종료)에서는 예상대로 하나도 오지 않았다. 그런데 이때 보낸 메시지는 버려지지 않았다. 앱을 다시 열자 3~7분 늦게, 순서가 섞여 도착했다(아래).
+- 에뮬레이터 API 36.1에서는 상태바 칩과 잠금화면 카드로 승격됐다. API 36.0에서는 ProgressStyle만 보이고 승격되지 않았다.
+- 삼성 "절전 앱"에 넣은 경우는 사용자가 설정에서 직접 넣어야 해서 아직 하지 않았다.
+
+### 측정값
+
+- 보낸 쪽: Mac에서 `spikes/fcm-sender/send.ts`가 60초마다 FCM v1로 보냈다. `android.priority: HIGH`, 데이터 메시지만(`notification` 없음).
+- 받은 쪽: `setBackgroundMessageHandler` → 로컬 모듈 `CommuteNotification.show` → `logcat` 태그 `CommuteSpike`에 `seq`, `sentAt`, `receivedAt`을 찍었다.
+- "지연"은 기기 `receivedAt` − Mac `sentAt`이다. 두 시계가 모두 NTP라 음수(−0.02초)도 나온다. 시계 차이 이하의 지연은 0으로 본다.
+- "최대 간격"은 기기에서 이웃한 두 메시지를 처리한 시각의 차이다. 60초면 한 번도 밀리지 않은 것이다.
+
+| # | 상태 | 보냄/받음 | 누락 | 최대 간격 | 지연 중앙값 | 지연 최대 |
+|---|---|---|---|---|---|---|
+| A2 | 앱 백그라운드, 화면 켜짐, USB 충전 중 | 30/30 | 없음 | 60초 | 0.0초 | 0.0초 |
+| A(첫 실행) | 같음 | 30/15 | seq 16~30 기록 끊김(아래) | 60초 | 0.0초 | 0.0초 |
+| B | 앱 프로세스 종료(`am kill`), 화면 꺼짐, 충전 끊김 | 30/30 | 없음 | 60초 | 0.0초 | 0.7초 |
+| C | B + Doze 강제 | 30/30 | 없음 | 60초 | 0.0초 | 0.0초 |
+| D | Doze 유지 + rare 버킷 | 30/30 | 없음 | 60초 | 0.0초 | 0.1초 |
+| E | Doze 유지 + 절전 모드, 버킷 active | 30/30 | 없음 | 60초 | 0.0초 | 0.1초 |
+| F | 강제 종료, 5분 | 5/0 | 5 | - | - | - |
+| E' | 삼성 "절전 앱"에 넣음 | 미실시 | | | | |
+
+- 상태는 시나리오 시작과 끝에 `dumpsys`로 기록했다.
+  - B 끝: 화면 꺼짐 30분 뒤 deep=`IDLE_PENDING`, light=`IDLE`. 실제 대기로는 deep Doze까지 가지 않았다.
+  - C: `force-idle` 뒤 deep=`IDLE` 30분 유지.
+  - D·E: `unforce`를 했지만 화면이 꺼져 있고 충전이 끊겨 있어서 deep=`IDLE`가 그대로였다. 그래서 D는 "Doze + rare 버킷", E는 "Doze + 절전 모드"를 함께 시험한 셈이다.
+- B~E 120회 모두 한 번도 밀리지 않았다. 높은 우선순위 메시지는 Doze의 유지 관리 창을 기다리지 않고 바로 앱을 깨웠다.
+- B에서 프로세스를 죽인 뒤에도 지연 최대는 0.7초였다. 메시지마다 앱 프로세스와 JS(헤드리스 태스크)를 새로 띄우는 비용이 이 정도다.
+- F(설정의 강제 종료와 같은 `am force-stop`): 5회 모두 FCM 200이었지만 기기에는 하나도 오지 않았다. Android가 강제 종료된 앱에는 브로드캐스트를 보내지 않기 때문이다. 사용자가 앱을 다시 열기 전까지 계속 이렇다.
+- A 첫 실행은 seq 16부터 기록이 끊겼다. 같은 시각에 에뮬레이터를 빌드하면서 adb 서버가 다시 시작돼 `logcat` 수집이 끊긴 것으로 보인다. 기기 쪽 문제가 아니라서 A2로 다시 쟀다.
+
+**화면(Step 4)**
+
+| 기기 | 결과 |
+|---|---|
+| 에뮬레이터 API 36.0 | `Notification.ProgressStyle`(진행 점 4개)은 보였다. 승격은 되지 않았다. 상태바 칩도 없었다 |
+| 에뮬레이터 API 36.1 | 승격됐다(`FLAG_PROMOTED_ONGOING`). 상태바 칩 `341 · 21분`, 잠금화면 맨 위 카드, 알림창의 ProgressStyle이 모두 보였다 |
+| S20 Ultra(Android 13) | 일반 ongoing 알림이 같은 ID(4101) 하나로 갱신됐다. 23:43 기준 Betro 알림 기록은 ID 4101 하나뿐이고, 플래그는 `ONGOING_EVENT | ONLY_ALERT_ONCE`다. 갱신 때 소리나 진동이 다시 울리지 않았다 |
+
+- API 36.0 빌드에는 `Notification.Builder.setRequestPromotedOngoing`, `setShortCriticalText`가 없다. 이 메서드는 36.1에서 들어왔다. API 36.0 기기에서 부르면 `NoSuchMethodError`가 난다.
+- 리플렉션으로 부르면 R8이 Release 빌드에서 이름을 바꿔서 깨졌다.
+- 그래서 두 setter가 쓰는 extras 키(`android.requestPromotedOngoing`, `android.shortCriticalText`)를 직접 넣었다. 36.1에서 이것만으로 승격됐다. 36.0에서는 아무 일도 없고 에러도 없다.
+- 승격 조건 중 이번에 맞춘 것: 채널 중요도 HIGH, `setOngoing(true)`, 제목 있음, 사용자 정의 뷰 없음, 매니페스트 `POST_PROMOTED_NOTIFICATIONS`. 권한은 일반 권한이라 따로 묻지 않는다.
+
+### 재현 방법
+
+- 앱: Release APK(`expo run:android --variant release`), 기기에 USB로 설치.
+- 로컬 모듈 `apps/native/modules/commute-notification/`(Kotlin)
+  - `show(data)`: 채널 `commute-live`(HIGH), 알림 ID 4101로 만들고 덮어쓴다. API 36 이상은 `Notification.ProgressStyle`, 그 아래는 `NotificationCompat` ongoing 알림.
+  - 받은 시각을 `Log.i("CommuteSpike", …)`로 찍는다.
+- `apps/native/lib/push/background.ts`: `data.spike`가 있는 메시지만 `CommuteNotification.show`로 넘긴다.
+- 시나리오 순서는 스크립트 하나로 돌렸다(`adb` 명령, 시나리오마다 30분).
+  - A: `svc power stayon usb`, 앱 실행 뒤 홈으로.
+  - B: `stayon false`, `dumpsys battery unplug`, `am kill`, 화면 끔.
+  - C: `dumpsys deviceidle force-idle`.
+  - D: `unforce`, `am set-standby-bucket com.cmu02.betro rare`.
+  - E: 버킷 `active`, `settings put global low_power 1`.
+  - F: `low_power 0`, `am force-stop`, 5분.
+  - 끝: `unforce`, 버킷 `active`, `low_power 0`, `dumpsys battery reset`, `stayon false`.
+- 분석: `send.ndjson`(보낸 seq, FCM 응답)과 `logcat`(받은 seq)을 맞춰 누락, 간격, 지연을 셌다.
+- 호출 수: FCM 185(S20). 에뮬레이터 화면 확인용 발송은 따로 몇 회회.
+
+### 2-F에 주는 결정
+
+- **포그라운드 서비스 대안은 필요 없다.** A~E에서 높은 우선순위 FCM 데이터 메시지만으로 끊김이 없었다. 그래서 `FOREGROUND_SERVICE_*` 권한과 스토어의 포그라운드 서비스 신고도 필요 없다. 삼성 "절전 앱" 결과가 나오면 이 결정을 다시 본다.
+- **오래된 메시지는 버린다.** 이번에 가장 중요한 발견이다.
+  - 강제 종료 중에 보낸 F 메시지 5개는 FCM이 보관했다. 앱을 다시 열자 123~442초 늦게, 순서가 섞여 왔다.
+  - 그중 seq 2·3은 23:17:20에 와서, 그 24초 전에 받은 A2의 최신 값을 덮어썼다. 실제 서비스였다면 잠금화면에 7분 전 도착 정보가 다시 떴을 것이다.
+  - 서버: 메시지마다 `android.ttl`을 짧게(120초 안팎) 주고, 세션마다 같은 `collapse_key`를 준다. 그러면 FCM이 오래된 것을 보관하거나 쌓지 않는다.
+  - 앱: 세션마다 마지막으로 반영한 `sentAt`(또는 서버가 주는 버전 번호)을 기억한다. 그보다 오래된 메시지는 버린다. `etaEpoch`가 이미 지난 메시지도 버린다.
+- **강제 종료는 막을 수 없다.** FCM은 200을 돌려주므로 서버가 알아챌 방법도 없다. 앱을 다시 열면 최신 상태를 받아 오게 하고, 그 전까지 알림이 멈춰 있을 수 있다는 것을 도움말에 적는다.
+- **승격 API는 extras 키나 정식 setter로 쓰고, 리플렉션은 쓰지 않는다.**
+  - compileSdk가 36.0이면 `android.requestPromotedOngoing`, `android.shortCriticalText` extras를 직접 넣는다. 승격은 36.1 이상에서만 되고, 36.0에서는 아무 효과가 없다.
+  - compileSdk를 36.1로 올릴 수 있으면 `setRequestPromotedOngoing`, `setShortCriticalText`를 쓰고 `Build.VERSION.SDK_INT_FULL`로 나눈다.
+- **처리는 지금처럼 JS 백그라운드 핸들러에서 해도 된다.** 프로세스가 죽은 상태(B)에서도 0.7초 안에 끝났다. 네이티브 `FirebaseMessagingService`로 옮길 필요는 아직 없다.
+- **남은 확인**: Android 16 QPR1 이상 실기기에서 Step 4(상태바 칩, 잠금화면, 삼성이면 Now Bar)를 다시 본다.
