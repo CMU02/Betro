@@ -130,3 +130,68 @@ TAGO는 서울 API와 같은 차량 좌표를 조금 늦게, 일부는 건너뛰
 - **정류장 ID 연결**: 경기는 `GGB` 접두어만 붙이면 서울 `stId`와 같다. 인천은 첫 자리에 2를 더한다. 좌표 최근접 매칭은 필요 없다.
 - **"몇 정거장 전"**: 두 출처 모두 정류장 순번(서울 `sectOrd`, TAGO `nodeord`)과 좌표가 있어 지금 서울 버스와 같은 방식으로 계산할 수 있다. 위치가 약 1분 간격이므로, 지도 보간은 1분 간격을 전제로 맞춘다.
 - **도착 예측**: 서울 정류장은 서울 API로만 받을 수 있다. TAGO는 서울 정류장에서 0건이다.
+
+## 2. APNs 발송 경로
+
+실험일: 2026-11-09(월) 18:10~18:50 KST. 실험 코드는 로컬 브랜치 `spike/mvp2-apns`(병합·push 안 함)에 있다.
+
+### 질문
+
+- Cloudflare Worker의 `fetch`로 APNs(HTTP/2 전용, ES256 JWT)에 직접 보낼 수 있는가?
+- 안 되면 FCM HTTP v1로 iOS 알림을 보낼 수 있는가? Live Activity 경로는 Task 4에서 본다.
+
+### 기준
+
+Worker가 보낸 알림이 iPhone에 5초 안에 도착하고, 응답이 200과 `apns-id`이면 통과다.
+
+### 결과: 통과
+
+- **직접 발송이 된다.** Worker의 일반 `fetch`로 `api.sandbox.push.apple.com`에 보낸 알림이 200과 `apns-id`를 받았고, iPhone 홈 화면에 3초 안에 배너가 떴다. Worker 쪽에 HTTP/2 설정이나 별도 라이브러리는 필요 없었다.
+- **JWT 서명이 된다.** WebCrypto `importKey("pkcs8", …, {name:"ECDSA", namedCurve:"P-256"})`로 `.p8` 키를 그대로 읽어 서명했다.
+- **FCM HTTP v1도 된다.** 같은 Worker에서 서비스 계정으로 RS256 JWT를 만들어 OAuth 토큰을 받고 FCM으로 보낸 알림도 200을 받고 도착했다.
+
+### 측정값
+
+- 기기: iPhone 16 Pro, 개발 빌드(sandbox). APNs 토큰 `FD7A47D8…`(64자), FCM 토큰 `el9XbwLw…`(142자).
+
+| 경로 | 응답 | 처리 시간 | 도착 |
+|---|---|---|---|
+| Mac에서 `curl --http2`(기준선) | `HTTP/2 200`, `apns-id` | 0.84초(연결 포함) | 3초 안에 배너 |
+| Worker → APNs 직접 | 200, `apns-id` `B26A088D…` | Worker 안 143ms | 3초 안에 배너 |
+| Worker → FCM HTTP v1 | 200, `projects/betro-a77a2/messages/…` | Worker 안 527ms(OAuth 토큰 발급 포함) | 3초 안에 배너 |
+
+- 앱이 화면에 떠 있을 때는 iOS가 직접 보낸 APNs 알림의 배너를 보여주지 않았다. 확인은 홈 화면에서 했다.
+- 도착 시간은 보낸 직후 기기 화면을 캡처해 확인했다. 캡처까지 약 3초가 걸리므로 실제로는 그보다 짧다.
+
+**오류 응답** (Worker → APNs sandbox)
+
+| 경우 | 상태 | `reason` |
+|---|---|---|
+| 토큰 마지막 한 글자를 바꿈 | 400 | `BadDeviceToken` |
+| JWT `iat`를 2시간 전으로 | 403 | `ExpiredProviderToken` |
+| 다른 번들 토픽(`com.cmu02.other`) | 400 | `TopicDisallowed` |
+| sandbox 토큰을 운영 호스트(`api.push.apple.com`)로 | 400 | `BadDeviceToken` |
+
+앱 삭제 뒤의 `410 Unregistered`는 이번에 보지 않았다. 토큰이 바뀌는 경우와 함께 Task 4에서 본다.
+
+### 재현 방법
+
+- 실험 브랜치에서 앱의 `getPushToken`이 APNs·FCM 토큰을 Mac의 수신 서버(`:8787`)로 보내게 했다.
+  - 이 설치는 알림 권한을 아직 묻지 않은 상태(`undetermined`)였다. 그래서 실험 브랜치에서만 앱을 켤 때 권한을 묻게 바꿨다.
+  - Metro를 `CI=1`로 띄우면 앱 로그가 보이지 않아서 수신 서버를 썼다.
+- 로컬 기준선: `bun spikes/apns-worker/sign.ts`로 JWT를 만들고 `curl --http2`로 sandbox에 보낸다.
+- Worker: `spikes/apns-worker`를 `betro-spike-apns`로 배포한다.
+  - secret `APNS_KEY_P8`·`FCM_SA_JSON`은 파일에서 표준입력으로 넣고, `SPIKE_SECRET`은 임의 값으로 둔다.
+  - `POST /send`(APNs)와 `POST /send-fcm`(FCM)을 부른다. 헤더 `x-spike-secret`가 틀리면 403이다.
+- 확인 뒤 `wrangler delete --name betro-spike-apns`로 지웠다.
+
+### 2-C~2-F에 주는 결정
+
+- **iOS 알림과 Live Activity 업데이트는 Worker에서 APNs로 직접 보낸다.** 중계 서버는 필요 없다. FCM은 Android용으로 쓰고, iOS의 예비 경로로 남긴다.
+- **JWT 재사용**: APNs는 같은 JWT를 20분~1시간 동안 재사용하라고 권고하고, 너무 자주 바꾸면 `TooManyProviderTokenUpdates`를 돌려준다. 그래서 Worker(Durable Object)가 JWT 하나를 만들어 약 50분 동안 메모리에 두고 쓴다. 403 `ExpiredProviderToken`이 오면 새로 만들어 한 번 다시 보낸다.
+- **토큰 정리 규칙**
+  - 400 `BadDeviceToken`이나 410 `Unregistered`: 그 기기 토큰 등록을 지운다.
+  - 403 `ExpiredProviderToken`이나 `InvalidProviderToken`: 서버 쪽 문제이므로 토큰은 지우지 않는다. JWT를 새로 만들고 경보를 남긴다.
+  - 400 `TopicDisallowed`: 설정 오류이므로 경보만 남긴다.
+- **환경 구분**: sandbox 토큰을 운영 호스트로 보내면 `BadDeviceToken`이 온다. 그래서 등록할 때 토큰마다 환경(개발 빌드는 sandbox, 배포 빌드는 운영)을 함께 저장한다. 그러지 않으면 정상 토큰을 지우게 된다.
+- 호출 수: APNs 7회(로컬 2, Worker 5), FCM 1회.
