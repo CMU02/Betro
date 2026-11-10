@@ -112,6 +112,22 @@ describe("GET /v1/ref/bus/routes/:busRouteId/stops", () => {
 		expect(body.stops[0]?.stop).toBe("seoul-bus:S1");
 	});
 
+	test("accepts the line ID a search result returns", async () => {
+		const search = await get("/bus/routes?q=1000");
+		const { routes } = (await search.json()) as { routes: { line: string }[] };
+		const line = routes[0]?.line;
+		if (!line) {
+			throw new Error("no search result");
+		}
+		expect(line.startsWith("seoul-bus:")).toBe(true);
+		for (const id of [line, encodeURIComponent(line)]) {
+			// biome-ignore lint/performance/noAwaitInLoops: 두 형태를 차례로 확인한다
+			const res = await get(`/bus/routes/${id}/stops`);
+			expect(res.status).toBe(200);
+			expect(((await res.json()) as { line: string }).line).toBe(line);
+		}
+	});
+
 	test("answers 404 for unknown and old-batch routes", async () => {
 		expect((await get("/bus/routes/nope/stops")).status).toBe(404);
 		expect((await get(`/bus/routes/${OLD_ONLY_ROUTE_ID}/stops`)).status).toBe(

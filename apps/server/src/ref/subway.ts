@@ -191,15 +191,6 @@ export function listSubwayLines(): SubwayLineItem[] {
 	}));
 }
 
-const SUBWAY_PREFIX = "seoul-subway:";
-
-/** 출처 구분 ID(`seoul-subway:…`)나 맨 값을 맨 값으로 돌려준다. */
-export function stripSubwayPrefix(value: string): string {
-	return value.startsWith(SUBWAY_PREFIX)
-		? value.slice(SUBWAY_PREFIX.length)
-		: value;
-}
-
 export function findLineKey(value: string): LineKey | null {
 	return LINES.find((line) => line.lineKey === value)?.lineKey ?? null;
 }

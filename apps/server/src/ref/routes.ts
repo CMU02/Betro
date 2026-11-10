@@ -1,6 +1,7 @@
 import type { Database } from "@Betro/db";
 import { Hono } from "hono";
 import { currentBusBatch, findBusRouteStops, searchBusRoutes } from "./bus";
+import { stripBusPrefix, stripSubwayPrefix } from "./ids";
 import { ifNoneMatchMatches } from "./if-none-match";
 import {
 	currentTrackBatch,
@@ -8,7 +9,6 @@ import {
 	findLineKey,
 	findLineStations,
 	listSubwayLines,
-	stripSubwayPrefix,
 } from "./subway";
 
 const CACHE_CONTROL = "public, max-age=3600";
@@ -60,7 +60,10 @@ export function createRefRoutes(db: Database): Hono {
 	});
 
 	routes.get("/bus/routes/:busRouteId/stops", async (c) => {
-		const result = await findBusRouteStops(db, c.req.param("busRouteId"));
+		const result = await findBusRouteStops(
+			db,
+			stripBusPrefix(c.req.param("busRouteId"))
+		);
 		if (!result) {
 			return c.json({ error: "reference unavailable" }, 503);
 		}
