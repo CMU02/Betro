@@ -1,0 +1,960 @@
+{
+  "timezone": "Asia/Seoul",
+  "cases": [
+    {
+      "name": "passed line shows next bus",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 5,
+        "etaEpoch": 1794265920,
+        "leaveEpoch": null,
+        "passed": {
+          "lineName": "146"
+        },
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "146번이 지나갔어요 · 다음 차 08:12",
+        "detail": "강남역 · 08:12 도착",
+        "minutes": "12분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "passed subway shows next train",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "subway",
+        "lineName": "2호선",
+        "stopName": "강남역",
+        "stopsAway": 5,
+        "etaEpoch": 1794265920,
+        "leaveEpoch": null,
+        "passed": {
+          "lineName": "2호선"
+        },
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "2호선 열차가 지나갔어요 · 다음 열차 08:12",
+        "detail": "강남역 · 08:12 도착",
+        "minutes": "12분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "before leave tells when to go",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "walk",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 4,
+        "etaEpoch": 1794265920,
+        "leaveEpoch": 1794265500,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "08:05에 나가면 146 08:12 탑승",
+        "detail": "강남역 · 08:12 도착",
+        "minutes": "12분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "walk after leave time uses stops away",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "walk",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 3,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": 1794265140,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "3정거장 전",
+        "detail": "강남역 · 08:08 도착",
+        "minutes": "8분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "walk in later leg ignores leave time",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "walk",
+        "legIndex": 1,
+        "legCount": 2,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 1,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": 1794265500,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "1정거장 전",
+        "detail": "강남역 · 08:08 도착",
+        "minutes": "8분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "wait with two stops away",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 2,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "2정거장 전",
+        "detail": "강남역 · 08:08 도착",
+        "minutes": "8분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "wait arriving",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 0,
+        "etaEpoch": 1794265230,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "곧 도착",
+        "detail": "강남역 · 08:00 도착",
+        "minutes": "곧",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "wait without position",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": null,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "none",
+        "etaState": "estimated",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "위치 확인 중",
+        "detail": "강남역 · 약 08:08 도착",
+        "minutes": "8분",
+        "tag": "estimated",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "ride shows stops to alight",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "ride",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "역삼역",
+        "stopsAway": 4,
+        "etaEpoch": 1794265800,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "하차까지 4정거장",
+        "detail": "역삼역 · 08:10 도착",
+        "minutes": "10분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": []
+      }
+    },
+    {
+      "name": "ride last stop",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "ride",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "역삼역",
+        "stopsAway": 0,
+        "etaEpoch": 1794265290,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "이번에 내려요",
+        "detail": "역삼역 · 08:01 도착",
+        "minutes": "1분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": []
+      }
+    },
+    {
+      "name": "ride without position",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "ride",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "역삼역",
+        "stopsAway": null,
+        "etaEpoch": null,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "stale",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "이동 중",
+        "detail": "역삼역",
+        "minutes": null,
+        "tag": "estimated",
+        "suggestion": null,
+        "actions": []
+      }
+    },
+    {
+      "name": "arrived",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "arrived",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "회사앞",
+        "stopsAway": null,
+        "etaEpoch": 1794265200,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "회사앞 도착",
+        "detail": "회사앞 · 08:00 도착",
+        "minutes": null,
+        "tag": "live",
+        "suggestion": null,
+        "actions": []
+      }
+    },
+    {
+      "name": "estimated eta says about",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 2,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "estimated",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "2정거장 전",
+        "detail": "강남역 · 약 08:08 도착",
+        "minutes": "8분",
+        "tag": "estimated",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "no eta shows stop name only",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": null,
+        "etaEpoch": null,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "위치 확인 중",
+        "detail": "강남역",
+        "minutes": null,
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "minutes under a minute is soon",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 2,
+        "etaEpoch": 1794265259,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "2정거장 전",
+        "detail": "강남역 · 08:00 도착",
+        "minutes": "곧",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "minutes at 61 seconds",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 2,
+        "etaEpoch": 1794265261,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "2정거장 전",
+        "detail": "강남역 · 08:01 도착",
+        "minutes": "1분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "stale position is estimated tag",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 2,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "stale",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "2정거장 전",
+        "detail": "강남역 · 08:08 도착",
+        "minutes": "8분",
+        "tag": "estimated",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "delay of five minutes is delayed tag",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 2,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 5,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "2정거장 전",
+        "detail": "강남역 · 08:08 도착",
+        "minutes": "8분",
+        "tag": "delayed",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "delay of four minutes stays live",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 2,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 4,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "2정거장 전",
+        "detail": "강남역 · 08:08 도착",
+        "minutes": "8분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "suggestion line",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 2,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": {
+          "rank": 1,
+          "lineName": "440",
+          "boardEtaEpoch": 1794265380,
+          "savesMinutes": 6,
+          "mode": "bus"
+        }
+      },
+      "expected": {
+        "status": "2정거장 전",
+        "detail": "강남역 · 08:08 도착",
+        "minutes": "8분",
+        "tag": "live",
+        "suggestion": "440번이 3분 뒤 와요 · 6분 빨리 도착",
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "suggestion subway line",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 2,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": {
+          "rank": 1,
+          "lineName": "신분당선",
+          "mode": "subway",
+          "boardEtaEpoch": 1794265380,
+          "savesMinutes": 6
+        }
+      },
+      "expected": {
+        "status": "2정거장 전",
+        "detail": "강남역 · 08:08 도착",
+        "minutes": "8분",
+        "tag": "live",
+        "suggestion": "신분당선 열차가 3분 뒤 와요 · 6분 빨리 도착",
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "android wait has end button",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 2,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "platform": "android",
+      "expected": {
+        "status": "2정거장 전",
+        "detail": "강남역 · 08:08 도착",
+        "minutes": "8분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next", "end"]
+      }
+    },
+    {
+      "name": "android ride has only end",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "ride",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "역삼역",
+        "stopsAway": 4,
+        "etaEpoch": 1794265800,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "platform": "android",
+      "expected": {
+        "status": "하차까지 4정거장",
+        "detail": "역삼역 · 08:10 도착",
+        "minutes": "10분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["end"]
+      }
+    },
+    {
+      "name": "header from plan",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 2,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "header": "출근 · 회사까지",
+      "expected": {
+        "status": "2정거장 전",
+        "detail": "강남역 · 08:08 도착",
+        "minutes": "8분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "passed without eta falls back to stops away",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 3,
+        "etaEpoch": null,
+        "leaveEpoch": null,
+        "passed": {
+          "lineName": "146"
+        },
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "3정거장 전",
+        "detail": "강남역",
+        "minutes": null,
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "before leave without eta falls back to stops away",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "walk",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 4,
+        "etaEpoch": null,
+        "leaveEpoch": 1794265500,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "4정거장 전",
+        "detail": "강남역",
+        "minutes": null,
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "ended reads like arrived",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "ended",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "회사앞",
+        "stopsAway": null,
+        "etaEpoch": null,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "회사앞 도착",
+        "detail": "회사앞",
+        "minutes": null,
+        "tag": "live",
+        "suggestion": null,
+        "actions": []
+      }
+    },
+    {
+      "name": "negative stops away is unknown",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": -1,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": null
+      },
+      "expected": {
+        "status": "위치 확인 중",
+        "detail": "강남역 · 08:08 도착",
+        "minutes": "8분",
+        "tag": "live",
+        "suggestion": null,
+        "actions": ["boarded", "next"]
+      }
+    },
+    {
+      "name": "suggestion already due shows one minute",
+      "now": 1794265200,
+      "state": {
+        "v": 1,
+        "seq": 1,
+        "sentAt": 1794265200,
+        "stage": "wait",
+        "legIndex": 0,
+        "legCount": 1,
+        "mode": "bus",
+        "lineName": "146",
+        "stopName": "강남역",
+        "stopsAway": 2,
+        "etaEpoch": 1794265680,
+        "leaveEpoch": null,
+        "passed": null,
+        "positionState": "live",
+        "etaState": "live",
+        "delayMinutes": 0,
+        "destinationEtaEpoch": 1794267600,
+        "suggestion": {
+          "rank": 1,
+          "lineName": "440",
+          "boardEtaEpoch": 1794265080,
+          "savesMinutes": 6,
+          "mode": "bus"
+        }
+      },
+      "expected": {
+        "status": "2정거장 전",
+        "detail": "강남역 · 08:08 도착",
+        "minutes": "8분",
+        "tag": "live",
+        "suggestion": "440번이 1분 뒤 와요 · 6분 빨리 도착",
+        "actions": ["boarded", "next"]
+      }
+    }
+  ]
+}

@@ -5,7 +5,7 @@ import { type ErrorBoundaryProps, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { HeroUINativeProvider } from "heroui-native";
 import { useEffect, useMemo } from "react";
-import { Platform, View } from "react-native";
+import { AppState, Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { Uniwind } from "uniwind";
@@ -15,6 +15,7 @@ import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
 import { Screen } from "@/components/ui/screen";
 import { AppThemeProvider, useAppTheme } from "@/contexts/app-theme-context";
+import { passActivityCredentials } from "@/lib/commute/activity-credentials";
 import { appCrashSink } from "@/lib/crash/app-crash-reporting";
 import {
 	configureCrashReporting,
@@ -26,6 +27,9 @@ import { shouldShowOnboarding } from "@/lib/onboarding/onboarding";
 import { appPreferences } from "@/lib/preferences/app-preferences";
 import { toUniwindTheme } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
+import { ensureRegistered } from "@/lib/server/app-server";
+import { createRegistrationFlow } from "@/lib/server/registration-flow";
+import { CommuteActivity } from "@/modules/commute-activity";
 import { setAndroidSystemBarsContent } from "@/modules/system-bars";
 import { ENV } from "@/src/env";
 import { queryClient } from "@/utils/orpc";
@@ -37,7 +41,29 @@ configureCrashReporting(appCrashSink, {
 });
 
 /**
- * 설치 ID를 읽거나 만든다. 실패하면 기록만 하고 앱은 계속 쓰며, 다음 실행에 다시 시도한다.
+ * 서버가 설치를 안 뒤에만(등록 성공 또는 이미 등록) iOS 네이티브 토큰 보고기와 잠금화면 버튼이 쓸
+ * 인증값을 Live Activity 모듈에 넘긴다. 서버가 모르는 설치 ID로 토큰을 보내면 401만 받기 때문이다.
+ */
+const registration = createRegistrationFlow({
+	onRegistered: async () => {
+		try {
+			await passActivityCredentials({
+				identity: await ensureInstallIdentity(),
+				platform: Platform.OS,
+				serverUrl: ENV.EXPO_PUBLIC_SERVER_URL,
+				setCredentials: CommuteActivity.setCredentials,
+			});
+		} catch (error) {
+			reportError(appCrashSink, error, "activity-credentials");
+			throw error;
+		}
+	},
+	register: ensureRegistered,
+});
+
+/**
+ * 설치 ID를 읽거나 만들고 서버에 등록한다. 실패하면 기록만 하고 앱은 계속 쓴다.
+ * 등록하지 못했으면 앱이 다시 앞으로 올 때 다시 시도한다(콜드 스타트를 기다리지 않는다).
  */
 async function startInstallIdentity(): Promise<void> {
 	try {
@@ -49,10 +75,21 @@ async function startInstallIdentity(): Promise<void> {
 		}
 	} catch (error) {
 		reportError(appCrashSink, error, "install-identity");
+		return;
 	}
+	await registration.run();
 }
 
-startInstallIdentity();
+startInstallIdentity().catch((error: unknown) => {
+	reportError(appCrashSink, error, "install-registration");
+});
+AppState.addEventListener("change", (state) => {
+	if (state === "active") {
+		registration.run().catch((error: unknown) => {
+			reportError(appCrashSink, error, "install-registration");
+		});
+	}
+});
 
 /**
  * iOS는 Info.plist의 UIViewControllerBasedStatusBarAppearance가 켜져 있어 화면(뷰 컨트롤러)이 상태 표시줄 글자색을 정한다.
