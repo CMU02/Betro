@@ -152,6 +152,12 @@ export function buildContent(
 	const boarding = isBeforeBoarding(state.stage);
 	const etaAt = boarding ? legEstimate?.boardEtaAt : legEstimate?.alightEtaAt;
 	const stopName = boarding ? leg?.board.name : leg?.alight.name;
+	// 차량이 아직 승차 정류장 목록에 있으면 stopsAway는 승차 정류장까지의 수라 하차 기준이 아니다.
+	const stopsAwayCountsToBoarding =
+		!boarding && legEstimate?.boardEtaAt !== null;
+	const stopsAway = stopsAwayCountsToBoarding
+		? null
+		: (legEstimate?.stopsAway ?? null);
 	const showsLeave = state.stage === "walk" && legIndex === 0;
 
 	return {
@@ -170,7 +176,7 @@ export function buildContent(
 		seq: state.seq + 1,
 		stage: state.stage,
 		stopName: stopName ?? "",
-		stopsAway: legEstimate?.stopsAway ?? null,
+		stopsAway,
 		suggestion: suggestionOf(state, plan, config),
 		v: 1,
 	};

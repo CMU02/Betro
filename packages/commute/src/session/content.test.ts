@@ -164,6 +164,23 @@ describe("buildContent", () => {
 		expect(result.etaEpoch).toBe(epoch(at(31)));
 	});
 
+	it("ride인데 차량이 아직 승차 정류장 목록에 있으면 stopsAway는 null", () => {
+		const state = stateOf({
+			boardedBy: ["user"],
+			estimates: [
+				routeEstimate(0, at(40), {
+					alightEtaAt: at(31),
+					boardEtaAt: at(25),
+					stopsAway: 0,
+				}),
+			],
+			stage: "ride",
+		});
+		const result = buildContent(state, plan, at(25), config);
+		expect(result.stage).toBe("ride");
+		expect(result.stopsAway).toBeNull();
+	});
+
 	it("첫 구간이 아니거나 wait이면 leaveEpoch는 null", () => {
 		const result = buildContent(
 			stateOf({ stage: "wait" }),
