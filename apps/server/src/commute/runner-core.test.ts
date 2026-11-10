@@ -1521,6 +1521,88 @@ function makeSuggestPlan(planId: string): CommutePlan {
 	return plan;
 }
 
+describe("RunnerCore 진행 중 세션의 경로별 예상", () => {
+	function suggestHarness(): Harness {
+		const h = harness();
+		h.db.addPlan(ANDROID_INSTALL, makeSuggestPlan(PLAN_ANDROID));
+		h.db.addToken(ANDROID_INSTALL, "fcm", FCM_TOKEN, { env: "production" });
+		h.boards.handler = (routeId) =>
+			routeStops(
+				routeId === ALT_ROUTE_ID
+					? [{ arriveBoardAt: T0 + 12 * MINUTE, id: "A1" }]
+					: h.boards.vehicles,
+				h.clock.now,
+				h.clock.now
+			);
+		return h;
+	}
+
+	test("대안이 있으면 rank 오름차순으로 경로마다 하나씩 싣고 시각은 초 단위다", async () => {
+		const h = suggestHarness();
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [, entry] = await onlySession(h);
+		const active = await core.activeSession(ANDROID_INSTALL);
+		expect(active?.routes.map((route) => route.rank)).toEqual([0, 1]);
+		const alt = entry.state.estimates.find((estimate) => estimate.rank === 1);
+		expect(alt?.destinationEtaAt).not.toBeNull();
+		const altView = active?.routes[1];
+		expect(altView?.destinationEtaEpoch).toBe(
+			Math.floor((alt?.destinationEtaAt ?? 0) / 1000)
+		);
+		expect(altView?.boardEtaEpoch).toBe(
+			Math.floor((alt?.legs[0]?.boardEtaAt ?? 0) / 1000)
+		);
+		const primary = entry.state.estimates.find(
+			(estimate) => estimate.rank === 0
+		);
+		const primaryLeg = primary?.legs[entry.state.legIndex];
+		expect(primaryLeg).toBeDefined();
+		const primaryBoardAt = primaryLeg?.boardEtaAt ?? null;
+		expect(active?.routes[0]).toMatchObject({
+			boardEtaEpoch:
+				primaryBoardAt === null ? null : Math.floor(primaryBoardAt / 1000),
+			destinationEtaEpoch: Math.floor((primary?.destinationEtaAt ?? 0) / 1000),
+			etaState: primaryLeg?.etaState,
+			positionState: primaryLeg?.positionState,
+			rank: 0,
+			stopsAway: primaryLeg?.stopsAway,
+		});
+	});
+
+	test("추정이 아직 없으면 시각은 null이고 etaState는 estimated, positionState는 none이다", async () => {
+		const h = suggestHarness();
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [sessionId, entry] = await onlySession(h);
+		await h.store.put(`session:${sessionId}`, {
+			...entry,
+			state: { ...entry.state, estimates: [] },
+		});
+		const active = await core.activeSession(ANDROID_INSTALL);
+		expect(active?.routes).toEqual(
+			[0, 1].map((rank) => ({
+				boardEtaEpoch: null,
+				destinationEtaEpoch: null,
+				etaState: "estimated",
+				positionState: "none",
+				rank,
+				stopsAway: null,
+			}))
+		);
+	});
+
+	test("대안이 없는 경로는 routes가 1개다", async () => {
+		const h = harness();
+		addAndroid(h);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const active = await core.activeSession(ANDROID_INSTALL);
+		expect(active?.routes).toHaveLength(1);
+		expect(active?.routes[0]?.rank).toBe(0);
+	});
+});
+
 describe("RunnerCore 정확도 기록", () => {
 	test("세션이 끝나면 R2에 기록과 요약이 생기고 기록 표가 빈다. 실행기를 새로 만들어도 그 전 tick의 기록이 들어 있다", async () => {
 		const h = harness();

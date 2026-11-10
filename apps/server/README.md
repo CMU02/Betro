@@ -156,7 +156,7 @@ R2에서 직접 확인하려면 객체 목록에서 그날 `raw/` 조각 수를 
 | `DELETE /v1/installs/me` | 설치와 토큰·계획·세션 기록을 모두 삭제. 204 |
 | `POST /v1/commute/sessions/:sessionId/input` | 본문 `{ kind: "boarded" \| "next" \| "end" }`. 없는 세션 404, 이미 끝난 세션 409, 성공 204 |
 | `POST /v1/commute/sessions/:sessionId/ack` | 본문 `{ shownAt }`(앱이 값을 화면에 표시한 시각, epoch ms). 없는 세션 404, 성공 204 |
-| `GET /v1/commute/sessions/active` | 진행 중인 세션 `{ session }`(없으면 `null`). `Cache-Control: no-store` |
+| `GET /v1/commute/sessions/active` | 진행 중인 세션 `{ session }`(없으면 `null`). `session`은 `{ sessionId, planId, content, routes }`이고 `routes`는 등록한 경로마다 하나(`rank` 오름차순)로 `{ rank, boardEtaEpoch, destinationEtaEpoch, etaState, positionState, stopsAway }`다. 시각은 초 단위, 기본 경로는 지금 구간·대안은 첫 구간 기준이며 추정이 아직 없으면 시각은 `null`, `etaState` `estimated`, `positionState` `none`. `Cache-Control: no-store` |
 
 세션 라우트는 실행기가 연결돼 있지 않으면 503이다.
 
