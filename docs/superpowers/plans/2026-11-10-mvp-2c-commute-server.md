@@ -253,10 +253,11 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
   - `interface LegEstimate { alightEtaAt: number | null; boardEtaAt: number | null; etaState: "live" | "estimated"; method: ArrivalMethod | null; positionState: "live" | "stale" | "none"; stopsAway: number | null; vehicleId: string | null }`
   - `interface RouteEstimate { destinationEtaAt: number | null; legs: LegEstimate[]; rank: number }`
   - `selectVehicle(board: StopBoard, readyAt: number, skip: ReadonlySet<string>): Approaching | null`. `etaAt >= readyAt`인 첫 차량. `skip`에 든 차량은 건너뛴다. `etaAt`이 null인 차량은 고르지 않는다.
-  - `estimateRoute(route: Route, boards: TransitBoards, input: { fixed: (string | null)[]; now: number; readyAt: number; skip: ReadonlySet<string> }, config: CommuteConfig): RouteEstimate`
-    - 구간 i의 `readyAt`은 첫 구간이면 입력값, 아니면 앞 구간의 `alightEtaAt + walkMinutes[i]분`이다.
+  - `estimateRoute(route: Route, boards: TransitBoards, input: { fixed: (string | null)[]; fromLeg?: number; now: number; readyAt: number; skip: ReadonlySet<string> }, config: CommuteConfig): RouteEstimate`
+    - `fromLeg`(기본 0)는 지금 구간(Task 6의 `legIndex`)이다. `input.readyAt`은 `fromLeg` 구간의 `readyAt`이고, 그 뒤 구간 i의 `readyAt`은 앞 구간의 `alightEtaAt + walkMinutes[i]분`이다. **[검토 반영]** 앞 구간 차량이 하차 정류장에 닿으면 진행 정보의 도착 시각이 null이 되어 다음 구간을 고를 수 없었다. 그래서 환승 도보·대기 중에는 호출하는 쪽이 `fromLeg`와 그 구간의 `readyAt`을 준다.
+    - `fromLeg` 앞 구간은 끝난 구간이다. 잡아 둔 차량만 보고(`readyAt` 없음, 새로 고르지 않음) 그 하차 시각을 다음 구간으로 잇지 않는다.
     - `fixed[i]`가 있으면 그 차량을 쓰고 고르지 않는다(이미 잡았거나 탄 차량).
-    - 도착판이 없거나 `now - sourceAt > config.staleAfterMs`면 `positionState: "stale"`(도착판이 아예 없으면 `"none"`), `etaState: "estimated"`로 두고 `boardEtaAt`은 `readyAt + headwayMs / 2`(배차간격을 모르면 null), `method`는 `"headway"`다.
+    - 도착판이 없거나 `now - sourceAt > config.staleAfterMs`면 `positionState: "stale"`(도착판이 아예 없으면 `"none"`), `etaState: "estimated"`로 두고 `boardEtaAt`은 `readyAt + headwayMs / 2`(배차간격을 모르면 null), `method`는 `"headway"`다. 단 `fixed[i]`가 승차 도착판에 없고(탄 차량) `progress`가 도착 시각을 주면 `alightEtaAt`은 그 값, `boardEtaAt`은 null이다(상태·방법·`stopsAway: null`은 그대로). **[검토 반영]** 묵은 도착판에서 탄 차량에 배차간격 추정을 쓰면 하차 예정이 매 tick 미래로 밀려 Task 6 규칙 6이 걸리지 않는다.
     - 고를 차량이 도착판의 범위 밖이면(둘 다 `readyAt`보다 이르면) 마지막 차량의 `etaAt + headwayMs`를 쓰고 `etaState: "estimated"`, `method: "headway"`.
     - `etaState`는 도착판이 묵었거나 `method`가 `"timetable"`, `"headway"`, `"extrapolated"`면 `"estimated"`, 그 밖에는 `"live"`다.
     - `alightEtaAt = boardEtaAt + rideMs`. `rideMs`가 null이면 `alightEtaAt`도 null이다.
@@ -294,7 +295,7 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
   - `type SessionInput = { kind: "boarded" } | { kind: "next" } | { kind: "end" }`
   - `advance(state: SessionState, plan: CommutePlan, boards: TransitBoards, now: number, config: CommuteConfig, input?: SessionInput): SessionState`. 순수 함수다. 규칙은 아래와 같다.
     1. `stage`가 `ended`면 그대로 돌려준다.
-    2. 기본 경로의 지금 구간에서 `readyAt`을 정한다. 첫 구간은 `max(now, leaveAt) + walkMinutes[0]분`, 그 뒤 구간은 앞 구간 하차 + 환승 도보다.
+    2. 기본 경로의 지금 구간에서 `readyAt`을 정한다. 첫 구간은 `max(now, leaveAt) + walkMinutes[0]분`, 그 뒤 구간은 앞 구간 하차 + 환승 도보다. 기본 경로의 `estimateRoute`에는 `fromLeg: legIndex`와 이 `readyAt`을 준다(Task 5). 앞 구간 차량이 하차 정류장에 닿은 뒤에는 그 하차 시각을 진행 정보에서 다시 얻을 수 없고, `fromLeg` 앞 구간의 `alightEtaAt`도 null로 돌아올 수 있다. 그래서 규칙 6에서 구간을 넘길 때의 시각을 상태에 남겨 두고 `max(now, 넘긴 시각 + 환승 도보)`로 쓴다(이를 위해 `SessionState`에 필드가 하나 늘 수 있다). **[검토 반영]**
     3. 잡은 차량(`fixed[legIndex]`)이 승차 정류장의 `passed`에 있고 아직 타지 않았으면: `now >= readyAt`(정류장에 있을 시각)이면 탄 것으로 본다(`stage: "ride"`, `boardedBy: "time"`). 아니면 차량을 놓고(`fixed`를 null로, `skip`에 추가) `passed`에 그 노선 이름을 넣고 다시 고른다.
     4. `input.kind === "next"`: 탑승 전이면 잡은 차량을 `skip`에 넣고 다시 고른다. 탑승 뒤면 무시한다.
     5. `input.kind === "boarded"`: 탑승 전이면 `stage: "ride"`, `boardedBy: "user"`. 탈 차량은 승차 정류장을 3분 안에 지난 차량 중 가장 최근 것, 없으면 `stopsAway`가 0인 차량, 그것도 없으면 잡아 둔 차량이다. 이미 탑승 중이면 무시한다.

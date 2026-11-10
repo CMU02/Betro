@@ -97,6 +97,7 @@ function input(
 	readyAt: number,
 	overrides: Partial<{
 		fixed: (string | null)[];
+		fromLeg: number;
 		now: number;
 		skip: ReadonlySet<string>;
 	}> = {}
@@ -218,6 +219,62 @@ describe("estimateRoute: 환승", () => {
 		]);
 		const estimate = estimateRoute(longTransfer, boards, input(at(15)), config);
 		expect(estimate.legs[1]?.vehicleId).toBe("T3");
+	});
+
+	it("첫 구간 차량이 하차 정류장에 닿은 뒤에는 fromLeg 구간을 readyAt 뒤 첫 열차로 고른다", () => {
+		// 탄 버스 A가 하차 정류장에 닿았다(진행 정보에 도착 시각이 없다). 환승 도보 중이고 08:34부터 탈 수 있다.
+		const boards = fakeBoards([
+			[
+				busLeg,
+				{
+					board: stopBoard([vehicle("B", at(25))]),
+					progress: {
+						A: { etaAt: null, method: "official", stopsAway: 0 },
+					},
+					rideMs: 10 * MINUTE_MS,
+				},
+			],
+			[
+				subwayLeg,
+				{
+					board: stopBoard([vehicle("T0", at(32)), vehicle("T1", at(36))]),
+					rideMs: 2 * MINUTE_MS,
+				},
+			],
+		]);
+		const estimate = estimateRoute(
+			transferRoute,
+			boards,
+			input(at(34), { fixed: ["A", null], fromLeg: 1 }),
+			config
+		);
+		expect(estimate.legs[0]?.vehicleId).toBe("A");
+		expect(estimate.legs[1]?.vehicleId).toBe("T1");
+		expect(estimate.legs[1]?.boardEtaAt).toBe(at(36));
+		expect(estimate.legs[1]?.alightEtaAt).toBe(at(38));
+		expect(estimate.destinationEtaAt).toBe(at(40));
+	});
+
+	it("fromLeg 앞 구간은 끝난 구간이라 새 차량을 고르지 않는다", () => {
+		const boards = fakeBoards([
+			[
+				busLeg,
+				{ board: stopBoard([vehicle("B", at(25))]), rideMs: 10 * MINUTE_MS },
+			],
+			[
+				subwayLeg,
+				{ board: stopBoard([vehicle("T1", at(36))]), rideMs: 2 * MINUTE_MS },
+			],
+		]);
+		const estimate = estimateRoute(
+			transferRoute,
+			boards,
+			input(at(34), { fromLeg: 1 }),
+			config
+		);
+		expect(estimate.legs[0]?.vehicleId).toBeNull();
+		expect(estimate.legs[0]?.boardEtaAt).toBeNull();
+		expect(estimate.legs[1]?.vehicleId).toBe("T1");
 	});
 });
 
@@ -369,6 +426,67 @@ describe("estimateRoute: 묵은 도착판", () => {
 		expect(estimate.legs[0]?.etaState).toBe("estimated");
 		expect(estimate.legs[0]?.boardEtaAt).toBeNull();
 		expect(estimate.destinationEtaAt).toBeNull();
+	});
+
+	it("탄 차량은 도착판이 묵어도 진행 정보로 하차 도착을 내고 위치는 stale로 둔다", () => {
+		const boards = fakeBoards([
+			[
+				busLeg,
+				{
+					board: stopBoard([vehicle("B", at(25))], {
+						headwayMs: 10 * MINUTE_MS,
+						sourceAt: at(10) - 151 * SECOND_MS,
+					}),
+					progress: {
+						RIDING: { etaAt: at(33), method: "official", stopsAway: 2 },
+					},
+					rideMs: 14 * MINUTE_MS,
+				},
+			],
+		]);
+		const estimate = estimateRoute(
+			busRoute,
+			boards,
+			input(at(35), { fixed: ["RIDING"] }),
+			config
+		);
+		expect(estimate.legs[0]).toEqual({
+			alightEtaAt: at(33),
+			boardEtaAt: null,
+			etaState: "estimated",
+			method: "headway",
+			positionState: "stale",
+			stopsAway: null,
+			vehicleId: "RIDING",
+		});
+		expect(estimate.destinationEtaAt).toBe(at(36));
+	});
+
+	it("묵은 도착판에 남은 잡아 둔 차량(탑승 전)은 배차간격 추정을 쓴다", () => {
+		const boards = fakeBoards([
+			[
+				busLeg,
+				{
+					board: stopBoard([vehicle("A", at(17))], {
+						headwayMs: 12 * MINUTE_MS,
+						sourceAt: at(10) - 151 * SECOND_MS,
+					}),
+					progress: {
+						A: { etaAt: at(31), method: "official", stopsAway: 5 },
+					},
+					rideMs: 14 * MINUTE_MS,
+				},
+			],
+		]);
+		const estimate = estimateRoute(
+			busRoute,
+			boards,
+			input(at(15), { fixed: ["A"] }),
+			config
+		);
+		expect(estimate.legs[0]?.boardEtaAt).toBe(at(21));
+		expect(estimate.legs[0]?.alightEtaAt).toBe(at(35));
+		expect(estimate.legs[0]?.positionState).toBe("stale");
 	});
 
 	it("묵음 기준은 config.staleAfterMs를 따른다", () => {

@@ -40,8 +40,13 @@ export interface RouteEstimate {
 interface EstimateInput {
 	/** 구간마다 이미 잡았거나 탄 차량. 있으면 다시 고르지 않는다. */
 	fixed: (string | null)[];
+	/**
+	 * 지금 구간(세션의 legIndex). 기본 0. 앞 구간은 끝난 것으로 보고 새 차량을 고르지 않으며,
+	 * 그 하차 시각을 다음 구간으로 잇지 않는다.
+	 */
+	fromLeg?: number;
 	now: number;
-	/** 첫 구간의 승차 정류장에 있을 수 있는 시각. */
+	/** fromLeg 구간의 승차 정류장에 있을 수 있는 시각. */
 	readyAt: number;
 	skip: ReadonlySet<string>;
 }
@@ -210,6 +215,24 @@ function estimateLeg(
 	const isStale =
 		board !== null && input.now - board.sourceAt > config.staleAfterMs;
 	if (board === null || isStale) {
+		const positionState = board ? "stale" : "none";
+		// 탄 차량(승차 도착판에 없음)은 하차 쪽 진행으로 하차 시각을 낸다. 위치는 여전히 묵은 것으로 둔다.
+		const isOnBoard =
+			board?.approaching.some((vehicle) => vehicle.vehicleId === fixedId) ??
+			false;
+		const progress =
+			fixedId !== null && !isOnBoard ? boards.progress(leg, fixedId) : null;
+		if (progress && progress.etaAt !== null) {
+			return {
+				alightEtaAt: progress.etaAt,
+				boardEtaAt: null,
+				etaState: "estimated",
+				method: "headway",
+				positionState,
+				stopsAway: null,
+				vehicleId: fixedId,
+			};
+		}
 		const boardEtaAt = board
 			? halfHeadwayAfter(readyAt, knownHeadway(board))
 			: null;
@@ -224,7 +247,7 @@ function estimateLeg(
 			boardEtaAt,
 			etaState: "estimated",
 			method: "headway",
-			positionState: board ? "stale" : "none",
+			positionState,
 			stopsAway: null,
 			vehicleId: fixedId,
 		};
@@ -253,7 +276,10 @@ function plusMinutes(
 
 /**
  * 경로의 구간을 차례로 따라가며 탈 차량을 고르고 목적지 도착을 계산한다.
- * 구간 i(i > 0)는 앞 구간 하차 + 환승 도보 뒤에 탈 수 있다.
+ * fromLeg 구간은 input.readyAt 뒤에 탈 수 있고, 그 뒤 구간 i는 앞 구간 하차 + 환승 도보 뒤에 탈 수 있다.
+ * fromLeg 앞 구간은 끝났으므로 잡아 둔 차량만 보고(readyAt 없음) 하차 시각을 잇지 않는다.
+ * 앞 구간 차량이 하차 정류장에 닿으면 진행 정보에 도착 시각이 없어지므로, 환승 중에도 다음 구간을 고르려면
+ * 호출하는 쪽이 fromLeg와 그 구간의 readyAt을 직접 준다.
  */
 export function estimateRoute(
 	route: Route,
@@ -261,10 +287,13 @@ export function estimateRoute(
 	input: EstimateInput,
 	config: CommuteConfig
 ): RouteEstimate {
+	const { fromLeg = 0, readyAt: currentReadyAt } = input;
 	const legs: LegEstimate[] = [];
-	let readyAt: number | null = input.readyAt;
+	let readyAt: number | null = null;
 	for (const [index, leg] of route.legs.entries()) {
-		if (index > 0) {
+		if (index === fromLeg) {
+			readyAt = currentReadyAt;
+		} else if (index > fromLeg) {
 			readyAt = plusMinutes(
 				legs[index - 1]?.alightEtaAt ?? null,
 				route.walkMinutes[index]
