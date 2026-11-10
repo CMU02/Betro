@@ -169,6 +169,17 @@
         "typescript": "^6.0.3",
       },
     },
+    "packages/commute": {
+      "name": "@Betro/commute",
+      "dependencies": {
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@Betro/config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "^6.0.3",
+      },
+    },
     "packages/config": {
       "name": "@Betro/config",
       "version": "0.0.0",
@@ -281,6 +292,8 @@
     "@Betro/api": ["@Betro/api@workspace:packages/api"],
 
     "@Betro/auth": ["@Betro/auth@workspace:packages/auth"],
+
+    "@Betro/commute": ["@Betro/commute@workspace:packages/commute"],
 
     "@Betro/config": ["@Betro/config@workspace:packages/config"],
 
