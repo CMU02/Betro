@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 
 import { sha256Hex } from "./auth";
+import type { CommuteRunnerClient } from "./client";
 import { createCommuteRoutes } from "./routes";
 
 const INSTALL_A = "11111111-1111-4111-8111-111111111111";
@@ -22,15 +23,55 @@ const MAX_PLANS = 16;
 
 type TestDb = Awaited<ReturnType<typeof createTestDb>>;
 
+const SESSION_ID = "44444444-4444-4444-8444-444444444444";
+const ENDED_SESSION_ID = "55555555-5555-4555-8555-555555555555";
+
 let db: TestDb;
 let app: Hono;
 let nowMs = Date.UTC(2026, 10, 10, 0, 0, 0);
+let runnerCalls: unknown[][] = [];
+
+/** 실행기 DO 대신. INSTALL_A의 SESSION_ID만 진행 중이고 ENDED_SESSION_ID는 끝났다. */
+const fakeRunner: CommuteRunnerClient = {
+	ack: (installId, sessionId, at) => {
+		runnerCalls.push(["ack", installId, sessionId, at]);
+		return Promise.resolve(
+			installId === INSTALL_A && sessionId === SESSION_ID ? "ok" : "not-found"
+		);
+	},
+	activeSession: (installId) => {
+		runnerCalls.push(["active", installId]);
+		if (installId !== INSTALL_A) {
+			return Promise.resolve(null);
+		}
+		return Promise.resolve({
+			content: { seq: 3, stage: "walk" } as never,
+			planId: PLAN_ID,
+			sessionId: SESSION_ID,
+		});
+	},
+	healthCheck: () => Promise.resolve(),
+	input: (installId, sessionId, input) => {
+		runnerCalls.push(["input", installId, sessionId, input.kind]);
+		if (installId !== INSTALL_A) {
+			return Promise.resolve("not-found");
+		}
+		if (sessionId === ENDED_SESSION_ID) {
+			return Promise.resolve("ended");
+		}
+		return Promise.resolve(sessionId === SESSION_ID ? "ok" : "not-found");
+	},
+};
 
 beforeEach(async () => {
 	db = await createTestDb();
 	nowMs = Date.UTC(2026, 10, 10, 0, 0, 0);
+	runnerCalls = [];
 	app = new Hono();
-	app.route("/", createCommuteRoutes({ db, now: () => nowMs }));
+	app.route(
+		"/",
+		createCommuteRoutes({ commute: fakeRunner, db, now: () => nowMs })
+	);
 });
 
 function makePlan(
@@ -388,5 +429,117 @@ describe("install deletion", () => {
 		expect(await db.select().from(commutePlan)).toHaveLength(0);
 		expect(await db.select().from(commuteSession)).toHaveLength(0);
 		expect(await db.select().from(install)).toHaveLength(1);
+	});
+});
+
+describe("commute sessions", () => {
+	function postInput(
+		sessionId: string,
+		body: unknown,
+		headers = authHeaders()
+	) {
+		return app.request(`${BASE}/v1/commute/sessions/${sessionId}/input`, {
+			body: JSON.stringify(body),
+			headers,
+			method: "POST",
+		});
+	}
+
+	test("input is 204 for the install's own session and reaches the runner", async () => {
+		await register();
+		const res = await postInput(SESSION_ID, { kind: "boarded" });
+		expect(res.status).toBe(204);
+		expect(runnerCalls).toEqual([["input", INSTALL_A, SESSION_ID, "boarded"]]);
+	});
+
+	test("input for another install's or a missing session is 404, an ended session is 409", async () => {
+		await register();
+		await register(INSTALL_B, SECRET_B);
+		const other = await postInput(
+			SESSION_ID,
+			{ kind: "next" },
+			authHeaders(INSTALL_B, SECRET_B)
+		);
+		expect(other.status).toBe(404);
+		const missing = await postInput(uuidN(9), { kind: "next" });
+		expect(missing.status).toBe(404);
+		const ended = await postInput(ENDED_SESSION_ID, { kind: "end" });
+		expect(ended.status).toBe(409);
+	});
+
+	test("input needs authentication and a known kind", async () => {
+		await register();
+		const unauth = await postInput(SESSION_ID, { kind: "end" }, {
+			"Content-Type": "application/json",
+		} as never);
+		expect(unauth.status).toBe(401);
+		const bad = await postInput(SESSION_ID, { kind: "jump" });
+		expect(bad.status).toBe(400);
+		const extra = await postInput(SESSION_ID, { at: 1, kind: "end" });
+		expect(extra.status).toBe(400);
+		expect(runnerCalls).toEqual([]);
+	});
+
+	test("ack records the first shown time with 204, 404 for others", async () => {
+		await register();
+		const shownAt = nowMs + 5000;
+		const res = await app.request(
+			`${BASE}/v1/commute/sessions/${SESSION_ID}/ack`,
+			{
+				body: JSON.stringify({ shownAt }),
+				headers: authHeaders(),
+				method: "POST",
+			}
+		);
+		expect(res.status).toBe(204);
+		expect(runnerCalls).toEqual([["ack", INSTALL_A, SESSION_ID, shownAt]]);
+		const missing = await app.request(
+			`${BASE}/v1/commute/sessions/${uuidN(9)}/ack`,
+			{
+				body: JSON.stringify({ shownAt }),
+				headers: authHeaders(),
+				method: "POST",
+			}
+		);
+		expect(missing.status).toBe(404);
+		const bad = await app.request(
+			`${BASE}/v1/commute/sessions/${SESSION_ID}/ack`,
+			{
+				body: JSON.stringify({ shownAt: "soon" }),
+				headers: authHeaders(),
+				method: "POST",
+			}
+		);
+		expect(bad.status).toBe(400);
+	});
+
+	test("active returns the install's session or null", async () => {
+		await register();
+		await register(INSTALL_B, SECRET_B);
+		const mine = await app.request(`${BASE}/v1/commute/sessions/active`, {
+			headers: authHeaders(),
+		});
+		expect(mine.status).toBe(200);
+		expect(await mine.json()).toEqual({
+			session: {
+				content: { seq: 3, stage: "walk" },
+				planId: PLAN_ID,
+				sessionId: SESSION_ID,
+			},
+		});
+		const theirs = await app.request(`${BASE}/v1/commute/sessions/active`, {
+			headers: authHeaders(INSTALL_B, SECRET_B),
+		});
+		expect(await theirs.json()).toEqual({ session: null });
+	});
+
+	test("without a runner the session routes are 503", async () => {
+		await register();
+		const bare = new Hono();
+		bare.route("/", createCommuteRoutes({ db, now: () => nowMs }));
+		const res = await bare.request(`${BASE}/v1/commute/sessions/active`, {
+			headers: authHeaders(),
+		});
+		expect(res.status).toBe(503);
 	});
 });

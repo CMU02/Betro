@@ -13,3 +13,10 @@ DATA_GO_KR_API_KEY=dummy-key
 # Optional FCM alerts. When either is empty, alerts are only logged.
 # FCM_SERVICE_ACCOUNT_JSON=
 # ALERT_FCM_TOKEN=
+
+# Commute runner. Local dev never sends pushes: keep PUSH_MODE=log
+# (only "send" calls APNs and FCM).
+PUSH_MODE=log
+# APNs .p8 PEM. Not needed in log mode for Android sessions; iOS sessions sign a JWT,
+# so use a throwaway P-256 key locally, never the real one.
+# APNS_KEY_P8=

@@ -11,8 +11,11 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { authenticateInstall } from "./auth";
+import type { CommuteRunnerClient } from "./client";
 
 export interface CommuteRoutesDeps {
+	/** 출퇴근 실행기. 없으면 세션 라우트는 503이다. */
+	commute?: CommuteRunnerClient;
 	db: Database;
 	now?: () => number;
 }
@@ -39,7 +42,16 @@ const pushTokenBodySchema = z
 	})
 	.strict();
 
+const sessionInputSchema = z
+	.object({ kind: z.enum(["boarded", "next", "end"]) })
+	.strict();
+
+const sessionAckSchema = z
+	.object({ shownAt: z.number().int().nonnegative() })
+	.strict();
+
 const UNAUTHORIZED = { error: "unauthorized" } as const;
+const UNAVAILABLE = { error: "unavailable" } as const;
 
 /** 예약 시작 시각(나가는 시각에서 선행을 뺀 분). 자정을 넘기면 전날로 돈다. */
 export function startMinuteOf(
@@ -219,5 +231,77 @@ export function createCommuteRoutes(deps: CommuteRoutesDeps): Hono {
 		return c.body(null, 204);
 	});
 
+	addSessionRoutes(routes, deps, now);
+
 	return routes;
+}
+
+/** 세션 입력·표시 확인·진행 중인 세션(모두 인증). 실행기 DO로 넘긴다. */
+function addSessionRoutes(
+	routes: Hono,
+	deps: CommuteRoutesDeps,
+	now: () => number
+): void {
+	const { commute, db } = deps;
+
+	routes.post("/v1/commute/sessions/:sessionId/input", async (c) => {
+		const auth = await authenticateInstall(db, c.req.raw.headers, now());
+		if (!auth) {
+			return c.json(UNAUTHORIZED, 401);
+		}
+		const parsed = sessionInputSchema.safeParse(await readJson(c.req.raw));
+		if (!parsed.success) {
+			return c.json({ error: "invalid" }, 400);
+		}
+		if (!commute) {
+			return c.json(UNAVAILABLE, 503);
+		}
+		const result = await commute.input(
+			auth.installId,
+			c.req.param("sessionId"),
+			parsed.data
+		);
+		if (result === "not-found") {
+			return c.json({ error: "not found" }, 404);
+		}
+		if (result === "ended") {
+			return c.json({ error: "ended" }, 409);
+		}
+		return c.body(null, 204);
+	});
+
+	routes.post("/v1/commute/sessions/:sessionId/ack", async (c) => {
+		const auth = await authenticateInstall(db, c.req.raw.headers, now());
+		if (!auth) {
+			return c.json(UNAUTHORIZED, 401);
+		}
+		const parsed = sessionAckSchema.safeParse(await readJson(c.req.raw));
+		if (!parsed.success) {
+			return c.json({ error: "invalid" }, 400);
+		}
+		if (!commute) {
+			return c.json(UNAVAILABLE, 503);
+		}
+		const result = await commute.ack(
+			auth.installId,
+			c.req.param("sessionId"),
+			parsed.data.shownAt
+		);
+		return result === "ok"
+			? c.body(null, 204)
+			: c.json({ error: "not found" }, 404);
+	});
+
+	routes.get("/v1/commute/sessions/active", async (c) => {
+		const auth = await authenticateInstall(db, c.req.raw.headers, now());
+		if (!auth) {
+			return c.json(UNAUTHORIZED, 401);
+		}
+		if (!commute) {
+			return c.json(UNAVAILABLE, 503);
+		}
+		const session = await commute.activeSession(auth.installId);
+		c.header("Cache-Control", "no-store");
+		return c.json({ session });
+	});
 }

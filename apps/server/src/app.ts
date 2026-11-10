@@ -13,6 +13,7 @@ import { getPath } from "hono/utils/url";
 import type { CollectorClient } from "./collector/client";
 import type { SnapshotKind } from "./collector/core";
 import { INSTALL_HEADER } from "./commute/auth";
+import type { CommuteRunnerClient } from "./commute/client";
 import { createCommuteRoutes } from "./commute/routes";
 import { renderStatusPage } from "./status-page";
 
@@ -22,6 +23,7 @@ export interface AppDeps {
 	apiHost: string;
 	auth: Auth;
 	collector?: CollectorClient;
+	commute?: CommuteRunnerClient;
 	corsOrigins: string[];
 	db: Database;
 	statusHost: string;
@@ -164,7 +166,7 @@ function createApiRoutes(deps: AppDeps): Hono {
 		});
 	});
 
-	routes.route("/", createCommuteRoutes({ db }));
+	routes.route("/", createCommuteRoutes({ commute: deps.commute, db }));
 
 	return routes;
 }

@@ -8,10 +8,12 @@ import type { Hono } from "hono";
 
 import { createApp } from "./app";
 import { collectorClient } from "./collector/client";
+import { commuteClient } from "./commute/client";
 import type { Env } from "./worker-env";
 
 // biome-ignore lint/performance/noBarrelFile: wrangler는 Worker 진입점에서 Durable Object 클래스를 export해야 한다.
 export { Collector } from "./collector/durable-object";
+export { CommuteRunner } from "./commute/runner-do";
 export type { Env } from "./worker-env";
 
 let cachedApp: Hono | undefined;
@@ -25,6 +27,7 @@ function getApp(env: Env): Hono {
 			apiHost: env.API_HOST,
 			auth,
 			collector: collectorClient(env),
+			commute: commuteClient(env),
 			corsOrigins: parseOrigins(env.CORS_ORIGIN),
 			db,
 			statusHost: env.STATUS_HOST,
@@ -41,12 +44,24 @@ export default {
 	): Response | Promise<Response> {
 		return getApp(env).fetch(request, env, ctx);
 	},
-	/** cron(5분마다): 수집기 상태를 보고 알림을 판단한다. 시작한 수집기의 멈춘 alarm도 다시 건다. */
+	/**
+	 * cron(5분마다): 수집기 상태를 보고 알림을 판단한다. 시작한 수집기의 멈춘 alarm도 다시 건다.
+	 * 출퇴근 실행기는 alarm이 없으면 건다(처음 배포 뒤 첫 alarm도 여기서 건다). 한쪽이 실패해도
+	 * 다른 쪽은 돈다.
+	 */
 	async scheduled(
 		_controller: ScheduledController,
 		env: Env,
 		_ctx: ExecutionContext
 	): Promise<void> {
-		await collectorClient(env).healthCheck();
+		const results = await Promise.allSettled([
+			collectorClient(env).healthCheck(),
+			commuteClient(env).healthCheck(),
+		]);
+		for (const result of results) {
+			if (result.status === "rejected") {
+				throw result.reason;
+			}
+		}
 	},
 };
