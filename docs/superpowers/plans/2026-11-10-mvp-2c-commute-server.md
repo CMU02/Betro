@@ -290,7 +290,8 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
 - Produces:
   - `type Stage = "walk" | "wait" | "ride" | "arrived" | "ended"`
   - `type EndReason = "arrived" | "user" | "timeout" | "no-token" | "plan-removed"`
-  - `interface SessionState { boardedBy: ("time" | "user" | null)[]; endReason: EndReason | null; estimates: RouteEstimate[]; fixed: (string | null)[]; initialDestinationEtaAt: number | null; leaveAt: number; legIndex: number; passed: { lineName: string } | null; planId: string; seq: number; sessionId: string; skip: string[]; stage: Stage; startedAt: number }`. JSON으로 그대로 저장한다.
+  - `interface SessionState { boardedBy: ("time" | "user" | null)[]; endReason: EndReason | null; estimates: RouteEstimate[]; fixed: (string | null)[]; initialDestinationEtaAt: number | null; leaveAt: number; legIndex: number; passed: { lineName: string } | null; planId: string; readyAt: number | null; seq: number; sessionId: string; skip: string[]; stage: Stage; startedAt: number }`. JSON으로 그대로 저장한다.
+    - `readyAt`(**[검토 반영]**, 규칙 2의 "넘긴 시각"을 담는 필드): 지금 구간의 승차 정류장에 있을 수 있는 시각이다. 첫 `advance`에서 `max(now, leaveAt) + walkMinutes[0]분`으로, 환승 구간은 내린 시각 + 환승 도보로 한 번 정하고 그 뒤로 바꾸지 않는다(매번 `now`로 다시 계산하면 `now >= readyAt`이 되지 않아 `wait`과 규칙 3의 탑승 판단이 걸리지 않는다). `estimateRoute`에는 `max(now, readyAt)`을 준다. `arrived`에서는 목적지에 닿는 시각(내린 시각 + 마지막 도보)이고 규칙 8의 종료 판단에 쓴다. `startSession`은 null로 둔다.
   - `startSession(plan: CommutePlan, due: { leaveAt: number; startAt: number }, sessionId: string): SessionState`
   - `type SessionInput = { kind: "boarded" } | { kind: "next" } | { kind: "end" }`
   - `advance(state: SessionState, plan: CommutePlan, boards: TransitBoards, now: number, config: CommuteConfig, input?: SessionInput): SessionState`. 순수 함수다. 규칙은 아래와 같다.
