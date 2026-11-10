@@ -3,32 +3,28 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "build": "tsc -b ../../packages/api && tsdown",
     "check-types": "tsc -b ../../packages/api && tsc --noEmit",
-    "compile": "bun build --compile --no-compile-autoload-dotenv --minify --sourcemap --bytecode ./src/index.ts --outfile server",
-    "start": "bun run dist/index.mjs",
-    "dev:bare": "bun run --hot src/index.ts",
-    "env:generate": "varlock codegen",
-    "auth:generate": "varlock run -- bun x auth@latest generate --config src/services.ts --output ../../packages/db/src/schema/auth.ts --yes"
+    "d1:migrate:local": "wrangler d1 migrations apply betro --local",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --infer-origin-from-routes=false"
   },
   "dependencies": {
     "@Betro/api": "workspace:*",
     "@Betro/auth": "workspace:*",
     "@Betro/db": "workspace:*",
-    "@fastify/cors": "^11.3.0",
+    "@Betro/realtime": "workspace:*",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
     "better-auth": "catalog:",
-    "fastify": "^5.12.3",
-    "libsql": "catalog:",
-    "varlock": "catalog:",
+    "hono": "^4.13.16",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@Betro/config": "workspace:*",
+    "@cloudflare/workers-types": "^5.20261104.1",
     "@types/bun": "catalog:",
-    "tsdown": "^0.23.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "wrangler": "^4.157.0"
   }
 }

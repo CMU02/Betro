@@ -16,6 +16,9 @@ local.db-*
 # Environment variables
 .env
 .env*.local
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
 
 # IDEs and editors
 .vscode/*
@@ -38,6 +41,9 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
+
+# Cloudflare Wrangler
+.wrangler/
 
 # Turbo
 .turbo
