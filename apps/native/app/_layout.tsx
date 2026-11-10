@@ -24,6 +24,7 @@ import {
 import { ensureInstallIdentity } from "@/lib/device/app-install-identity";
 import { t } from "@/lib/i18n/t";
 import { shouldShowOnboarding } from "@/lib/onboarding/onboarding";
+import { appPlacesSync } from "@/lib/places/app-places";
 import { appPreferences } from "@/lib/preferences/app-preferences";
 import { toUniwindTheme } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
@@ -77,7 +78,17 @@ async function startInstallIdentity(): Promise<void> {
 		reportError(appCrashSink, error, "install-identity");
 		return;
 	}
-	await registration.run();
+	await registerThenSync();
+}
+
+/**
+ * 서버가 설치를 안 뒤에만 장소 예약을 서버와 맞춘다(밀린 저장·삭제, 재설치 뒤 가져오기).
+ * 맞추기는 겹쳐 돌지 않고 던지지 않는다. 실패는 `places-sync`로 기록된다.
+ */
+async function registerThenSync(): Promise<void> {
+	if (await registration.run()) {
+		await appPlacesSync.run();
+	}
 }
 
 startInstallIdentity().catch((error: unknown) => {
@@ -85,7 +96,7 @@ startInstallIdentity().catch((error: unknown) => {
 });
 AppState.addEventListener("change", (state) => {
 	if (state === "active") {
-		registration.run().catch((error: unknown) => {
+		registerThenSync().catch((error: unknown) => {
 			reportError(appCrashSink, error, "install-registration");
 		});
 	}
