@@ -40,7 +40,8 @@
 
 | 줄 | 조건 | 키 | 문구 |
 |---|---|---|---|
-| 상태 | `passed`가 있음 | `status.passed` | `{passedLine}번이 지나갔어요 · 다음 차 {eta}` |
+| 상태 | `passed`가 있음, `mode: bus` | `status.passedBus` | `{passedLine}번이 지나갔어요 · 다음 차 {eta}` |
+| 상태 | `passed`가 있음, `mode: subway` | `status.passedSubway` | `{passedLine} 열차가 지나갔어요 · 다음 열차 {eta}` |
 | 상태 | `walk`, 첫 구간, 지금이 `leaveEpoch` 전 | `status.beforeLeave` | `{leave}에 나가면 {line} {eta} 탑승` |
 | 상태 | `walk`·`wait`, `stopsAway` ≥ 1 | `status.stopsAway` | `{n}정거장 전` |
 | 상태 | `walk`·`wait`, `stopsAway` 0 | `status.arriving` | `곧 도착` |
@@ -57,11 +58,13 @@
 | 태그 | `etaState: estimated`이거나 `positionState`가 `live`가 아님 | `tag.estimated` | `시간표 추정` |
 | 태그 | 그 밖이고 `delayMinutes` ≥ 5 | `tag.delayed` | `지연` |
 | 태그 | 그 밖 | `tag.live` | `실시간` |
-| 제안 | `suggestion` 있음 | `suggestion.line` | `{line}번이 {m}분 뒤 와요 · {saves}분 빨리 도착` |
+| 제안 | `suggestion.mode: bus` | `suggestion.bus` | `{line}번이 {m}분 뒤 와요 · {saves}분 빨리 도착` |
+| 제안 | `suggestion.mode: subway` | `suggestion.subway` | `{line} 열차가 {m}분 뒤 와요 · {saves}분 빨리 도착` |
 | 버튼 | `walk`·`wait` | `action.boarded`, `action.next` | `탔어요`, `다음 차 탈게요` |
 | 버튼 | Android, 모든 단계 | `action.end` | `종료` |
 
 - 상태 줄은 위에서부터 처음 맞는 것 하나를 쓴다.
+- 지하철 노선 이름(`2호선`)에는 "번"을 붙이지 않는다. 지나간 차량 문구는 지금 구간의 `mode`로, 제안 문구는 `suggestion.mode`(대안 첫 구간의 수단, 2026-11-10에 푸시 값에 더함)로 고른다.
 - iOS 버튼은 `walk`·`wait`에 둘, 그 밖에는 없다. Android는 `walk`·`wait`에 `탔어요`, `다음 차 탈게요`, `종료` 셋, 그 밖에는 `종료` 하나다. "대안 경로" 버튼은 두지 않고 알림 본문을 누르면 17 출퇴근 안내가 열린다(Android 알림 버튼은 셋까지만 보인다).
 - 머리줄(예: "출근 · 회사까지")은 서버가 모르는 장소 이름이라 기기에서 붙인다. 앱이 `planId`별 머리줄을 저장해 두고(2-E), 없으면 `header.fallback` "출퇴근"을 쓴다.
 
