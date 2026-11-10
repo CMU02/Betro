@@ -2,6 +2,7 @@ import {
 	getInitialNotification,
 	getMessaging,
 	getToken,
+	hasPermission,
 	onMessage,
 	onNotificationOpenedApp,
 	onTokenRefresh,
@@ -9,9 +10,11 @@ import {
 } from "@react-native-firebase/messaging";
 import { PermissionsAndroid, Platform } from "react-native";
 
+import type { PermissionStatus } from "@/lib/onboarding/onboarding";
+
 import {
-	isPushAuthorized,
 	type PushMessage,
+	toPermissionStatus,
 	toPushMessage,
 } from "./push-message";
 
@@ -27,32 +30,41 @@ export interface PushSubscriptionHandlers {
 	onTokenRefresh?: (token: string) => void;
 }
 
-async function requestAndroidPermission(): Promise<boolean> {
-	if (Platform.OS !== "android") {
-		return true;
-	}
-	const apiLevel =
-		typeof Platform.Version === "number"
-			? Platform.Version
-			: Number(Platform.Version);
-	if (apiLevel < ANDROID_RUNTIME_NOTIFICATION_PERMISSION_API) {
-		return true;
+function androidApiLevel(): number {
+	return typeof Platform.Version === "number"
+		? Platform.Version
+		: Number(Platform.Version);
+}
+
+async function requestAndroidPermission(): Promise<PermissionStatus> {
+	if (androidApiLevel() < ANDROID_RUNTIME_NOTIFICATION_PERMISSION_API) {
+		// Android 12 이하는 런타임 권한이 없다. 사용자가 시스템 설정에서 끈 경우만 거부로 본다.
+		return getPushPermissionStatus();
 	}
 	const result = await PermissionsAndroid.request(
 		PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
 	);
-	return result === PermissionsAndroid.RESULTS.GRANTED;
+	return result === PermissionsAndroid.RESULTS.GRANTED ? "granted" : "denied";
 }
 
 /**
- * Asks the user for notification permission on both platforms.
+ * Current notification permission without showing any dialog.
+ * iOS reports all three states. Android only reports whether notifications are enabled,
+ * so "not asked yet" on Android 13+ comes back as "denied".
+ */
+export async function getPushPermissionStatus(): Promise<PermissionStatus> {
+	return toPermissionStatus(await hasPermission(getMessaging()));
+}
+
+/**
+ * Asks the user for notification permission on both platforms. Call it only from a
+ * user action (the onboarding permission screen), never on launch.
  * iOS goes through Firebase (which also registers with APNs). Android 13+ uses the
  * runtime permission dialog and older Android grants implicitly.
  */
-export async function requestPushPermission(): Promise<boolean> {
+export async function requestPushPermission(): Promise<PermissionStatus> {
 	if (Platform.OS === "ios") {
-		const status = await requestPermission(getMessaging());
-		return isPushAuthorized(status);
+		return toPermissionStatus(await requestPermission(getMessaging()));
 	}
 	return requestAndroidPermission();
 }

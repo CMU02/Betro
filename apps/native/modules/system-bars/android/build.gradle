@@ -1,0 +1,19 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.cmu02.betro'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.systembars"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  implementation 'androidx.core:core:1.17.0'
+}

@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
 
+import { type PushSubscribeOptions, permissionStepFor } from "./push-launch";
 import type { PushMessage } from "./push-message";
 import {
+	getPushPermissionStatus,
 	getPushToken,
 	type PushSubscriptionHandlers,
 	requestPushPermission,
 	subscribeToPushMessages,
 } from "./push-messaging";
 
-export type PushPermissionState = "requesting" | "granted" | "denied" | "error";
+/** "checking": 권한 확인 중. "denied": 허용되지 않음(아직 묻지 않은 경우 포함). */
+export type PushPermissionState = "checking" | "granted" | "denied" | "error";
 
 export interface PushNotificationsState {
 	/** Most recent message received while the app was in the foreground. */
@@ -23,31 +26,37 @@ export interface PushNotificationsState {
 const INITIAL_STATE: PushNotificationsState = {
 	lastForegroundMessage: null,
 	lastOpenedMessage: null,
-	permission: "requesting",
+	permission: "checking",
 	token: null,
 };
 
 /**
- * Requests notification permission once on mount, fetches the FCM token and keeps the
- * foreground, tap and token-refresh listeners alive while the component is mounted.
+ * Checks notification permission on mount (asking only when `options.requestPermission`
+ * is true), fetches the FCM token once granted and keeps the foreground, tap and
+ * token-refresh listeners alive while the component is mounted.
  */
 export function usePushNotifications(
-	handlers: PushSubscriptionHandlers = {}
+	handlers: PushSubscriptionHandlers,
+	options: PushSubscribeOptions
 ): PushNotificationsState {
 	const [state, setState] = useState<PushNotificationsState>(INITIAL_STATE);
 	const { onForegroundMessage, onNotificationOpened, onTokenRefresh } =
 		handlers;
+	const permissionStep = permissionStepFor(options);
 
 	useEffect(() => {
 		let cancelled = false;
 		let unsubscribe: (() => void) | null = null;
 
 		const start = async () => {
-			const granted = await requestPushPermission();
+			const status =
+				permissionStep === "request"
+					? await requestPushPermission()
+					: await getPushPermissionStatus();
 			if (cancelled) {
 				return;
 			}
-			if (!granted) {
+			if (status !== "granted") {
 				setState((previous) => ({ ...previous, permission: "denied" }));
 				return;
 			}
@@ -85,7 +94,12 @@ export function usePushNotifications(
 			cancelled = true;
 			unsubscribe?.();
 		};
-	}, [onForegroundMessage, onNotificationOpened, onTokenRefresh]);
+	}, [
+		onForegroundMessage,
+		onNotificationOpened,
+		onTokenRefresh,
+		permissionStep,
+	]);
 
 	return state;
 }

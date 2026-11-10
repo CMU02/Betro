@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { isPushAuthorized, toPushMessage } from "./push-message";
+import {
+	isPushAuthorized,
+	toPermissionStatus,
+	toPushMessage,
+} from "./push-message";
 
 describe("isPushAuthorized", () => {
 	it("treats AUTHORIZED, PROVISIONAL and EPHEMERAL as granted", () => {
@@ -11,6 +15,16 @@ describe("isPushAuthorized", () => {
 	it("treats DENIED and NOT_DETERMINED as not granted", () => {
 		expect(isPushAuthorized(0)).toBe(false);
 		expect(isPushAuthorized(-1)).toBe(false);
+	});
+});
+
+describe("toPermissionStatus", () => {
+	it("maps Firebase authorization statuses to the app permission states", () => {
+		expect(toPermissionStatus(-1)).toBe("undetermined");
+		expect(toPermissionStatus(0)).toBe("denied");
+		expect(toPermissionStatus(1)).toBe("granted");
+		expect(toPermissionStatus(2)).toBe("granted");
+		expect(toPermissionStatus(3)).toBe("granted");
 	});
 });
 
