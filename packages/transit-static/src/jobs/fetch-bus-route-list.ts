@@ -24,6 +24,14 @@ export const ROUTES_FILE = "routes.json";
 const FRESH_DAYS = 7;
 const DAY_MS = 86_400_000;
 const DATE_DIR_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 날짜 폴더 이름(YYYY-MM-DD)은 ASCII라 코드 단위 순서가 날짜 순서다. 최신이 앞에 온다. */
+function newestDirFirst(a: string, b: string): number {
+	if (a === b) {
+		return 0;
+	}
+	return a < b ? 1 : -1;
+}
 const DATE_LENGTH = 10;
 
 /**
@@ -82,8 +90,7 @@ async function findFreshRaw(
 	const candidates = dirs
 		.filter((dir) => DATE_DIR_RE.test(dir))
 		.filter((dir) => today - Date.parse(dir) <= FRESH_DAYS * DAY_MS)
-		.sort()
-		.reverse();
+		.sort(newestDirFirst);
 	for (const dir of candidates) {
 		try {
 			// biome-ignore lint/performance/noAwaitInLoops: 최근 날짜부터 처음 찾은 파일을 쓴다
@@ -244,8 +251,7 @@ export function latestRouteList(dataDir: string): BusRouteListRow[] | null {
 	}
 	const sorted = dirs
 		.filter((dir) => DATE_DIR_RE.test(dir))
-		.sort()
-		.reverse();
+		.sort(newestDirFirst);
 	for (const dir of sorted) {
 		try {
 			return JSON.parse(
