@@ -80,10 +80,14 @@ async function startInstallIdentity(): Promise<void> {
 	await registration.run();
 }
 
-startInstallIdentity();
+startInstallIdentity().catch((error: unknown) => {
+	reportError(appCrashSink, error, "install-registration");
+});
 AppState.addEventListener("change", (state) => {
 	if (state === "active") {
-		registration.run();
+		registration.run().catch((error: unknown) => {
+			reportError(appCrashSink, error, "install-registration");
+		});
 	}
 });
 
