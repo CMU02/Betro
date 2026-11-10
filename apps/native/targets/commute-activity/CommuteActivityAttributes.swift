@@ -20,12 +20,15 @@ public struct CommuteActivityAttributes: ActivityAttributes {
     public struct Suggestion: Codable, Hashable {
       public var rank: Int
       public var lineName: String
+      /// "bus" | "subway" (대안 첫 구간의 수단)
+      public var mode: String
       public var boardEtaEpoch: Double
       public var savesMinutes: Int
 
-      public init(rank: Int, lineName: String, boardEtaEpoch: Double, savesMinutes: Int) {
+      public init(rank: Int, lineName: String, mode: String, boardEtaEpoch: Double, savesMinutes: Int) {
         self.rank = rank
         self.lineName = lineName
+        self.mode = mode
         self.boardEtaEpoch = boardEtaEpoch
         self.savesMinutes = savesMinutes
       }

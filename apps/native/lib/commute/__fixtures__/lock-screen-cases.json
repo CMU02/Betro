@@ -34,6 +34,40 @@
     }
   },
   {
+    "name": "passed subway shows next train",
+    "now": 1794265200,
+    "state": {
+      "v": 1,
+      "seq": 1,
+      "sentAt": 1794265200,
+      "stage": "wait",
+      "legIndex": 0,
+      "legCount": 1,
+      "mode": "subway",
+      "lineName": "2호선",
+      "stopName": "강남역",
+      "stopsAway": 5,
+      "etaEpoch": 1794265920,
+      "leaveEpoch": null,
+      "passed": {
+        "lineName": "2호선"
+      },
+      "positionState": "live",
+      "etaState": "live",
+      "delayMinutes": 0,
+      "destinationEtaEpoch": 1794267600,
+      "suggestion": null
+    },
+    "expected": {
+      "status": "2호선 열차가 지나갔어요 · 다음 열차 08:12",
+      "detail": "강남역 · 08:12 도착",
+      "minutes": "12분",
+      "tag": "live",
+      "suggestion": null,
+      "actions": ["boarded", "next"]
+    }
+  },
+  {
     "name": "before leave tells when to go",
     "now": 1794265200,
     "state": {
@@ -602,7 +636,8 @@
         "rank": 1,
         "lineName": "440",
         "boardEtaEpoch": 1794265380,
-        "savesMinutes": 6
+        "savesMinutes": 6,
+        "mode": "bus"
       }
     },
     "expected": {
@@ -611,6 +646,44 @@
       "minutes": "8분",
       "tag": "live",
       "suggestion": "440번이 3분 뒤 와요 · 6분 빨리 도착",
+      "actions": ["boarded", "next"]
+    }
+  },
+  {
+    "name": "suggestion subway line",
+    "now": 1794265200,
+    "state": {
+      "v": 1,
+      "seq": 1,
+      "sentAt": 1794265200,
+      "stage": "wait",
+      "legIndex": 0,
+      "legCount": 1,
+      "mode": "bus",
+      "lineName": "146",
+      "stopName": "강남역",
+      "stopsAway": 2,
+      "etaEpoch": 1794265680,
+      "leaveEpoch": null,
+      "passed": null,
+      "positionState": "live",
+      "etaState": "live",
+      "delayMinutes": 0,
+      "destinationEtaEpoch": 1794267600,
+      "suggestion": {
+        "rank": 1,
+        "lineName": "신분당선",
+        "mode": "subway",
+        "boardEtaEpoch": 1794265380,
+        "savesMinutes": 6
+      }
+    },
+    "expected": {
+      "status": "2정거장 전",
+      "detail": "강남역 · 08:08 도착",
+      "minutes": "8분",
+      "tag": "live",
+      "suggestion": "신분당선 열차가 3분 뒤 와요 · 6분 빨리 도착",
       "actions": ["boarded", "next"]
     }
   },

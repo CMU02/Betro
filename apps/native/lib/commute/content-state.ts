@@ -10,6 +10,7 @@ export type EtaState = "live" | "estimated";
 export interface ContentStateSuggestion {
 	boardEtaEpoch: number;
 	lineName: string;
+	mode: CommuteMode;
 	rank: number;
 	savesMinutes: number;
 }
@@ -90,6 +91,7 @@ function parseSuggestion(
 			isRecord(value) &&
 			isNumber(value.rank) &&
 			isString(value.lineName) &&
+			oneOf<CommuteMode>(value.mode, MODES) &&
 			isNumber(value.boardEtaEpoch) &&
 			isNumber(value.savesMinutes)
 		)
@@ -99,6 +101,7 @@ function parseSuggestion(
 	return {
 		boardEtaEpoch: value.boardEtaEpoch,
 		lineName: value.lineName,
+		mode: value.mode,
 		rank: value.rank,
 		savesMinutes: value.savesMinutes,
 	};

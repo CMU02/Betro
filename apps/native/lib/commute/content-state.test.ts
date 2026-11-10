@@ -42,12 +42,36 @@ it("keeps passed and suggestion objects", () => {
 		suggestion: {
 			boardEtaEpoch: 5,
 			lineName: "440",
+			mode: "bus",
 			rank: 1,
 			savesMinutes: 6,
 		},
 	});
 	expect(state?.passed).toEqual({ lineName: "146" });
 	expect(state?.suggestion?.savesMinutes).toBe(6);
+	expect(state?.suggestion?.mode).toBe("bus");
+});
+
+it("rejects a suggestion without a valid mode", () => {
+	const suggestion = {
+		boardEtaEpoch: 5,
+		lineName: "440",
+		rank: 1,
+		savesMinutes: 6,
+	};
+	expect(parseContentState({ ...SAMPLE, suggestion })).toBeNull();
+	expect(
+		parseContentState({
+			...SAMPLE,
+			suggestion: { ...suggestion, mode: "tram" },
+		})
+	).toBeNull();
+	expect(
+		parseContentState({
+			...SAMPLE,
+			suggestion: { ...suggestion, mode: "subway" },
+		})?.suggestion?.mode
+	).toBe("subway");
 });
 
 it("rejects a different version, unknown stage and string seq", () => {

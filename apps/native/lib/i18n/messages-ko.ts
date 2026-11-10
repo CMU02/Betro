@@ -32,7 +32,8 @@ export const ko = {
 				arrived: "{stop} 도착",
 				arriving: "곧 도착",
 				beforeLeave: "{leave}에 나가면 {line} {eta} 탑승",
-				passed: "{passedLine}번이 지나갔어요 · 다음 차 {eta}",
+				passedBus: "{passedLine}번이 지나갔어요 · 다음 차 {eta}",
+				passedSubway: "{passedLine} 열차가 지나갔어요 · 다음 열차 {eta}",
 				ride: "하차까지 {n}정거장",
 				rideLast: "이번에 내려요",
 				rideUnknown: "이동 중",
@@ -40,7 +41,8 @@ export const ko = {
 				unknown: "위치 확인 중",
 			},
 			suggestion: {
-				line: "{line}번이 {m}분 뒤 와요 · {saves}분 빨리 도착",
+				bus: "{line}번이 {m}분 뒤 와요 · {saves}분 빨리 도착",
+				subway: "{line} 열차가 {m}분 뒤 와요 · {saves}분 빨리 도착",
 			},
 			tag: {
 				delayed: "지연",

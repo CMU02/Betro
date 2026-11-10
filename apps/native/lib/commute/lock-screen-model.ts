@@ -57,7 +57,11 @@ function statusLine(
 	const { t, now } = deps;
 	const { etaEpoch, stage } = state;
 	if (state.passed && etaEpoch !== null) {
-		return t("commute.lock.status.passed", {
+		const passedKey =
+			state.mode === "subway"
+				? "commute.lock.status.passedSubway"
+				: "commute.lock.status.passedBus";
+		return t(passedKey, {
 			eta: clock(etaEpoch),
 			passedLine: state.passed.lineName,
 		});
@@ -148,7 +152,11 @@ function suggestionLine(
 		1,
 		Math.floor((state.suggestion.boardEtaEpoch - deps.now) / SECONDS_PER_MINUTE)
 	);
-	return deps.t("commute.lock.suggestion.line", {
+	const key =
+		state.suggestion.mode === "subway"
+			? "commute.lock.suggestion.subway"
+			: "commute.lock.suggestion.bus";
+	return deps.t(key, {
 		line: state.suggestion.lineName,
 		m: minutes,
 		saves: state.suggestion.savesMinutes,
