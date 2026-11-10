@@ -97,6 +97,7 @@ const STOP_BY_KIND = {
 
 /**
  * 검색어마다 getBusRouteList를 한 번 부르고 합친 목록을 routes.json으로 남긴다.
+ * 중간에 멈추거나 실패한 검색어가 있으면 routes.json은 쓰지 않는다(원본은 남아 재실행이 이어받는다).
  * 7일 안에 받은 검색어는 저장된 원본을 쓰고 다시 부르지 않는다.
  */
 export async function fetchBusRouteList(
@@ -144,7 +145,8 @@ export async function fetchBusRouteList(
 	}
 
 	const routes = mergeRouteLists(pages);
-	if (pages.length > 0) {
+	const complete = stoppedBy === "none" && failed.length === 0;
+	if (complete && pages.length > 0) {
 		const out = rawPath(
 			dataDir,
 			BUS_ROUTE_LIST_SOURCE,

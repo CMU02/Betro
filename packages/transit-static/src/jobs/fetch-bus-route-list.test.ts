@@ -44,6 +44,13 @@ function fakeFetch(responder: (term: string, index: number) => Response) {
 	return { fetchImpl, terms, urls };
 }
 
+const OLD_ROW = {
+	busRouteId: "old-complete",
+	name: "old-complete",
+	routeType: "8",
+	shortName: "old-complete",
+};
+
 function dateDir(daysAgo: number): string {
 	return new Date(NOW.getTime() - daysAgo * DAY_MS).toISOString().slice(0, 10);
 }
@@ -113,6 +120,50 @@ describe("fetchBusRouteList", () => {
 		for (const [line] of logSpy.mock.calls) {
 			expect(String(line)).not.toContain(KEY);
 		}
+	});
+
+	it("keeps calling other terms when one term fails and writes no routes.json", async () => {
+		const { fetchImpl, terms } = fakeFetch((_term, index) =>
+			index === 1
+				? new Response(`boom ${KEY}`, { status: 500 })
+				: Response.json(JSON.parse(body([item(`id-${index}`)])))
+		);
+		const result = await fetchBusRouteList({
+			dataDir,
+			fetchImpl,
+			key: KEY,
+			now: () => NOW,
+			terms: ["a", "b", "c"],
+		});
+		expect(result.stoppedBy).toBe("none");
+		expect(terms).toEqual(["a", "b", "c"]);
+		expect(result.failed).toHaveLength(1);
+		expect(JSON.stringify(result.failed)).not.toContain(KEY);
+		const dir = rawPath(dataDir, BUS_ROUTE_LIST_SOURCE, dateDir(0));
+		await expect(readFile(join(dir, "routes.json"), "utf8")).rejects.toThrow();
+		expect(await readFile(join(dir, "a.json"), "utf8")).toContain("id-0");
+	});
+
+	it("does not shadow an older complete list after a 401 run", async () => {
+		const older = rawPath(dataDir, BUS_ROUTE_LIST_SOURCE, dateDir(8));
+		await mkdir(older, { recursive: true });
+		await writeFile(join(older, "routes.json"), JSON.stringify([OLD_ROW]));
+		const { fetchImpl } = fakeFetch((_term, index) =>
+			index === 1
+				? new Response("unauthorized", { status: 401 })
+				: Response.json(JSON.parse(body([item(`id-${index}`)])))
+		);
+		const result = await fetchBusRouteList({
+			dataDir,
+			fetchImpl,
+			key: KEY,
+			now: () => NOW,
+			terms: ["a", "b", "c"],
+		});
+		expect(result.stoppedBy).toBe("unauthorized");
+		const dir = rawPath(dataDir, BUS_ROUTE_LIST_SOURCE, dateDir(0));
+		await expect(readFile(join(dir, "routes.json"), "utf8")).rejects.toThrow();
+		expect(latestRouteList(dataDir)).toEqual([OLD_ROW]);
 	});
 
 	it("skips terms fetched 6 days ago and refetches those from 8 days ago", async () => {

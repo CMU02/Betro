@@ -128,7 +128,10 @@ const commands: Record<string, CommandHandler> = {
 			dataDir: resolveDataDir(process.env),
 			key,
 		});
-		if (result.stoppedBy !== "none") {
+		if (result.failed.length > 0) {
+			console.error(`failed terms:\n${result.failed.join("\n")}`);
+		}
+		if (result.stoppedBy !== "none" || result.failed.length > 0) {
 			process.exitCode = 1;
 		}
 	},
