@@ -13,7 +13,7 @@ const NAVER_MAP_MAVEN_REPO = "https://repository.map.naver.com/archive/maven";
 const config: ExpoConfig = {
 	android: {
 		adaptiveIcon: {
-			backgroundColor: "#0b0e15",
+			backgroundColor: "#0e0f10",
 			backgroundImage: "./assets/images/android-icon-background.png",
 			foregroundImage: "./assets/images/android-icon-foreground.png",
 			monochromeImage: "./assets/images/android-icon-monochrome.png",
@@ -46,9 +46,9 @@ const config: ExpoConfig = {
 		[
 			"expo-splash-screen",
 			{
-				backgroundColor: "#f5f6f8",
+				backgroundColor: "#f6f6f7",
 				dark: {
-					backgroundColor: "#0b0e15",
+					backgroundColor: "#0e0f10",
 					image: "./assets/images/splash-icon-dark.png",
 				},
 				image: "./assets/images/splash-icon.png",
