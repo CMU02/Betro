@@ -70,7 +70,7 @@ const startInput = {
 	attributes: { planId: "plan-1", sessionId: "sess-1" },
 	env: "sandbox" as const,
 	jwt: "jwt-value",
-	now: 1_800_000_000,
+	now: NOW,
 	state: STATE,
 	token: DEVICE_TOKEN,
 	topic: TOPIC,
@@ -156,9 +156,9 @@ describe("apns 요청", () => {
 		const request = apnsUpdateRequest({
 			env: "sandbox",
 			jwt: "j",
-			now: 1_800_000_000,
+			now: NOW,
 			priority: 5,
-			staleAt: 1_800_000_150,
+			staleAt: NOW + 150_000,
 			state: STATE,
 			token: DEVICE_TOKEN,
 			topic: TOPIC,
@@ -170,6 +170,7 @@ describe("apns 요청", () => {
 		};
 		expect(aps.event).toBe("update");
 		expect(aps["stale-date"]).toBe(1_800_000_150);
+		expect(aps.timestamp).toBe(1_800_000_000);
 		expect(aps["content-state"]).toEqual(STATE);
 	});
 
@@ -177,7 +178,7 @@ describe("apns 요청", () => {
 		const request = apnsEndRequest({
 			env: "sandbox",
 			jwt: "j",
-			now: 1_800_000_000,
+			now: NOW,
 			state: STATE,
 			token: DEVICE_TOKEN,
 			topic: TOPIC,
@@ -187,6 +188,8 @@ describe("apns 요청", () => {
 		};
 		expect(aps.event).toBe("end");
 		expect(aps["dismissal-date"]).toBe(1_800_000_000);
+		expect(aps.timestamp).toBe(1_800_000_000);
+		expect(String(aps["dismissal-date"])).toHaveLength(10);
 	});
 
 	it("요청 어디에도 p8 원문이 없다", async () => {

@@ -10,6 +10,7 @@ const PEM_PKCS8 =
 	/-----BEGIN PRIVATE KEY-----([A-Za-z0-9+/=\s]+)-----END PRIVATE KEY-----/;
 const ATTRIBUTES_TYPE = "CommuteActivityAttributes";
 const PRIORITY_START = 10;
+const MS_PER_SECOND = 1000;
 const HTTP_OK = 200;
 const HTTP_BAD_REQUEST = 400;
 const HTTP_FORBIDDEN = 403;
@@ -32,10 +33,16 @@ export interface ApnsJwtCache {
 interface ApnsBase {
 	env: "sandbox" | "production";
 	jwt: string;
+	/** 밀리초. APNs 필드로 나갈 때 초로 바꾼다. */
 	now: number;
 	state: ContentState;
 	token: string;
 	topic: string;
+}
+
+/** 패키지 전체가 밀리초를 쓰므로 APNs 로 나가는 값만 여기서 epoch 초로 바꾼다. */
+function toEpochSec(ms: number): number {
+	return Math.floor(ms / MS_PER_SECOND);
 }
 
 function base64Url(bytes: Uint8Array): string {
@@ -136,27 +143,27 @@ export function apnsStartRequest(
 		"attributes-type": ATTRIBUTES_TYPE,
 		"content-state": input.state,
 		event: "start",
-		timestamp: input.now,
+		timestamp: toEpochSec(input.now),
 	});
 }
 
 export function apnsUpdateRequest(
-	input: ApnsBase & { priority: 5 | 10; staleAt: number }
+	input: ApnsBase & { priority: 5 | 10; staleAt: number /* 밀리초 */ }
 ): Request {
 	return build(input, input.priority, {
 		"content-state": input.state,
 		event: "update",
-		"stale-date": input.staleAt,
-		timestamp: input.now,
+		"stale-date": toEpochSec(input.staleAt),
+		timestamp: toEpochSec(input.now),
 	});
 }
 
 export function apnsEndRequest(input: ApnsBase): Request {
 	return build(input, PRIORITY_START, {
 		"content-state": input.state,
-		"dismissal-date": input.now,
+		"dismissal-date": toEpochSec(input.now),
 		event: "end",
-		timestamp: input.now,
+		timestamp: toEpochSec(input.now),
 	});
 }
 
