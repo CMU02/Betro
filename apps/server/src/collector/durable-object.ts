@@ -18,6 +18,7 @@ import {
 	type SnapshotKind,
 	type SnapshotResponse,
 } from "./core";
+import type { StationRowsEntry } from "./core-state";
 import { errorText, secretVariants } from "./util";
 
 /** `start()`를 한 번이라도 불렀는지(`kv`). cron은 시작한 수집기의 alarm만 다시 건다. */
@@ -33,6 +34,17 @@ function idleFlushMsOf(env: Env): number {
 
 const isSnapshotKind = (value: unknown): value is SnapshotKind =>
 	value === "subway" || value === "bus";
+
+/** RPC로 받는 역 ID 목록. 한 번에 받는 역 수를 제한한다. */
+const MAX_WATCHED_STATIONS = 200;
+
+function isStationIds(value: unknown): value is string[] {
+	return (
+		Array.isArray(value) &&
+		value.length <= MAX_WATCHED_STATIONS &&
+		value.every((id) => typeof id === "string" && id !== "")
+	);
+}
 
 /**
  * 수집기 Durable Object. `fetch`는 쓰지 않고 RPC 메서드만 둔다. alarm마다 `CollectorCore.tick`을
@@ -74,6 +86,26 @@ export class Collector extends DurableObject<Env> {
 		}
 		const core = await this.#getCore();
 		return core.snapshot(kind);
+	}
+
+	/** 출퇴근 세션이 보는 역을 `until`까지 등록한다. */
+	async watchStations(statnIds: string[], until: number): Promise<void> {
+		if (!(isStationIds(statnIds) && Number.isFinite(until))) {
+			throw new Error("watchStations needs station ids and an end time");
+		}
+		const core = await this.#getCore();
+		await core.watchStations(statnIds, until);
+	}
+
+	/** 등록한 역의 최근 ALL 행. */
+	async stationRows(
+		statnIds: string[]
+	): Promise<Record<string, StationRowsEntry>> {
+		if (!isStationIds(statnIds)) {
+			throw new Error("stationRows needs station ids");
+		}
+		const core = await this.#getCore();
+		return core.stationRows(statnIds);
 	}
 
 	async status(): Promise<CollectorStatus> {

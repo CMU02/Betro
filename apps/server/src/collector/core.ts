@@ -21,7 +21,7 @@ import type { UpstreamOutcome } from "@Betro/realtime/upstream/classify";
 import { redactKeys } from "@Betro/realtime/upstream/urls";
 import { applyCall, type References } from "./apply-call";
 import { CollectorState } from "./collector-state";
-import { currentOperatingEnd } from "./core-state";
+import { currentOperatingEnd, type StationRowsEntry } from "./core-state";
 import type { CollectorPorts, UpstreamResponse } from "./ports";
 import { evaluateAlerts, writeReportIfDue } from "./reporting";
 import {
@@ -132,6 +132,32 @@ export class CollectorCore {
 		return response;
 	}
 
+	/**
+	 * 출퇴근 세션이 보는 역을 `until`까지 등록한다. 이후 ALL 응답마다 그 역의 행을 남긴다.
+	 * 만료 시각이 지난 역은 지운다. 진행 중인 tick을 기다리지 않는다(메모리의 같은 값을 바꾸고 바로 저장).
+	 */
+	async watchStations(statnIds: string[], until: number): Promise<void> {
+		const state = await this.#state();
+		state.watchStations(statnIds, until);
+		state.expireWatches(this.#ports.clock());
+		await state.saveBoards(this.#ports.state);
+	}
+
+	/** 등록한 역 중 행을 받은 역의 최근 행. 받지 못한 역은 키가 없다. */
+	async stationRows(
+		statnIds: string[]
+	): Promise<Record<string, StationRowsEntry>> {
+		const state = await this.#state();
+		const result: Record<string, StationRowsEntry> = {};
+		for (const statnId of statnIds) {
+			const entry = state.boards.stations[statnId];
+			if (entry) {
+				result[statnId] = entry;
+			}
+		}
+		return result;
+	}
+
 	/** 상태 페이지·`/status.json`. */
 	async status(): Promise<CollectorStatus> {
 		const state = await this.#state();
@@ -232,6 +258,7 @@ export class CollectorCore {
 		const { blobs, clock, config } = this.#ports;
 		const now = clock();
 		state.rollDay(now);
+		state.expireWatches(now);
 		const refs = await this.#references(now);
 		const planned = refs
 			? await this.#poll(state, refs, now)
@@ -368,6 +395,12 @@ export class CollectorCore {
 			receivedAt,
 			(tag, line) => this.#warnOnce(tag, line)
 		);
+		if (
+			parsed.kind === "subway-all" &&
+			(outcome === "ok" || outcome === "no-data")
+		) {
+			state.recordStationRows(parsed.rows, receivedAt);
+		}
 		if (outcome === "auth" || outcome === "quota-exhausted") {
 			state.stop(kind, outcome, at);
 			this.#log(`${kind} stopped for the day: ${outcome}`);

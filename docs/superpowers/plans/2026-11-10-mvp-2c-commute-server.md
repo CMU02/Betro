@@ -43,7 +43,7 @@
 
 1. **자정과 요일 경계.** 나가는 시각이 00:05이고 선행이 10분이면 세션은 전날 23:55에 시작해야 하고, 요일과 공휴일은 나가는 날 기준으로 본다. 기대: 월요일 00:05 예약은 일요일 23:55에 시작하고, 일요일이 공휴일이어도 월요일이 아니면 건너뛰지 않는다. Task 3(`dueStarts`) 테스트로 고정.
 2. **실행기 재시작.** DO가 잠들었다 깨어나거나 배포로 다시 떠도 같은 예약의 세션을 두 번 만들지 않고, 시작 푸시를 다시 보내지 않고, `seq`가 이어지고, APNs JWT를 새로 만들지 않는다. Task 9 테스트(같은 저장소로 만든 두 번째 `RunnerCore`)로 고정.
-3. **토큰이 없거나 늦거나 죽은 경우.** push-to-start 토큰이 없는 기기, 시작 뒤 60초 안에 업데이트 토큰이 오지 않는 세션, `BadDeviceToken`·`Unregistered` 응답. 기대: 시작을 다시 보내 Activity를 둘 만들지 않고, 죽은 토큰은 지우고, 세션은 "갱신 불가"로 기록한다. Task 8, 9 테스트로 고정.
+3. **토큰이 없거나 늦거나 죽은 경우.** push-to-start 토큰이 없는 기기, 시작 뒤 60초 안에 업데이트 토큰이 오지 않는 세션, `BadDeviceToken`·`Unregistered` 응답. 기대: 시작을 다시 보내 Activity를 둘 만들지 않고(시작 요청이 예외·타임아웃으로 끝나 결과를 모를 때도), 죽은 토큰은 지우고, 세션은 "갱신 불가"로 기록한다. Task 8, 9 테스트로 고정.
 4. **원천이 멈춘 경우.** 도착판이 150초 넘게 새로 오지 않으면 시간표·배차간격 추정으로 바꾸고 `etaState: "estimated"`, `positionState: "stale"`로 보낸다. 값이 그대로여도 110초마다 한 번은 보낸다. 기대: 실시간인 척 멈춘 화면이 없다. Task 5, 7 테스트로 고정.
 5. **남의 세션, 끝난 세션, 중복 입력.** 다른 설치의 비밀값으로 보낸 입력은 404, 끝난 세션의 입력은 409, "탔어요"를 두 번 눌러도 상태가 한 번만 바뀐다. 강제 종료 뒤 늦게 도착한 옛 메시지가 최신 값을 덮지 않도록 모든 값에 `seq`가 있다. Task 6, 10 테스트로 고정.
 
@@ -253,10 +253,11 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
   - `interface LegEstimate { alightEtaAt: number | null; boardEtaAt: number | null; etaState: "live" | "estimated"; method: ArrivalMethod | null; positionState: "live" | "stale" | "none"; stopsAway: number | null; vehicleId: string | null }`
   - `interface RouteEstimate { destinationEtaAt: number | null; legs: LegEstimate[]; rank: number }`
   - `selectVehicle(board: StopBoard, readyAt: number, skip: ReadonlySet<string>): Approaching | null`. `etaAt >= readyAt`인 첫 차량. `skip`에 든 차량은 건너뛴다. `etaAt`이 null인 차량은 고르지 않는다.
-  - `estimateRoute(route: Route, boards: TransitBoards, input: { fixed: (string | null)[]; now: number; readyAt: number; skip: ReadonlySet<string> }, config: CommuteConfig): RouteEstimate`
-    - 구간 i의 `readyAt`은 첫 구간이면 입력값, 아니면 앞 구간의 `alightEtaAt + walkMinutes[i]분`이다.
+  - `estimateRoute(route: Route, boards: TransitBoards, input: { fixed: (string | null)[]; fromLeg?: number; now: number; readyAt: number; skip: ReadonlySet<string> }, config: CommuteConfig): RouteEstimate`
+    - `fromLeg`(기본 0)는 지금 구간(Task 6의 `legIndex`)이다. `input.readyAt`은 `fromLeg` 구간의 `readyAt`이고, 그 뒤 구간 i의 `readyAt`은 앞 구간의 `alightEtaAt + walkMinutes[i]분`이다. **[검토 반영]** 앞 구간 차량이 하차 정류장에 닿으면 진행 정보의 도착 시각이 null이 되어 다음 구간을 고를 수 없었다. 그래서 환승 도보·대기 중에는 호출하는 쪽이 `fromLeg`와 그 구간의 `readyAt`을 준다.
+    - `fromLeg` 앞 구간은 끝난 구간이다. 잡아 둔 차량만 보고(`readyAt` 없음, 새로 고르지 않음) 그 하차 시각을 다음 구간으로 잇지 않는다.
     - `fixed[i]`가 있으면 그 차량을 쓰고 고르지 않는다(이미 잡았거나 탄 차량).
-    - 도착판이 없거나 `now - sourceAt > config.staleAfterMs`면 `positionState: "stale"`(도착판이 아예 없으면 `"none"`), `etaState: "estimated"`로 두고 `boardEtaAt`은 `readyAt + headwayMs / 2`(배차간격을 모르면 null), `method`는 `"headway"`다.
+    - 도착판이 없거나 `now - sourceAt > config.staleAfterMs`면 `positionState: "stale"`(도착판이 아예 없으면 `"none"`), `etaState: "estimated"`로 두고 `boardEtaAt`은 `readyAt + headwayMs / 2`(배차간격을 모르면 null), `method`는 `"headway"`다. 단 `fixed[i]`가 승차 도착판에 없고(탄 차량) `progress`가 도착 시각을 주면 `alightEtaAt`은 그 값, `boardEtaAt`은 null이다(상태·방법·`stopsAway: null`은 그대로). **[검토 반영]** 묵은 도착판에서 탄 차량에 배차간격 추정을 쓰면 하차 예정이 매 tick 미래로 밀려 Task 6 규칙 6이 걸리지 않는다.
     - 고를 차량이 도착판의 범위 밖이면(둘 다 `readyAt`보다 이르면) 마지막 차량의 `etaAt + headwayMs`를 쓰고 `etaState: "estimated"`, `method: "headway"`.
     - `etaState`는 도착판이 묵었거나 `method`가 `"timetable"`, `"headway"`, `"extrapolated"`면 `"estimated"`, 그 밖에는 `"live"`다.
     - `alightEtaAt = boardEtaAt + rideMs`. `rideMs`가 null이면 `alightEtaAt`도 null이다.
@@ -288,13 +289,14 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
 - Consumes: `RouteEstimate`, `estimateRoute`(Task 5), `CommutePlan`, `TransitBoards`, `CommuteConfig`
 - Produces:
   - `type Stage = "walk" | "wait" | "ride" | "arrived" | "ended"`
-  - `type EndReason = "arrived" | "user" | "timeout" | "no-token" | "plan-removed"`
-  - `interface SessionState { boardedBy: ("time" | "user" | null)[]; endReason: EndReason | null; estimates: RouteEstimate[]; fixed: (string | null)[]; initialDestinationEtaAt: number | null; leaveAt: number; legIndex: number; passed: { lineName: string } | null; planId: string; seq: number; sessionId: string; skip: string[]; stage: Stage; startedAt: number }`. JSON으로 그대로 저장한다.
+  - `type EndReason = "arrived" | "user" | "timeout" | "no-token" | "plan-removed" | "push-rejected"`. **[검토 반영]** `push-rejected`는 실행기가 붙이는 값이다(Task 9 규칙 8). D1 `end_reason`은 제약 없는 text라 마이그레이션이 필요 없다.
+  - `interface SessionState { boardedBy: ("time" | "user" | null)[]; endReason: EndReason | null; estimates: RouteEstimate[]; fixed: (string | null)[]; initialDestinationEtaAt: number | null; leaveAt: number; legIndex: number; passed: { lineName: string } | null; planId: string; readyAt: number | null; seq: number; sessionId: string; skip: string[]; stage: Stage; startedAt: number }`. JSON으로 그대로 저장한다.
+    - `readyAt`(**[검토 반영]**, 규칙 2의 "넘긴 시각"을 담는 필드): 지금 구간의 승차 정류장에 있을 수 있는 시각이다. 첫 `advance`에서 `max(now, leaveAt) + walkMinutes[0]분`으로, 환승 구간은 내린 시각 + 환승 도보로 한 번 정하고 그 뒤로 바꾸지 않는다(매번 `now`로 다시 계산하면 `now >= readyAt`이 되지 않아 `wait`과 규칙 3의 탑승 판단이 걸리지 않는다). `estimateRoute`에는 `max(now, readyAt)`을 준다. `arrived`에서는 목적지에 닿는 시각(내린 시각 + 마지막 도보)이고 규칙 8의 종료 판단에 쓴다. `startSession`은 null로 둔다.
   - `startSession(plan: CommutePlan, due: { leaveAt: number; startAt: number }, sessionId: string): SessionState`
   - `type SessionInput = { kind: "boarded" } | { kind: "next" } | { kind: "end" }`
   - `advance(state: SessionState, plan: CommutePlan, boards: TransitBoards, now: number, config: CommuteConfig, input?: SessionInput): SessionState`. 순수 함수다. 규칙은 아래와 같다.
     1. `stage`가 `ended`면 그대로 돌려준다.
-    2. 기본 경로의 지금 구간에서 `readyAt`을 정한다. 첫 구간은 `max(now, leaveAt) + walkMinutes[0]분`, 그 뒤 구간은 앞 구간 하차 + 환승 도보다.
+    2. 기본 경로의 지금 구간에서 `readyAt`을 정한다. 첫 구간은 `max(now, leaveAt) + walkMinutes[0]분`, 그 뒤 구간은 앞 구간 하차 + 환승 도보다. 기본 경로의 `estimateRoute`에는 `fromLeg: legIndex`와 이 `readyAt`을 준다(Task 5). 앞 구간 차량이 하차 정류장에 닿은 뒤에는 그 하차 시각을 진행 정보에서 다시 얻을 수 없고, `fromLeg` 앞 구간의 `alightEtaAt`도 null로 돌아올 수 있다. 그래서 규칙 6에서 구간을 넘길 때의 시각을 상태에 남겨 두고 `max(now, 넘긴 시각 + 환승 도보)`로 쓴다(이를 위해 `SessionState`에 필드가 하나 늘 수 있다). **[검토 반영]**
     3. 잡은 차량(`fixed[legIndex]`)이 승차 정류장의 `passed`에 있고 아직 타지 않았으면: `now >= readyAt`(정류장에 있을 시각)이면 탄 것으로 본다(`stage: "ride"`, `boardedBy: "time"`). 아니면 차량을 놓고(`fixed`를 null로, `skip`에 추가) `passed`에 그 노선 이름을 넣고 다시 고른다.
     4. `input.kind === "next"`: 탑승 전이면 잡은 차량을 `skip`에 넣고 다시 고른다. 탑승 뒤면 무시한다.
     5. `input.kind === "boarded"`: 탑승 전이면 `stage: "ride"`, `boardedBy: "user"`. 탈 차량은 승차 정류장을 3분 안에 지난 차량 중 가장 최근 것, 없으면 `stopsAway`가 0인 차량, 그것도 없으면 잡아 둔 차량이다. 이미 탑승 중이면 무시한다.
@@ -397,7 +399,7 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
     - `interface ApnsJwtCache { issuedAt: number; token: string }`, `reusableJwt(cache: ApnsJwtCache | undefined, now: number): string | null`
     - `apnsStartRequest(input: { attributes: { planId: string; sessionId: string }; env: "sandbox" | "production"; jwt: string; now: number; state: ContentState; token: string; topic: string }): Request`. 헤더는 `apns-push-type: liveactivity`, `apns-topic: <topic>.push-type.liveactivity`, `apns-priority: 10`. 본문은 `{ aps: { timestamp, event: "start", "attributes-type": "CommuteActivityAttributes", attributes, "content-state": state, alert: { title: { "loc-key": "commute.start.title" }, body: { "loc-key": "commute.start.body" } } } }`. 알림 문구는 기기의 문자열 리소스 키다.
     - `apnsUpdateRequest(input: { env; jwt; now; priority: 5 | 10; staleAt: number; state: ContentState; token: string; topic: string }): Request`(`event: "update"`, `"stale-date": staleAt`)
-    - `apnsEndRequest(input: { env; jwt; now; state: ContentState; token: string; topic: string }): Request`(`event: "end"`, `"dismissal-date": now`)
+    - `apnsEndRequest(input: { env; jwt; now; state: ContentState; token: string; topic: string }): Request`(`event: "end"`, `"dismissal-date": now`). 단위: `now`와 `staleAt`은 밀리초이고, 요청 본문의 `timestamp`·`dismissal-date`·`stale-date`는 함수 안에서 epoch 초로 바꾼다.
     - 호스트는 `env`가 `"sandbox"`면 `api.sandbox.push.apple.com`, 아니면 `api.push.apple.com`.
     - `type PushOutcome = "ok" | "token-dead" | "jwt-expired" | "config" | "retry"`
     - `classifyApns(status: number, reason: string | null): PushOutcome`. 200 → `ok`. 400 `BadDeviceToken`·410 `Unregistered`·410 `ExpiredToken` → `token-dead`. 403 `ExpiredProviderToken`·`InvalidProviderToken` → `jwt-expired`. 400 `TopicDisallowed`와 그 밖의 400·403 → `config`. 429·5xx → `retry`.
@@ -455,7 +457,9 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
   5. **시작**: 처음 보내는 세션은 iOS면 `apns-start` 토큰으로 시작 요청, Android면 FCM `event: "start"`. 시작 토큰이 없으면 `no-token`으로 닫는다.
   6. **갱신**: iOS는 그 세션의 `apns-activity` 토큰(`session_id`가 같은 것)이 있어야 보낸다. 없으면 `tokenWaitUntil`(시작 + `tokenWaitMs`)까지 기다리고, 지나면 `updatable: false`로 기록하고 **시작을 다시 보내지 않는다.**
   7. **종료**: `stage`가 `ended`가 되면 종료 요청을 보내고 `closeSession`, 저장소에서 세션과 그 세션의 `apns-activity` 토큰을 지운다.
-  8. 응답 분류: `token-dead` → 토큰 삭제. 죽은 것이 FCM 토큰이면 그 설치를 통째로 지운다(Android는 앱을 지우면 설치 ID가 사라져 서버 등록이 고아가 된다, 5.2). iOS는 재설치해도 설치 ID가 이어지므로 토큰만 지운다. `jwt-expired` → JWT를 새로 만들어 한 번만 다시 보낸다. `config` → 로그만. `retry` → 다음 tick에 맡긴다(같은 tick에서 다시 보내지 않는다).
+  8. 응답 분류: `token-dead` → 토큰 삭제. 죽은 것이 FCM 토큰이면 그 설치를 통째로 지운다(Android는 앱을 지우면 설치 ID가 사라져 서버 등록이 고아가 된다, 5.2). iOS는 재설치해도 설치 ID가 이어지므로 토큰만 지운다. `jwt-expired` → JWT를 새로 만들어 한 번만 다시 보낸다(새 JWT·액세스 토큰도 인증 오류면 `config`로 본다). `retry`(429·5xx) → 다음 tick에 맡긴다(같은 tick에서 다시 보내지 않는다).
+     - **[검토 반영]** 요청이 예외나 타임아웃으로 끝나 응답이 없으면 `unconfirmed`로 기록한다(상대가 받았는지 모른다). iOS 시작이 `unconfirmed`면 다시 보내지 않는다(APNs가 이미 받았으면 Activity가 둘이 된다). 보낸 것으로 두고 정상 시작처럼 `tokenWaitUntil`까지 업데이트 토큰을 기다리며, 안 오면 규칙 6대로 갱신 불가다. Android 시작은 같은 알림을 덮어쓰므로 `retry`처럼 다시 보낸다. 갱신의 `unconfirmed`도 다음 tick에 다시 판단한다.
+     - **[검토 반영]** `config`(토큰이 아닌 400·403)는 다시 보내도 같아서 tick마다 보내면 세션당 수백 번 실패한다. 시작이 `config`면 `push-rejected`로 닫는다(다음 날 다시 시도된다). 갱신은 세션당 3번(`PUSH_REJECT_LIMIT`) 거절되면 종료를 한 번 보내고 `push-rejected`로 닫는다. 종료는 원래 세션당 한 번이다.
   9. 보냈으면 `state.seq`를 올리고 `lastContent`, `lastSentAt`을 저장한다. **모든 변경은 tick이 끝나기 전에 저장소에 쓴다.**
 
 - [ ] **Step 1: 실패하는 테스트**
@@ -536,6 +540,7 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
   - `dailyReport(date: string, summaries: SessionSummary[]): DailyCommuteReport`
   - `RunnerCore.writeDailyReport(date: string): Promise<boolean>`. `commute/summaries/<date>/`를 읽어 `commute/reports/<date>.json`을 쓴다. cron이 부르고, 실행기는 마지막으로 쓴 날짜를 저장해 하루에 한 번만 쓴다(4단계 일일 보고서와 같은 방식).
   - 제안이 나간 세션은 종료 뒤에도 두 차량이 하차 정류장에 도착하거나 30분이 지날 때까지 그 두 노선의 도착판만 계속 보고 `arrival`을 남긴다(푸시는 보내지 않는다).
+  - **[구현 반영]** `AccuracyRecord`에 `{ kind: "end"; at; sessionId; planId; reason: EndReason }`를 더했다(요약의 `planId`·`endReason`이 나올 곳이 없었다). `suggestion`의 `primary`·`alternative`에는 `afterAlightMs`(하차 예정 → 목적지 도착 예상, 구간이 하나면 마지막 도보)를 더해 "도보를 더해 비교"를 기록만으로 한다. `StopBoard`에 선택 필드 `prevSourceAt`(직전 도착판의 `sourceAt`)을 더해 `arrival.low`로 쓴다. 따라가기는 저장소 키 `follow:<세션ID>`, 마지막 보고서 날짜는 `commuteReportDate`, cron은 `commuteReportDate(now, DEFAULT_TIMEZONE)`(서비스일 D를 D+1 04:00부터)로 `writeDailyReport`를 부른다.
 
 - [ ] **Step 1: 실패하는 테스트**
   - `recordsOf`: tick 하나에서 기본 경로 첫 구간 예측 1건, 대안 2개면 3건. 차량이 정류장을 지난 tick에서 `arrival`의 `low`가 직전 도착판의 `sourceAt`, `high`가 지금 `sourceAt`.
@@ -558,9 +563,37 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
 - Create: `packages/commute/README.md`
 - Modify: `apps/server/README.md`(출퇴근 절: 라우트, secret, `PUSH_MODE`, 실행기 상태 보는 법, 기록 위치), 이 계획 문서(결과 기록)
 
-- [ ] **Step 1: secret** — `APNS_KEY_P8`을 `~/Documents/Betro-APNs/AuthKey_HFSD7YXX9N.p8`에서 표준입력으로 넣는다(화면 출력 없음). `FCM_SERVICE_ACCOUNT_JSON`은 이미 있다. Expected: `wrangler secret list`에 6개.
-- [ ] **Step 2: 배포** — `packages/db`에서 `bun run db:d1-migrations`, `apps/server`에서 `bunx wrangler d1 migrations apply betro --remote`, `PUSH_MODE=send`로 `bun run deploy`. Expected: 수집기는 그대로 돌고(`/v1/snapshot/subway` 200), `GET /v1/commute/plans`는 인증 없이 401.
-- [ ] **Step 3: 서버만으로 한 바퀴** — 시험용 설치를 등록하고, 5분 뒤 시작하는 경로(6411 노량진역 → 고속터미널, 대안 없음)를 넣는다. 토큰은 넣지 않는다. Expected: `wrangler tail`에 세션 시작과 `no-token` 종료, R2 `commute/summaries/…`에 요약 1개, 로그에 키 0건. 끝나면 `DELETE /v1/installs/me`.
-- [ ] **Step 4: 푸시 서버 응답 확인** — 실험 4의 iPhone push-to-start 토큰(sandbox)과 실험 5의 S20 FCM 토큰을 시험용 설치 둘에 등록하고 Step 3의 경로를 한 번씩 돌린다. Expected: 로그에 APNs 시작 `status=200`, FCM start·update·end `status=200`, `token-dead` 0건. 기기에 설치된 실험 빌드는 값 모양이 달라 화면에는 뜨지 않는다. 화면 확인은 2-F의 첫 실기기 확인에서 한다. 끝나면 시험용 설치를 지운다.
-- [ ] **Step 5: 문서와 결과** — README 두 개를 쓰고, 이 문서에 "2-C 결과"(배포 버전, Step 3·4 결과, 버스 도착 예산 사용량)를 적는다.
-- [ ] **Step 6: 커밋** — `docs: document the commute server and record the 2-C run`
+- [x] **Step 1: secret** — `APNS_KEY_P8`을 `~/Documents/Betro-APNs/AuthKey_HFSD7YXX9N.p8`에서 표준입력으로 넣는다(화면 출력 없음). `FCM_SERVICE_ACCOUNT_JSON`은 이미 있다. Expected: `wrangler secret list`에 6개.
+- [x] **Step 2: 배포** — `packages/db`에서 `bun run db:d1-migrations`, `apps/server`에서 `bunx wrangler d1 migrations apply betro --remote`, `PUSH_MODE=send`로 `bun run deploy`. Expected: 수집기는 그대로 돌고(`/v1/snapshot/subway` 200), `GET /v1/commute/plans`는 인증 없이 401.
+- [x] **Step 3: 서버만으로 한 바퀴** — 시험용 설치를 등록하고, 5분 뒤 시작하는 경로(6411 노량진역 → 고속터미널, 대안 없음)를 넣는다. 토큰은 넣지 않는다. Expected: `wrangler tail`에 세션 시작과 `no-token` 종료, R2 `commute/summaries/…`에 요약 1개, 로그에 키 0건. 끝나면 `DELETE /v1/installs/me`.
+- [x] **Step 4: 푸시 서버 응답 확인** — 실험 4의 iPhone push-to-start 토큰(sandbox)과 실험 5의 S20 FCM 토큰을 시험용 설치 둘에 등록하고 Step 3의 경로를 한 번씩 돌린다. Expected: 로그에 APNs 시작 `status=200`, FCM start·update·end `status=200`, `token-dead` 0건. 기기에 설치된 실험 빌드는 값 모양이 달라 화면에는 뜨지 않는다. 화면 확인은 2-F의 첫 실기기 확인에서 한다. 끝나면 시험용 설치를 지운다.
+- [x] **Step 5: 문서와 결과** — README 두 개를 쓰고, 이 문서에 "2-C 결과"(배포 버전, Step 3·4 결과, 버스 도착 예산 사용량)를 적는다.
+- [x] **Step 6: 커밋** — `docs: document the commute server and record the 2-C run`
+
+---
+
+## 2-C 결과 (2026-11-10)
+
+배포: `betro-server` 버전 `76851e32`(커밋 `c1c13da`, `PUSH_MODE=send`). 원격 D1에 `0005_20261110061833_quick_emma_frost.sql`을 적용했고 secret은 6개다. 배포 뒤 `/v1/snapshot/subway` 200(생성 시각 14초 전), 인증 없는 `GET /v1/commute/plans` 401, 수집기 알람은 계속 돈다.
+
+| Step | 결과 |
+|---|---|
+| 3 서버만으로 한 바퀴 | 통과. 17:42 KST에 시험용 설치와 6411(노량진역 → 고속터미널) 경로를 넣었고, 17:47:00 알람에서 `commute start … platform=none` → `commute end … reason=no-token` → `commute records … written records=2`. R2에 `commute/records/2026-11-10/<세션>.ndjson.gz`와 `commute/summaries/2026-11-10/<세션>.json` 1개씩. `wrangler tail` 37KB에서 두 API 키(원문·URL 인코딩)와 설치 secret 0건, `Authorization` 헤더는 `REDACTED`. 끝나고 `DELETE /v1/installs/me` 204, 그 뒤 같은 인증값은 401. |
+| 4 푸시 서버 응답 | 통과. 17:51:00에 두 세션이 함께 시작했다. iOS: APNs 시작 `status=200`(sandbox), Activity 토큰이 오지 않아 17:52:00에 `not updatable: no activity token`(실험 빌드는 토큰을 이 서버에 보고하지 않는다). Android: FCM 시작이 첫 시도에 `status=500 reason=INTERNAL outcome=retry`, 30초 뒤 다음 tick에 `status=200`. 갱신 2건 `status=200`, `end` 입력 뒤 종료 `status=200`. `token-dead` 0건. 두 세션 모두 `reason=user`로 닫혔고 시험용 설치는 지웠다. 기기 화면은 보지 않았다(2-F Task 8). |
+
+- **버스 도착 호출**: Step 4의 두 세션이 같은 노선이라 분당 1건씩 3건(`getArrInfoByRouteAll`). Step 3은 시작하자마자 닫혀 0건.
+- **기록**: 예측 레코드는 tick마다 1건(`method: official`, `stopsAway` 15 → 14 → 13)씩 남았다. 세션을 일찍 끝내 통과 관측이 없으므로 요약의 `predictions`는 비어 있다.
+- **일일 보고서**: 첫 cron(17:45)이 `commute/reports/2026-11-09.json`(세션 0건)을 썼다.
+
+### 배포하면서 고친 것
+
+- `a8e04dc`: iOS 시작 푸시가 예외·타임아웃으로 끝나면 다시 보내지 않는다(Activity가 둘 생기는 것을 막는다). 토큰 문제가 아닌 400/403(`config`)은 시작이면 세션을 `push-rejected`로 닫고, 갱신은 세션당 3번까지만 허용한다. 배포 전에 고쳤다.
+- `74e613d`: 첫 배포(버전 `7c7b64a0`)의 17:45 cron이 `holidays store: D1_ERROR: too many SQL variables`로 실패했다. D1은 한 문장에 바인딩 값을 100개까지만 받는데, 두 해 공휴일(행당 4개)을 한 INSERT로 넣었다. libsql 테스트 DB에는 이 한도가 없어 테스트가 잡지 못했다. 20행씩 나눠 한 batch로 보내게 고치고 다시 배포했다. 17:50 cron은 정상이고 `holiday`에 `KR` 46행(2026-01-01~2027-12-27)이 들어갔다.
+
+### 남은 일
+
+- 지하철 낡음 기준(`staleAfterMs` 150초)이 `dev` 수집 주기(80초)와 원본 지연(약 70초)의 합과 같아 표시가 오갈 수 있다. 지하철 경로로 세션을 돌려 도착판 나이를 재고 값을 정한다.
+- 표시 확인 API의 `shownAt`은 밀리초다(푸시 값의 시각은 초). 2-F Task 4·7에서 맞춘다.
+- 임시공휴일에 `includeHolidays` 경로가 평일 시간표로 추정하는 것, 지원 목록 밖 시간대의 경로가 신호 없이 시작되지 않는 것은 그대로다.
+- 기기 화면 확인과 시작 지연 측정은 2-F Task 8에서 한다.
+

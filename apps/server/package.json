@@ -11,12 +11,14 @@
   "dependencies": {
     "@Betro/api": "workspace:*",
     "@Betro/auth": "workspace:*",
+    "@Betro/commute": "workspace:*",
     "@Betro/db": "workspace:*",
     "@Betro/realtime": "workspace:*",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
     "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
     "hono": "^4.13.16",
     "zod": "catalog:"
   },

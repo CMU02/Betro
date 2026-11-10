@@ -1,3 +1,4 @@
+import type { StationRow } from "@Betro/commute/sources/seoul-subway";
 import type { HistoryLineCounts } from "@Betro/realtime/history";
 import type { MetricsSource, SourceProgress } from "@Betro/realtime/metrics";
 import { operatingWindow } from "@Betro/realtime/metrics";
@@ -11,11 +12,33 @@ const CORE_STATE_VERSION = 1;
 /** `StateStore` 키. */
 export const STATE_KEYS = {
 	alerts: "alerts",
+	boards: "boards",
 	budget: "budget",
 	core: "core",
 	latest: "latest",
 	schedule: "schedule",
 } as const;
+
+/** 한 역의 최근 ALL 행. */
+export interface StationRowsEntry {
+	/** 행을 받은 시각(ALL 응답을 받은 시각). */
+	fetchedAt: number;
+	rows: StationRow[];
+}
+
+/**
+ * 출퇴근 세션이 보는 역의 도착판(`STATE_KEYS.boards`). DO가 잠들어도 남게 저장한다.
+ * `watch`는 역 → 등록 만료 시각, `stations`는 역 → 마지막으로 받은 행.
+ */
+export interface StationBoardsSaved {
+	stations: Record<string, StationRowsEntry>;
+	watch: Record<string, number>;
+}
+
+export const emptyStationBoards = (): StationBoardsSaved => ({
+	stations: {},
+	watch: {},
+});
 
 /** 그날(KST) 소스를 멈춘 이유. 다음 KST 날 다시 시도한다. */
 export type StopReason = "auth" | "quota-exhausted";
