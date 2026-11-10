@@ -155,6 +155,23 @@ export const ko = {
 		},
 		settingsHint: "설정에서 언제든 바꿀 수 있어요",
 	},
+	places: {
+		/** 잠금화면과 17 화면의 머리줄. `{name}`은 종류 이름이나 기타 장소의 이름이다. */
+		header: {
+			home: "퇴근 · {name}까지",
+			other: "{name}까지",
+			school: "등교 · {name}까지",
+			work: "출근 · {name}까지",
+		},
+		/** 서버에서 가져와 이름이 없는 장소(재설치 뒤 맞추기) */
+		importedName: "가져온 경로",
+		kind: {
+			home: "집",
+			other: "기타",
+			school: "학교",
+			work: "회사",
+		},
+	},
 	push: {
 		defaultTitle: "알림",
 	},

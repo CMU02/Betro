@@ -24,6 +24,7 @@
       "version": "1.0.0",
       "dependencies": {
         "@Betro/api": "workspace:*",
+        "@Betro/commute": "workspace:*",
         "@expo/metro-runtime": "~58.0.17",
         "@mj-studio/react-native-naver-map": "^2.10.0",
         "@orpc/client": "catalog:",
