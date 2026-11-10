@@ -3,6 +3,7 @@ import type { Database } from "@Betro/db";
 import { holiday } from "@Betro/db/schema/commute";
 import { redactKeys } from "@Betro/realtime/upstream/urls";
 import { and, eq, max, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { z } from "zod";
 import type { Upstream } from "../collector/ports";
 import { safeFetch } from "../collector/upstream-call";
@@ -77,6 +78,12 @@ export function parseRestDays(json: string): RestDay[] | null {
 	return days;
 }
 
+/**
+ * 한 INSERT에 넣는 행 수. D1은 한 문장의 바인딩 값을 100개까지만 받고, 한 행이 4개를 쓴다.
+ * 두 해를 한 문장으로 넣으면 한도를 넘는다(2027년만 24행).
+ */
+const ROWS_PER_INSERT = 20;
+
 export function restDaysUrl(key: string, year: number): string {
 	return `${REST_DAYS_ENDPOINT}?serviceKey=${encodeURIComponent(key)}&solYear=${year}&numOfRows=${ROWS_PER_PAGE}&_type=json`;
 }
@@ -136,12 +143,14 @@ export async function refreshHolidays(
 		fetchedAt: deps.now,
 		name: day.name,
 	}));
+	const inserts: BatchItem<"sqlite">[] = [];
+	for (let start = 0; start < rows.length; start += ROWS_PER_INSERT) {
+		inserts.push(
+			deps.db.insert(holiday).values(rows.slice(start, start + ROWS_PER_INSERT))
+		);
+	}
 	try {
-		if (rows.length === 0) {
-			await removeOld;
-		} else {
-			await deps.db.batch([removeOld, deps.db.insert(holiday).values(rows)]);
-		}
+		await deps.db.batch([removeOld, ...inserts]);
 	} catch (error) {
 		const text = error instanceof Error ? error.message : String(error);
 		return { error: `holidays store: ${redactKeys(text, [deps.key])}` };

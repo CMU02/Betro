@@ -19,6 +19,8 @@ const KEY = "SECRET/KEY+value==";
 const HOUR_MS = 3_600_000;
 const NOW = Date.UTC(2026, 10, 10, 3, 0, 0);
 const TIMEZONE = "Asia/Seoul";
+/** D1은 한 문장에 바인딩 값을 100개까지만 받는다. */
+const D1_MAX_BOUND_PARAMS = 100;
 
 const json = (value: unknown): string => JSON.stringify(value);
 
@@ -110,6 +112,17 @@ describe("restDaysUrl", () => {
 	});
 });
 
+const LOCDATE_YEAR_STEP = 10_000;
+
+/** 2027년 표본의 날짜를 한 해 앞당긴 응답. 두 해를 합치면 48건이 된다. */
+function rest2027AsLastYear(): unknown {
+	const copy = structuredClone(rest2027);
+	for (const item of copy.response.body.items.item) {
+		item.locdate -= LOCDATE_YEAR_STEP;
+	}
+	return copy;
+}
+
 async function rowsOf(year: string) {
 	const rows = await db.select().from(holiday);
 	return rows.filter((row) => row.date.startsWith(year));
@@ -155,6 +168,36 @@ describe("refreshHolidays", () => {
 			.where(eq(holiday.date, "2027-02-09"));
 		expect(seol[0]?.name).toBe("대체공휴일(설날)");
 		expect(seol[0]?.fetchedAt).toBe(NOW);
+	});
+
+	it("한 문장의 바인딩 값이 D1 한도(100개)를 넘지 않게 나눠 넣는다", async () => {
+		const paramCounts: number[] = [];
+		const counting = new Proxy(db, {
+			get(target, prop, receiver) {
+				if (prop === "batch") {
+					return (statements: { toSQL: () => { params: unknown[] } }[]) => {
+						for (const statement of statements) {
+							paramCounts.push(statement.toSQL().params.length);
+						}
+						return target.batch(statements as never);
+					};
+				}
+				return Reflect.get(target, prop, receiver);
+			},
+		});
+		const result = await refreshHolidays({
+			db: counting,
+			fetch: upstreamOf((url) =>
+				url.includes("solYear=2026") ? ok(rest2027AsLastYear()) : ok(rest2027)
+			),
+			key: KEY,
+			now: NOW,
+			timezone: TIMEZONE,
+		});
+		expect(result).toEqual({ fetched: 48 });
+		expect(paramCounts.length).toBeGreaterThan(2);
+		expect(Math.max(...paramCounts)).toBeLessThanOrEqual(D1_MAX_BOUND_PARAMS);
+		expect(await rowsOf("2027")).toHaveLength(24);
 	});
 
 	it("둘째 해에서 실패하면 error를 내고 기존 행이 그대로며 문구에 키가 없다", async () => {
