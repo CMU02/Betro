@@ -69,7 +69,7 @@ vars는 `wrangler.jsonc`, secret은 `wrangler secret put <NAME>`(로컬은 `.dev
 | `DAILY_BUDGET_SUBWAY`, `DAILY_BUDGET_BUS` | 900 | 소스별 하루 호출 예산 |
 | `OPERATING_START_KST`, `OPERATING_END_KST` | `05:00`, `01:00` | 운행 시간 |
 | `HISTORY_IDLE_FLUSH_MS` | 5000 | 다음 alarm까지 이 시간 이상 남으면 이력을 미리 R2에 쓴다 |
-| `PUSH_MODE` | `log` | 출퇴근 푸시. `send`일 때만 APNs·FCM에 보내고, 그 밖의 값은 로그만 남긴다 |
+| `PUSH_MODE` | `send` | 출퇴근 푸시. `send`일 때만 APNs·FCM에 보내고, 그 밖의 값은 로그만 남긴다 |
 | `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_TOPIC` | `wrangler.jsonc` 참고 | APNs 키 ID, 팀 ID, 앱 번들 ID. 키가 아니라 식별자라 vars에 둔다 |
 | `COMMUTE_*` | 코드의 기본값 | 출퇴근 실행기 설정. 아래 출퇴근 절 |
 
@@ -170,9 +170,9 @@ R2에서 직접 확인하려면 객체 목록에서 그날 `raw/` 조각 수를 
 
 ### 푸시 모드 (`PUSH_MODE`)
 
-- `log`(기본): APNs·FCM을 부르지 않고 `push (log) <이벤트> host=<호스트>` 줄만 남긴다. 보낸 것으로 치고 상태 200을 돌려받은 것처럼 이어간다. `wrangler.jsonc`의 vars는 `log`다.
+- `log`: APNs·FCM을 부르지 않고 `push (log) <이벤트> host=<호스트>` 줄만 남긴다. 보낸 것으로 치고 상태 200을 돌려받은 것처럼 이어간다. 로컬 `.dev.vars`의 값이고, 변수가 없을 때의 기본값이다.
 - `send`: iOS는 APNs(`apns-start` 토큰으로 Live Activity 시작, `apns-activity` 토큰으로 갱신·종료), Android는 FCM으로 보낸다. 세션의 플랫폼은 설치가 가진 토큰으로 정한다(`apns-start`가 있으면 iOS, 아니면 `fcm`이 있으면 Android, 둘 다 없으면 `no-token`으로 닫는다).
-- `send`로 바꾸려면 `APNS_KEY_P8`와 `FCM_SERVICE_ACCOUNT_JSON` secret이 있어야 하고, 값을 바꾼 뒤 배포한다.
+- 배포된 Worker는 `send`다(`wrangler.jsonc`의 vars). `APNS_KEY_P8`와 `FCM_SERVICE_ACCOUNT_JSON` secret이 있어야 한다.
 
 ### 실행기 상태 보는 법
 

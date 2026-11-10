@@ -38,7 +38,7 @@
     // 로컬 .dev.vars는 UPSTREAM_MODE=fixture로 덮어써서 상류를 부르지 않는다.
     "UPSTREAM_MODE": "live",
     // 출퇴근 푸시. "send"일 때만 APNs·FCM에 보낸다. 로컬 .dev.vars는 "log"로 둔다.
-    "PUSH_MODE": "log",
+    "PUSH_MODE": "send",
     "APNS_KEY_ID": "HFSD7YXX9N",
     "APNS_TEAM_ID": "5JKMP6D4C5",
     "APNS_TOPIC": "com.cmu02.betro"
