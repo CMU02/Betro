@@ -122,6 +122,22 @@ describe("createApp", () => {
 		expect(await res.text()).toBe("OK");
 	});
 
+	test("mounts /v1 commute routes and allows the install header in CORS", async () => {
+		const res = await app.request(`${API}/v1/commute/plans`);
+		expect(res.status).toBe(401);
+		const preflight = await app.request(`${API}/v1/commute/plans`, {
+			headers: {
+				"access-control-request-headers": "x-betro-install,authorization",
+				"access-control-request-method": "GET",
+				origin: LOCAL_ORIGIN,
+			},
+			method: "OPTIONS",
+		});
+		expect(
+			preflight.headers.get("access-control-allow-headers")?.toLowerCase()
+		).toContain("x-betro-install");
+	});
+
 	test("rpc healthCheck works", async () => {
 		const { status, json } = await callRpc("healthCheck");
 		expect(status).toBe(200);

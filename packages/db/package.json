@@ -16,6 +16,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@Betro/commute": "workspace:*",
     "@libsql/client": "0.18.0",
     "drizzle-orm": "catalog:",
     "libsql": "catalog:",

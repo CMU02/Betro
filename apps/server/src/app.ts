@@ -12,6 +12,8 @@ import { cors } from "hono/cors";
 import { getPath } from "hono/utils/url";
 import type { CollectorClient } from "./collector/client";
 import type { SnapshotKind } from "./collector/core";
+import { INSTALL_HEADER } from "./commute/auth";
+import { createCommuteRoutes } from "./commute/routes";
 import { renderStatusPage } from "./status-page";
 
 const SNAPSHOT_KINDS: readonly SnapshotKind[] = ["subway", "bus"];
@@ -106,7 +108,12 @@ function createApiRoutes(deps: AppDeps): Hono {
 	routes.use(
 		"*",
 		cors({
-			allowHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+			allowHeaders: [
+				"Content-Type",
+				"Authorization",
+				"X-Requested-With",
+				INSTALL_HEADER,
+			],
 			allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 			credentials: true,
 			maxAge: CORS_MAX_AGE_SECONDS,
@@ -156,6 +163,8 @@ function createApiRoutes(deps: AppDeps): Hono {
 			"Content-Type": "application/json; charset=utf-8",
 		});
 	});
+
+	routes.route("/", createCommuteRoutes({ db }));
 
 	return routes;
 }
