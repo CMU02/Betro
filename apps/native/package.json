@@ -64,7 +64,6 @@
   },
   "devDependencies": {
     "@Betro/config": "workspace:*",
-    "@expo-google-fonts/jetbrains-mono": "^0.4.1",
     "@expo-google-fonts/noto-sans-kr": "^0.4.4",
     "@types/node": "catalog:",
     "@types/react": "~19.3.0",

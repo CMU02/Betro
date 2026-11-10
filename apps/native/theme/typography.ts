@@ -4,9 +4,7 @@ export type FontFamily =
 	| "NotoSansKR-Regular"
 	| "NotoSansKR-Medium"
 	| "NotoSansKR-Bold"
-	| "NotoSansKR-Black"
-	| "JetBrainsMono-Medium"
-	| "JetBrainsMono-Bold";
+	| "NotoSansKR-Black";
 
 export type TextVariant =
 	| "displayL"
@@ -29,22 +27,27 @@ export type TextVariant =
 export interface TextStyleSpec {
 	fontFamily: FontFamily;
 	fontSize: number;
+	/** 숫자 자릿수 폭을 고정해 값이 바뀌어도 흔들리지 않게 한다. data* 변형만 쓴다. */
+	fontVariant?: "tabular-nums"[];
 	letterSpacing: number;
 	lineHeight: number;
 }
 
 const PERCENT = 100;
+const TABULAR_NUMS: "tabular-nums"[] = ["tabular-nums"];
 
 function spec(
 	fontFamily: FontFamily,
 	fontSize: number,
 	lineHeight: number,
-	letterSpacingPercent: number
+	letterSpacingPercent: number,
+	tabularNums = false
 ): TextStyleSpec {
 	const letterSpacing =
 		Math.round(((fontSize * letterSpacingPercent) / PERCENT) * PERCENT) /
 		PERCENT;
-	return { fontFamily, fontSize, letterSpacing, lineHeight };
+	const base = { fontFamily, fontSize, letterSpacing, lineHeight };
+	return tabularNums ? { ...base, fontVariant: TABULAR_NUMS } : base;
 }
 
 export const TEXT_STYLES: Record<TextVariant, TextStyleSpec> = {
@@ -53,10 +56,10 @@ export const TEXT_STYLES: Record<TextVariant, TextStyleSpec> = {
 	bodyMStrong: spec("NotoSansKR-Medium", 15, 22, -0.3),
 	bodyS: spec("NotoSansKR-Regular", 14, 20, -0.2),
 	caption: spec("NotoSansKR-Medium", 12, 16, 0),
-	dataL: spec("JetBrainsMono-Bold", 18, 24, -1),
-	dataM: spec("JetBrainsMono-Medium", 14, 20, 0),
-	dataS: spec("JetBrainsMono-Medium", 12, 16, 0),
-	dataXL: spec("JetBrainsMono-Bold", 28, 32, -2),
+	dataL: spec("NotoSansKR-Bold", 18, 24, -1, true),
+	dataM: spec("NotoSansKR-Medium", 14, 20, 0, true),
+	dataS: spec("NotoSansKR-Medium", 12, 16, 0, true),
+	dataXL: spec("NotoSansKR-Bold", 28, 32, -2, true),
 	displayL: spec("NotoSansKR-Black", 32, 40, -2),
 	labelM: spec("NotoSansKR-Medium", 14, 20, -0.2),
 	labelS: spec("NotoSansKR-Medium", 13, 18, -0.2),

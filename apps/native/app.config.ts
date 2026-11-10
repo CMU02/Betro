@@ -85,8 +85,6 @@ const config: ExpoConfig = {
 					"./assets/fonts/NotoSansKR-Medium.ttf",
 					"./assets/fonts/NotoSansKR-Bold.ttf",
 					"./assets/fonts/NotoSansKR-Black.ttf",
-					"./assets/fonts/JetBrainsMono-Medium.ttf",
-					"./assets/fonts/JetBrainsMono-Bold.ttf",
 				],
 			},
 		],
