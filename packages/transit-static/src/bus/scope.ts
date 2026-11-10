@@ -1,14 +1,17 @@
+import type { BusRouteListEntry } from "../sources/bus-route-xlsx";
+import type { BusRouteListRow } from "../sources/seoul-bus-route-list";
+
 /**
  * 수집·적재에서 빼는 getStaionByRoute.routeType 값.
  * - 1: 공항버스 (한정면허, 서울시 시내버스 396에 없음. 6001-6020, 6100-6705A, N6000/N6002/N6701/N6703, 38개).
- * - 2: 마을.
- * - 7: 인천, 8: 경기, 9: 폐지. 2026-09 데이터에는 이 세 값이 없다. 가드로 남긴다.
+ * - 9: 폐지. 2026-09 데이터에는 없다. 가드로 남긴다.
  * - 10: 관광·연계 셔틀 (마포순환열차버스 113000006, 한강마곡 103000003, 한강잠실 103000005).
  * - 14: 한강버스 (선박. 정류소가 선착장, ARS 00001-00008).
- * 그 밖의 값은 범위 안이다: 3, 4, 5, 6, 15(심야 N버스), 가이드에 없는 값(예: 0). 보고서가 센다.
+ * 그 밖의 값은 범위 안이다: 2(마을), 3, 4, 5, 6, 7(인천), 8(경기), 15(심야 N버스), 가이드에 없는 값(예: 0). 보고서가 센다.
+ * 마을(2)은 서울 시내버스와 똑같이, 인천(7)·경기(8)는 출퇴근 등록과 세션에만 쓴다(스펙 3장 "버스 범위", MVP 2-D).
  *
- * 범위 안 대조(2026-09 OA-1095 + getStaionByRoute 718개):
- * - 유형으로 거르면 427개 노선 ID(3: 152, 4: 242, 5: 5, 6: 13, 15: 15). 지금 적재 범위가 이것이다.
+ * 3단계 범위 대조(2026-09 OA-1095 + getStaionByRoute 718개, 마을 제외 시절):
+ * - 유형으로 거르면 427개 노선 ID(3: 152, 4: 242, 5: 5, 6: 13, 15: 15).
  * - 427 = 서울시 시내버스 396노선의 416개 ID + 자율주행 시범버스 11개(AUTONOMOUS_PILOT_ROUTES).
  * - 416 − 출근/퇴근으로 나뉜 14개 ID(서울01-10, 8442, 8762, 8773, 8775) − A/B 분기 6개 ID
  *   (110A/B, 702A/B, 750A/B, 5522A/B, 6640A/B, 7013A/B, 추정) = 396 노선
@@ -17,13 +20,86 @@
  */
 export const OUT_OF_SCOPE_ROUTE_TYPES: readonly string[] = [
 	"1",
-	"2",
-	"7",
-	"8",
 	"9",
 	"10",
 	"14",
 ];
+
+/**
+ * 서울을 오가는 인천(7)·경기(8) 면허 노선. 노선 엑셀(OA-1095)에 없어 getBusRouteList 목록에서 더하고,
+ * 지도용 상시 관측에서 뺀다(출퇴근 세션에서만 관측).
+ */
+export const REGIONAL_ROUTE_TYPES: readonly string[] = ["7", "8"];
+
+export type BusRegion = "seoul" | "gyeonggi" | "incheon";
+
+/** routeType으로 노선 면허 지역을 정한다. 7 → incheon, 8 → gyeonggi, 그 밖(마을 2 포함) → seoul. */
+export function regionOf(routeType: string): BusRegion {
+	switch (routeType.trim()) {
+		case "7":
+			return "incheon";
+		case "8":
+			return "gyeonggi";
+		default:
+			return "seoul";
+	}
+}
+
+/** 지도용 상시 관측 대상인 유형인지. 인천·경기 노선(7·8)은 출퇴근 세션에서만 관측하므로 false. */
+export function isMapObservedRouteType(routeType: string): boolean {
+	return !REGIONAL_ROUTE_TYPES.includes(routeType.trim());
+}
+
+/**
+ * 수집·조립이 읽는 노선 항목. 엑셀(OA-1095) 노선은 maxSeq·stopCount가 있고,
+ * 노선 목록(getBusRouteList)에서만 온 인천·경기 노선은 없다.
+ */
+export interface BusRouteEntry {
+	/** 엑셀 노선의 가장 큰 순번. 엑셀에 없는 노선은 없다. */
+	maxSeq?: number;
+	routeId: string;
+	routeName: string;
+	/** 노선 목록의 routeType. 정류소 원본을 읽지 못한 노선의 지역을 정할 때만 쓴다. */
+	routeType?: string;
+	/** 지역을 뗀 이름(노선 목록의 busRouteAbrv). 목록에 없으면 routeName을 쓴다. */
+	shortName?: string;
+	/** 엑셀 행 수. 엑셀에 없는 노선은 없다. */
+	stopCount?: number;
+}
+
+/**
+ * 노선 ID 출처: 엑셀의 노선 ∪ 노선 목록에서 routeType 7·8인 노선.
+ * 목록에 있는 노선은 목록의 shortName을 붙인다. 엑셀 노선이 먼저, 더한 노선은 ID 순이다.
+ */
+export function withRegionalRoutes(
+	xlsxRoutes: readonly BusRouteListEntry[],
+	list: readonly BusRouteListRow[]
+): BusRouteEntry[] {
+	const listed = new Map(list.map((row) => [row.busRouteId, row]));
+	const entries: BusRouteEntry[] = xlsxRoutes.map((entry) => {
+		const row = listed.get(entry.routeId);
+		return row ? { ...entry, shortName: row.shortName } : { ...entry };
+	});
+	const known = new Set(xlsxRoutes.map((entry) => entry.routeId));
+	const regional = list
+		.filter((row) => REGIONAL_ROUTE_TYPES.includes(row.routeType.trim()))
+		.toSorted((a, b) =>
+			a.busRouteId < b.busRouteId ? -1 : Number(a.busRouteId > b.busRouteId)
+		);
+	for (const row of regional) {
+		if (known.has(row.busRouteId)) {
+			continue;
+		}
+		known.add(row.busRouteId);
+		entries.push({
+			routeId: row.busRouteId,
+			routeName: row.name,
+			routeType: row.routeType,
+			shortName: row.shortName,
+		});
+	}
+	return entries;
+}
 
 /** OUT_OF_SCOPE_ROUTE_IDS로 뺀 노선에 보고서가 붙이는 사유(자율주행 시범버스를 뺄 때의 문구). */
 export const OUT_OF_SCOPE_ROUTE_ID_REASON =

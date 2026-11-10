@@ -19,6 +19,8 @@ export type SourceManifest = Record<
 >;
 export type MatchMethod = "auto-same-line" | "auto-shared" | "manual-alias";
 export type TrackDirection = "up" | "down";
+/** bus_route.region. transit-static bus/scope.ts의 BusRegion과 같다. */
+export type BusRegion = "seoul" | "gyeonggi" | "incheon";
 export type ServiceDay = "weekday" | "saturday" | "holiday";
 export type ServiceDaySource = "source" | "holiday-copied";
 export type ExpressKind = "local" | "express" | "special" | "direct";
@@ -200,10 +202,15 @@ export const busRoute = sqliteTable(
 		qualityFlags: text("quality_flags", { mode: "json" })
 			.$type<string[]>()
 			.notNull(),
+		/** routeType으로 정한 면허 지역. 7 → incheon, 8 → gyeonggi, 그 밖 → seoul */
+		region: text("region").$type<BusRegion>().notNull(),
 		routeId: text("route_id").notNull(),
+		/** 원본 노선명. 경기·인천 노선은 지역이 붙어 온다(M5107광주) */
 		routeName: text("route_name").notNull(),
 		/** 원본 routeType 코드 문자열 */
 		routeType: text("route_type").notNull(),
+		/** 지역을 뗀 노선명(getBusRouteList busRouteAbrv). 목록에 없는 서울 노선은 route_name과 같다 */
+		shortName: text("short_name").notNull(),
 	},
 	(table) => [
 		uniqueIndex("bus_route_batch_route_idx").on(table.batchId, table.routeId),

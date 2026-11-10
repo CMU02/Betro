@@ -105,6 +105,7 @@ function pathFile(dataDir: string, routeId: string): string {
 }
 
 const NO_RETRY_WAIT = [0, 0, 0] as const;
+const RUN_ROUTE_LIST_FIRST = /fetch:bus-route-list/;
 
 describe("fetchBusRoutes", () => {
 	let dataDir: string;
@@ -132,7 +133,7 @@ describe("fetchBusRoutes", () => {
 
 	it("fetches stations then path for in-scope routes and saves raw bodies", async () => {
 		const { calls, fetchImpl } = fakeFetch(
-			normalResponder({ "100100001": "4", "100100002": "2" })
+			normalResponder({ "100100001": "4", "100100002": "1" })
 		);
 		const result = await fetchBusRoutes({
 			dataDir,
@@ -160,12 +161,42 @@ describe("fetchBusRoutes", () => {
 			stationsBody("100100001", "4")
 		);
 		expect(await readFile(stationsFile(dataDir, "100100002"), "utf8")).toBe(
-			stationsBody("100100002", "2")
+			stationsBody("100100002", "1")
 		);
 		expect(await readFile(pathFile(dataDir, "100100001"), "utf8")).toBe(
 			pathBody("100100001")
 		);
 		expect(existsSync(pathFile(dataDir, "100100002"))).toBe(false);
+	});
+
+	it("fetches the path of village, Incheon and Gyeonggi routes now in scope", async () => {
+		const { calls, fetchImpl } = fakeFetch(
+			normalResponder({ "111900010": "2", "165000215": "7", "234001243": "8" })
+		);
+		const result = await fetchBusRoutes({
+			dataDir,
+			delayMs: 0,
+			fetchImpl,
+			key: KEY,
+			routes: [
+				route("111900010"),
+				{ routeId: "165000215", routeName: "M6450인천", shortName: "M6450" },
+				{ routeId: "234001243", routeName: "M5107광주", shortName: "M5107" },
+			],
+		});
+		expect(result.outOfScope).toBe(0);
+		expect(result.fetched).toEqual({ getRoutePath: 3, getStaionByRoute: 3 });
+		expect(
+			calls.filter((call) => call.operation === "getRoutePath")
+		).toHaveLength(3);
+	});
+
+	it("asks for fetch:bus-route-list when the route list is missing", async () => {
+		const { calls, fetchImpl } = fakeFetch(normalResponder({}));
+		await expect(
+			fetchBusRoutes({ dataDir, delayMs: 0, fetchImpl, key: KEY })
+		).rejects.toThrow(RUN_ROUTE_LIST_FIRST);
+		expect(calls).toEqual([]);
 	});
 
 	it("never fetches the path of a route excluded by ID", async () => {

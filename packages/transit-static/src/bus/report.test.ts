@@ -57,10 +57,12 @@ function route(
 		issues,
 		lengthM: 1000,
 		qualityFlags: [...new Set(issues.map((issue) => issue.code))],
+		region: "seoul",
 		routeId,
 		routeName: `R${routeId}`,
 		routeType: "4",
 		segments,
+		shortName: `R${routeId}`,
 		stops,
 	};
 }
@@ -70,10 +72,15 @@ function result(
 ): Omit<BusAssembleResult, "markdown"> {
 	return {
 		excluded: [],
+		loadable: {
+			regional: { inScope: 0, loadable: 0 },
+			seoul: { inScope: 1, loadable: 1 },
+		},
 		missingRaw: [],
 		ok: true,
 		outOfScope: 0,
 		outOfScopeById: [],
+		regionCounts: { gyeonggi: 0, incheon: 0, seoul: 1 },
 		routes: [route("1")],
 		routeTypeCounts: { "4": 1 },
 		...overrides,
@@ -93,6 +100,7 @@ describe("renderBusRouteReport", () => {
 								level: "error",
 							},
 						],
+						region: "gyeonggi",
 						routeId: "100100999",
 						routeName: "제외노선",
 					},
@@ -107,12 +115,41 @@ describe("renderBusRouteReport", () => {
 		expect(markdown).toContain("| 15 |");
 		expect(markdown).toContain("제외노선");
 		expect(markdown).toContain("100100999");
+		// 제외 노선 표에 지역이 있어 경기·인천 노선의 오류를 따로 볼 수 있다.
+		expect(markdown).toContain(
+			"| 제외노선 | 100100999 | seq-not-contiguous | seq 1, 2, 4 | gyeonggi |"
+		);
 		expect(markdown).toContain("seq-not-contiguous");
 		expect(markdown).toContain("ok: false");
 		expect(markdown).toContain("서울특별시 버스노선정보(공공데이터포털)");
 		// routeType 표는 숫자 순서(2, 4, 15).
 		expect(markdown.indexOf("| 2 |")).toBeLessThan(markdown.indexOf("| 4 |"));
 		expect(markdown.indexOf("| 4 |")).toBeLessThan(markdown.indexOf("| 15 |"));
+	});
+
+	it("shows route counts by region and the Seoul and regional loadable ratios", () => {
+		const markdown = renderBusRouteReport(
+			result({
+				loadable: {
+					regional: { inScope: 645, loadable: 600 },
+					seoul: { inScope: 680, loadable: 670 },
+				},
+				ok: false,
+				regionCounts: { gyeonggi: 333, incheon: 312, seoul: 680 },
+			})
+		);
+		const regions = markdown.split("## 지역별 노선 수")[1]?.split("## ")[0];
+		expect(regions).toContain("| seoul | 680 |");
+		expect(regions).toContain("| gyeonggi | 333 |");
+		expect(regions).toContain("| incheon | 312 |");
+		const ratios = markdown.split("## 적재 가능 비율")[1]?.split("## ")[0];
+		expect(ratios).toContain("| seoul | 670 | 680 | 98.5% | 98% |");
+		expect(ratios).toContain("| regional | 600 | 645 | 93.0% | 90% |");
+		// 경기·인천 노선이 없으면 비율 대신 "-".
+		const seoulOnly = renderBusRouteReport(result())
+			.split("## 적재 가능 비율")[1]
+			?.split("## ")[0];
+		expect(seoulOnly).toContain("| regional | 0 | 0 | - | 90% |");
 	});
 
 	it("summarizes counts and missing raw routes", () => {
@@ -267,6 +304,7 @@ describe("renderBusRouteReport", () => {
 						issues: [
 							{ code: "bad-envelope", detail: "a\r\nb\rc", level: "error" },
 						],
+						region: "seoul",
 						routeId: "9|9",
 						routeName: "줄\n바꿈",
 					},

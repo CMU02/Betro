@@ -67,9 +67,11 @@ async function seedLocal(): Promise<LibsqlDatabase> {
 	await db.insert(busRoute).values({
 		batchId: 2,
 		qualityFlags: [],
+		region: "seoul",
 		routeId: "100100290",
 		routeName: "6411",
 		routeType: "3",
+		shortName: "6411",
 	});
 	return db;
 }
