@@ -152,6 +152,33 @@ describe("renderBusRouteReport", () => {
 		expect(seoulOnly).toContain("| regional | 0 | 0 | - | 90% |");
 	});
 
+	it("compares village and regional counts with the published figures", () => {
+		const section = (overrides: Parameters<typeof result>[0]) =>
+			renderBusRouteReport(result(overrides))
+				.split("## 공표 수치 대조")[1]
+				?.split("## ")[0] ?? "";
+		const near = section({
+			regionCounts: { gyeonggi: 333, incheon: 312, seoul: 900 },
+			routeTypeCounts: { "2": 250, "4": 1 },
+		});
+		expect(near).toContain(
+			"| 마을(routeType 2) | 250 | 253 | 228–278 | 범위 안 |"
+		);
+		expect(near).toContain(
+			"| 경기·인천(gyeonggi + incheon) | 645 | 645 | 581–709 | 범위 안 |"
+		);
+		const short = section({
+			regionCounts: { gyeonggi: 100, incheon: 0, seoul: 1 },
+			routeTypeCounts: { "4": 1 },
+		});
+		expect(short).toContain(
+			"| 마을(routeType 2) | 0 | 253 | 228–278 | 범위 밖 |"
+		);
+		expect(short).toContain(
+			"| 경기·인천(gyeonggi + incheon) | 100 | 645 | 581–709 | 범위 밖 |"
+		);
+	});
+
 	it("summarizes counts and missing raw routes", () => {
 		const markdown = renderBusRouteReport(
 			result({ missingRaw: ["111", "222"], ok: false, outOfScope: 4 })

@@ -1,6 +1,11 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import {
+	comparePublishedCount,
+	PUBLISHED_REGIONAL_ROUTE_COUNT,
+	REGIONAL_ROUTE_TYPES,
+} from "../bus/scope";
 import { rawPath } from "../paths";
 import {
 	fetchBusRouteOperation,
@@ -21,6 +26,12 @@ const DAY_MS = 86_400_000;
 const DATE_DIR_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_LENGTH = 10;
 
+/**
+ * 결과가 없는 검색어(headerCd 4) 응답 대신 저장하는 고정 본문. 응답 원문은 키를 되풀이할 수 있어 저장하지 않는다.
+ * 저장해 두면 7일 안에 다시 실행해도 그 검색어를 부르지 않는다.
+ */
+export const EMPTY_TERM_BODY = JSON.stringify({ msgHeader: { headerCd: "4" } });
+
 export type RouteListStop =
 	| "none"
 	| "quota-exceeded"
@@ -37,6 +48,8 @@ export interface FetchBusRouteListOptions {
 
 export interface FetchBusRouteListResult {
 	calls: number;
+	/** 결과가 없다고 답한(headerCd 4) 검색어. 실패가 아니지만, 전에 결과가 있던 검색어가 비면 여기서 보인다. */
+	empty: string[];
 	failed: string[];
 	routes: BusRouteListRow[];
 	stoppedBy: RouteListStop;
@@ -84,9 +97,53 @@ async function findFreshRaw(
 	return undefined;
 }
 
-function rowsFromBody(bodyText: string): BusRouteListRow[] {
+/** 저장된 원본을 읽는다. 결과 없음 본문(EMPTY_TERM_BODY)은 빈 목록이고 empty가 참이다. */
+function pageFromBody(bodyText: string): {
+	empty: boolean;
+	rows: BusRouteListRow[];
+} {
 	const envelope = parseBusEnvelope(200, bodyText);
-	return envelope.kind === "ok" ? parseBusRouteList(envelope.items) : [];
+	if (envelope.kind === "route-not-found") {
+		return { empty: true, rows: [] };
+	}
+	return {
+		empty: false,
+		rows: envelope.kind === "ok" ? parseBusRouteList(envelope.items) : [],
+	};
+}
+
+async function saveTermBody(
+	dataDir: string,
+	dateDir: string,
+	term: string,
+	bodyText: string
+): Promise<void> {
+	const path = rawPath(
+		dataDir,
+		BUS_ROUTE_LIST_SOURCE,
+		join(dateDir, termFile(term))
+	);
+	await mkdir(dirname(path), { recursive: true });
+	await writeFile(path, bodyText);
+}
+
+/** routeType별 개수와 7·8 합계를 공표 수치(645)와 대조한 줄. */
+function routeTypeLines(routes: readonly BusRouteListRow[]): string[] {
+	const counts = new Map<string, number>();
+	for (const row of routes) {
+		counts.set(row.routeType, (counts.get(row.routeType) ?? 0) + 1);
+	}
+	const types = [...counts.keys()].toSorted(
+		(a, b) => Number(a) - Number(b) || a.localeCompare(b)
+	);
+	const regional = REGIONAL_ROUTE_TYPES.reduce(
+		(sum, type) => sum + (counts.get(type) ?? 0),
+		0
+	);
+	return [
+		...types.map((type) => `routeType ${type}: ${counts.get(type)}`),
+		`routeType ${REGIONAL_ROUTE_TYPES.join("+")}: ${comparePublishedCount(regional, PUBLISHED_REGIONAL_ROUTE_COUNT)}`,
+	];
 }
 
 const STOP_BY_KIND = {
@@ -99,6 +156,7 @@ const STOP_BY_KIND = {
  * 검색어마다 getBusRouteList를 한 번 부르고 합친 목록을 routes.json으로 남긴다.
  * 중간에 멈추거나 실패한 검색어가 있으면 routes.json은 쓰지 않는다(원본은 남아 재실행이 이어받는다).
  * 7일 안에 받은 검색어는 저장된 원본을 쓰고 다시 부르지 않는다.
+ * 결과가 없는 검색어(headerCd 4)는 실패가 아니라 빈 목록이다. 고정 본문을 저장하고 empty로 따로 보인다.
  */
 export async function fetchBusRouteList(
 	options: FetchBusRouteListOptions
@@ -108,6 +166,7 @@ export async function fetchBusRouteList(
 	const dateDir = utcDate(now);
 	const pages: BusRouteListRow[][] = [];
 	const failed: string[] = [];
+	const empty: string[] = [];
 	let calls = 0;
 	let stoppedBy: RouteListStop = "none";
 
@@ -115,7 +174,11 @@ export async function fetchBusRouteList(
 		// biome-ignore lint/performance/noAwaitInLoops: 검색어를 순서대로 부르고 한도 응답에서 멈춘다
 		const cached = await findFreshRaw(dataDir, term, now);
 		if (cached !== undefined) {
-			pages.push(rowsFromBody(cached));
+			const page = pageFromBody(cached);
+			if (page.empty) {
+				empty.push(term);
+			}
+			pages.push(page.rows);
 			continue;
 		}
 		calls += 1;
@@ -126,18 +189,17 @@ export async function fetchBusRouteList(
 			operation: "getBusRouteList",
 		});
 		if (envelope.kind === "ok") {
-			const path = rawPath(
-				dataDir,
-				BUS_ROUTE_LIST_SOURCE,
-				join(dateDir, termFile(term))
-			);
-			await mkdir(dirname(path), { recursive: true });
-			await writeFile(path, bodyText);
+			await saveTermBody(dataDir, dateDir, term, bodyText);
 			pages.push(parseBusRouteList(envelope.items));
 			continue;
 		}
-		const detail = "detail" in envelope ? envelope.detail : envelope.kind;
-		failed.push(maskKey(`${term}: ${envelope.kind} ${detail}`, key));
+		if (envelope.kind === "route-not-found") {
+			await saveTermBody(dataDir, dateDir, term, EMPTY_TERM_BODY);
+			empty.push(term);
+			pages.push([]);
+			continue;
+		}
+		failed.push(maskKey(`${term}: ${envelope.kind} ${envelope.detail}`, key));
 		if (envelope.kind in STOP_BY_KIND) {
 			stoppedBy = STOP_BY_KIND[envelope.kind as keyof typeof STOP_BY_KIND];
 			break;
@@ -161,12 +223,14 @@ export async function fetchBusRouteList(
 				`calls: ${calls}`,
 				`routes: ${routes.length}`,
 				`failed: ${failed.length}`,
+				`empty: ${empty.length === 0 ? "-" : empty.join(", ")}`,
 				`stoppedBy: ${stoppedBy}`,
+				...routeTypeLines(routes),
 			].join("\n"),
 			key
 		)
 	);
-	return { calls, failed, routes, stoppedBy };
+	return { calls, empty, failed, routes, stoppedBy };
 }
 
 /** 가장 최근 `routes.json`. 없으면 null. */

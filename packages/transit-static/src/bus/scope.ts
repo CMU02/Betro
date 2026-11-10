@@ -31,6 +31,45 @@ export const OUT_OF_SCOPE_ROUTE_TYPES: readonly string[] = [
  */
 export const REGIONAL_ROUTE_TYPES: readonly string[] = ["7", "8"];
 
+/** 서울시 공표 마을버스 노선 수(`docs/research/2026-10-30-data-sources.md`). routeType 2와 대조한다. */
+export const PUBLISHED_VILLAGE_ROUTE_COUNT = 253;
+/** 서울시 공표 서울을 오가는 경기·인천 면허 노선 수(같은 문서). routeType 7·8과 대조한다. */
+export const PUBLISHED_REGIONAL_ROUTE_COUNT = 645;
+/** 공표 수치 대조 허용 폭(±10%, 계획 Task 3 Step 1). */
+export const PUBLISHED_COUNT_TOLERANCE = 0.1;
+const PERCENT = 100;
+
+/** 공표 수치의 ±10% 안에 드는 정수 범위. 645 → 581–709. */
+export function publishedCountBand(published: number): {
+	max: number;
+	min: number;
+} {
+	return {
+		max: Math.floor(published * (1 + PUBLISHED_COUNT_TOLERANCE)),
+		min: Math.ceil(published * (1 - PUBLISHED_COUNT_TOLERANCE)),
+	};
+}
+
+/** 개수가 공표 수치의 ±10% 안이면 "범위 안", 아니면 "범위 밖". */
+export function publishedCountVerdict(
+	count: number,
+	published: number
+): "범위 안" | "범위 밖" {
+	const { max, min } = publishedCountBand(published);
+	return count >= min && count <= max ? "범위 안" : "범위 밖";
+}
+
+/** 개수를 공표 수치와 대조한 한 줄 요약. 예: "600 (공표 645, ±10% 581–709, 범위 안)". */
+export function comparePublishedCount(
+	count: number,
+	published: number
+): string {
+	const { max, min } = publishedCountBand(published);
+	const verdict = publishedCountVerdict(count, published);
+	const tolerance = Math.round(PUBLISHED_COUNT_TOLERANCE * PERCENT);
+	return `${count} (공표 ${published}, ±${tolerance}% ${min}–${max}, ${verdict})`;
+}
+
 export type BusRegion = "seoul" | "gyeonggi" | "incheon";
 
 /** routeType으로 노선 면허 지역을 정한다. 7 → incheon, 8 → gyeonggi, 그 밖(마을 2 포함) → seoul. */

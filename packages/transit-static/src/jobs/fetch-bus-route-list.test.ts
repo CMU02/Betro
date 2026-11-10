@@ -185,6 +185,86 @@ describe("fetchBusRouteList", () => {
 		expect(result.routes.map((row) => row.busRouteId)).not.toContain("old-1");
 	});
 
+	it("treats a term with no hits (headerCd 4) as an empty page and does not call it again", async () => {
+		const notFound = () =>
+			Response.json({
+				msgBody: { itemList: null },
+				msgHeader: { headerCd: "4", headerMsg: `결과가 없습니다 ${KEY}` },
+			});
+		const first = fakeFetch((term) =>
+			term === "G" ? notFound() : Response.json(JSON.parse(body([item(term)])))
+		);
+		const result = await fetchBusRouteList({
+			dataDir,
+			fetchImpl: first.fetchImpl,
+			key: KEY,
+			now: () => NOW,
+			terms: ["a", "G", "b"],
+		});
+		expect(result.stoppedBy).toBe("none");
+		expect(result.failed).toEqual([]);
+		expect(result.empty).toEqual(["G"]);
+		expect(result.routes.map((row) => row.busRouteId)).toEqual(["a", "b"]);
+		const dir = rawPath(dataDir, BUS_ROUTE_LIST_SOURCE, dateDir(0));
+		expect(
+			JSON.parse(await readFile(join(dir, "routes.json"), "utf8"))
+		).toEqual(result.routes);
+		const saved = await readFile(join(dir, "G.json"), "utf8");
+		expect(saved).not.toContain(KEY);
+		expect(logSpy.mock.calls.flat().map(String).join("\n")).toContain(
+			"empty: G"
+		);
+
+		const rerun = fakeFetch(() => notFound());
+		const again = await fetchBusRouteList({
+			dataDir,
+			fetchImpl: rerun.fetchImpl,
+			key: KEY,
+			now: () => NOW,
+			terms: ["a", "G", "b"],
+		});
+		expect(again.calls).toBe(0);
+		expect(rerun.terms).toEqual([]);
+		expect(again.empty).toEqual(["G"]);
+		expect(again.failed).toEqual([]);
+		expect(again.routes).toEqual(result.routes);
+	});
+
+	it("prints routeType counts and the 7+8 total against the published 645", async () => {
+		const typed = (id: string, routeType: string) => ({
+			...item(id),
+			routeType,
+		});
+		const { fetchImpl } = fakeFetch(() =>
+			Response.json(
+				JSON.parse(
+					body([
+						typed("v1", "2"),
+						typed("v2", "2"),
+						typed("i1", "7"),
+						typed("g1", "8"),
+						typed("g2", "8"),
+						typed("g3", "8"),
+					])
+				)
+			)
+		);
+		await fetchBusRouteList({
+			dataDir,
+			fetchImpl,
+			key: KEY,
+			now: () => NOW,
+			terms: ["a"],
+		});
+		const printed = logSpy.mock.calls.flat().map(String).join("\n");
+		expect(printed).toContain("routeType 2: 2");
+		expect(printed).toContain("routeType 7: 1");
+		expect(printed).toContain("routeType 8: 3");
+		expect(printed).toContain(
+			"routeType 7+8: 4 (공표 645, ±10% 581–709, 범위 밖)"
+		);
+	});
+
 	it("uses the strSrch parameter and the getBusRouteList operation", async () => {
 		const { fetchImpl, urls } = fakeFetch(() =>
 			Response.json(JSON.parse(body([item("x")])))

@@ -9,6 +9,10 @@ import {
 	AUTONOMOUS_ROUTE_NAME,
 	type BusRegion,
 	OUT_OF_SCOPE_ROUTE_ID_REASON,
+	PUBLISHED_REGIONAL_ROUTE_COUNT,
+	PUBLISHED_VILLAGE_ROUTE_COUNT,
+	publishedCountBand,
+	publishedCountVerdict,
 } from "./scope";
 
 /** 보고서 출처 줄. 계획의 인터페이스 이름(BUS_SHAPE_ATTRIBUTION)으로는 assemble.ts가 내보낸다. */
@@ -29,6 +33,8 @@ const LOADABLE_GROUPS: readonly LoadableGroup[] = ["seoul", "regional"];
 const REGIONS: readonly BusRegion[] = ["seoul", "gyeonggi", "incheon"];
 const PERCENT = 100;
 const PERCENT_DIGITS = 1;
+/** 마을버스 routeType. 공표 마을 노선 수와 대조한다. */
+const VILLAGE_ROUTE_TYPE = "2";
 
 /** 오프셋·stop-off-shape 정류소·sect-dist-mismatch 표에 보여 줄 항목 수. */
 const TOP_N = 20;
@@ -97,6 +103,37 @@ function renderRegions(result: ReportInput): string[] {
 		...REGIONS.map(
 			(region) => `| ${region} | ${result.regionCounts[region]} |`
 		),
+		"",
+	];
+}
+
+/**
+ * 공표 수치(마을 253, 경기·인천 645)와 대조한다. 마을은 routeTypeCounts["2"](정류소 원본을 읽은 노선),
+ * 경기·인천은 regionCounts의 gyeonggi + incheon(범위 안 노선)이다. 크게 벗어나면 검색어나 수집이 빠뜨린 노선이 있다.
+ */
+function renderPublishedComparison(result: ReportInput): string[] {
+	const routeTypeCounts = new Map(Object.entries(result.routeTypeCounts));
+	const rows: [label: string, count: number, published: number][] = [
+		[
+			"마을(routeType 2)",
+			routeTypeCounts.get(VILLAGE_ROUTE_TYPE) ?? 0,
+			PUBLISHED_VILLAGE_ROUTE_COUNT,
+		],
+		[
+			"경기·인천(gyeonggi + incheon)",
+			result.regionCounts.gyeonggi + result.regionCounts.incheon,
+			PUBLISHED_REGIONAL_ROUTE_COUNT,
+		],
+	];
+	return [
+		"## 공표 수치 대조",
+		"",
+		"| 항목 | 보고서 | 공표 | ±10% 범위 | 판정 |",
+		"| --- | --- | --- | --- | --- |",
+		...rows.map(([label, count, published]) => {
+			const { max, min } = publishedCountBand(published);
+			return `| ${label} | ${count} | ${published} | ${min}–${max} | ${publishedCountVerdict(count, published)} |`;
+		}),
 		"",
 	];
 }
@@ -457,6 +494,7 @@ export function renderBusRouteReport(result: ReportInput): string {
 		...renderSummary(result),
 		...renderRouteTypes(result),
 		...renderRegions(result),
+		...renderPublishedComparison(result),
 		...renderLoadableRatios(result),
 		...renderOutOfScopeById(result),
 		...renderAutonomousReview(result),
