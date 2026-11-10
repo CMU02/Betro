@@ -30,7 +30,7 @@ export interface Env {
 	DB: D1Database;
 	/** Firebase 서비스 계정 JSON(secret). 없으면 알림은 로그로만 남긴다. */
 	FCM_SERVICE_ACCOUNT_JSON?: string;
-	/** 다음 alarm까지 이 시간(ms) 이상 남으면 이력을 미리 R2에 쓴다. 기본 60000. */
+	/** 다음 alarm까지 이 시간(ms) 이상 남으면 이력을 미리 R2에 쓴다. 기본 5000(10000 미만으로 둔다). */
 	HISTORY_IDLE_FLUSH_MS?: string;
 	OPERATING_END_KST?: string;
 	OPERATING_START_KST?: string;

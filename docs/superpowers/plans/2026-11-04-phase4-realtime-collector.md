@@ -21,6 +21,58 @@
 - Firebase 프로젝트 `betro-a77a2`, 앱 번들/패키지 `com.cmu02.betro`. 앱의 FCM 토큰은 dev 빌드 콘솔에 `[push] FCM token`으로 찍힌다.
 - **이 Mac 재적재 (2026-11-04)**: 실제로는 `local.db`에 2026-10-31 1~2단계 배치(crosswalk 3, track 4·5, timetable 6·7)가 이미 있었다. 마이그레이션 4개는 모두 적용 상태(새로 적용 0). 원본은 모두 있어 fetch는 하지 않았다. 다시 빌드한 결과 현재 배치: `station_crosswalk` **8**(696행, 매칭 696/696, 코드 없는 역 37), `track` **5** 유지(원본 해시가 같아 재적재 생략; shape 59, track_station 1,526 = osm-stop 1,509 + master 17, stitch 실패·미커버 역 0), `timetable` **9**(trip 19,745, stop_time 556,108, error 0, warn 1,587, 시간표 없는 노선 gtx-a), `bus_route` **2** 유지(노선 427, stop 32,098, segment 31,671, shape 427). 각 kind 현재 배치 1개. 이전 배치 1, 3, 4, 6, 7은 `is_current=0`으로 남아 있다.
 
+## 4단계 결과 (2026-11-10 확인)
+
+수집기는 2026-11-04 20:18 KST부터 `dev` 모드로 계속 돌고 있다. 아래는 2026-11-10 오전에 R2, D1, Cloudflare 지표, `wrangler tail`로 확인한 내용이다.
+
+### 완료 기준 (설계 9장)
+
+| # | 기준 | 결과 |
+|---|---|---|
+| 1 | 새 Worker에서 로그인과 푸시 | **API로만 확인.** 시험 계정으로 가입 → 로그인 → `get-session` → `/rpc/privateData` 모두 200, 세션 없이는 401(D1에서 better-auth 동작). 시험 계정 행은 지웠다. 푸시는 11-04에 알림 수신을 확인했다. 앱에서의 로그인은 확인하지 못했다: `apps/native/.env`의 `EXPO_PUBLIC_SERVER_URL`이 `http://localhost:3000`이고 운영 D1의 `user`가 0행이라, 앱은 새 Worker에 붙은 적이 없다. |
+| 2 | 현재 배치가 D1에 있고 수집기가 그것으로 정규화 | 통과. 원격 D1 현재 배치 `station_crosswalk` 8, `track` 5, `timetable` 9, `bus_route` 2, `timetable_trip` 19,745행(로컬과 같음). 수집기 로그 `references loaded subway[station_crosswalk=8,track=5,timetable=9] bus[bus_route=2]`. |
+| 3 | 하루 운행 보고서에 멈춤 구간이 없고 호출 수가 한도 안 | 통과. `reports/2026-11-05.json`: `ok: true`, 지하철 899건, 버스 899건, `stalledIntervals` 없음. 11-06~09도 모두 `ok: true`, 소스별 899~900건. |
+| 4 | 상태 페이지 지표와 멈춤 알림 | 11-04에 확인한 그대로다(Task 13 진행 기록). 11-10에는 Access 로그인이 필요해 터미널에서 다시 열지 못했고, 비로그인 요청이 Access로 302 되는 것만 확인했다. |
+| 5 | 원본·관측이 R2에 시간 단위로 쌓이고 키가 남지 않음 | **부분 통과.** 11-05에 5개 스트림 모두 운행 20시간에 파일이 있다. 키는 표본 30개(11-05~10, 1,450줄)와 `wrangler tail` 5분 치에서 원문·URL 인코딩 모두 0건. 그러나 이력 일부가 R2에 쓰이지 않았다(아래). |
+
+### 이력 누락 (발견, 수정은 커밋했고 아직 배포하지 않음)
+
+일일 보고서는 정상인데 R2의 `raw/` 조각 수가 호출 수보다 적다. `dev`에서는 호출 한 번이 조각 하나다.
+
+| 운행일 | 보고서 | 지하철 호출 / 조각 (누락) | 버스 호출 / 조각 (누락) |
+|---|---|---|---|
+| 11-05 | ok | 899 / 881 (2.0%) | 899 / 886 (1.4%) |
+| 11-06 | ok | 899 / 861 (4.2%) | 900 / 861 (4.3%) |
+| 11-07 | ok | 900 / 899 (0.1%) | 900 / 899 (0.1%) |
+| 11-08 | ok | 900 / 899 (0.1%) | 899 / 899 (0%) |
+| 11-09 | ok | 900 / 707 (21.4%) | 900 / 670 (25.6%) |
+
+- 가장 큰 구간은 11-09 20:02~23:03 KST다. 버스는 20:02부터 다음 날 00:15까지 조각이 없고, 지하철은 3시간 동안 7개뿐이다. `events/`도 같은 주기에 함께 빠졌다.
+- **원인**: 이력 버퍼는 메모리에 있고, 다음 alarm까지 60초 이상 남을 때만 미리 R2에 쓰게 되어 있었다(`DEFAULT_IDLE_FLUSH_MS = 60_000`, "쉬는 DO는 70~140초 뒤 내려간다"는 가정). 실제로는 요청·alarm 없이 10초가 지나면 DO가 잠들고 메모리가 비워진다. 지하철과 버스의 호출 시각이 10~60초 어긋나 있는 동안에는 어느 tick도 버퍼를 쓰지 않은 채 잠들어 그 주기의 원본과 이벤트가 사라졌다. 예산·지표·최신 상태는 tick마다 저장되므로 보고서와 상태 페이지에는 드러나지 않았다.
+- **근거**: `wrangler tail` 5분 동안 10초 이상 쉰 뒤의 alarm 4건은 모두 `collector core mode=…` 로그로 시작했고(새로 만들어짐), 10초 미만으로 이어진 5건은 그렇지 않았다. 누락 구간에도 alarm은 시간당 90건으로 정상이었고 R2 쓰기만 180건에서 4~8건으로 줄었다. 실패한 R2 쓰기는 없다.
+- **수정**: `DEFAULT_IDLE_FLUSH_MS`를 5,000으로 낮췄다(커밋 `89bb57b`). 재현 테스트는 호출 시각을 40초 어긋나게 두고 10초 이상 쉴 때마다 `CollectorCore`를 새로 만든다. 수정 전 호출 15건 중 원본 0줄, 수정 후 15줄.
+- 지금(11-10 오전)은 두 tick이 5초 간격으로 붙어 있어 누락이 없는 상태다. 호출 시각은 재시도나 지연으로 조금씩 밀리므로 다시 어긋날 수 있다.
+
+### 매칭률 (일일 보고서)
+
+- 7호선: 11-05 1.0, 11-06 1.0, 11-07 0.999, 11-08 1.0, 11-09 1.0.
+- 11-05 기준: 1~9호선 0.986~1.0, 경의중앙 0.970, 공항철도 0.991, 서해 0.985, 경강 1.0, 신림 0.990, 우이신설 0.952, 수인분당 0.860, 경춘 0.806. 신분당과 GTX-A는 `null`(시간표 매칭 대상 아님).
+- 주말(11-07, 11-08)에는 경춘 0.70, 수인분당 0.82, 신림 0.90으로 내려간다.
+
+### 용량과 사용량 (`dev`, 11-05~09)
+
+- R2: 2026-11-10 10:45 기준 객체 18,053개, 910MB. 운행일 하루에 `raw/` 162~169MB, `events/` 10~12MB. 보관 기간이 다 차면 `raw/` 약 5.0GB(30일), `events/` 약 4.2GB(365일)로 무료 10GB에 가깝다.
+- `raw/`가 설계 추정("절반은 해시만 남는다")보다 큰 이유: DO가 tick마다 잠들고, 다시 깨어나면 스트림의 첫 줄은 본문을 그대로 남기게 되어 있어서 `dev`에서는 본문 중복 제거가 사실상 동작하지 않는다.
+- Worker 요청 하루 292~2,193건(cron 288건 포함), DO 요청 약 2,100건, DO 실행 시간 약 4.0~4.3시간(약 1,900 GB-s), DO SQLite 쓰기 약 12,400행, R2 쓰기 2,831~3,597건. Worker 오류 0건.
+- DO alarm의 `clientDisconnected` 20~36건/일은 원인을 확인하지 않았다. 같은 날 보고서의 호출 수와 멈춤 구간에는 영향이 없다.
+
+### 남은 일
+
+- [ ] 수정(`89bb57b`)을 배포하고, 그 뒤 운행일 하나에서 `raw/` 조각 수가 보고서 호출 수와 같은지 확인한다.
+- [ ] 앱에서 로그인 확인: `EXPO_PUBLIC_SERVER_URL=https://betro.cmu02-studio.com`으로 dev 빌드에서 가입·로그인(Task 3 Step 7).
+- [ ] 후속 후보: 일일 보고서에 이력 누락을 넣는다(버퍼에 넣은 줄 수와 R2에 쓴 줄 수를 세어 차이가 나면 `ok: false`).
+- [ ] `develop` PR.
+
 ## Global Constraints
 
 - 커밋 메시지·PR 본문에 AI 서명·출처 표기(`Co-Authored-By`, 세션 URL 등)를 넣지 않는다. 브랜치는 `feat/phase4-realtime-collector`(develop 기준), PR은 develop으로.
@@ -457,14 +509,14 @@ apps/native/.env                   (사용자 로컬) EXPO_PUBLIC_SERVER_URL=htt
 **Files:**
 - Modify: `packages/realtime/README.md`(생성), `apps/server/README.md`(생성 또는 수정), `docs/superpowers/plans/2026-11-04-phase4-realtime-collector.md`(결과 기록)
 
-- [ ] **Step 1: R2와 수명 주기** — Run: `bunx wrangler r2 bucket create betro-data`, 수명 주기 규칙 `raw/` 30일 삭제, `events/` 365일 삭제(`wrangler r2 bucket lifecycle add`) / Expected: `wrangler r2 bucket lifecycle list betro-data`에 규칙 2개.
-- [ ] **Step 2: secret** — `SEOUL_OPEN_API_KEY`, `DATA_GO_KR_API_KEY`는 `packages/transit-static/.env`에서 표준입력으로 넣는다(화면 출력 없음). `FCM_SERVICE_ACCOUNT_JSON`(Firebase 콘솔 → 서비스 계정 → 새 비공개 키, 사용자가 받아 경로를 알려줌, 저장소 밖 보관), `ALERT_FCM_TOKEN`(사용자 기기 dev 빌드 로그의 `[push] FCM token`). Expected: `wrangler secret list`에 5개(`BETTER_AUTH_SECRET` 포함).
-- [ ] **Step 3: Cloudflare Access(사용자)** — 사용자에게 Zero Trust 대시보드에서 `betro-status.cmu02-studio.com` 자체 호스팅 앱을 만들고, 정책을 사용자 이메일 1개 허용으로 걸어 달라고 요청한다. Expected: 시크릿 창에서 상태 페이지가 로그인 화면으로 막힘, `https://betro.cmu02-studio.com/`은 그대로 `OK`.
-- [ ] **Step 4: 배포와 시작** — Run: `bunx wrangler deploy` → Access 로그인한 브라우저(또는 Access 서비스 토큰)로 `POST https://betro-status.cmu02-studio.com/internal/collector/start` / Expected: 5분 안에 상태 페이지 지하철·버스가 "정상", `wrangler tail`에 키가 없는 로그.
+- [x] **Step 1: R2와 수명 주기** — Run: `bunx wrangler r2 bucket create betro-data`, 수명 주기 규칙 `raw/` 30일 삭제, `events/` 365일 삭제(`wrangler r2 bucket lifecycle add`) / Expected: `wrangler r2 bucket lifecycle list betro-data`에 규칙 2개.
+- [x] **Step 2: secret** — `SEOUL_OPEN_API_KEY`, `DATA_GO_KR_API_KEY`는 `packages/transit-static/.env`에서 표준입력으로 넣는다(화면 출력 없음). `FCM_SERVICE_ACCOUNT_JSON`(Firebase 콘솔 → 서비스 계정 → 새 비공개 키, 사용자가 받아 경로를 알려줌, 저장소 밖 보관), `ALERT_FCM_TOKEN`(사용자 기기 dev 빌드 로그의 `[push] FCM token`). Expected: `wrangler secret list`에 5개(`BETTER_AUTH_SECRET` 포함).
+- [x] **Step 3: Cloudflare Access(사용자)** — 사용자에게 Zero Trust 대시보드에서 `betro-status.cmu02-studio.com` 자체 호스팅 앱을 만들고, 정책을 사용자 이메일 1개 허용으로 걸어 달라고 요청한다. Expected: 시크릿 창에서 상태 페이지가 로그인 화면으로 막힘, `https://betro.cmu02-studio.com/`은 그대로 `OK`.
+- [x] **Step 4: 배포와 시작** — Run: `bunx wrangler deploy` → Access 로그인한 브라우저(또는 Access 서비스 토큰)로 `POST https://betro-status.cmu02-studio.com/internal/collector/start` / Expected: 5분 안에 상태 페이지 지하철·버스가 "정상", `wrangler tail`에 키가 없는 로그.
 - [x] **Step 5: 알림 확인** — `wrangler secret put DATA_GO_KR_API_KEY`에 일부러 틀린 값을 넣어 401을 만들고 알림("Betro 키 오류")을 확인한 뒤 원래 값으로 되돌린다. 틀린 키 호출은 1~3건으로 끝난다. Expected: 휴대폰 알림 1회, 되돌린 뒤 다음 KST 날부터 버스 재개(그날은 멈춘 상태가 맞음 — 시험은 운행 끝 무렵에 한다).
-- [ ] **Step 6: 하루 운행** — 운행일 하나(05:00~01:00)를 그대로 둔다. 그동안 수집기 밖에서 실시간 오퍼레이션을 부르지 않는다. 다음날 `reports/<운행일>.json`을 R2에서 받는다. Expected: `ok: true`(멈춤 구간 없음, 호출 수 ≤ 1,000), 노선별 매칭률과 7호선 매칭률이 기록됨.
-- [ ] **Step 7: 확인 항목** — 완료 기준(4단계 설계 9장) 1~5를 하나씩 확인한다. 특히 R2에서 원본 몇 개를 받아 두 키 원문이 없는지 `grep`. 결과(일일 보고서 요약, 7호선 매칭률, R2 하루 용량, Workers 사용량)를 이 계획 문서 "계획 중 확인한 사실" 아래 "4단계 결과"로 적는다.
-- [ ] **Step 8: 문서** — `packages/realtime/README.md`(모듈 지도, 규칙, 플래그 목록), `apps/server/README.md`(로컬 개발 `.dev.vars`, `UPSTREAM_MODE`, 배포, secret, D1 마이그레이션, `publish:d1` 순서, 수집기 시작·중지, 상태 페이지, 비용 확인). 커밋: `docs: record phase 4 run and document the collector`
+- [x] **Step 6: 하루 운행** — 운행일 하나(05:00~01:00)를 그대로 둔다. 그동안 수집기 밖에서 실시간 오퍼레이션을 부르지 않는다. 다음날 `reports/<운행일>.json`을 R2에서 받는다. Expected: `ok: true`(멈춤 구간 없음, 호출 수 ≤ 1,000), 노선별 매칭률과 7호선 매칭률이 기록됨.
+- [x] **Step 7: 확인 항목** — 완료 기준(4단계 설계 9장) 1~5를 하나씩 확인한다. 특히 R2에서 원본 몇 개를 받아 두 키 원문이 없는지 `grep`. 결과(일일 보고서 요약, 7호선 매칭률, R2 하루 용량, Workers 사용량)를 이 계획 문서 "계획 중 확인한 사실" 아래 "4단계 결과"로 적는다.
+- [x] **Step 8: 문서** — `packages/realtime/README.md`(모듈 지도, 규칙, 플래그 목록), `apps/server/README.md`(로컬 개발 `.dev.vars`, `UPSTREAM_MODE`, 배포, secret, D1 마이그레이션, `publish:d1` 순서, 수집기 시작·중지, 상태 페이지, 비용 확인). 커밋: `docs: record phase 4 run and document the collector`
 
 #### Task 13 진행 기록 (2026-11-04)
 
@@ -479,7 +531,14 @@ apps/native/.env                   (사용자 로컬) EXPO_PUBLIC_SERVER_URL=htt
 #### 이월 확인 항목 (시간이 지나야 확인 가능)
 
 - [x] **2026-11-04 밤**: 다시 설치한 iOS dev 빌드의 새 FCM 토큰으로 `ALERT_FCM_TOKEN`을 바꾸고, 같은 서비스 계정으로 FCM 시험 메시지를 직접 보내 기기 수신을 확인한다(키를 다시 틀리게 넣지 않는다 — 11/5 하루 운행이 멈춘다).
-- [ ] **2026-11-05 05:00 이후**: 버스 수집 재개 확인(`cloudflared access curl …/status.json`에서 bus `usedToday` 증가, `errorsToday` 비어 있음). 되돌린 키가 맞는지도 이것으로 확인된다.
-- [ ] **2026-11-05 아침**: `reports/2026-11-04.json` 미리보기. 20:18부터의 반나절이고 버스가 401로 멈췄으므로 `ok: false`가 맞다. 형식, 노선별 매칭률, 호출 수 집계만 본다.
-- [ ] **2026-11-05 05:00 ~ 11-06 01:00**: Step 6 하루 운행. 그동안 수집기 밖에서 실시간 오퍼레이션을 부르지 않는다.
+- [x] **2026-11-05 05:00 이후**: 버스 수집 재개 확인(`cloudflared access curl …/status.json`에서 bus `usedToday` 증가, `errorsToday` 비어 있음). 되돌린 키가 맞는지도 이것으로 확인된다.
+- [x] **2026-11-05 아침**: `reports/2026-11-04.json` 미리보기. 20:18부터의 반나절이고 버스가 401로 멈췄으므로 `ok: false`가 맞다. 형식, 노선별 매칭률, 호출 수 집계만 본다.
+- [x] **2026-11-05 05:00 ~ 11-06 01:00**: Step 6 하루 운행. 그동안 수집기 밖에서 실시간 오퍼레이션을 부르지 않는다.
 - [ ] **2026-11-06**: `reports/2026-11-05.json`으로 Step 6 판정(`ok: true`, 호출 수 ≤ 1,000), 이어서 Step 7·8과 `develop` PR.
+
+2026-11-10에 한꺼번에 확인했다. 결과는 위 "4단계 결과"에 있다.
+
+- 버스 재개: `reports/2026-11-05.json`에서 버스 899건, 오류 없음. 되돌린 키가 맞다.
+- `reports/2026-11-04.json`: `ok: false`(20:18 시작 전 구간과 버스 401 뒤 구간이 멈춤으로 잡힘), 지하철 211건, 버스 62건, 버스 `auth` 1건. 예상한 그대로다.
+- Step 6: `reports/2026-11-05.json` `ok: true`, 지하철 899건, 버스 899건, 멈춤 구간 없음. 판정 기준은 통과했지만 그날 이력의 1.4~2.0%가 R2에 쓰이지 않았다.
+- Step 7·8: 완료 기준 확인과 README 2개는 끝났다. 이력 누락 수정의 배포와 재확인, 앱 로그인 확인, `develop` PR이 남았다.
