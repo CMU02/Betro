@@ -275,7 +275,7 @@ describe("transit schema", () => {
 
 describe("bus_route region migration", () => {
 	const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
-	const REGION_MIGRATION = "20261110062424_bus_route_region";
+	const REGION_MIGRATION = "20261110095423_bus_route_region";
 
 	it("fills short_name from route_name and region with seoul for existing rows", async () => {
 		const before = await mkdtemp(join(tmpdir(), "betro-migrations-"));

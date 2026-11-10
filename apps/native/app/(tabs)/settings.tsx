@@ -106,7 +106,7 @@ function ThemeRow() {
 	return (
 		<View className="gap-3 px-4 pt-3 pb-4">
 			<View className="flex-row items-center gap-3">
-				<View className="size-10 items-center justify-center rounded-md bg-bg-control">
+				<View className="size-6 items-center justify-center">
 					<MoonTileIcon colorClassName="accent-icon-primary" size={20} />
 				</View>
 				<AppText variant="bodyMStrong">{t("settings.theme.title")}</AppText>

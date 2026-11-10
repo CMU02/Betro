@@ -1,3 +1,4 @@
+import type { StationRow } from "@Betro/commute/sources/seoul-subway";
 import { type AlertState, emptyAlertState } from "@Betro/realtime/alerts";
 import {
 	type BudgetKind,
@@ -17,15 +18,19 @@ import {
 } from "@Betro/realtime/metrics";
 import type { CollectorConfig, ScheduleState } from "@Betro/realtime/schedule";
 import { LatestState, type SavedState } from "@Betro/realtime/state";
-import { kstParts } from "@Betro/realtime/time";
+import { arrivalDirection } from "@Betro/realtime/subway/reduce-arrivals";
+import { kstParts, kstToEpochMs } from "@Betro/realtime/time";
 import type { UpstreamOutcome } from "@Betro/realtime/upstream/classify";
+import type { ArrivalRow } from "@Betro/realtime/upstream/subway-arrival";
 import { redactKeys } from "@Betro/realtime/upstream/urls";
 import { SERVICE_ENDED_RECHECK_MS } from "./apply-call";
 import {
 	type CoreSaved,
 	currentOperatingWindow,
+	emptyStationBoards,
 	restoreCoreState,
 	STATE_KEYS,
+	type StationBoardsSaved,
 	type StopReason,
 } from "./core-state";
 import { HistoryWriter } from "./history-writer";
@@ -43,6 +48,29 @@ const RESTING_GRACE_MS = 120_000;
 
 const bucketKey = (source: MetricsSource, bucketStart: number): string =>
 	`${source}|${bucketStart}`;
+
+/** ALL 행 → 역 도착판 행. 방향이나 원천 시각을 알 수 없는 행은 버린다. */
+function stationRowOf(row: ArrivalRow): StationRow | null {
+	const direction = arrivalDirection(row.updnLine);
+	if (direction === null) {
+		return null;
+	}
+	let sourceAt: number;
+	try {
+		sourceAt = kstToEpochMs(row.recptnDt);
+	} catch {
+		return null;
+	}
+	const barvlSec = Number(row.barvlDt ?? "0");
+	return {
+		arvlCd: row.arvlCd,
+		barvlSec: Number.isFinite(barvlSec) && barvlSec > 0 ? barvlSec : 0,
+		direction,
+		ordkey: row.ordkey,
+		sourceAt,
+		trainNo: row.btrainNo,
+	};
+}
 
 /** 원본 이력 한 줄에 넣을 시도 정보. */
 export interface RawAttempt {
@@ -64,6 +92,8 @@ export class CollectorState {
 	latest: LatestState;
 	core: CoreSaved;
 	alerts: AlertState;
+	/** 출퇴근 세션이 보는 역과 그 역의 최근 ALL 행. */
+	boards: StationBoardsSaved;
 	readonly history: HistoryWriter;
 	/** 저장소에서 되살린 시각. 상태를 아직 바꾸지 않은 스냅샷의 `generatedAt`. */
 	readonly loadedAt: number;
@@ -76,6 +106,7 @@ export class CollectorState {
 
 	private constructor(init: {
 		alerts: AlertState;
+		boards: StationBoardsSaved;
 		budget: BudgetState;
 		buckets: readonly MetricsBucket[];
 		core: CoreSaved;
@@ -85,6 +116,7 @@ export class CollectorState {
 		secrets: readonly string[];
 	}) {
 		this.alerts = init.alerts;
+		this.boards = init.boards;
 		this.budget = init.budget;
 		this.core = init.core;
 		this.latest = init.latest;
@@ -108,24 +140,25 @@ export class CollectorState {
 		config: CollectorConfig,
 		secrets: readonly string[]
 	): Promise<CollectorState> {
-		const [budget, schedule, latest, core, alerts, buckets] = await Promise.all(
-			[
+		const [budget, schedule, latest, core, alerts, boards, buckets] =
+			await Promise.all([
 				store.get<BudgetState>(STATE_KEYS.budget),
 				store.get<ScheduleState>(STATE_KEYS.schedule),
 				store.get<SavedState>(STATE_KEYS.latest),
 				store.get<CoreSaved>(STATE_KEYS.core),
 				store.get<AlertState>(STATE_KEYS.alerts),
+				store.get<StationBoardsSaved>(STATE_KEYS.boards),
 				store.metricsSince(
 					bucketStartOf(now) - KEPT_BUCKETS_BEFORE * METRICS_BUCKET_MS
 				),
-			]
-		);
+			]);
 		const restored = restoreCoreState(core, now, config);
 		// 해시가 가리키는 본문이 아직 R2에 쓰이지 않은 채 버퍼와 함께 사라졌을 수 있다.
 		// 재시작 뒤 스트림마다 첫 줄은 본문을 그대로 남긴다.
 		restored.rawHashes = {};
 		return new CollectorState({
 			alerts: alerts ?? emptyAlertState(),
+			boards: boards ?? emptyStationBoards(),
 			buckets,
 			budget: budget ?? emptyBudget(now),
 			core: restored,
@@ -134,6 +167,51 @@ export class CollectorState {
 			schedule: schedule ?? { nextAt: {} },
 			secrets,
 		});
+	}
+
+	/** 역을 `until`까지 본다. 이미 더 늦게까지 보고 있으면 그대로 둔다. */
+	watchStations(statnIds: readonly string[], until: number): void {
+		for (const statnId of statnIds) {
+			this.boards.watch[statnId] = Math.max(
+				this.boards.watch[statnId] ?? 0,
+				until
+			);
+		}
+	}
+
+	/** 만료 시각이 지난 역과 그 행을 지운다. */
+	expireWatches(now: number): void {
+		for (const [statnId, until] of Object.entries(this.boards.watch)) {
+			if (until < now) {
+				delete this.boards.watch[statnId];
+				delete this.boards.stations[statnId];
+			}
+		}
+	}
+
+	/** ALL 응답의 행 중 보고 있는 역의 행만 남긴다. 행이 없는 역도 받은 시각은 남긴다. */
+	recordStationRows(rows: readonly ArrivalRow[], at: number): void {
+		const watched = Object.keys(this.boards.watch);
+		if (watched.length === 0) {
+			return;
+		}
+		const byStation = new Map<string, StationRow[]>(
+			watched.map((statnId) => [statnId, []])
+		);
+		for (const row of rows) {
+			const list = byStation.get(row.statnId);
+			const stationRow = list ? stationRowOf(row) : null;
+			if (list && stationRow) {
+				list.push(stationRow);
+			}
+		}
+		for (const [statnId, stationRows] of byStation) {
+			this.boards.stations[statnId] = { fetchedAt: at, rows: stationRows };
+		}
+	}
+
+	async saveBoards(store: StateStore): Promise<void> {
+		await store.put(STATE_KEYS.boards, this.boards);
 	}
 
 	/** KST 날짜가 바뀌면 오늘 오류 수를 0부터 센다. */
@@ -316,6 +394,7 @@ export class CollectorState {
 			store.put(STATE_KEYS.budget, this.budget),
 			store.put(STATE_KEYS.schedule, this.schedule),
 			store.put(STATE_KEYS.latest, this.latest.save()),
+			this.saveBoards(store),
 			this.saveCore(store),
 			...buckets.map((bucket) => store.putMetrics(bucket)),
 		]);

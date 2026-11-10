@@ -18,12 +18,30 @@ describe("TEXT_STYLES", () => {
 			lineHeight: 14,
 		});
 		expect(TEXT_STYLES.dataXL).toEqual({
-			fontFamily: "JetBrainsMono-Bold",
+			fontFamily: "NotoSansKR-Bold",
 			fontSize: 28,
+			fontVariant: ["tabular-nums"],
 			letterSpacing: -0.56,
 			lineHeight: 32,
 		});
 		expect(TEXT_STYLES.displayL.fontFamily).toBe("NotoSansKR-Black");
+	});
+});
+
+describe("data variants", () => {
+	it("uses Noto Sans KR Bold for XL and L, Medium for M and S", () => {
+		expect(TEXT_STYLES.dataXL.fontFamily).toBe("NotoSansKR-Bold");
+		expect(TEXT_STYLES.dataL.fontFamily).toBe("NotoSansKR-Bold");
+		expect(TEXT_STYLES.dataM.fontFamily).toBe("NotoSansKR-Medium");
+		expect(TEXT_STYLES.dataS.fontFamily).toBe("NotoSansKR-Medium");
+	});
+	it("turns on tabular-nums only for data variants", () => {
+		for (const [variant, style] of Object.entries(TEXT_STYLES)) {
+			const expected = variant.startsWith("data")
+				? ["tabular-nums"]
+				: undefined;
+			expect(style.fontVariant).toEqual(expected);
+		}
 	});
 });
 

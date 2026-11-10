@@ -27,10 +27,7 @@ const FADE_LAYER_TOPS = Array.from(
 	(_, index) =>
 		`${((FADE_START + FADE_STEP * index) / MAP_HEIGHT) * 100}%` as const
 );
-/**
- * iOS(12:1580)는 로고가 지도 위 왼쪽 위에 있고, Android(12:3338)는 제목 바로 위에 있으며
- * 제목 둘째 줄을 강조색으로 쓴다.
- */
+/** iOS(12:1580)는 로고가 지도 위 왼쪽 위에 있고, Android(12:3338)는 제목 바로 위에 있다. */
 const IS_ANDROID_LAYOUT = Platform.OS === "android";
 /** 상태 표시줄(54pt) 아래 12pt에 로고(iOS). */
 const LOGO_GAP_BELOW_STATUS_BAR = 12;
@@ -38,7 +35,10 @@ const LOGO_GAP_BELOW_STATUS_BAR = 12;
 const ACTIONS_GAP_ABOVE_HOME_INDICATOR = 8;
 const ICON_SIZE = 20;
 
-/** Lucide 아이콘에 `colorClassName`으로 토큰 색을 입힌다. 두 번째 줄은 문구가 바뀌어 Figma의 Bell 대신 Route. */
+/**
+ * 아이콘은 배경 없는 24pt 상자 안에 20pt로 놓는다. Lucide 아이콘에 `colorClassName`으로
+ * 토큰 색을 입힌다. 두 번째 줄은 문구가 바뀌어 Figma의 Bell 대신 Route.
+ */
 const FEATURES = [
 	{
 		Icon: withUniwind(ZapIcon),
@@ -53,7 +53,7 @@ type Feature = (typeof FEATURES)[number];
 function FeatureRow({ Icon, labelKey }: Feature) {
 	return (
 		<View className="flex-row items-center gap-3">
-			<View className="size-10 items-center justify-center rounded-md bg-accent-soft">
+			<View className="size-6 items-center justify-center">
 				<Icon colorClassName="accent-text-accent" size={ICON_SIZE} />
 			</View>
 			<AppText className="flex-1" variant="bodyMStrong">
@@ -64,19 +64,10 @@ function FeatureRow({ Icon, labelKey }: Feature) {
 }
 
 function Headline() {
-	if (!IS_ANDROID_LAYOUT) {
-		return (
-			<AppText accessibilityRole="header" variant="displayL">
-				{`${t("onboarding.headline.lead")}\n${t("onboarding.headline.accent")}`}
-			</AppText>
-		);
-	}
 	return (
 		<AppText accessibilityRole="header" variant="displayL">
-			{`${t("onboarding.headline.lead")}\n`}
-			<AppText className="text-text-accent" variant="displayL">
-				{t("onboarding.headline.accent")}
-			</AppText>
+			{`${t("onboarding.headline.lead")}
+${t("onboarding.headline.accent")}`}
 		</AppText>
 	);
 }

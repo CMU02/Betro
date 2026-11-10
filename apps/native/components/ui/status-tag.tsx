@@ -9,13 +9,6 @@ export interface StatusTagProps {
 	label: string;
 }
 
-const CONTAINER_BY_KIND: Record<StatusKind, string> = {
-	delayed: "bg-status-delayed-soft",
-	ended: "bg-status-neutral-soft",
-	estimated: "bg-status-estimated-soft",
-	live: "bg-status-live-soft",
-};
-
 const DOT_BY_KIND: Record<StatusKind, string> = {
 	delayed: "bg-status-delayed",
 	ended: "bg-text-tertiary",
@@ -33,12 +26,7 @@ const TEXT_BY_KIND: Record<StatusKind, string> = {
 /** Figma `StatusTag`(4:60). 점과 라벨로 위치 정보의 신선도를 보여준다. */
 export function StatusTag({ kind, label }: StatusTagProps) {
 	return (
-		<View
-			className={cn(
-				"flex-row items-center gap-[5px] self-start rounded-full py-[3px] pr-2.5 pl-2",
-				CONTAINER_BY_KIND[kind]
-			)}
-		>
+		<View className="flex-row items-center gap-[5px] self-start">
 			<View className={cn("size-1.5 rounded-full", DOT_BY_KIND[kind])} />
 			<AppText className={TEXT_BY_KIND[kind]} variant="caption">
 				{label}

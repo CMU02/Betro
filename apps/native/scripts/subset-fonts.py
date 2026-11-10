@@ -1,4 +1,4 @@
-"""Noto Sans KR / JetBrains Mono 정적 TTF를 필요한 글자만 남겨 assets/fonts에 쓴다.
+"""Noto Sans KR 정적 TTF를 필요한 글자만 남겨 assets/fonts에 쓴다.
 
 실행: cd apps/native && uvx --from fonttools python scripts/subset-fonts.py
 """
@@ -21,7 +21,6 @@ LATIN_RANGES = [
     (0x3000, 0x303F),
     (0x3131, 0x318E),
 ]
-MONO_RANGES = [(0x0020, 0x007E), (0x00A0, 0x00FF), (0x2010, 0x2027), (0x2190, 0x21FF)]
 
 
 def ks_x_1001_hangul() -> list[int]:
@@ -71,15 +70,6 @@ def main() -> None:
             noto / folder / f"NotoSansKR_{folder}.ttf",
             OUT / f"NotoSansKR-{weight}.ttf",
             noto_codes,
-        )
-
-    mono = PKG / "jetbrains-mono"
-    mono_codes = sorted(set(expand(MONO_RANGES)))
-    for weight, folder in [("Medium", "500Medium"), ("Bold", "700Bold")]:
-        run_subset(
-            mono / folder / f"JetBrainsMono_{folder}.ttf",
-            OUT / f"JetBrainsMono-{weight}.ttf",
-            mono_codes,
         )
 
 

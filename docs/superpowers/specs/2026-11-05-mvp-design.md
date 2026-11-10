@@ -227,6 +227,37 @@ Cloudflare (betro.cmu02-studio.com)
 - **종료**: 목적지 도착 예정 시각 + 10분이 지나거나, 사용자가 닫거나(앱이 서버에 알림), 시작 후 3시간이 지나면 종료 푸시를 보내고 세션을 닫습니다. **[설계 판단]**
 - **대안 제안 규칙**: 대안의 목적지 도착 예정이 기본 경로보다 3분 이상 빠를 때만 제안합니다(작은 차이로 깜빡이지 않게). 3분은 설정값입니다. **[설계 판단]**
 
+#### 푸시 값 v1
+
+푸시에는 문장을 넣지 않고 아래 구조화된 값만 보냅니다(5.10). 문장은 기기가 만듭니다. 노선 이름과 정류장 이름은 값이므로 넣습니다. 시각은 epoch **초**입니다. 구현: `packages/commute/src/session/content.ts`. 2-F가 이 절을 기준으로 Swift·Kotlin 타입을 만듭니다.
+
+```ts
+interface ContentState {
+  v: 1;
+  seq: number;                 // 세션 안에서 보낼 때마다 1씩 오른다. 기기는 더 작은 값을 버린다
+  sentAt: number;
+  stage: "walk" | "wait" | "ride" | "arrived" | "ended";
+  legIndex: number;
+  legCount: number;
+  mode: "bus" | "subway";
+  lineName: string;
+  stopName: string;            // walk·wait: 승차 정류장, ride·arrived: 하차 정류장
+  stopsAway: number | null;
+  etaEpoch: number | null;     // stopName에 도착하는 시각
+  leaveEpoch: number | null;   // 첫 구간 walk 단계에서 나가는 시각. 그 밖에는 null
+  passed: { lineName: string } | null;
+  positionState: "live" | "stale" | "none";
+  etaState: "live" | "estimated";
+  delayMinutes: number;        // 처음 계산한 목적지 도착보다 늦어진 분(0 이상)
+  destinationEtaEpoch: number | null;
+  suggestion: { rank: number; mode: "bus" | "subway"; lineName: string; boardEtaEpoch: number; savesMinutes: number } | null;
+}
+```
+
+- `suggestion`: 탑승 전(`walk`, `wait`)에, 대안의 목적지 도착이 기본 경로보다 3분(설정값) 이상 빠를 때 가장 빠른 대안 하나. 어느 한쪽의 목적지 도착을 모르거나 대안 첫 구간의 시각이 `estimated`면 제안하지 않습니다. `mode`와 `lineName`은 대안 첫 구간의 것이라 기기가 수단에 맞는 문구를 고릅니다.
+- 보낼지 판단: `stage`, `legIndex`, `lineName`, `passed` 유무, `suggestion` 유무·`rank`가 바뀌면 높은 우선순위(10). `stopsAway`, `etaEpoch`·`destinationEtaEpoch`의 분, `positionState`, `etaState`, `delayMinutes`, `suggestion.savesMinutes`가 바뀌면 낮은 우선순위(5). 바뀐 것이 없어도 마지막 전송 뒤 110초가 지나면 낮은 우선순위로 한 번 보냅니다(heartbeat).
+- iOS 시작 푸시의 `attributes`는 `{ planId, sessionId }`입니다.
+
 ### 5.4 도착 시각 계산
 
 출시 기준 7.1의 정확도(차량 도착 5분 전 예측 기준 ±1분 80%, ±2분 95%)를 맞추는 것이 목표입니다. 방법은 구현자가 정하되 다음을 따릅니다.
