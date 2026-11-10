@@ -152,36 +152,69 @@ async function sendPendingDeletes(deps: SyncDeps): Promise<number | null> {
 	return removed;
 }
 
+/** 지금 기기에 있는 장소의 최신 값. 지워졌거나, 지울 목록에 있거나, 더는 `pending`이 아니면 undefined. */
+function stillPending(deps: SyncDeps, placeId: string): Place | undefined {
+	const { pendingDeletes, places } = deps.store.get();
+	const latest = places.find((entry) => entry.id === placeId);
+	if (
+		latest === undefined ||
+		latest.sync !== "pending" ||
+		pendingDeletes.includes(latest.plan.planId)
+	) {
+		return;
+	}
+	return latest;
+}
+
 /**
  * 장소들의 예약을 올린다. 받은 것만 `synced`로 바꾸고 나머지(400, 409, 5xx)는 `pending`으로 둔다.
  * 사용자가 등록한 장소라 409여도 뒤에서 지우지 않는다. 서버에 닿지 않으면 null.
+ * 앞 요청을 기다리는 사이 지워지거나 고쳐질 수 있어, 올리기 직전에 기기에서 다시 찾아 최신 값을 올린다.
  */
 async function pushPlaces(
 	deps: SyncDeps,
 	places: Place[]
 ): Promise<number | null> {
 	let pushed = 0;
-	for (const place of places) {
+	for (const { id } of places) {
+		const latest = stillPending(deps, id);
+		if (latest === undefined) {
+			continue;
+		}
 		// biome-ignore lint/performance/noAwaitInLoops: one at a time so the first unreachable request stops the rest
-		const { status } = await putPlan(deps, place.plan);
+		const { status } = await putPlan(deps, latest.plan);
 		if (status === NETWORK_ERROR_STATUS) {
 			return null;
 		}
 		if (status === NO_CONTENT) {
-			deps.store.markSynced(place.id, place.updatedAt);
+			deps.store.markSynced(latest.id, latest.updatedAt);
 			pushed += 1;
 		}
 	}
 	return pushed;
 }
 
-/** ④ 서버에만 있는 예약(지울 목록에 없는 것)을 이름 없는 기타 장소로 가져온다. */
-function importServerOnly(deps: SyncDeps, plans: CommutePlan[]): number {
-	const state = deps.store.get();
-	const known = new Set([
-		...state.pendingDeletes,
-		...state.places.map((place) => place.plan.planId),
+/** 기기가 아는 planId(장소와 지울 목록). */
+function knownPlanIds(deps: SyncDeps): Set<string> {
+	const { pendingDeletes, places } = deps.store.get();
+	return new Set([
+		...pendingDeletes,
+		...places.map((place) => place.plan.planId),
 	]);
+}
+
+/**
+ * ④ 서버에만 있는 예약(지울 목록에 없는 것)을 이름 없는 기타 장소로 가져온다.
+ * `knownBefore`는 목록을 요청하기 직전에 기기가 알던 planId다. 응답을 기다리는 사이 지운 예약을
+ * 서버 목록이 아직 담고 있어도 가져오지 않는다.
+ */
+function importServerOnly(
+	deps: SyncDeps,
+	plans: CommutePlan[],
+	knownBefore: Set<string>
+): number {
+	const state = deps.store.get();
+	const known = new Set([...knownBefore, ...knownPlanIds(deps)]);
 	const usedIds = new Set(state.places.map((place) => place.id));
 	const imported: Place[] = [];
 	for (const plan of plans) {
@@ -234,13 +267,14 @@ async function syncWithServer(
 	if (pushedPending === null) {
 		return "offline";
 	}
+	const knownBefore = knownPlanIds(deps);
 	const plans = serverPlans(
 		await deps.client.request("GET", PLANS_PATH, undefined)
 	);
 	if (plans === null) {
 		return "offline";
 	}
-	const imported = importServerOnly(deps, plans);
+	const imported = importServerOnly(deps, plans, knownBefore);
 	const pushedMissing = await pushPlaces(deps, markMissingPending(deps, plans));
 	return {
 		imported,

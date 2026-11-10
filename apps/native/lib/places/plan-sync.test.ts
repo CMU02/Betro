@@ -466,6 +466,82 @@ it("stops at the first request that cannot reach the server", async () => {
 	expect(store.get()).toEqual(before);
 });
 
+it("does not bring back a plan deleted while the server list is on its way", async () => {
+	const server = fakeServer([planOf(WORK_PLAN)]);
+	const { deps, store } = setup({ places: [place("work", WORK_PLAN)] }, server);
+	server.setOverride((call) => {
+		if (call.method !== "GET") {
+			return;
+		}
+		const listed = { json: { plans: [...server.plans.values()] }, status: 200 };
+		store.remove("work");
+		server.plans.delete(WORK_PLAN);
+		store.clearPendingDelete(WORK_PLAN);
+		return listed;
+	});
+
+	expect(await reconcile(deps)).toEqual({ imported: 0, pushed: 0, removed: 0 });
+	expect(store.get()).toEqual({ pendingDeletes: [], places: [] });
+	expect(server.requests()).not.toContain(`PUT /v1/commute/plans/${WORK_PLAN}`);
+	server.setOverride(() => undefined);
+	await reconcile(deps);
+	expect(server.plans.has(WORK_PLAN)).toBe(false);
+	expect(store.get().places).toEqual([]);
+});
+
+it("does not upload a place deleted while an earlier upload is on its way", async () => {
+	const server = fakeServer();
+	const { deps, store } = setup(
+		{
+			places: [
+				place("work", WORK_PLAN, { sync: "pending" }),
+				place("home", HOME_PLAN, { kind: "home", sync: "pending" }),
+			],
+		},
+		server
+	);
+	server.setOverride((call) => {
+		if (call.method === "PUT" && call.path.endsWith(WORK_PLAN)) {
+			store.remove("home");
+			store.clearPendingDelete(HOME_PLAN);
+		}
+	});
+
+	expect(await reconcile(deps)).toEqual({ imported: 0, pushed: 1, removed: 0 });
+	expect(server.requests()).not.toContain(`PUT /v1/commute/plans/${HOME_PLAN}`);
+	expect(server.plans.has(HOME_PLAN)).toBe(false);
+	expect(store.get().places.map((p) => p.id)).toEqual(["work"]);
+});
+
+it("uploads the latest version of a place edited during an earlier upload", async () => {
+	const server = fakeServer();
+	const edited = place("home", HOME_PLAN, {
+		kind: "home",
+		name: "새 집",
+		sync: "pending",
+		updatedAt: 2000,
+	});
+	const { deps, store } = setup(
+		{
+			places: [
+				place("work", WORK_PLAN, { sync: "pending" }),
+				place("home", HOME_PLAN, { kind: "home", sync: "pending" }),
+			],
+		},
+		server
+	);
+	const changedPlan: CommutePlan = { ...edited.plan, enabled: false };
+	server.setOverride((call) => {
+		if (call.method === "PUT" && call.path.endsWith(WORK_PLAN)) {
+			store.upsert({ ...edited, plan: changedPlan });
+		}
+	});
+
+	expect(await reconcile(deps)).toEqual({ imported: 0, pushed: 2, removed: 0 });
+	expect(server.plans.get(HOME_PLAN)).toEqual(changedPlan);
+	expect(store.get().places.map((p) => p.sync)).toEqual(["synced", "synced"]);
+});
+
 it("sets every planId header once at the end", async () => {
 	const server = fakeServer([planOf(SERVER_PLAN), planOf(WORK_PLAN)]);
 	const { deps, headers } = setup(
