@@ -32,7 +32,8 @@
       "!**/.source",
       "!**/convex/_generated",
       "!data",
-      "!**/migrations/**/snapshot.json"
+      "!**/migrations/**/snapshot.json",
+      "!.claude/skills"
     ]
   },
   "formatter": {

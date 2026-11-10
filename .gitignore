@@ -65,3 +65,6 @@ temp
 
 # Raw downloaded data
 data/
+
+# Impeccable engine binary (the launcher downloads and checksum-verifies it per platform)
+.claude/skills/impeccable/scripts/bin/
