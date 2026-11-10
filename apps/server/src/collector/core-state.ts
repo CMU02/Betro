@@ -1,3 +1,4 @@
+import type { HistoryLineCounts } from "@Betro/realtime/history";
 import type { MetricsSource, SourceProgress } from "@Betro/realtime/metrics";
 import { operatingWindow } from "@Betro/realtime/metrics";
 import type { CollectorConfig } from "@Betro/realtime/schedule";
@@ -25,6 +26,8 @@ export interface CoreSaved {
 	authFailedAt: Partial<Record<MetricsSource, number>>;
 	/** 소스별 최신 상태를 마지막으로 바꾼 호출 시각. 스냅샷 `generatedAt`(ETag를 고정). */
 	changedAt: Partial<Record<MetricsSource, number>>;
+	/** 이력 시간 파일별로 버퍼에 넣은 줄 수와 R2에 쓴 줄 수(오늘·어제). 예전 저장값에는 없다. */
+	historyLines?: HistoryLineCounts;
 	/** `sources[*].errorsToday`가 속한 KST 날짜. */
 	kstDay: string;
 	lastPrunedAt: number | null;

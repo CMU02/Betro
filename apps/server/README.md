@@ -68,7 +68,7 @@ vars는 `wrangler.jsonc`, secret은 `wrangler secret put <NAME>`(로컬은 `.dev
 | `OPERATING_START_KST`, `OPERATING_END_KST` | `05:00`, `01:00` | 운행 시간 |
 | `HISTORY_IDLE_FLUSH_MS` | 5000 | 다음 alarm까지 이 시간 이상 남으면 이력을 미리 R2에 쓴다 |
 
-`HISTORY_IDLE_FLUSH_MS`는 10000보다 작아야 한다. Cloudflare는 요청이나 alarm 없이 10초가 지나면 Durable Object를 재우고 메모리를 비운다. 이력 버퍼는 메모리에 있으므로, 그 전에 쓰지 않으면 그 주기의 원본과 관측 이벤트가 사라진다. 이때도 예산과 지표는 저장되므로 일일 보고서에는 드러나지 않는다.
+`HISTORY_IDLE_FLUSH_MS`는 10000보다 작아야 한다. Cloudflare는 요청이나 alarm 없이 10초가 지나면 Durable Object를 재우고 메모리를 비운다. 이력 버퍼는 메모리에 있으므로, 그 전에 쓰지 않으면 그 주기의 원본과 관측 이벤트가 사라진다. 이때도 예산과 지표는 저장되므로 호출 수와 멈춤 구간에는 드러나지 않고, 일일 보고서의 `history`에만 드러난다.
 
 ## 배포
 
@@ -119,7 +119,7 @@ cloudflared access curl -X POST https://betro-status.cmu02-studio.com/internal/c
 |---|---|
 | `raw/<source>/<YYYY>/<MM>/<DD>/<HH>-<n>.ndjson.gz` | 상류 응답 원본. 한 줄에 요청(키는 `<key>`), 받은 시각, HTTP 상태, 본문 해시, 본문 |
 | `events/<subway\|bus>/<YYYY>/<MM>/<DD>/<HH>-<n>.ndjson.gz` | 관측 이벤트 |
-| `reports/<운행일>.json` | 일일 보고서: 호출 수, 오류 수, 멈춤 구간, 노선별 평균 차량 수와 매칭률 |
+| `reports/<운행일>.json` | 일일 보고서: 호출 수, 오류 수, 멈춤 구간, 이력 줄 수, 노선별 평균 차량 수와 매칭률 |
 
 날짜와 시각은 KST다. `<n>`은 그 시간 파일의 조각 번호다.
 
@@ -129,7 +129,9 @@ bunx wrangler r2 object get betro-data/reports/2026-11-05.json --remote --file /
 bunx wrangler r2 bucket info betro-data          # 객체 수, 용량
 ```
 
-일일 보고서는 지표로 만들기 때문에 이력이 R2에 실제로 쓰였는지는 알려 주지 않는다. 이력이 빠지지 않았는지는 R2 객체 목록에서 그날 `raw/` 조각 수를 세어 보고서의 `calls`와 비교한다. `dev`에서는 호출 한 번이 조각 하나다.
+보고서의 `history`는 원본(`raw`)과 이벤트(`events`)를 지하철·버스로 나눠 버퍼에 넣은 줄 수(`buffered`)와 R2에 쓴 줄 수(`written`)를 담는다. `written`이 `buffered`보다 작으면 그만큼 R2에 남지 않은 것이고 `ok`가 `false`가 된다. 줄 수는 오늘과 어제(KST) 것만 들고 있어서, 그보다 늦게 쓰는 보고서에는 `history: null`로 남고 이력으로는 판정하지 않는다.
+
+R2에서 직접 확인하려면 객체 목록에서 그날 `raw/` 조각 수를 세어 보고서의 `calls`와 비교한다. `dev`에서는 호출 한 번이 조각 하나다.
 
 ## 비용 확인
 

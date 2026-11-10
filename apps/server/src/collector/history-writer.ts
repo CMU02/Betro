@@ -1,4 +1,8 @@
-import { HistoryBuffer } from "@Betro/realtime/history";
+import {
+	HistoryBuffer,
+	type HistoryLineCounts,
+	type HistoryPart,
+} from "@Betro/realtime/history";
 import { kstParts } from "@Betro/realtime/time";
 import type { BlobStore } from "./ports";
 
@@ -10,10 +14,7 @@ export const MAX_PENDING_BYTES = 32 * 1024 * 1024;
 /** 한 번에 R2에 쓰는 조각 수 상한(서브요청 폭주 방지). 나머지는 다음 호출로 미룬다. */
 export const MAX_PUTS_PER_WRITE = 50;
 
-interface PendingBlob {
-	body: Uint8Array;
-	key: string;
-}
+type PendingBlob = HistoryPart;
 
 export interface HistoryWriteHooks {
 	onError: (key: string, error: unknown) => void;
@@ -32,6 +33,8 @@ export class HistoryWriter {
 	readonly raw: HistoryBuffer;
 	readonly events: HistoryBuffer;
 	readonly #parts: PartCounters;
+	/** 시간 파일별로 버퍼에 넣은 줄 수와 R2에 쓴 줄 수. 일일 보고서가 누락을 찾는 데 쓴다. */
+	readonly #lines: HistoryLineCounts;
 	readonly #pending: PendingBlob[] = [];
 	/** flush로 받은 조각 번호를 아직 저장소에 저장하지 않았다. */
 	#partsUnsaved: boolean;
@@ -41,18 +44,45 @@ export class HistoryWriter {
 	constructor(
 		keys: readonly string[],
 		parts: PartCounters = {},
-		maxPendingBytes = MAX_PENDING_BYTES
+		maxPendingBytes = MAX_PENDING_BYTES,
+		lines: HistoryLineCounts = {}
 	) {
 		this.#maxPendingBytes = maxPendingBytes;
-		this.raw = new HistoryBuffer("raw", keys);
-		this.events = new HistoryBuffer("events", keys);
+		this.raw = new HistoryBuffer("raw", keys, this.#countBuffered);
+		this.events = new HistoryBuffer("events", keys, this.#countBuffered);
 		this.#parts = { ...parts };
+		this.#lines = Object.fromEntries(
+			Object.entries(lines).map(([hourKey, totals]) => [hourKey, { ...totals }])
+		);
 		this.#partsUnsaved = false;
 	}
 
 	get parts(): PartCounters {
 		return { ...this.#parts };
 	}
+
+	/**
+	 * 시간 파일별 줄 수(복사본). 재시작 뒤에도 이어서 세도록 저장한다. 버퍼와 함께 사라진 줄은
+	 * `buffered`에만 남으므로 `written`과의 차이가 곧 R2에 남지 않은 줄 수다.
+	 */
+	get lineCounts(): HistoryLineCounts {
+		return Object.fromEntries(
+			Object.entries(this.#lines).map(([hourKey, totals]) => [
+				hourKey,
+				{ ...totals },
+			])
+		);
+	}
+
+	#totals(hourKey: string): { buffered: number; written: number } {
+		const totals = this.#lines[hourKey] ?? { buffered: 0, written: 0 };
+		this.#lines[hourKey] = totals;
+		return totals;
+	}
+
+	readonly #countBuffered = (hourKey: string): void => {
+		this.#totals(hourKey).buffered += 1;
+	};
 
 	get pendingCount(): number {
 		return this.#pending.length;
@@ -69,9 +99,11 @@ export class HistoryWriter {
 		const keep = [now, now - DAY_MS].map(
 			(t) => `/${kstParts(t).date.replaceAll("-", "/")}/`
 		);
-		for (const hourKey of Object.keys(this.#parts)) {
-			if (!keep.some((day) => hourKey.includes(day))) {
-				delete this.#parts[hourKey];
+		for (const counters of [this.#parts, this.#lines]) {
+			for (const hourKey of Object.keys(counters)) {
+				if (!keep.some((day) => hourKey.includes(day))) {
+					delete counters[hourKey];
+				}
 			}
 		}
 	}
@@ -118,6 +150,8 @@ export class HistoryWriter {
 			if (result.status === "rejected") {
 				failed.push(blob);
 				hooks.onError(blob.key, result.reason);
+			} else {
+				this.#totals(blob.hourKey).written += blob.lines;
 			}
 		}
 		// 실패한 조각은 아직 시도하지 않은 조각 앞에 둔다(시간 순서 유지).

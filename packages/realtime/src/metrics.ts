@@ -5,6 +5,7 @@ import {
 } from "@Betro/transit-static/realtime/train-no-rules";
 import type { BudgetKind, BudgetState } from "./budget";
 import { remaining } from "./budget";
+import type { HistorySummary } from "./history";
 import type { BusObservation, SubwayObservation } from "./observation";
 import type { CollectorConfig } from "./schedule";
 import {
@@ -460,12 +461,20 @@ export interface DailyReport {
 	errors: Partial<
 		Record<MetricsSource, Partial<Record<UpstreamOutcome, number>>>
 	>;
+	/**
+	 * 버퍼에 넣은 이력 줄 수와 R2에 쓴 줄 수. 지표는 저장됐는데 이력만 사라진 경우를 잡는다.
+	 * 세지 못한 날은 null.
+	 */
+	history: HistorySummary | null;
 	lines: {
 		key: string;
 		avgVehicles: number | null;
 		matchRate: number | null;
 	}[];
-	/** 멈춘 구간이 없고, 소스별 호출 수가 KST 날짜마다 하루 예산 이하. */
+	/**
+	 * 멈춘 구간이 없고, 소스별 호출 수가 KST 날짜마다 하루 예산 이하이고,
+	 * 버퍼에 넣은 이력 줄이 모두 R2에 쓰였다.
+	 */
 	ok: boolean;
 	operatingDate: string;
 	stalledIntervals: StalledInterval[];
@@ -594,6 +603,16 @@ function reportLines(
 	});
 }
 
+/** 넣은 줄이 모두 쓰였는가. 세지 못한 날(null)은 이력으로 판정하지 않는다. */
+function historyComplete(history: HistorySummary | null): boolean {
+	if (history === null) {
+		return true;
+	}
+	return [history.raw, history.events]
+		.flatMap((bySource) => Object.values(bySource))
+		.every((totals) => totals.written >= totals.buffered);
+}
+
 /**
  * 운행일 하나의 요약(`reports/<operatingDate>.json`). 운행일 D는 D 05:00 ~ D+1 01:00(KST, 설정값).
  * 응답을 받은 버킷이 없는 5분 칸이 3칸(15분) 이상 이어지면 그 구간을 멈춤으로 본다.
@@ -601,7 +620,8 @@ function reportLines(
 export function buildDailyReport(
 	operatingDate: string,
 	buckets: readonly MetricsBucket[],
-	config: CollectorConfig
+	config: CollectorConfig,
+	history: HistorySummary | null = null
 ): DailyReport {
 	const window = operatingWindow(operatingDate, config);
 	const inWindow = buckets.filter(
@@ -626,10 +646,12 @@ export function buildDailyReport(
 	);
 	const ok =
 		stalledIntervals.length === 0 &&
-		sources.every((source) => withinBudget(source, inWindow, config));
+		sources.every((source) => withinBudget(source, inWindow, config)) &&
+		historyComplete(history);
 	return {
 		calls,
 		errors,
+		history,
 		lines: reportLines(inWindow, config),
 		ok,
 		operatingDate,

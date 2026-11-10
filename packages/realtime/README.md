@@ -24,7 +24,7 @@
 | `state.ts` | 차량별 최신 상태, 변화 감지, 스냅샷, TTL(지하철·버스 5분) |
 | `budget.ts` | KST 하루 단위 호출 예산 |
 | `schedule.ts` | `dev`/`prod` 설정과 `planTick`(지금 부를 소스와 다음 alarm 시각) |
-| `history.ts` | 시간 단위 gzip NDJSON 버퍼(`raw/`, `events/`)와 본문 중복 제거 |
+| `history.ts` | 시간 단위 gzip NDJSON 버퍼(`raw/`, `events/`), 본문 중복 제거, 이력 줄 수 요약(`summarizeHistory`) |
 | `metrics.ts` | 5분 지표, 상태 페이지 값(`buildStatus`), 일일 보고서 |
 | `alerts.ts` | 알림 판단(멈춤, 키 오류, 회복)과 FCM 요청 만들기 |
 

@@ -278,6 +278,28 @@ describe("daily report", () => {
 		expect(report.ok).toBe(false);
 	});
 
+	it("fails a day that lost history lines", () => {
+		const full = { buffered: 10, written: 10 };
+		const complete = {
+			events: { bus: full, subway: full },
+			raw: { bus: full, subway: full },
+		};
+		const lossy = {
+			...complete,
+			raw: { bus: full, subway: { buffered: 10, written: 8 } },
+		};
+		const report = buildDailyReport("2026-11-03", fullDay(), config, lossy);
+		expect(report.history).toEqual(lossy);
+		expect(report.ok).toBe(false);
+		expect(buildDailyReport("2026-11-03", fullDay(), config, complete).ok).toBe(
+			true
+		);
+		// 세지 못한 날(값 없음)은 이력으로 판정하지 않는다.
+		const unknown = buildDailyReport("2026-11-03", fullDay(), config);
+		expect(unknown.history).toBeNull();
+		expect(unknown.ok).toBe(true);
+	});
+
 	it("passes a day without gaps", () => {
 		const report = buildDailyReport("2026-11-03", fullDay(), config);
 		expect(report.stalledIntervals).toEqual([]);

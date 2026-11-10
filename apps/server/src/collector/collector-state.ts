@@ -91,7 +91,12 @@ export class CollectorState {
 		this.loadedAt = init.loadedAt;
 		this.schedule = init.schedule;
 		this.#secrets = init.secrets;
-		this.history = new HistoryWriter(init.secrets, init.core.parts);
+		this.history = new HistoryWriter(
+			init.secrets,
+			init.core.parts,
+			undefined,
+			init.core.historyLines
+		);
 		for (const bucket of init.buckets) {
 			this.#buckets.set(bucketKey(bucket.source, bucket.bucketStart), bucket);
 		}
@@ -280,6 +285,7 @@ export class CollectorState {
 
 	async saveCore(store: StateStore): Promise<void> {
 		this.core.parts = this.history.parts;
+		this.core.historyLines = this.history.lineCounts;
 		await store.put(STATE_KEYS.core, this.core);
 	}
 

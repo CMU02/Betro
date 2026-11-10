@@ -1,4 +1,5 @@
 import { decideAlerts } from "@Betro/realtime/alerts";
+import { summarizeHistory } from "@Betro/realtime/history";
 import {
 	buildDailyReport,
 	buildStatus,
@@ -41,13 +42,16 @@ function unreportedDates(
 /** 운행일 하나의 보고서를 쓴다. 성공하면 true. */
 async function writeReport(
 	date: string,
+	state: CollectorState,
 	ports: CollectorPorts,
 	log: Log
 ): Promise<boolean> {
 	const { blobs, config } = ports;
 	const window = operatingWindow(date, config);
 	const buckets = await ports.state.metricsSince(window.from);
-	const report = buildDailyReport(date, buckets, config);
+	// 이력 줄 수는 오늘·어제 것만 들고 있다. 그보다 오래된 날의 보고서에는 null로 남는다.
+	const history = summarizeHistory(state.history.lineCounts, window);
+	const report = buildDailyReport(date, buckets, config, history);
 	const key = `reports/${date}.json`;
 	try {
 		await blobs.put(
@@ -84,7 +88,7 @@ export async function writeReportIfDue(
 		if (date === undefined) {
 			return true;
 		}
-		if (!(await writeReport(date, ports, log))) {
+		if (!(await writeReport(date, state, ports, log))) {
 			return false;
 		}
 		state.core.lastReportDate = date;

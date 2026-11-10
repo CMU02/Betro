@@ -58,3 +58,33 @@ describe("HistoryWriter backlog", () => {
 		expect(dropped[0]).toContain("/12-0.ndjson.gz");
 	});
 });
+
+describe("HistoryWriter line counts", () => {
+	const HOUR_KEY = "raw/subway-all/2026/11/04/12";
+	const okStore: BlobStore = { put: () => Promise.resolve() };
+
+	test("counts a line as buffered when added and as written only after R2 accepts it", async () => {
+		const writer = new HistoryWriter([]);
+		writer.raw.add("subway-all", NOW, { n: 1 });
+		writer.raw.add("subway-all", NOW + 1000, { n: 2 });
+		expect(writer.lineCounts).toEqual({
+			[HOUR_KEY]: { buffered: 2, written: 0 },
+		});
+
+		await writer.write(failingStore(), NOW, true, quietHooks);
+		expect(writer.lineCounts[HOUR_KEY]).toEqual({ buffered: 2, written: 0 });
+
+		await writer.write(okStore, NOW, true, quietHooks);
+		expect(writer.lineCounts[HOUR_KEY]).toEqual({ buffered: 2, written: 2 });
+	});
+
+	test("continues from saved counts, so lines lost with the old instance stay unwritten", async () => {
+		const first = new HistoryWriter([]);
+		first.raw.add("subway-all", NOW, { n: 1 });
+		// 쓰기 전에 인스턴스가 사라졌다(DO가 잠듦). 저장된 숫자만 남는다.
+		const second = new HistoryWriter([], {}, undefined, first.lineCounts);
+		second.raw.add("subway-all", NOW + 1000, { n: 2 });
+		await second.write(okStore, NOW, true, quietHooks);
+		expect(second.lineCounts[HOUR_KEY]).toEqual({ buffered: 2, written: 1 });
+	});
+});

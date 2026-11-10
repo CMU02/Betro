@@ -1,4 +1,5 @@
 import type { ReferenceBatchKind } from "@Betro/db/schema/transit";
+import type { HistorySummary } from "@Betro/realtime/history";
 import type { MetricsBucket } from "@Betro/realtime/metrics";
 import {
 	type BusReference,
@@ -541,11 +542,22 @@ describe("CollectorCore", () => {
 		expect(h.blobs.keys("reports/")).toEqual(["reports/2026-11-04.json"]);
 		const report = JSON.parse(h.blobs.text("reports/2026-11-04.json")) as {
 			calls: Record<string, number>;
+			history: HistorySummary | null;
 			ok: boolean;
 			operatingDate: string;
 		};
 		expect(report.operatingDate).toBe("2026-11-04");
 		expect(report.calls.subway).toBe(subwayCalls(h).length);
+		// 버퍼에 넣은 줄이 모두 R2에 쓰였다.
+		expect(report.history?.raw.subway).toEqual({
+			buffered: subwayCalls(h).length,
+			written: subwayCalls(h).length,
+		});
+		expect(report.history?.raw.bus.written).toBe(busCalls(h).length);
+		expect(report.history?.events.subway.buffered).toBeGreaterThan(0);
+		expect(report.history?.events.subway.written).toBe(
+			report.history?.events.subway.buffered
+		);
 		// 운행 끝에 남은 이력을 모두 비웠다.
 		expect(h.blobs.keys("events/subway/2026/11/05/00-").length).toBeGreaterThan(
 			0
@@ -828,5 +840,36 @@ describe("CollectorCore", () => {
 
 		expect(calls.length).toBeGreaterThanOrEqual(14);
 		expect(rawLines(h).length).toBe(calls.length);
+	});
+
+	// 이력이 사라져도 지표는 저장되므로, 보고서가 넣은 줄 수와 쓴 줄 수를 따로 세어 알려야 한다.
+	it("reports history lines that never reached R2", async () => {
+		const state = new MemoryState();
+		await state.put(STATE_KEYS.schedule, {
+			nextAt: {
+				[`bus:${ROUTE_150}`]: NEAR_END + 120 * SECOND,
+				[`bus:${ROUTE_6411}`]: NEAR_END + 40 * SECOND,
+				subway: NEAR_END,
+			},
+		});
+		// 예전 기준값(60초): 10~60초 쉬는 동안 버퍼를 쓰지 않아 잠들 때마다 잃는다.
+		const h = makeHarness({
+			idleFlushMs: 60 * SECOND,
+			start: NEAR_END,
+			state,
+		});
+
+		const calls = await runHibernatingAlarms(h, OPERATING_END + MINUTE);
+
+		const report = JSON.parse(h.blobs.text("reports/2026-11-04.json")) as {
+			history: HistorySummary | null;
+			ok: boolean;
+		};
+		const subway = report.history?.raw.subway;
+		expect(subway?.buffered).toBe(
+			calls.filter((call) => ALL_URL.test(call.url)).length
+		);
+		expect(subway?.written).toBeLessThan(subway?.buffered ?? 0);
+		expect(report.ok).toBe(false);
 	});
 });

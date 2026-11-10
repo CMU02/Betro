@@ -6,6 +6,7 @@ import {
 	HistoryBuffer,
 	type RawRecord,
 	sha256Hex,
+	summarizeHistory,
 } from "./history";
 import { kstToEpochMs } from "./time";
 
@@ -80,5 +81,66 @@ describe("history buffer", () => {
 		const sized = new HistoryBuffer("raw", []);
 		sized.add("s", t, { body: "x".repeat(HISTORY_FLUSH_BYTES) });
 		expect(sized.due(t)).toBe(true);
+	});
+
+	it("reports the hour file of each added line and the line count of each part", async () => {
+		const added: string[] = [];
+		const buf = new HistoryBuffer("raw", [], (hourKey) => {
+			added.push(hourKey);
+		});
+		const t = kstToEpochMs("2026-11-03 12:10:00");
+		buf.add("subway-all", t, { n: 1 });
+		buf.add("subway-all", t + 1000, { n: 2 });
+		expect(added).toEqual([
+			"raw/subway-all/2026/11/03/12",
+			"raw/subway-all/2026/11/03/12",
+		]);
+		const files = await buf.flush(0, () => 0);
+		expect(files.map((f) => ({ hourKey: f.hourKey, lines: f.lines }))).toEqual([
+			{ hourKey: "raw/subway-all/2026/11/03/12", lines: 2 },
+		]);
+	});
+});
+
+describe("history summary", () => {
+	const window = {
+		from: kstToEpochMs("2026-11-03 05:00:00"),
+		to: kstToEpochMs("2026-11-04 01:00:00"),
+	};
+
+	it("sums buffered and written lines per source inside the window", () => {
+		const summary = summarizeHistory(
+			{
+				"events/bus/2026/11/03/12": { buffered: 40, written: 0 },
+				"events/subway/2026/11/03/12": { buffered: 300, written: 300 },
+				"raw/bus-100100029/2026/11/03/12": { buffered: 23, written: 20 },
+				"raw/bus-100100290/2026/11/03/12": { buffered: 22, written: 22 },
+				// 운행 시간 밖(04시, 다음 날 01시)은 세지 않는다.
+				"raw/subway-all/2026/11/03/04": { buffered: 9, written: 0 },
+				"raw/subway-all/2026/11/03/05": { buffered: 45, written: 45 },
+				"raw/subway-all/2026/11/04/00": { buffered: 45, written: 40 },
+				"raw/subway-all/2026/11/04/01": { buffered: 9, written: 0 },
+			},
+			window
+		);
+		expect(summary).toEqual({
+			events: {
+				bus: { buffered: 40, written: 0 },
+				subway: { buffered: 300, written: 300 },
+			},
+			raw: {
+				bus: { buffered: 45, written: 42 },
+				subway: { buffered: 90, written: 85 },
+			},
+		});
+	});
+
+	it("is null when no counted hour falls inside the window", () => {
+		expect(
+			summarizeHistory(
+				{ "raw/subway-all/2026/11/01/12": { buffered: 1, written: 1 } },
+				window
+			)
+		).toBeNull();
 	});
 });
