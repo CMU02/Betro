@@ -1,10 +1,5 @@
 import { cn } from "heroui-native";
-import {
-	BellIcon,
-	LocateFixedIcon,
-	MapPinIcon,
-	ShieldCheckIcon,
-} from "lucide-react-native";
+import { BellIcon, MapPinIcon } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { AppState, Linking, Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,30 +21,21 @@ import {
 	requestNotificationPermission,
 } from "@/lib/permissions/permissions";
 import { appPreferences } from "@/lib/preferences/app-preferences";
-import { withAlpha } from "@/theme/tokens";
 
 const StyledBellIcon = withUniwind(BellIcon);
-const StyledLocateFixedIcon = withUniwind(LocateFixedIcon);
 const StyledMapPinIcon = withUniwind(MapPinIcon);
-const StyledShieldCheckIcon = withUniwind(ShieldCheckIcon);
 
 /**
- * iOS(12:3140)는 원 세 겹 그림과 두 줄 설명, Android(12:4888)는 방패 아이콘 타일과 한 줄 설명을 쓰고
- * "설정에서 언제든…" 안내를 버튼 위로 내린다.
+ * iOS(12:3140)는 두 줄 설명, Android(12:4888)는 한 줄 설명을 쓰고
+ * "설정에서 언제든…" 안내를 버튼 위로 내린다. 두 플랫폼 모두 그림 없이 제목부터 시작한다.
  */
 const IS_ANDROID_LAYOUT = Platform.OS === "android";
-/** 본문 시작: iOS는 상태 표시줄(54pt) 아래 32pt, Android는 상태 표시줄(40dp) 아래 128dp(화면 위 168). */
+/** 제목 시작: iOS는 상태 표시줄(54pt) 아래 32pt, Android는 상태 표시줄(40dp) 아래 128dp(화면 위 168). */
 const CONTENT_GAP_BELOW_STATUS_BAR = IS_ANDROID_LAYOUT ? 128 : 32;
-const SHIELD_ICON_SIZE = 32;
 /** 마지막 버튼과 홈 인디케이터 사이 간격. */
 const FOOTER_GAP_ABOVE_HOME_INDICATOR = 8;
-const BADGE_ICON_SIZE = 20;
-const CORE_ICON_SIZE = 26;
-/** Figma 효과 `Glow/Accent`: accent/primary 55% 불투명, 반경 18. */
-const ACCENT_GLOW_OPACITY = 0.55;
-const CORE_GLOW_STYLE = {
-	boxShadow: `0 0 18px 0 ${withAlpha("accent/primary", "dark", ACCENT_GLOW_OPACITY)}`,
-} as const;
+/** 카드 아이콘: 배경 없는 24 상자 가운데의 20 아이콘. */
+const CARD_ICON_SIZE = 20;
 
 const INITIAL_STATE: PermissionsState = {
 	location: "undetermined",
@@ -68,78 +54,22 @@ const REQUESTS: Record<PermissionKind, () => Promise<PermissionStatus>> = {
 	notifications: requestNotificationPermission,
 };
 
-/** Figma `Illustration`(12:3153): 168pt 원 세 겹, 가운데 라임 원, 위치·알림 배지. */
-function Illustration() {
-	return (
-		<View
-			className="h-[168px] items-center"
-			importantForAccessibility="no-hide-descendants"
-		>
-			<View className="size-[168px]">
-				<View className="absolute inset-0 rounded-full bg-accent-soft opacity-35" />
-				<View className="absolute top-[22px] left-[22px] size-[124px] rounded-full bg-accent-soft opacity-60" />
-				<View className="absolute top-[42px] left-[42px] size-[84px] rounded-full bg-accent-soft" />
-				<View
-					className="absolute top-14 left-14 size-14 items-center justify-center rounded-full bg-accent-primary"
-					style={CORE_GLOW_STYLE}
-				>
-					<StyledLocateFixedIcon
-						colorClassName="accent-text-on-accent"
-						size={CORE_ICON_SIZE}
-					/>
-				</View>
-				<View className="absolute top-[18px] left-[136px] size-10 items-center justify-center rounded-full border border-border-subtle bg-bg-surface-raised">
-					<StyledMapPinIcon
-						colorClassName="accent-text-accent"
-						size={BADGE_ICON_SIZE}
-					/>
-				</View>
-				<View className="absolute top-[110px] -left-2 size-10 items-center justify-center rounded-full border border-border-subtle bg-bg-surface-raised">
-					<StyledBellIcon
-						colorClassName="accent-text-accent"
-						size={BADGE_ICON_SIZE}
-					/>
-				</View>
-			</View>
-		</View>
-	);
-}
+/** 머리 설명. iOS는 Figma처럼 두 줄로 끊고, Android는 한 줄로 둔다. */
+const INTRO_BODY_KEY = IS_ANDROID_LAYOUT
+	? "permissions.intro.android.body"
+	: "permissions.intro.ios.body";
 
-/** Figma Android 02 권한의 머리(12:4897~12:4905): 64dp 방패 타일, 제목, 한 줄 설명. */
-function AndroidIntro() {
+/** Figma 02 권한의 머리(iOS 12:3176, Android 12:4903~12:4905): 제목과 설명, 사이 8. */
+function Intro() {
 	return (
-		<View className="gap-6">
-			<View className="size-16 items-center justify-center rounded-xl bg-accent-soft">
-				<StyledShieldCheckIcon
-					colorClassName="accent-text-accent"
-					size={SHIELD_ICON_SIZE}
-				/>
-			</View>
-			<View className="gap-2">
-				<AppText accessibilityRole="header" variant="title1">
-					{t("permissions.intro.title")}
-				</AppText>
-				<AppText className="text-text-secondary" variant="bodyM">
-					{t("permissions.intro.android.body")}
-				</AppText>
-			</View>
+		<View className="gap-2">
+			<AppText accessibilityRole="header" variant="title1">
+				{t("permissions.intro.title")}
+			</AppText>
+			<AppText className="text-text-secondary" variant="bodyM">
+				{t(INTRO_BODY_KEY)}
+			</AppText>
 		</View>
-	);
-}
-
-function IosIntro() {
-	return (
-		<>
-			<Illustration />
-			<View className="gap-2">
-				<AppText accessibilityRole="header" variant="title1">
-					{t("permissions.intro.title")}
-				</AppText>
-				<AppText className="text-text-secondary" variant="bodyM">
-					{t("permissions.intro.ios.body")}
-				</AppText>
-			</View>
-		</>
 	);
 }
 
@@ -157,7 +87,6 @@ const CARD_DESCRIPTION_KEYS = IS_ANDROID_LAYOUT
 interface PermissionCardProps {
 	action: PermissionButtonAction;
 	description: string;
-	emphasized: boolean;
 	icon: "location" | "notifications";
 	onPress: () => void;
 	pending: boolean;
@@ -165,13 +94,13 @@ interface PermissionCardProps {
 }
 
 /**
- * Figma `PermissionCard`(12:3180, 12:3200). 허용되면 버튼이 "허용됨"으로 바뀌고 비활성이 된다.
+ * Figma `PermissionCard`(iOS 12:3180·12:3200, Android 12:4908·12:4923). 버튼은 두 카드 모두 Secondary라
+ * 화면의 라임 채움은 하단 "계속"만 남는다. 허용되면 버튼이 "허용됨"으로 바뀌고 비활성이 된다.
  * 거부된 뒤에는 같은 "허용" 버튼이 설정 앱을 연다(시스템 창이 다시 뜨지 않으므로).
  */
 function PermissionCard({
 	action,
 	description,
-	emphasized,
 	icon,
 	onPress,
 	pending,
@@ -181,13 +110,8 @@ function PermissionCard({
 	const Icon = icon === "location" ? StyledMapPinIcon : StyledBellIcon;
 	return (
 		<View className="flex-row items-center gap-3 rounded-lg bg-bg-surface-raised p-4">
-			<View
-				className={cn(
-					"items-center justify-center rounded-md bg-accent-soft",
-					IS_ANDROID_LAYOUT ? "size-10" : "size-11"
-				)}
-			>
-				<Icon colorClassName="accent-text-accent" size={BADGE_ICON_SIZE} />
+			<View className="size-6 items-center justify-center">
+				<Icon colorClassName="accent-text-accent" size={CARD_ICON_SIZE} />
 			</View>
 			<View className="flex-1 gap-0.5">
 				<AppText variant={IS_ANDROID_LAYOUT ? "bodyMStrong" : "title3"}>
@@ -209,7 +133,7 @@ function PermissionCard({
 				}
 				onPress={onPress}
 				size="medium"
-				variant={emphasized && !granted ? "primary" : "secondary"}
+				variant="secondary"
 			/>
 		</View>
 	);
@@ -301,9 +225,6 @@ export default function PermissionsScreen() {
 		completeOnboarding(appPreferences);
 	}, []);
 
-	/** Figma처럼 아직 허용하지 않은 첫 카드의 버튼만 강조한다. */
-	const emphasizeLocation = permissions.location !== "granted";
-
 	return (
 		<View className="flex-1 bg-bg-canvas">
 			<ScrollView
@@ -315,12 +236,11 @@ export default function PermissionsScreen() {
 					paddingTop: insets.top + CONTENT_GAP_BELOW_STATUS_BAR,
 				}}
 			>
-				{IS_ANDROID_LAYOUT ? <AndroidIntro /> : <IosIntro />}
+				<Intro />
 				<View className="gap-3">
 					<PermissionCard
 						action={locationAction}
 						description={t(CARD_DESCRIPTION_KEYS.location)}
-						emphasized={emphasizeLocation}
 						icon="location"
 						onPress={pressLocation}
 						pending={pending === "location"}
@@ -329,7 +249,6 @@ export default function PermissionsScreen() {
 					<PermissionCard
 						action={notificationsAction}
 						description={t(CARD_DESCRIPTION_KEYS.notifications)}
-						emphasized={!emphasizeLocation}
 						icon="notifications"
 						onPress={pressNotifications}
 						pending={pending === "notifications"}

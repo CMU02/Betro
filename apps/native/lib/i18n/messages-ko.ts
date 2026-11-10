@@ -69,7 +69,7 @@ export const ko = {
 			map3d: "다크·라이트 3D 지도",
 			realtime: "실시간 위치와 시간표 추정을 구분해서 보여줘요",
 		},
-		/** 제목은 두 줄이다. Android는 둘째 줄(`accent`)만 강조색으로 그린다. */
+		/** 제목은 두 줄이다. 두 플랫폼 모두 전체를 text/primary로 그리고, `lead`/`accent`는 줄 구분용이다. */
 		headline: {
 			accent: "실시간 3D로",
 			lead: "서울의 지하철과 버스를,",
