@@ -8,7 +8,10 @@ import type { CommutePlan } from "@Betro/commute/plan";
 import type { ContentState } from "@Betro/commute/session/content";
 import type { EndReason } from "@Betro/commute/session/stage";
 import type { RouteStopArrival } from "@Betro/commute/sources/seoul-bus";
-import type { TimetablePort } from "@Betro/commute/sources/seoul-subway";
+import type {
+	StationRow,
+	TimetablePort,
+} from "@Betro/commute/sources/seoul-subway";
 import { beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { gunzipSync } from "node:zlib";
 import type { PushTokenRow } from "./auth";
@@ -92,6 +95,30 @@ beforeAll(async () => {
 
 // ---------------------------------------------------------------------------
 // 가짜 포트
+
+const GANGNAM = "1002000222";
+
+/** 2호선 강남 → 역삼(외선) 한 구간. */
+function makeSubwayPlan(planId: string): CommutePlan {
+	const plan = makePlan(planId);
+	plan.routes = [
+		{
+			legs: [
+				{
+					alight: { name: "역삼", stop: "seoul-subway:1002000221" },
+					board: { name: "강남", stop: `seoul-subway:${GANGNAM}` },
+					direction: "down",
+					line: "seoul-subway:line2",
+					lineName: "2호선",
+					mode: "subway",
+				},
+			],
+			rank: 0,
+			walkMinutes: [5, 3],
+		},
+	];
+	return plan;
+}
 
 function makePlan(
 	planId: string,
@@ -445,8 +472,20 @@ class FakeBoards implements BoardSource {
 		return Promise.resolve(routeStops(this.vehicles, at, at));
 	}
 
-	stations(): Promise<Record<string, never>> {
-		return Promise.resolve({});
+	/** 수집기가 남긴 역 행. 키는 `statnId`. */
+	stationRows: Record<string, { fetchedAt: number; rows: StationRow[] }> = {};
+
+	stations(
+		statnIds: string[]
+	): Promise<Record<string, { fetchedAt: number; rows: StationRow[] }>> {
+		return Promise.resolve(
+			Object.fromEntries(
+				statnIds.flatMap((statnId) => {
+					const entry = this.stationRows[statnId];
+					return entry ? [[statnId, entry]] : [];
+				})
+			)
+		);
 	}
 
 	watch(statnIds: string[]): Promise<void> {
@@ -836,6 +875,45 @@ describe("RunnerCore 푸시 응답", () => {
 		expect(await sessions(h)).toHaveLength(0);
 	});
 
+	const deadActivityReplies: PushResult[] = [
+		{ reason: "Unregistered", status: 410 },
+		{ reason: "BadDeviceToken", status: 400 },
+	];
+	for (const reply of deadActivityReplies) {
+		test(`세션 도중 업데이트 토큰이 ${reply.status} ${reply.reason}이면 그 토큰만 지우고 세션은 갱신 불가로 열어 둔다`, async () => {
+			const h = harness();
+			addIos(h);
+			const core = h.core();
+			await tickAt(h, core, T0);
+			const [sessionId] = await onlySession(h);
+			h.db.addToken(IOS_INSTALL, "apns-activity", ACTIVITY_TOKEN, {
+				sessionId,
+			});
+			h.push.respond = (sent) =>
+				apsOf(sent).event === "update" ? reply : { reason: null, status: 200 };
+
+			await tickAt(h, core, T0 + 60 * SECOND);
+			await tickAt(h, core, T0 + 90 * SECOND);
+
+			expect(
+				h.db.tokenRows.filter((row) => row.kind === "apns-activity")
+			).toEqual([]);
+			expect(h.db.tokenRows.map((row) => row.kind)).toEqual(["apns-start"]);
+			const [, entry] = await onlySession(h);
+			expect(entry.updatable).toBe(false);
+			expect(entry.state.stage).not.toBe("ended");
+			const [sessionRow] = [...h.db.sessions.values()];
+			expect(sessionRow?.status).toBe("active");
+			expect(
+				h.push.sent.map(describeSent).filter((name) => name === "apns:start")
+			).toEqual(["apns:start"]);
+			expect(h.push.sent.map(describeSent)).toEqual([
+				"apns:start",
+				"apns:update",
+			]);
+		});
+	}
+
 	test("FCM UNREGISTERED면 그 설치의 토큰·경로·설치 행을 모두 지운다", async () => {
 		const h = harness();
 		addAndroid(h);
@@ -1007,6 +1085,51 @@ describe("RunnerCore 도착판", () => {
 		expect(entry.state.stage).toBe("walk");
 		expect(entry.state.estimates[0]?.legs[0]?.method).toBe("headway");
 		expect(h.push.sent.length).toBeGreaterThan(1);
+	});
+
+	test("지하철 역 행은 빈 응답이면 돌리지 않고, 앞 폴링이 묵었으면 prev로 쓰지 않는다", async () => {
+		const h = harness();
+		h.db.addPlan(ANDROID_INSTALL, makeSubwayPlan(PLAN_ANDROID));
+		h.db.addToken(ANDROID_INSTALL, "fcm", FCM_TOKEN, { env: "production" });
+		const core = h.core();
+		const row = (trainNo: string, sourceAt: number): StationRow => ({
+			arvlCd: "5",
+			barvlSec: 90,
+			direction: "down",
+			ordkey: "01001역삼0",
+			sourceAt,
+			trainNo,
+		});
+		const savedOf = () =>
+			h.store.get<{
+				cur: { fetchedAt: number; rows: StationRow[] };
+				prev: { fetchedAt: number; rows: StationRow[] } | null;
+			}>(`station:${GANGNAM}`);
+		const first = { fetchedAt: T0 - 5 * SECOND, rows: [row("T1", T0)] };
+		h.boards.stationRows[GANGNAM] = first;
+		await tickAt(h, core, T0);
+		expect(h.boards.watched.at(-1)).toContain(GANGNAM);
+		expect(await savedOf()).toEqual({ cur: first, prev: null });
+
+		h.boards.stationRows[GANGNAM] = { fetchedAt: T0 + 25 * SECOND, rows: [] };
+		await tickAt(h, core, T0 + 30 * SECOND);
+		expect(await savedOf()).toEqual({ cur: first, prev: null });
+
+		const second = {
+			fetchedAt: T0 + 55 * SECOND,
+			rows: [row("T2", T0 + 55 * SECOND)],
+		};
+		h.boards.stationRows[GANGNAM] = second;
+		await tickAt(h, core, T0 + 60 * SECOND);
+		expect(await savedOf()).toEqual({ cur: second, prev: first });
+
+		const late = {
+			fetchedAt: second.fetchedAt + h.config.staleAfterMs + SECOND,
+			rows: [row("T3", second.fetchedAt + h.config.staleAfterMs)],
+		};
+		h.boards.stationRows[GANGNAM] = late;
+		await tickAt(h, core, late.fetchedAt + 5 * SECOND);
+		expect(await savedOf()).toEqual({ cur: late, prev: null });
 	});
 
 	test("상류가 응답하지 못하면 1초, 2초 뒤 두 번까지 다시 부르고 시도마다 예산을 쓴다", async () => {

@@ -38,6 +38,11 @@ export interface RouteEstimate {
 }
 
 interface EstimateInput {
+	/**
+	 * 구간마다 이미 탔는가. 탄 구간의 차량이 어느 도착판에도 없으면(지하철은 역마다 가까운 두 대만
+	 * 보인다) readyAt(탄 시각) + 주행 시간으로 하차를 추정한다. 없으면 모두 타기 전으로 본다.
+	 */
+	boardedLegs?: readonly boolean[];
 	/** 구간마다 이미 잡았거나 탄 차량. 있으면 다시 고르지 않는다. */
 	fixed: (string | null)[];
 	/**
@@ -125,10 +130,31 @@ function beyondBoard(
 	return lastEtaAt + steps * headwayMs;
 }
 
+/** 탄 차량의 위치를 모를 때: 탄 시각 + 주행 시간. 주행 시간을 모르면 null. */
+function rideFromBoarding(
+	leg: Leg,
+	vehicleId: string,
+	boardedAt: number | null,
+	boards: TransitBoards
+): Pick | null {
+	const rideMs = boardedAt === null ? null : boards.rideMs(leg, vehicleId);
+	if (boardedAt === null || rideMs === null) {
+		return null;
+	}
+	return {
+		alightEtaAt: boardedAt + rideMs,
+		boardEtaAt: null,
+		method: "timetable",
+		stopsAway: null,
+		vehicleId,
+	};
+}
+
 function pickFixed(
 	leg: Leg,
 	board: StopBoard,
 	vehicleId: string,
+	boardedAt: number | null,
 	boards: TransitBoards
 ): Pick {
 	const onBoard = board.approaching.find(
@@ -153,7 +179,14 @@ function pickFixed(
 			vehicleId,
 		};
 	}
-	return { boardEtaAt: null, method: null, stopsAway: null, vehicleId };
+	return (
+		rideFromBoarding(leg, vehicleId, boardedAt, boards) ?? {
+			boardEtaAt: null,
+			method: null,
+			stopsAway: null,
+			vehicleId,
+		}
+	);
 }
 
 function pickFree(
@@ -196,17 +229,26 @@ function alightFrom(
 	return rideMs === null ? null : pick.boardEtaAt + rideMs;
 }
 
-/** 새 도착판에서의 시각 상태. 묵었거나 없는 도착판은 언제나 estimated다. */
-function etaStateOf(method: ArrivalMethod | null): LegEstimate["etaState"] {
-	return method !== null && ESTIMATED_METHODS.has(method)
-		? "estimated"
-		: "live";
+/**
+ * 새 도착판에서의 시각 상태. 묵었거나 없는 도착판은 언제나 estimated다.
+ * 방법도 시각도 없으면 모르는 시각이라 실시간으로 부르지 않는다.
+ */
+function etaStateOf(
+	pick: Pick,
+	alightEtaAt: number | null
+): LegEstimate["etaState"] {
+	if (pick.method === null) {
+		const hasTime = pick.boardEtaAt !== null || alightEtaAt !== null;
+		return hasTime ? "live" : "estimated";
+	}
+	return ESTIMATED_METHODS.has(pick.method) ? "estimated" : "live";
 }
 
 function estimateLeg(
 	leg: Leg,
 	readyAt: number | null,
 	fixedId: string | null,
+	isBoarded: boolean,
 	input: EstimateInput,
 	boards: TransitBoards,
 	config: CommuteConfig
@@ -255,11 +297,12 @@ function estimateLeg(
 	const pick =
 		fixedId === null
 			? pickFree(board, readyAt, input.skip)
-			: pickFixed(leg, board, fixedId, boards);
+			: pickFixed(leg, board, fixedId, isBoarded ? readyAt : null, boards);
+	const alightEtaAt = alightFrom(leg, pick, boards);
 	return {
-		alightEtaAt: alightFrom(leg, pick, boards),
+		alightEtaAt,
 		boardEtaAt: pick.boardEtaAt,
-		etaState: etaStateOf(pick.method),
+		etaState: etaStateOf(pick, alightEtaAt),
 		method: pick.method,
 		positionState: "live",
 		stopsAway: pick.stopsAway,
@@ -304,6 +347,7 @@ export function estimateRoute(
 				leg,
 				readyAt,
 				input.fixed[index] ?? null,
+				input.boardedLegs?.[index] ?? false,
 				input,
 				boards,
 				config

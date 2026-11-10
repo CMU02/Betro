@@ -807,7 +807,7 @@ export class RunnerCore {
 		if (statnIds.length === 0) {
 			return;
 		}
-		const { boards, store } = this.#ports;
+		const { boards, config, store } = this.#ports;
 		let rows: Record<string, StationEntry> = {};
 		try {
 			await boards.watch(statnIds, now + WATCH_MS);
@@ -820,8 +820,18 @@ export class RunnerCore {
 				const key = `${STATION_PREFIX}${statnId}`;
 				let saved = (await store.get<StationSaved>(key)) ?? null;
 				const fresh = rows[statnId];
-				if (fresh && fresh.fetchedAt !== saved?.cur.fetchedAt) {
-					saved = { cur: fresh, prev: saved?.cur ?? null };
+				// 빈 응답은 돌리지 않는다(앞 열차가 모두 지난 것처럼 보인다). 앞 폴링이 묵었으면
+				// 그 사이에 지난 열차를 알 수 없으므로 prev로 쓰지 않는다.
+				const isNew =
+					fresh !== undefined &&
+					fresh.rows.length > 0 &&
+					fresh.fetchedAt !== saved?.cur.fetchedAt;
+				if (isNew) {
+					const last = saved?.cur ?? null;
+					const isConsecutive =
+						last !== null &&
+						fresh.fetchedAt - last.fetchedAt <= config.staleAfterMs;
+					saved = { cur: fresh, prev: isConsecutive ? last : null };
 					await store.put(key, saved);
 				}
 				if (saved) {

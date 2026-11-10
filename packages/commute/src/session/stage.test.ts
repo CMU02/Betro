@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { commuteConfig } from "../config";
 import type { BusLeg, CommutePlan, Leg, Route, SubwayLeg } from "../plan";
+import { assembleBoards, legKey } from "../sources/assemble";
+import type { StationRow } from "../sources/seoul-subway";
 import type {
 	Approaching,
 	Progress,
@@ -261,6 +263,150 @@ describe("advance: 탑승 전", () => {
 		expect(state.boardedBy).toEqual(["time"]);
 		expect(state.fixed).toEqual(["B"]);
 		expect(state.passed).toBeNull();
+	});
+});
+
+describe("advance: 지하철 도착판", () => {
+	const subwayRoute: Route = {
+		legs: [subwayLeg],
+		rank: 0,
+		walkMinutes: [5, 2],
+	};
+	const subwayPlan = planOf([subwayRoute]);
+	const BOARD_STATN = "1002000222";
+	const ALIGHT_STATN = "1002000221";
+
+	/** 강남(승차역)으로 다가오는 외선 열차. 한 정거장 앞이다. */
+	function train(trainNo: string, sourceAt: number, etaAt: number): StationRow {
+		return {
+			arvlCd: "5",
+			barvlSec: (etaAt - sourceAt) / SECOND_MS,
+			direction: "down",
+			ordkey: "01001역삼0",
+			sourceAt,
+			trainNo,
+		};
+	}
+
+	interface StationPoll {
+		fetchedAt: number;
+		prev: StationRow[] | null;
+		rows: StationRow[];
+	}
+
+	function rawBoards(
+		board: StationPoll,
+		alight: StationPoll | null = null,
+		rideMs: number | null = null
+	): TransitBoards {
+		return assembleBoards(
+			{
+				bus: {},
+				subway: {
+					[BOARD_STATN]: board,
+					...(alight ? { [ALIGHT_STATN]: alight } : {}),
+				},
+				timetable: { arrivals: {}, rideMs: { [legKey(subwayLeg)]: rideMs } },
+			},
+			config
+		);
+	}
+
+	/** 08:15 강남에서 T1(08:16:30)을 기다리는 상태. */
+	function waitingT1(): SessionState {
+		const early = train("T1", at(10), at(16));
+		const walking = step(
+			started(subwayPlan),
+			at(10),
+			rawBoards({ fetchedAt: at(10), prev: null, rows: [early] }),
+			undefined,
+			subwayPlan
+		);
+		expect(walking.readyAt).toBe(at(15));
+		expect(walking.fixed).toEqual(["T1"]);
+		const waiting = step(
+			walking,
+			at(15),
+			rawBoards({
+				fetchedAt: at(15),
+				prev: [early],
+				rows: [train("T1", at(15), at(16, 30))],
+			}),
+			undefined,
+			subwayPlan
+		);
+		expect(waiting.stage).toBe("wait");
+		expect(waiting.fixed).toEqual(["T1"]);
+		return waiting;
+	}
+
+	it("승차역이 빈 응답을 받으면 잡은 열차가 지나간 것으로 보지 않고 wait에 남는다", () => {
+		const empty = step(
+			waitingT1(),
+			at(16),
+			rawBoards({
+				fetchedAt: at(16),
+				prev: [train("T1", at(15), at(16, 30))],
+				rows: [],
+			}),
+			undefined,
+			subwayPlan
+		);
+		expect(empty.stage).toBe("wait");
+		expect(empty.boardedBy).toEqual([null]);
+		expect(empty.fixed).toEqual(["T1"]);
+		expect(empty.passed).toBeNull();
+	});
+
+	it("탄 열차가 승차역에도 하차역에도 없으면 탄 시각 + 주행 시간으로 목적지 도착을 추정한다", () => {
+		const ride = 10 * MINUTE_MS;
+		const t2 = (sourceAt: number) => ({
+			...train("T2", sourceAt, sourceAt + 5 * MINUTE_MS),
+			ordkey: "02003역삼0",
+		});
+		// 08:16:40 T1이 강남을 지난다.
+		const boarded = step(
+			waitingT1(),
+			at(16, 40),
+			rawBoards(
+				{
+					fetchedAt: at(16, 40),
+					prev: [train("T1", at(15), at(16, 30))],
+					rows: [t2(at(16, 40))],
+				},
+				null,
+				ride
+			),
+			undefined,
+			subwayPlan
+		);
+		expect(boarded.stage).toBe("ride");
+		expect(boarded.boardedBy).toEqual(["time"]);
+		expect(boarded.readyAt).toBe(at(16, 40));
+
+		// 08:18 T1은 강남의 passed에서도 빠졌고 역삼 도착판에는 아직 없다.
+		const riding = step(
+			boarded,
+			at(18),
+			rawBoards(
+				{ fetchedAt: at(18), prev: [t2(at(16, 40))], rows: [t2(at(18))] },
+				{
+					fetchedAt: at(18),
+					prev: null,
+					rows: [{ ...t2(at(18)), trainNo: "OTHER" }],
+				},
+				ride
+			),
+			undefined,
+			subwayPlan
+		);
+		expect(riding.stage).toBe("ride");
+		const leg = riding.estimates[0]?.legs[0];
+		expect(leg?.vehicleId).toBe("T1");
+		expect(leg?.alightEtaAt).toBe(at(26, 40));
+		expect(leg?.etaState).toBe("estimated");
+		// 08:26:40 하차 + 2분 도보
+		expect(riding.estimates[0]?.destinationEtaAt).toBe(at(28, 40));
 	});
 });
 

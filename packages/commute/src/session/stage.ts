@@ -239,6 +239,7 @@ function estimatePrimary(
 		route,
 		boards,
 		{
+			boardedLegs: state.boardedBy.map((by) => by !== null),
 			fixed: state.fixed,
 			fromLeg: state.legIndex,
 			now,

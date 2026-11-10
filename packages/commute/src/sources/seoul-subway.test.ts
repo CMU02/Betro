@@ -150,6 +150,28 @@ describe("stationBoard", () => {
 		const down = stationBoard(rows1, rows2, "down", 0, poll2.fetchedAt);
 		expect(down.passed).toEqual([]);
 	});
+
+	it("lists no train as passed when the new poll has no rows", () => {
+		for (const direction of ["up", "down"] as const) {
+			const board = stationBoard(rows1, [], direction, 0, poll2.fetchedAt);
+			expect(board.passed).toEqual([]);
+			expect(board.approaching).toEqual([]);
+		}
+	});
+
+	it("lists only trains that were at most one stop away as passed", () => {
+		const prev = [
+			makeRow({ arvlCd: "5", ordkey: "01001성수0", trainNo: "NEAR" }),
+			makeRow({ arvlCd: "1", ordkey: "", trainNo: "AT_STOP" }),
+			makeRow({ arvlCd: "99", ordkey: "02003성수0", trainNo: "FAR" }),
+		];
+		const rows = [makeRow({ ordkey: "02004성수0", trainNo: "NEXT" })];
+		const board = stationBoard(prev, rows, "up", 0, AT_0810);
+		expect(board.passed.map((entry) => entry.vehicleId).sort()).toEqual([
+			"AT_STOP",
+			"NEAR",
+		]);
+	});
 });
 
 describe("fillFromTimetable", () => {

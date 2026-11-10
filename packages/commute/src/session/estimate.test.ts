@@ -96,6 +96,7 @@ const transferRoute: Route = {
 function input(
 	readyAt: number,
 	overrides: Partial<{
+		boardedLegs: boolean[];
 		fixed: (string | null)[];
 		fromLeg: number;
 		now: number;
@@ -348,6 +349,47 @@ describe("estimateRoute: 잡아 둔 차량", () => {
 			vehicleId: "RIDING",
 		});
 		expect(estimate.destinationEtaAt).toBe(at(32));
+	});
+
+	it("탄 열차가 승차역에도 하차역에도 없으면 탄 시각 + 주행 시간으로 하차를 추정한다", () => {
+		const boards = fakeBoards([
+			[
+				subwayLeg,
+				{
+					board: stopBoard([vehicle("NEXT", at(22))]),
+					rideMs: 20 * MINUTE_MS,
+				},
+			],
+		]);
+		const route: Route = { legs: [subwayLeg], rank: 0, walkMinutes: [5, 3] };
+		const riding = estimateRoute(
+			route,
+			boards,
+			input(at(8), { boardedLegs: [true], fixed: ["T1"] }),
+			config
+		);
+		expect(riding.legs[0]).toEqual({
+			alightEtaAt: at(28),
+			boardEtaAt: null,
+			etaState: "estimated",
+			method: "timetable",
+			positionState: "live",
+			stopsAway: null,
+			vehicleId: "T1",
+		});
+		expect(riding.destinationEtaAt).toBe(at(31));
+
+		// 타기 전에 사라진 열차는 시각을 모른다. 모르는 시각을 실시간이라고 하지 않는다.
+		const before = estimateRoute(
+			route,
+			boards,
+			input(at(15), { fixed: ["T1"] }),
+			config
+		);
+		expect(before.legs[0]?.alightEtaAt).toBeNull();
+		expect(before.legs[0]?.method).toBeNull();
+		expect(before.legs[0]?.etaState).toBe("estimated");
+		expect(before.destinationEtaAt).toBeNull();
 	});
 
 	it("skip은 fixed 차량에는 쓰지 않는다", () => {

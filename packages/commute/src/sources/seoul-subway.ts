@@ -37,6 +37,17 @@ const SECOND_MS = 1000;
 /** `ordkey`의 3~5번째 글자가 "몇 정거장 전"이다(`01001성수0` → 1, `02006성수0` → 6). */
 const STOPS_AWAY_FROM = 2;
 const STOPS_AWAY_TO = 5;
+/** 직전 폴링에서 이만큼 가까웠던 열차만 다음 폴링에서 사라졌을 때 지난 것으로 본다. */
+const PASSABLE_STOPS_AWAY = 1;
+/** 역에 진입·도착·출발했거나 전역에서 출발·진입·도착한 열차(`arvlCd` 0~5). 99는 운행 중. */
+const NEAR_ARRIVAL_CODES: ReadonlySet<string> = new Set([
+	"0",
+	"1",
+	"2",
+	"3",
+	"4",
+	"5",
+]);
 
 function stopsAwayOf(ordkey: string): number | null {
 	const digits = ordkey.slice(STOPS_AWAY_FROM, STOPS_AWAY_TO);
@@ -45,6 +56,18 @@ function stopsAwayOf(ordkey: string): number | null {
 	}
 	const value = Number(digits);
 	return Number.isInteger(value) ? value : null;
+}
+
+/**
+ * 직전 폴링에서 역 바로 앞(한 정거장 이내)이었는가. 도착판은 가까운 두 대만 보여 주므로
+ * 멀리 있던 열차가 목록에서 빠진 것은 역을 지났다는 뜻이 아니다.
+ */
+function wasNear(row: StationRow): boolean {
+	if (NEAR_ARRIVAL_CODES.has(row.arvlCd)) {
+		return true;
+	}
+	const stopsAway = stopsAwayOf(row.ordkey);
+	return stopsAway !== null && stopsAway <= PASSABLE_STOPS_AWAY;
 }
 
 function approachingOf(row: StationRow, biasSec: number): Approaching {
@@ -84,6 +107,8 @@ function nearestFirst(a: Approaching, b: Approaching): number {
 /**
  * 역 행 → 한 방향의 도착판. `biasSec`(노선별 편향)을 공식 예측에 더한다. 예측이 없는 열차(0)도
  * 위치(`stopsAway`)는 그대로 보여 준다. `prev`는 같은 역의 직전 폴링 행이다.
+ * `passed`는 직전 폴링에서 한 정거장 이내였는데 지금 없는 열차다. 지금 행이 하나도 없으면
+ * (빈 응답) 지난 것인지 알 수 없으므로 비운다.
  */
 export function stationBoard(
 	prev: StationRow[] | null,
@@ -107,8 +132,9 @@ export function stationBoard(
 		.map((row) => approachingOf(row, biasSec))
 		.sort(nearestFirst);
 	const gone = new Set<string>();
-	for (const row of prev ?? []) {
-		if (row.direction === direction && !seen.has(row.trainNo)) {
+	const canPass = rows.length > 0;
+	for (const row of canPass ? (prev ?? []) : []) {
+		if (row.direction === direction && !seen.has(row.trainNo) && wasNear(row)) {
 			gone.add(row.trainNo);
 		}
 	}
