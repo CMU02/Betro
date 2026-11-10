@@ -1,12 +1,11 @@
 import { expect, it } from "bun:test";
 
 import { t } from "../i18n/t";
-import cases from "./__fixtures__/lock-screen-cases.json";
+import fixture from "./__fixtures__/lock-screen-cases.json";
 import type { ContentState } from "./content-state";
 import { type LockScreenDeps, lockScreenModel } from "./lock-screen-model";
 
-const FORBIDDEN_TEXT = /null"|undefined|NaN|1970/;
-const TIMEZONE = "Asia/Seoul";
+const FORBIDDEN_TEXT = /\bnull\b|undefined|NaN|1970/;
 const NOW = 1_794_265_200; // 2026-11-10 08:00 KST
 
 interface Case {
@@ -25,24 +24,45 @@ interface Case {
 	state: ContentState;
 }
 
+interface Fixture {
+	cases: Case[];
+	timezone: string;
+}
+
+const { cases, timezone } = fixture as Fixture;
+
+/** 모델 결과에 든 모든 문자열 */
+function stringsOf(value: unknown): string[] {
+	if (typeof value === "string") {
+		return [value];
+	}
+	if (Array.isArray(value)) {
+		return value.flatMap(stringsOf);
+	}
+	if (value !== null && typeof value === "object") {
+		return Object.values(value).flatMap(stringsOf);
+	}
+	return [];
+}
+
 function deps(overrides: Partial<LockScreenDeps> = {}): LockScreenDeps {
 	return {
 		header: null,
 		now: NOW,
 		platform: "ios",
 		t,
-		timezone: TIMEZONE,
+		timezone,
 		...overrides,
 	};
 }
 
-const BASE = (cases as Case[])[4].state;
+const BASE = (cases[4] as Case).state;
 
 function state(overrides: Partial<ContentState>): ContentState {
 	return { ...BASE, ...overrides };
 }
 
-for (const item of cases as Case[]) {
+for (const item of cases) {
 	it(`matches fixture: ${item.name}`, () => {
 		const model = lockScreenModel(
 			item.state,
@@ -61,11 +81,15 @@ for (const item of cases as Case[]) {
 		if (item.header) {
 			expect(model.header).toBe(item.header);
 		}
+		for (const text of stringsOf(model)) {
+			expect(text).not.toMatch(FORBIDDEN_TEXT);
+		}
 	});
 }
 
 it("fixture now matches the test clock", () => {
-	expect((cases as Case[])[0].now).toBe(NOW);
+	expect((cases[0] as Case).now).toBe(NOW);
+	expect(timezone).toBe("Asia/Seoul");
 });
 
 it("never prints null, undefined, NaN or 1970 for empty values", () => {
@@ -81,7 +105,9 @@ it("never prints null, undefined, NaN or 1970 for empty values", () => {
 	expect(model.detail).toBe("강남역");
 	expect(model.minutes).toBeNull();
 	expect(model.suggestion).toBeNull();
-	expect(JSON.stringify(model)).not.toMatch(FORBIDDEN_TEXT);
+	for (const text of stringsOf(model)) {
+		expect(text).not.toMatch(FORBIDDEN_TEXT);
+	}
 });
 
 it("remaining minutes: 61s, 59s and past", () => {
