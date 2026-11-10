@@ -70,20 +70,21 @@ export function maxAdjacentGapM(
 const MIN_LOOP_STATIONS = 3;
 
 /**
- * 첫 역과 마지막 역 사이 직선거리가 그 노선의 역 간 최대 거리보다 길지 않으면 순환으로 본다.
+ * 첫 역과 마지막 역 사이 직선거리가 그 선로 자신의 역 간 최대 거리보다 길지 않으면 순환으로 본다.
+ * 노선 전체의 최대 거리와 견주면 긴 구간이 있는 노선의 짧은 지선(경의중앙선 임진강)도 순환이 된다.
  * 순환선은 닫는 구간도 보통 역 간 거리 중 하나라서, 같은 값일 때도 순환이어야 해 "이하"로 비교한다.
  * 역이 셋보다 적으면 닫는 구간과 그냥 한 구간을 가릴 수 없어 순환이 아니다.
  */
 export function isLoopShape(
 	coords: readonly (Coordinate | null)[],
-	lineMaxGapM: number
+	maxGapM: number
 ): boolean {
 	const [first] = coords;
 	const last = coords.at(-1);
 	if (coords.length < MIN_LOOP_STATIONS || !first || !last) {
 		return false;
 	}
-	return haversineM(first, last) <= lineMaxGapM;
+	return haversineM(first, last) <= maxGapM;
 }
 
 function stopsOnShape(
@@ -92,7 +93,10 @@ function stopsOnShape(
 	to: string
 ): number | null {
 	const fromIndex = shape.stations.indexOf(from);
-	const toIndex = shape.stations.indexOf(to);
+	// 한 역을 두 번 지나는 선로(응암순환)에서는 `from` 뒤에 처음 나오는 `to`를 쓴다.
+	const laterToIndex = shape.stations.indexOf(to, fromIndex + 1);
+	const toIndex =
+		laterToIndex === -1 ? shape.stations.indexOf(to) : laterToIndex;
 	if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
 		return null;
 	}
@@ -119,6 +123,65 @@ export function directionBetween(
 		}
 	}
 	return best;
+}
+
+/**
+ * `start`가 `end`의 끝 역에서 시작해 `end`에 없는 역들을 지난 뒤 `end`의 끝 바로 앞 역으로
+ * 돌아오면(6호선 응암순환), 그 사이 역의 수. 그런 모양이 아니면 0.
+ */
+function lassoRunLength(end: DirectionShape, start: DirectionShape): number {
+	const shared = end.stations.at(-1);
+	const beforeShared = end.stations.at(-2);
+	if (
+		end.direction === start.direction ||
+		shared === undefined ||
+		beforeShared === undefined ||
+		start.stations[0] !== shared
+	) {
+		return 0;
+	}
+	const inEnd = new Set(end.stations);
+	const rejoinIndex = start.stations.findIndex(
+		(station, index) => index > 0 && inEnd.has(station)
+	);
+	const hasRun = rejoinIndex > 1;
+	return hasRun && start.stations[rejoinIndex] === beforeShared
+		? rejoinIndex - 1
+		: 0;
+}
+
+/**
+ * 한 방향 고리가 달린 노선(6호선 응암순환)을 방향 계산에 맞게 편다.
+ * 원본 선로에서는 `up`이 응암에서 끝나고, 고리 역(역촌…구산)은 `down` 앞머리에만 있다.
+ * - `up` 끝에 고리 역을 이어 붙인 선로를 더한다. 실제로 `up` 열차가 응암을 지나 고리를 돈다.
+ * - `down`에서는 고리를 돈 뒤 응암을 한 번 더 지나므로 고리 끝 다음에 응암을 다시 넣는다.
+ * 원본 선로를 앞에 두어, 정거장 수가 같으면 원본 선로의 방향이 이긴다.
+ */
+export function expandLassoShapes(
+	shapes: readonly DirectionShape[]
+): DirectionShape[] {
+	const expanded = [...shapes];
+	const extra: DirectionShape[] = [];
+	for (const end of shapes) {
+		for (const [index, start] of shapes.entries()) {
+			const runLength = lassoRunLength(end, start);
+			if (runLength > 0) {
+				const [shared = ""] = start.stations;
+				const run = start.stations.slice(1, runLength + 1);
+				const rest = start.stations.slice(runLength + 1);
+				extra.push({
+					direction: end.direction,
+					isLoop: false,
+					stations: [...end.stations, ...run],
+				});
+				expanded[index] = {
+					...start,
+					stations: [shared, ...run, shared, ...rest],
+				};
+			}
+		}
+	}
+	return [...expanded, ...extra];
 }
 
 export function listSubwayLines(): SubwayLineItem[] {
@@ -266,14 +329,18 @@ export async function findDirection(
 	if (!line) {
 		return null;
 	}
-	const shapeCoords = line.shapes.map((shape) =>
-		shape.statnIds.map((statnId) => line.coords.get(statnId) ?? null)
-	);
-	const lineMaxGapM = Math.max(0, ...shapeCoords.map(maxAdjacentGapM));
-	const shapes: DirectionShape[] = line.shapes.map((shape, index) => ({
-		direction: shape.direction,
-		isLoop: isLoopShape(shapeCoords[index] ?? [], lineMaxGapM),
-		stations: shape.statnIds,
-	}));
-	return { batchId: line.batchId, result: directionBetween(shapes, from, to) };
+	const shapes: DirectionShape[] = line.shapes.map((shape) => {
+		const coords = shape.statnIds.map(
+			(statnId) => line.coords.get(statnId) ?? null
+		);
+		return {
+			direction: shape.direction,
+			isLoop: isLoopShape(coords, maxAdjacentGapM(coords)),
+			stations: shape.statnIds,
+		};
+	});
+	return {
+		batchId: line.batchId,
+		result: directionBetween(expandLassoShapes(shapes), from, to),
+	};
 }
