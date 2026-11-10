@@ -356,11 +356,11 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
       etaState: "live" | "estimated";
       delayMinutes: number;        // 처음 계산한 목적지 도착보다 늦어진 분(0 이상)
       destinationEtaEpoch: number | null;
-      suggestion: { rank: number; lineName: string; boardEtaEpoch: number; savesMinutes: number } | null;
+      suggestion: { rank: number; mode: "bus" | "subway"; lineName: string; boardEtaEpoch: number; savesMinutes: number } | null;
     }
     ```
   - `buildContent(state: SessionState, plan: CommutePlan, now: number, config: CommuteConfig): ContentState`. `seq`는 `state.seq + 1`.
-  - `suggestion` 규칙: 탑승 전(`walk`, `wait`)이고, 대안 중 `destinationEtaAt`이 기본 경로보다 `suggestMinGainMs` 이상 빠른 것 가운데 가장 빠른 것. 기본 경로나 그 대안의 `destinationEtaAt`이 null이거나 대안의 첫 구간 `etaState`가 `"estimated"`면 제안하지 않는다(확신이 없을 때 단정하지 않는다).
+  - `suggestion` 규칙: 탑승 전(`walk`, `wait`)이고, 대안 중 `destinationEtaAt`이 기본 경로보다 `suggestMinGainMs` 이상 빠른 것 가운데 가장 빠른 것. 기본 경로나 그 대안의 `destinationEtaAt`이 null이거나 대안의 첫 구간 `etaState`가 `"estimated"`면 제안하지 않는다(확신이 없을 때 단정하지 않는다). `mode`와 `lineName`은 그 대안의 첫 구간 것이다(기기가 수단에 맞는 문구를 고른다).
   - `type SendDecision = { send: false } | { send: true; priority: 5 | 10; reason: "change" | "stage" | "heartbeat" }`
   - `decideSend(prev: ContentState | null, next: ContentState, lastSentAt: number | null, now: number, config: CommuteConfig): SendDecision`
     - `prev`가 null이면 `{ send: true, priority: 10, reason: "stage" }`.
@@ -372,7 +372,7 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
 - [ ] **Step 1: 실패하는 테스트**
   - `walk` 단계 첫 구간: `stopName`이 승차 정류장 이름, `leaveEpoch`가 나가는 시각, `etaEpoch`가 승차 도착. `ride`에서는 `stopName`이 하차 정류장, `leaveEpoch: null`, `stopsAway`가 하차까지 남은 정거장.
   - `delayMinutes`: 처음 08:34, 지금 08:39 → 5. 더 일러지면 0.
-  - 제안: 기본 08:40, 대안 08:34(6분 이득) → `{ rank: 1, savesMinutes: 6 }`. 대안 08:38(2분) → null. 대안이 둘이면 더 빠른 쪽. `ride`에서는 null. 대안 첫 구간이 `"estimated"`면 null.
+  - 제안: 기본 08:40, 대안 08:34(6분 이득) → `{ rank: 1, savesMinutes: 6 }`이고 `mode`가 대안 첫 구간의 수단이다. 대안 08:38(2분) → null. 대안이 둘이면 더 빠른 쪽. `ride`에서는 null. 대안 첫 구간이 `"estimated"`면 null.
   - `decideSend`: 정거장 수만 바뀜 → 5/`change`. 단계가 바뀜 → 10/`stage`. 초만 바뀌고 분이 같음 → 보내지 않음. **값이 같아도 110초가 지나면** 5/`heartbeat`, 109초면 보내지 않음.
   - 직렬화한 `ContentState`가 4KB(APNs 한도)의 절반보다 작다. 값 어디에도 한글 조사나 문장이 없다(`lineName`, `stopName` 제외한 문자열 값이 정해진 영어 낱말뿐이다).
 - [ ] **Step 2: 실패 확인** — Run: `bun test packages/commute/src/session/content.test.ts` / Expected: FAIL
