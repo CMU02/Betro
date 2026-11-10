@@ -340,6 +340,23 @@ describe("advance: 탔어요", () => {
 		expect(twice).toEqual(once);
 	});
 
+	it('"다음 차 탈게요"로 건너뛴 차량이 막 지나갔어도 정류장에 선 잡은 차량으로 탄다', () => {
+		const skipped = step(caughtB(), at(5), busBoardsAt(at(5)), {
+			kind: "next",
+		});
+		expect(skipped.fixed).toEqual(["C"]);
+		expect(skipped.skip).toEqual(["B"]);
+		const boards = busBoardsAt(at(19), {
+			board: stopBoard(
+				[vehicle("C", at(19), { stopsAway: 0 }), vehicle("D", at(30))],
+				{ passed: [{ at: at(17), vehicleId: "B" }] }
+			),
+		});
+		const state = step(skipped, at(19), boards, { kind: "boarded" });
+		expect(state.stage).toBe("ride");
+		expect(state.fixed).toEqual(["C"]);
+	});
+
 	it("탑승 뒤 estimates에는 기본 경로만 있다", () => {
 		expect(caughtB().estimates.map((estimate) => estimate.rank)).toEqual([
 			0, 1,
@@ -455,6 +472,79 @@ describe("advance: 하차와 환승", () => {
 		);
 		expect(state.legIndex).toBe(0);
 		expect(state.stage).toBe("ride");
+	});
+
+	it("탄 뒤 도착판이 묵어 탄 차량이 그대로 남아 있어도 하차 예정이 밀리지 않고 지나면 arrived", () => {
+		// 08:16에 B가 정류장에 선 도착판이 그대로 굳는다.
+		const frozen = stopBoard(
+			[vehicle("B", at(16), { stopsAway: 0 }), vehicle("C", at(22))],
+			{ fetchedAt: at(16), sourceAt: at(16) }
+		);
+		const boards: TransitBoards = {
+			board: (leg, side) =>
+				leg === busLeg && side === "board" ? frozen : null,
+			progress: (leg, vehicleId) =>
+				leg === busLeg && vehicleId === "B"
+					? { etaAt: at(31), method: "official", stopsAway: 2 }
+					: null,
+			rideMs: (leg) => (leg === busLeg ? 14 * MINUTE_MS : null),
+		};
+		const riding = step(caughtB(), at(16), boards, { kind: "boarded" });
+		expect(riding.stage).toBe("ride");
+		expect(riding.fixed).toEqual(["B"]);
+
+		const first = step(riding, at(25), boards);
+		expect(first.stage).toBe("ride");
+		const second = step(first, at(30), boards);
+		expect(second.stage).toBe("ride");
+		expect(second.estimates[0]?.destinationEtaAt).toBe(
+			first.estimates[0]?.destinationEtaAt
+		);
+
+		const later = step(second, at(40), boards);
+		expect(later.stage).toBe("arrived");
+	});
+
+	it("아무것도 잡지 못한 채 도착판 없이 탔어요를 누르면 탄 시각 + 주행 뒤 arrived", () => {
+		const noBusBoard = (now: number): TransitBoards =>
+			fakeBoards(now, [
+				[busLeg, { board: null, rideMs: 14 * MINUTE_MS }],
+				[altBusLeg, altView],
+			]);
+		const waiting = step(started(), at(0), noBusBoard(at(0)));
+		expect(waiting.fixed).toEqual([null]);
+		const riding = step(waiting, at(16), noBusBoard(at(16)), {
+			kind: "boarded",
+		});
+		expect(riding.stage).toBe("ride");
+		expect(riding.fixed).toEqual([null]);
+
+		const before = step(riding, at(29, 59), noBusBoard(at(29, 59)));
+		expect(before.stage).toBe("ride");
+		const arrived = step(before, at(30), noBusBoard(at(30)));
+		expect(arrived.stage).toBe("arrived");
+		// 08:16 승차 + 14분 주행 + 3분 도보
+		expect(arrived.readyAt).toBe(at(33));
+	});
+
+	it("아무것도 잡지 못한 채 탔으면 새 도착판이 뒤 차량을 보여도 탄 시각 + 주행 뒤 arrived", () => {
+		const noBusBoard = fakeBoards(at(0), [
+			[busLeg, { board: null, rideMs: 14 * MINUTE_MS }],
+			[altBusLeg, altView],
+		]);
+		const waiting = step(started(), at(0), noBusBoard);
+		const riding = step(waiting, at(16), noBusBoard, { kind: "boarded" });
+		expect(riding.fixed).toEqual([null]);
+		// 새 도착판에는 언제나 앞으로 올 차량만 있다.
+		const freshAt = (now: number): TransitBoards =>
+			busBoardsAt(now, {
+				board: stopBoard([vehicle("N", now + 2 * MINUTE_MS)]),
+			});
+		const before = step(riding, at(29), freshAt(at(29)));
+		expect(before.stage).toBe("ride");
+		const arrived = step(before, at(30), freshAt(at(30)));
+		expect(arrived.stage).toBe("arrived");
+		expect(arrived.readyAt).toBe(at(33));
 	});
 
 	it("마지막 구간에서 내리면 arrived, 마지막 도보 + 10분 뒤 ended", () => {

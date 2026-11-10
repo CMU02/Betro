@@ -1,5 +1,5 @@
 import type { CommuteConfig } from "../config";
-import type { CommutePlan, Route } from "../plan";
+import type { CommutePlan, Leg, Route } from "../plan";
 import type { StopBoard, TransitBoards } from "../sources/types";
 import type { RouteEstimate } from "./estimate";
 import { estimateRoute } from "./estimate";
@@ -37,6 +37,7 @@ export interface SessionState {
 	/**
 	 * 지금 구간의 승차 정류장에 있을 수 있는 시각. 첫 advance에서 `max(now, leaveAt) + 첫 도보`로,
 	 * 환승 구간은 앞 구간에서 내린 시각 + 환승 도보로 정하고 그 뒤로는 바꾸지 않는다.
+	 * ride면 그 구간에서 탄 시각(지난 기록의 시각, 없으면 "탔어요"를 누른 시각)이고,
 	 * arrived면 목적지에 닿는 시각(내린 시각 + 마지막 도보)이다. 시작 직후에는 null.
 	 */
 	readyAt: number | null;
@@ -100,24 +101,52 @@ export function startSession(
 	};
 }
 
-/** "탔어요": 3분 안에 승차 정류장을 지난 가장 최근 차량, 없으면 정류장에 선 차량, 없으면 잡아 둔 차량. */
+interface Boarding {
+	at: number;
+	vehicleId: string | null;
+}
+
+/**
+ * "탔어요": 잡아 둔 차량이 3분 안에 승차 정류장을 지났거나 정류장에 서 있으면 그 차량,
+ * 아니면 3분 안에 지난 가장 최근 차량, 없으면 정류장에 선 차량, 없으면 잡아 둔 차량.
+ * skip에 든 차량(건너뛰었거나 놓친 차량)은 고르지 않는다. 지난 차량이면 지난 시각에, 아니면 지금 탄 것으로 본다.
+ */
 function boardedVehicle(
 	board: StopBoard | null,
 	now: number,
-	fixedId: string | null
-): string | null {
+	fixedId: string | null,
+	skip: ReadonlySet<string>
+): Boarding {
+	const recentPassed = (board?.passed ?? []).filter(
+		(entry) =>
+			!skip.has(entry.vehicleId) &&
+			entry.at <= now &&
+			now - entry.at <= BOARDED_LOOKBACK_MS
+	);
+	const atStop = (board?.approaching ?? []).filter(
+		(vehicle) => !skip.has(vehicle.vehicleId) && vehicle.stopsAway === 0
+	);
+	if (fixedId !== null) {
+		const fixedPassed = recentPassed.find(
+			(entry) => entry.vehicleId === fixedId
+		);
+		if (fixedPassed) {
+			return { at: fixedPassed.at, vehicleId: fixedId };
+		}
+		if (atStop.some((vehicle) => vehicle.vehicleId === fixedId)) {
+			return { at: now, vehicleId: fixedId };
+		}
+	}
 	let recent: { at: number; vehicleId: string } | null = null;
-	for (const entry of board?.passed ?? []) {
-		const isRecent = entry.at <= now && now - entry.at <= BOARDED_LOOKBACK_MS;
-		if (isRecent && (recent === null || entry.at > recent.at)) {
+	for (const entry of recentPassed) {
+		if (recent === null || entry.at > recent.at) {
 			recent = entry;
 		}
 	}
 	if (recent) {
-		return recent.vehicleId;
+		return { at: recent.at, vehicleId: recent.vehicleId };
 	}
-	const atStop = board?.approaching.find((vehicle) => vehicle.stopsAway === 0);
-	return atStop?.vehicleId ?? fixedId;
+	return { at: now, vehicleId: atStop[0]?.vehicleId ?? fixedId };
 }
 
 /** 탑승 전 단계의 사용자 입력(규칙 4, 5). */
@@ -145,10 +174,12 @@ function applyInput(
 	if (input?.kind === "boarded") {
 		const leg = route.legs[index];
 		const board = leg ? boards.board(leg, "board") : null;
+		const boarding = boardedVehicle(board, now, fixedId, new Set(state.skip));
 		return {
 			...state,
 			boardedBy: replaceAt(state.boardedBy, index, "user"),
-			fixed: replaceAt(state.fixed, index, boardedVehicle(board, now, fixedId)),
+			fixed: replaceAt(state.fixed, index, boarding.vehicleId),
+			readyAt: boarding.at,
 			stage: "ride",
 		};
 	}
@@ -180,6 +211,7 @@ function checkPassed(
 		return {
 			...state,
 			boardedBy: replaceAt(state.boardedBy, index, "time"),
+			readyAt: passedEntry.at,
 			stage: "ride",
 		};
 	}
@@ -191,6 +223,10 @@ function checkPassed(
 	};
 }
 
+/**
+ * 탑승 전에는 지금보다 이른 시각에 탈 수 없으므로 readyAt을 now 뒤로 민다.
+ * 탄 뒤의 readyAt은 탄 시각이라 그대로 넘긴다. 밀면 배차간격 추정의 하차 시각이 매번 뒤로 밀린다.
+ */
 function estimatePrimary(
 	state: SessionState,
 	route: Route,
@@ -198,6 +234,7 @@ function estimatePrimary(
 	now: number,
 	config: CommuteConfig
 ): RouteEstimate {
+	const readyAt = state.readyAt ?? now;
 	return estimateRoute(
 		route,
 		boards,
@@ -205,7 +242,7 @@ function estimatePrimary(
 			fixed: state.fixed,
 			fromLeg: state.legIndex,
 			now,
-			readyAt: Math.max(now, state.readyAt ?? now),
+			readyAt: state.stage === "ride" ? readyAt : Math.max(now, readyAt),
 			skip: new Set(state.skip),
 		},
 		config
@@ -234,14 +271,34 @@ function alightedAt(
 			return Math.min(now, passedEntry.at);
 		}
 	}
-	const alightEtaAt = estimate.legs[index]?.alightEtaAt ?? null;
+	// 탄 차량을 모르면 추정의 하차 시각은 뒤에 올 다른 차량의 것이라 쓰지 않는다.
+	const alightEtaAt =
+		vehicleId === null ? null : (estimate.legs[index]?.alightEtaAt ?? null);
 	if (alightEtaAt !== null && alightEtaAt <= now) {
 		return alightEtaAt;
 	}
 	if (vehicleId !== null && boards.progress(leg, vehicleId)?.stopsAway === 0) {
 		return now;
 	}
-	return null;
+	return alightEtaAt === null
+		? rideElapsedAt(state, leg, vehicleId, boards, now)
+		: null;
+}
+
+/** 하차 추정이 없을 때: 탄 시각(readyAt) + 주행 시간이 지났으면 그 시각에 내린 것으로 본다. */
+function rideElapsedAt(
+	state: SessionState,
+	leg: Leg,
+	vehicleId: string | null,
+	boards: TransitBoards,
+	now: number
+): number | null {
+	const rideMs = boards.rideMs(leg, vehicleId);
+	if (rideMs === null || state.readyAt === null) {
+		return null;
+	}
+	const at = state.readyAt + rideMs;
+	return at <= now ? at : null;
 }
 
 /** 내린 뒤: 다음 구간 walk, 마지막 구간이면 arrived. */
