@@ -163,13 +163,15 @@
 
 - [x] **Step 1: 옮기기** — 실험 브랜치의 파일을 `git show spike/mvp2-live-activity:<경로>`로 꺼내 위 경로에 둔다. 실험용 주소(`betro-spike-apns…`)와 `launch`·`activityNew` 보고는 지운다.
 - [x] **Step 2: 구현** — 위 Interfaces대로. `_layout.tsx`는 `ensureInstallIdentity()` → `ensureRegistered()` → `CommuteActivity.setCredentials(...)` 순으로 부른다(iOS에서만).
-- [ ] **Step 3: 빌드** — Run: `cd apps/native && bunx expo prebuild --clean -p ios && bun run ios -- --device` / Expected: 앱과 확장이 함께 빌드되고 설치된다. 새 번들 ID라 처음에는 Xcode 계정 로그인과 `-allowProvisioningUpdates`가 필요하다(실험 3).
+- [x] **Step 3: 빌드** — Run: `cd apps/native && bunx expo prebuild --clean -p ios && bun run ios -- --device` / Expected: 앱과 확장이 함께 빌드되고 설치된다. 새 번들 ID라 처음에는 Xcode 계정 로그인과 `-allowProvisioningUpdates`가 필요하다(실험 3).
 - [x] **Step 4: 기기 확인** — 시작 푸시의 알림 문구가 키 그대로(`commute.start.title`) 보이지 않고 `locales/ko.json`의 문구로 나오는지는 Task 8에서 본다. 여기서는 로컬 서버(`apps/server`의 `bun run dev`, `PUSH_MODE=log`)를 `EXPO_PUBLIC_SERVER_URL`로 두고 앱을 연다. Expected: 서버 로그에 설치 등록과 `apns-start` 토큰 등록이 찍힌다. `startLocal`로 Activity를 만들면 `apns-activity` 토큰이 `sessionId`와 함께 등록된다. 서버를 끄고 `startLocal`을 하면 요청이 세 번(0초, 1초, 3초 간격) 나가고 앱은 멈추지 않는다. Xcode 콘솔에 비밀값과 토큰 전체가 없다.
 - [x] **Step 5: 커밋** — `feat(native): add the commute Live Activity target and token reporting`
 
 #### Task 3 기기 확인 기록 (2026-11-10, iPhone 16 Pro)
 
-- **Step 3 (부분)**: Debug 빌드가 앱과 확장(`CommuteActivityWidget.appex`)을 함께 만들고 기기에 설치됐다. 다만 Xcode에 Apple 계정이 로그인돼 있지 않아(`No Accounts`) 자동 서명이 앱 그룹(`group.com.cmu02.betro`)이 든 프로파일을 만들지 못했다. 생성된 `ios/`의 권한 파일 두 개에서 앱 그룹만 빼고 기존 프로파일로 서명해 확인했다(저장소 파일은 그대로). **앱 그룹이 든 정식 서명 빌드는 아직 확인하지 못했다.** Xcode 계정 로그인 뒤 `xcodebuild … -allowProvisioningUpdates DEVELOPMENT_TEAM=5JKMP6D4C5`로 다시 빌드해야 한다. `setPlanHeaders`(앱 그룹 `UserDefaults`)는 Task 4에서 처음 쓰인다.
+- **Step 3**: 통과. `xcodebuild -workspace ios/Betro.xcworkspace -scheme Betro -configuration Debug -destination id=<UDID> -allowProvisioningUpdates DEVELOPMENT_TEAM=5JKMP6D4C5 build`로 앱과 확장(`CommuteActivityWidget.appex`)이 함께 빌드되고 `xcrun devicectl device install app`으로 설치됐다. 서명된 권한에 두 타깃 모두 `group.com.cmu02.betro`가 들어 있고, 설치한 앱이 실행된다.
+  - 처음 두 번은 서명에서 멈췄다: 앱 그룹이 새로 들어가 기존 프로파일이 맞지 않았고, 명령줄 `xcodebuild`는 Xcode에 계정이 로그인돼 있는데도 `No Accounts`를 냈다(샌드박스 밖에서 돌려도 같았다). Xcode에서 `ios/Betro.xcworkspace`를 열어 두 타깃의 Signing & Capabilities를 한 번 띄우자 Xcode가 앱 그룹이 든 관리형 프로파일을 받아 왔고, 그 뒤 같은 명령이 통과했다. **새 권한을 넣은 뒤 첫 빌드는 Xcode에서 프로젝트를 한 번 열어야 한다.**
+  - 아래 Step 4는 그 전에, 생성된 `ios/`의 권한 파일에서 앱 그룹만 빼고 서명한 빌드로 확인했다. 토큰 보고는 앱 그룹을 쓰지 않는다. `setPlanHeaders`(앱 그룹 `UserDefaults`)는 Task 4에서 처음 쓰인다.
 - **Step 4**: 통과. 로컬 서버(2-C 브랜치, `wrangler dev --ip 0.0.0.0`, `PUSH_MODE=log`)를 `EXPO_PUBLIC_SERVER_URL`로 두었다.
   - 첫 실행: `POST /v1/installs` 201, `PUT /v1/push-tokens` 204(`apns-start`, `sandbox`). `startLocal` 뒤 `PUT /v1/push-tokens` 204. 로컬 D1 `push_token`에 `apns-start` 1행과 `apns-activity` 1행(`activity_id`와 `session_id`가 `startLocal`에 넘긴 값과 같다).
   - 503만 답하는 서버: 토큰마다 요청 3번, 첫 요청에서 1.02초, 4.12초 뒤(1초, 3초 간격). 앱은 계속 동작했다.
