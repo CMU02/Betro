@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export interface ArrivalRow {
 	arvlCd: "0" | "1" | "2" | "3" | "4" | "5" | "99";
+	/** 공식 도착 예측(초). 출퇴근 세션의 역 도착판이 쓴다. 예전 표본에는 없을 수 있다. */
+	barvlDt?: string;
 	bstatnId: string;
 	btrainNo: string;
 	btrainSttus: string;
@@ -22,6 +24,7 @@ export type ParsedArrival =
 
 const rowSchema = z.object({
 	arvlCd: z.enum(["0", "1", "2", "3", "4", "5", "99"]),
+	barvlDt: z.string().optional(),
 	bstatnId: z.string(),
 	btrainNo: z.string(),
 	btrainSttus: z.string(),
