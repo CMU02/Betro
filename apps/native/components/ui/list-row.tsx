@@ -8,7 +8,7 @@ import { Toggle } from "@/components/ui/toggle";
 
 const StyledChevron = withUniwind(ChevronRightIcon);
 
-const TILE_ICON_SIZE = 20;
+const LEADING_ICON_SIZE = 20;
 const ROW_CLASS_NAME = "min-h-[60px] flex-row items-center gap-3 px-4 py-3";
 const PRESSABLE_ROW_CLASS_NAME = `${ROW_CLASS_NAME} active:bg-bg-hover`;
 /** 토글 행 안의 토글은 보이기만 하고 터치는 행이 받는다. */
@@ -75,8 +75,8 @@ function RowContent({
 	return (
 		<>
 			{Icon ? (
-				<View className="size-10 items-center justify-center rounded-md bg-bg-control">
-					<Icon colorClassName="accent-icon-primary" size={TILE_ICON_SIZE} />
+				<View className="size-6 items-center justify-center">
+					<Icon colorClassName="accent-icon-primary" size={LEADING_ICON_SIZE} />
 				</View>
 			) : null}
 			<View className="flex-1 gap-0.5">
@@ -141,7 +141,7 @@ function ToggleRow({
 	);
 }
 
-/** Figma `ListRow`(6:219). 아이콘 타일, 제목·부제, 오른쪽 chevron/토글/값. */
+/** Figma `ListRow`(6:219). 24x24 상자 안 아이콘, 제목·부제, 오른쪽 chevron/토글/값. */
 export function ListRow({
 	accessibilityRole = "button",
 	icon,
@@ -182,10 +182,13 @@ export function ListRow({
 	return <View className={ROW_CLASS_NAME}>{content}</View>;
 }
 
-/** 카드 안 행 사이 구분선(아이콘 타일 너비만큼 들여쓴다). */
-export function ListDivider() {
+/**
+ * 카드 안 행 사이 구분선. "icon"은 제목 시작선(16 + 24 + 12 = 52)에 맞추고,
+ * "edge"는 아이콘 없는 행 목록용으로 행 padding(16)에 맞춘다.
+ */
+export function ListDivider({ inset = "icon" }: { inset?: "icon" | "edge" }) {
 	return (
-		<View className="pl-[68px]">
+		<View className={inset === "edge" ? "pl-4" : "pl-[52px]"}>
 			<View className="h-px bg-border-subtle" />
 		</View>
 	);
