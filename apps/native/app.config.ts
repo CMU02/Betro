@@ -28,16 +28,23 @@ const config: ExpoConfig = {
 	},
 	icon: "./assets/images/icon.png",
 	ios: {
+		appleTeamId: "5JKMP6D4C5",
 		bundleIdentifier: "com.cmu02.betro",
 		entitlements: {
 			"aps-environment": "development",
+			// 위젯 확장(targets/commute-activity)과 같은 앱 그룹. 머리줄을 확장에 넘긴다.
+			"com.apple.security.application-groups": ["group.com.cmu02.betro"],
 		},
 		googleServicesFile: "./GoogleService-Info.plist",
 		infoPlist: {
+			NSSupportsLiveActivities: true,
+			NSSupportsLiveActivitiesFrequentUpdates: true,
 			UIBackgroundModes: ["remote-notification"],
 		},
 		supportsTablet: true,
 	},
+	// iOS 시작 푸시의 알림 키(commute.start.*)가 앱 번들의 Localizable.strings에서 문구가 된다.
+	locales: { ko: "./locales/ko.json" },
 	name: "Betro",
 	orientation: "portrait",
 	plugins: [
@@ -56,6 +63,7 @@ const config: ExpoConfig = {
 				resizeMode: "contain",
 			},
 		],
+		"@bacons/apple-targets",
 		"@react-native-firebase/app",
 		"@react-native-firebase/messaging",
 		[

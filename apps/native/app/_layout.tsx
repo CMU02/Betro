@@ -15,18 +15,21 @@ import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
 import { Screen } from "@/components/ui/screen";
 import { AppThemeProvider, useAppTheme } from "@/contexts/app-theme-context";
+import { passActivityCredentials } from "@/lib/commute/activity-credentials";
 import { appCrashSink } from "@/lib/crash/app-crash-reporting";
 import {
 	configureCrashReporting,
 	reportError,
 } from "@/lib/crash/crash-reporting";
 import { ensureInstallIdentity } from "@/lib/device/app-install-identity";
+import type { InstallIdentity } from "@/lib/device/install-identity";
 import { t } from "@/lib/i18n/t";
 import { shouldShowOnboarding } from "@/lib/onboarding/onboarding";
 import { appPreferences } from "@/lib/preferences/app-preferences";
 import { toUniwindTheme } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
 import { ensureRegistered } from "@/lib/server/app-server";
+import { CommuteActivity } from "@/modules/commute-activity";
 import { setAndroidSystemBarsContent } from "@/modules/system-bars";
 import { ENV } from "@/src/env";
 import { queryClient } from "@/utils/orpc";
@@ -39,10 +42,12 @@ configureCrashReporting(appCrashSink, {
 
 /**
  * 설치 ID를 읽거나 만들고, 만들었으면 서버에 등록한다. 실패하면 기록만 하고 앱은 계속 쓰며, 다음 실행에 다시 시도한다.
+ * iOS는 이어서 네이티브 토큰 보고기와 잠금화면 버튼이 쓸 인증값을 Live Activity 모듈에 넘긴다.
  */
 async function startInstallIdentity(): Promise<void> {
+	let identity: InstallIdentity;
 	try {
-		const identity = await ensureInstallIdentity();
+		identity = await ensureInstallIdentity();
 		appCrashSink.setInstallId(identity.installId);
 		if (__DEV__) {
 			// 재실행 뒤에도 같은 값인지 기기 확인에서 본다.
@@ -53,6 +58,16 @@ async function startInstallIdentity(): Promise<void> {
 		return;
 	}
 	await ensureRegistered();
+	try {
+		await passActivityCredentials({
+			identity,
+			platform: Platform.OS,
+			serverUrl: ENV.EXPO_PUBLIC_SERVER_URL,
+			setCredentials: CommuteActivity.setCredentials,
+		});
+	} catch (error) {
+		reportError(appCrashSink, error, "activity-credentials");
+	}
 }
 
 startInstallIdentity();
