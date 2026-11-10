@@ -13,6 +13,7 @@
     "@Betro/auth": "workspace:*",
     "@Betro/db": "workspace:*",
     "@Betro/realtime": "workspace:*",
+    "@Betro/transit-static": "workspace:*",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",

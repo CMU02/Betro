@@ -2,6 +2,14 @@ import type { Database } from "@Betro/db";
 import { Hono } from "hono";
 import { currentBusBatch, findBusRouteStops, searchBusRoutes } from "./bus";
 import { ifNoneMatchMatches } from "./if-none-match";
+import {
+	currentTrackBatch,
+	findDirection,
+	findLineKey,
+	findLineStations,
+	listSubwayLines,
+	stripSubwayPrefix,
+} from "./subway";
 
 const CACHE_CONTROL = "public, max-age=3600";
 const MAX_QUERY_LENGTH = 20;
@@ -64,6 +72,59 @@ export function createRefRoutes(db: Database): Hono {
 			return c.body(null, 304, headers);
 		}
 		return c.json(result.route, 200, headers);
+	});
+
+	const subwayHeaders = (batchId: number) => ({
+		"Cache-Control": CACHE_CONTROL,
+		ETag: `"subway-${batchId}"`,
+	});
+
+	routes.get("/subway/lines", (c) =>
+		c.json({ lines: listSubwayLines() }, 200, {
+			"Cache-Control": CACHE_CONTROL,
+		})
+	);
+
+	routes.get("/subway/lines/:lineKey/stations", async (c) => {
+		const lineKey = findLineKey(stripSubwayPrefix(c.req.param("lineKey")));
+		if (!lineKey) {
+			return c.json({ error: "line not found" }, 404);
+		}
+		const batchId = await currentTrackBatch(db);
+		if (batchId === null) {
+			return c.json({ error: "reference unavailable" }, 503);
+		}
+		const headers = subwayHeaders(batchId);
+		if (ifNoneMatchMatches(c.req.header("if-none-match"), headers.ETag)) {
+			return c.body(null, 304, headers);
+		}
+		const result = await findLineStations(db, lineKey);
+		if (!result) {
+			return c.json({ error: "reference unavailable" }, 503);
+		}
+		return c.json(result, 200, headers);
+	});
+
+	routes.get("/subway/direction", async (c) => {
+		const from = stripSubwayPrefix(c.req.query("from")?.trim() ?? "");
+		const to = stripSubwayPrefix(c.req.query("to")?.trim() ?? "");
+		if (from === "" || to === "" || from === to) {
+			return c.json({ error: "invalid query" }, 400);
+		}
+		const lineKey = findLineKey(
+			stripSubwayPrefix(c.req.query("line")?.trim() ?? "")
+		);
+		if (!lineKey) {
+			return c.json({ error: "line not found" }, 404);
+		}
+		const found = await findDirection(db, lineKey, from, to);
+		if (!found) {
+			return c.json({ error: "reference unavailable" }, 503);
+		}
+		if (!found.result) {
+			return c.json({ error: "not-direct" }, 404);
+		}
+		return c.json(found.result, 200, subwayHeaders(found.batchId));
 	});
 
 	return routes;
