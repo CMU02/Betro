@@ -1006,6 +1006,181 @@ describe("RunnerCore 푸시 응답", () => {
 	});
 });
 
+function sendRecordsOf(
+	h: Harness,
+	sessionId: string
+): Extract<AccuracyRecord, { kind: "send" }>[] {
+	return (h.records.rows.get(sessionId) ?? []).filter(
+		(record): record is Extract<AccuracyRecord, { kind: "send" }> =>
+			record.kind === "send"
+	);
+}
+
+describe("RunnerCore 시작 푸시의 결과를 모를 때와 설정 오류", () => {
+	test("iOS 시작 푸시가 예외로 끝나면 다시 보내지 않고 unconfirmed로 남긴 뒤 Activity 토큰을 기다린다", async () => {
+		const h = harness({ busPollMs: 30 * SECOND });
+		addIos(h);
+		h.push.respond = (sent) =>
+			apsOf(sent).event === "start"
+				? new Error("The operation was aborted due to timeout")
+				: { reason: null, status: 200 };
+		const core = h.core();
+		await tickRange(h, core, T0, T0 + 50 * SECOND);
+		expect(h.push.sent.map(describeSent)).toEqual(["apns:start"]);
+
+		const [sessionId, entry] = await onlySession(h);
+		expect(entry.tokenWaitUntil).toBe(T0 + h.config.tokenWaitMs);
+		expect(sendRecordsOf(h, sessionId)).toEqual([
+			expect.objectContaining({ outcome: "unconfirmed", reason: "start" }),
+		]);
+
+		h.db.addToken(IOS_INSTALL, "apns-activity", ACTIVITY_TOKEN, { sessionId });
+		await tickAt(h, core, T0 + 80 * SECOND);
+		expect(h.push.sent.map(describeSent)).toEqual([
+			"apns:start",
+			"apns:update",
+		]);
+		expect((h.push.sent.at(-1) as SentRequest).url).toContain(ACTIVITY_TOKEN);
+		const [, after] = await onlySession(h);
+		expect(after.updatable).toBe(true);
+	});
+
+	test("결과를 모르는 iOS 시작 뒤 Activity 토큰이 끝내 오지 않으면 갱신 불가로 두고 시작은 한 번이다", async () => {
+		const h = harness();
+		addIos(h);
+		h.push.respond = () => new Error("network connection lost");
+		const core = h.core();
+		await tickRange(h, core, T0, T0 + 3 * MINUTE);
+		expect(h.push.sent.map(describeSent)).toEqual(["apns:start"]);
+		const [, entry] = await onlySession(h);
+		expect(entry.updatable).toBe(false);
+		expect(entry.state.stage).not.toBe("ended");
+	});
+
+	const retryReplies: PushResult[] = [
+		{ reason: "TooManyRequests", status: 429 },
+		{ reason: "InternalServerError", status: 500 },
+		{ reason: "ServiceUnavailable", status: 503 },
+	];
+	for (const reply of retryReplies) {
+		test(`iOS 시작이 ${reply.status}이면 다음 tick에 다시 보낸다`, async () => {
+			const h = harness();
+			addIos(h);
+			let rejected = false;
+			h.push.respond = () => {
+				if (!rejected) {
+					rejected = true;
+					return reply;
+				}
+				return { reason: null, status: 200 };
+			};
+			const core = h.core();
+			await tickAt(h, core, T0);
+			expect(h.push.sent.map(describeSent)).toEqual(["apns:start"]);
+			const [sessionId, entry] = await onlySession(h);
+			expect(entry.lastContent).toBeNull();
+			expect(entry.tokenWaitUntil).toBeNull();
+
+			await tickAt(h, core, T0 + 30 * SECOND);
+			expect(h.push.sent.map(describeSent)).toEqual([
+				"apns:start",
+				"apns:start",
+			]);
+			expect(sendRecordsOf(h, sessionId).map((r) => r.outcome)).toEqual([
+				"retry",
+				"ok",
+			]);
+			await tickAt(h, core, T0 + 60 * SECOND);
+			expect(
+				h.push.sent.map(describeSent).filter((name) => name === "apns:start")
+			).toHaveLength(2);
+		});
+	}
+
+	test("iOS 시작이 400 TopicDisallowed면 push-rejected로 닫고 더 보내지 않는다", async () => {
+		const h = harness();
+		addIos(h);
+		h.push.respond = () => ({ reason: "TopicDisallowed", status: 400 });
+		const core = h.core();
+		await tickRange(h, core, T0, T0 + 2 * MINUTE);
+		expect(h.push.sent.map(describeSent)).toEqual(["apns:start"]);
+		const [row] = [...h.db.sessions.values()];
+		expect(row?.status).toBe("ended");
+		expect(row?.endReason).toBe("push-rejected");
+		expect(await sessions(h)).toHaveLength(0);
+		// 시작 토큰은 지우지 않는다(토큰 문제가 아니다). 다음 날 다시 시도된다.
+		expect(h.db.tokenRows.map((r) => r.kind)).toEqual(["apns-start"]);
+		const summary = await summaryOf(h, row?.id ?? "");
+		expect(summary?.endReason).toBe("push-rejected");
+	});
+
+	test("새로 서명한 JWT도 InvalidProviderToken이면 설정 오류로 보고 닫는다", async () => {
+		const h = harness();
+		addIos(h);
+		h.push.respond = () => ({ reason: "InvalidProviderToken", status: 403 });
+		await tickRange(h, h.core(), T0, T0 + MINUTE);
+		expect(h.push.sent.map(describeSent)).toEqual(["apns:start", "apns:start"]);
+		const [row] = [...h.db.sessions.values()];
+		expect(row?.endReason).toBe("push-rejected");
+	});
+
+	test("Android 시작이 FCM 403이면 push-rejected로 닫고 더 보내지 않는다", async () => {
+		const h = harness();
+		addAndroid(h);
+		h.push.respond = () => ({ reason: "SENDER_ID_MISMATCH", status: 403 });
+		await tickRange(h, h.core(), T0, T0 + 2 * MINUTE);
+		expect(h.push.sent.map(describeSent)).toEqual(["fcm:start"]);
+		const [row] = [...h.db.sessions.values()];
+		expect(row?.endReason).toBe("push-rejected");
+		expect(h.db.tokenRows.map((r) => r.kind)).toEqual(["fcm"]);
+	});
+
+	test("갱신이 설정 오류로 세 번 실패하면 종료를 한 번 보내고 push-rejected로 닫는다", async () => {
+		const h = harness({ busPollMs: 30 * SECOND });
+		addIos(h);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [sessionId] = await onlySession(h);
+		h.db.addToken(IOS_INSTALL, "apns-activity", ACTIVITY_TOKEN, { sessionId });
+		h.push.respond = (sent) =>
+			apsOf(sent).event === "update"
+				? { reason: "BadTopic", status: 400 }
+				: { reason: null, status: 200 };
+		await tickRange(h, core, T0 + 30 * SECOND, T0 + 10 * MINUTE);
+		expect(h.push.sent.map(describeSent)).toEqual([
+			"apns:start",
+			"apns:update",
+			"apns:update",
+			"apns:update",
+			"apns:end",
+		]);
+		const row = h.db.sessions.get(sessionId);
+		expect(row?.endReason).toBe("push-rejected");
+		expect(await sessions(h)).toHaveLength(0);
+	});
+
+	test("Android 갱신의 설정 오류도 세 번에서 멈춘다", async () => {
+		const h = harness({ busPollMs: 30 * SECOND });
+		addAndroid(h);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [sessionId] = await onlySession(h);
+		h.push.respond = (sent) =>
+			fcmDataOf(sent).event === "update"
+				? { reason: "PERMISSION_DENIED", status: 403 }
+				: { reason: null, status: 200 };
+		await tickRange(h, core, T0 + 30 * SECOND, T0 + 10 * MINUTE);
+		expect(h.push.sent.map(describeSent)).toEqual([
+			"fcm:start",
+			"fcm:update",
+			"fcm:update",
+			"fcm:update",
+			"fcm:end",
+		]);
+		expect(h.db.sessions.get(sessionId)?.endReason).toBe("push-rejected");
+	});
+});
+
 describe("RunnerCore 도착판", () => {
 	test("도착판이 멈추면 151초 뒤 보낸 값이 estimated·stale이고, 값이 그대로여도 120초 안에 한 번은 보낸다", async () => {
 		const h = harness();

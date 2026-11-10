@@ -93,6 +93,11 @@ const REPORT_DELAY_MS = DAY_MS + 4 * 60 * MINUTE_MS;
 const HOLIDAY_COUNTRY = "KR";
 const TOKEN_SHOWN_LENGTH = 8;
 const FCM_UNREGISTERED_STATUS = 404;
+/**
+ * 한 세션에서 갱신이 `config`(토큰이 아닌 400·403)로 거절돼도 되는 횟수. 이만큼 거절되면 종료를 한 번
+ * 보내고 `push-rejected`로 닫는다. 설정이 틀린 채로 tick마다 3시간 보내지 않게 하는 안전 상한이다.
+ */
+const PUSH_REJECT_LIMIT = 3;
 /** 키를 지운 로그에도 남을 수 있는 키 모양: 쿼리 `serviceKey=…`, 서울 지하철 경로의 키. */
 const KEY_QUERY = /((?:service)?key=)[^&\s"']+/gi;
 const SUBWAY_KEY_PATH = /(\/api\/subway\/)[^/\s"']+/g;
@@ -101,6 +106,11 @@ const encoder = new TextEncoder();
 const MIN_SECRET_LINE = 16;
 
 type Platform = "ios" | "android";
+/**
+ * 푸시 한 번의 결과. `unconfirmed`는 응답을 받지 못한 것이다(예외, 10초 타임아웃). 상대가 이미
+ * 받았을 수 있다.
+ */
+type SendOutcome = PushOutcome | "unconfirmed";
 interface PlanRecord {
 	installId: string;
 	plan: CommutePlan;
@@ -117,6 +127,11 @@ export interface SessionEntry {
 	lastContent: ContentState | null;
 	lastSentAt: number | null;
 	platform: Platform | null;
+	/**
+	 * 갱신이 `config`로 거절된 횟수. `PUSH_REJECT_LIMIT`에 닿으면 닫는다. 이 필드가 생기기 전에
+	 * 저장된 세션 항목에는 없다(0으로 본다).
+	 */
+	rejectedUpdates?: number;
 	serviceDate: string;
 	/** 기기가 처음 그린 시각(ack). */
 	shownAt: number | null;
@@ -242,6 +257,29 @@ function endedState(state: SessionState, reason: EndReason): SessionState {
 		return state;
 	}
 	return { ...state, endReason: reason, passed: null, stage: "ended" };
+}
+
+type PushReply = { reason: string | null; status: number } | null;
+
+/** 응답이 없으면(`#push`가 예외를 삼켰으면) `unconfirmed`. */
+function outcomeOf(
+	result: PushReply,
+	classify: (status: number, reason: string | null) => PushOutcome
+): SendOutcome {
+	return result ? classify(result.status, result.reason) : "unconfirmed";
+}
+
+/** 새로 만든 JWT·액세스 토큰도 인증 오류면 키나 계정 설정 문제라 `config`로 본다. */
+function renewedOutcome(outcome: SendOutcome): SendOutcome {
+	return outcome === "jwt-expired" ? "config" : outcome;
+}
+
+/** 시작 푸시 결과로 세션을 닫아야 하면 그 이유. 다시 보내거나 이어 가면 null. */
+function startCloseReason(outcome: SendOutcome): EndReason | null {
+	if (outcome === "token-dead") {
+		return "no-token";
+	}
+	return outcome === "config" ? "push-rejected" : null;
 }
 
 /** 가장 최근에 올라온 토큰. */
@@ -616,6 +654,7 @@ export class RunnerCore {
 			lastContent: null,
 			lastSentAt: null,
 			platform,
+			rejectedUpdates: 0,
 			serviceDate: due.serviceDate,
 			shownAt: null,
 			startSentAt: null,
@@ -988,13 +1027,17 @@ export class RunnerCore {
 		}
 		const content = buildContent(entry.state, plan, now, config);
 		const lastSent = entry.lastContent;
-		const open =
+		const closeWith =
 			lastSent === null
 				? await this.#start(id, entry, content, rows, now)
 				: await this.#update(id, entry, content, rows, now);
-		if (!open) {
-			entry.state = endedState(entry.state, "no-token");
-			await this.#close(id, entry, rows, now);
+		if (closeWith !== null) {
+			entry.state = endedState(entry.state, closeWith);
+			// 거절은 토큰 문제가 아니니 시작한 Activity·알림을 치우려고 종료를 한 번 보낸다.
+			// 토큰이 없거나 죽었으면 보낼 곳이 없다.
+			await (closeWith === "push-rejected"
+				? this.#finish(id, entry, plan, rows, now)
+				: this.#close(id, entry, rows, now));
 			return false;
 		}
 		const suggestion =
@@ -1060,7 +1103,7 @@ export class RunnerCore {
 		id: string,
 		content: ContentState,
 		reason: string,
-		outcome: PushOutcome,
+		outcome: SendOutcome,
 		now: number
 	): void {
 		this.#note(id, {
@@ -1079,19 +1122,27 @@ export class RunnerCore {
 		entry.lastSentAt = now;
 	}
 
-	/** 처음 보내는 세션. 시작 토큰이 없거나 죽었으면 false(no-token으로 닫는다). */
+	/**
+	 * 처음 보내는 세션. 닫아야 하면 그 이유를 돌려준다: 시작 토큰이 없거나 죽었으면 `no-token`,
+	 * 토큰이 아닌 이유로 거절되면 `push-rejected`(다음 날 다시 시도된다). `retry`(429·5xx)는
+	 * 받지 않은 것이 확실하니 다음 tick에 다시 보낸다.
+	 *
+	 * iOS는 응답을 받지 못한 시작(`unconfirmed`)을 다시 보내지 않는다. APNs가 이미 받았으면 Activity가
+	 * 둘이 된다. 보낸 것으로 두고 정상 시작처럼 업데이트 토큰을 기다린다(안 오면 갱신 불가).
+	 * Android는 같은 알림을 덮어쓰므로 `unconfirmed`도 다시 보낸다.
+	 */
 	async #start(
 		id: string,
 		entry: SessionEntry,
 		content: ContentState,
 		rows: PushTokenRow[],
 		now: number
-	): Promise<boolean> {
+	): Promise<EndReason | null> {
 		const { config, secrets } = this.#ports;
 		if (entry.platform === "ios") {
 			const row = latestToken(rows, (r) => r.kind === "apns-start");
 			if (row === null) {
-				return false;
+				return "no-token";
 			}
 			const outcome = await this.#sendApns(id, row, "start", (jwt) =>
 				apnsStartRequest({
@@ -1105,17 +1156,17 @@ export class RunnerCore {
 				})
 			);
 			this.#noteSend(id, content, "start", outcome, now);
-			if (outcome === "ok") {
+			if (outcome === "ok" || outcome === "unconfirmed") {
 				this.#sent(entry, content, now);
 				entry.startSentAt = now;
 				entry.tokenWaitUntil = now + config.tokenWaitMs;
 			}
-			return outcome !== "token-dead";
+			return startCloseReason(outcome);
 		}
 		if (entry.platform === "android") {
 			const row = latestToken(rows, (r) => r.kind === "fcm");
 			if (row === null) {
-				return false;
+				return "no-token";
 			}
 			const outcome = await this.#sendFcm(id, entry, row, "start", content);
 			this.#noteSend(id, content, "start", outcome, now);
@@ -1123,14 +1174,28 @@ export class RunnerCore {
 				this.#sent(entry, content, now);
 				entry.startSentAt = now;
 			}
-			return outcome !== "token-dead";
+			return startCloseReason(outcome);
 		}
-		return false;
+		return "no-token";
+	}
+
+	/** 갱신이 `config`로 거절됐다. 세션당 상한에 닿았으면 true. */
+	#rejectedUpdate(id: string, entry: SessionEntry): boolean {
+		entry.rejectedUpdates = (entry.rejectedUpdates ?? 0) + 1;
+		if (entry.rejectedUpdates < PUSH_REJECT_LIMIT) {
+			return false;
+		}
+		this.#log(
+			`commute session=${id} update rejected ${entry.rejectedUpdates} times, closing`
+		);
+		return true;
 	}
 
 	/**
 	 * 갱신. iOS는 이 세션의 업데이트 토큰이 있어야 보낸다. 없으면 `tokenWaitUntil`까지 기다리고
 	 * 지나면 `updatable: false`로 기록한다(시작은 다시 보내지 않는다). 토큰이 늦게라도 오면 보낸다.
+	 * 보내지 못한 값(`retry`, `unconfirmed`, `config`)은 다음 tick에 다시 판단한다. `config`가
+	 * `PUSH_REJECT_LIMIT`번 쌓이면 `push-rejected`로 닫는다.
 	 */
 	async #update(
 		id: string,
@@ -1138,7 +1203,7 @@ export class RunnerCore {
 		content: ContentState,
 		rows: PushTokenRow[],
 		now: number
-	): Promise<boolean> {
+	): Promise<EndReason | null> {
 		const { config, secrets } = this.#ports;
 		const decision = decideSend(
 			entry.lastContent,
@@ -1150,7 +1215,7 @@ export class RunnerCore {
 		if (entry.platform === "ios") {
 			const row = this.#activityToken(id, entry, rows, now);
 			if (row === null || !decision.send) {
-				return true;
+				return null;
 			}
 			const outcome = await this.#sendApns(id, row, "update", (jwt) =>
 				apnsUpdateRequest({
@@ -1168,21 +1233,28 @@ export class RunnerCore {
 			if (outcome === "ok") {
 				this.#sent(entry, content, now);
 			}
-			return true;
+			// token-dead면 `#sendApns`가 업데이트 토큰을 지웠다. 세션은 열어 두고 갱신 불가로 간다.
+			const isOverLimit =
+				outcome === "config" && this.#rejectedUpdate(id, entry);
+			return isOverLimit ? "push-rejected" : null;
 		}
 		const row = latestToken(rows, (r) => r.kind === "fcm");
 		if (row === null) {
-			return false;
+			return "no-token";
 		}
 		if (!decision.send) {
-			return true;
+			return null;
 		}
 		const outcome = await this.#sendFcm(id, entry, row, "update", content);
 		this.#noteSend(id, content, decision.reason, outcome, now);
 		if (outcome === "ok") {
 			this.#sent(entry, content, now);
 		}
-		return outcome !== "token-dead";
+		if (outcome === "token-dead") {
+			return "no-token";
+		}
+		const isOverLimit = outcome === "config" && this.#rejectedUpdate(id, entry);
+		return isOverLimit ? "push-rejected" : null;
 	}
 
 	#activityToken(
@@ -1426,10 +1498,8 @@ export class RunnerCore {
 		return rows;
 	}
 
-	async #push(request: Request): Promise<{
-		reason: string | null;
-		status: number;
-	} | null> {
+	/** 응답을 받지 못하면(예외, 타임아웃) null. 상대가 받았는지는 모른다. */
+	async #push(request: Request): Promise<PushReply> {
 		try {
 			return await this.#ports.push.send(request);
 		} catch (error) {
@@ -1443,14 +1513,14 @@ export class RunnerCore {
 		row: PushTokenRow,
 		event: "start" | "update" | "end",
 		build: (jwt: string) => Request
-	): Promise<PushOutcome> {
+	): Promise<SendOutcome> {
 		const now = this.#ports.clock();
 		let result = await this.#push(build(await this.#apnsJwt(now, false)));
-		let outcome = result ? classifyApns(result.status, result.reason) : "retry";
+		let outcome = outcomeOf(result, classifyApns);
 		if (outcome === "jwt-expired") {
 			// 서명 키는 그대로이니 새 JWT로 한 번만 다시 보낸다.
 			result = await this.#push(build(await this.#apnsJwt(now, true)));
-			outcome = result ? classifyApns(result.status, result.reason) : "retry";
+			outcome = renewedOutcome(outcomeOf(result, classifyApns));
 		}
 		if (outcome === "token-dead") {
 			await this.#ports.tokens.remove(row.id);
@@ -1465,7 +1535,7 @@ export class RunnerCore {
 		row: PushTokenRow,
 		event: "start" | "update" | "end",
 		content: ContentState
-	): Promise<PushOutcome> {
+	): Promise<SendOutcome> {
 		const now = this.#ports.clock();
 		const build = (accessToken: string): Request =>
 			fcmCommuteRequest({
@@ -1478,10 +1548,10 @@ export class RunnerCore {
 				token: row.token,
 			});
 		let result = await this.#push(build(await this.#fcmAccess(now, false)));
-		let outcome = result ? classifyFcm(result.status, result.reason) : "retry";
+		let outcome = outcomeOf(result, classifyFcm);
 		if (outcome === "jwt-expired") {
 			result = await this.#push(build(await this.#fcmAccess(now, true)));
-			outcome = result ? classifyFcm(result.status, result.reason) : "retry";
+			outcome = renewedOutcome(outcomeOf(result, classifyFcm));
 		}
 		if (outcome === "token-dead") {
 			// 설치를 통째로 지우는 것은 UNREGISTERED뿐이다. INVALID_ARGUMENT는 본문 오류에도 나오니 그 토큰 행만 지운다.
@@ -1501,10 +1571,10 @@ export class RunnerCore {
 		via: "apns" | "fcm",
 		event: string,
 		row: PushTokenRow,
-		result: { reason: string | null; status: number } | null,
-		outcome: PushOutcome
+		result: PushReply,
+		outcome: SendOutcome
 	): void {
-		const status = result?.status ?? "none";
+		const status = result === null ? "none" : result.status;
 		const reason = result?.reason ? ` reason=${result.reason}` : "";
 		this.#log(
 			`commute push ${event} session=${id} via=${via} env=${row.env} token=${row.token.slice(0, TOKEN_SHOWN_LENGTH)}… status=${status}${reason} outcome=${outcome}`

@@ -193,13 +193,16 @@ bunx wrangler d1 execute betro --remote --command \
 | `commute runner alarm missing, arming` | cron이 사라진 alarm을 다시 걸었다 |
 | `commute start session=<id> plan=<id> platform=<ios\|android\|none>` | 세션 시작 |
 | `commute push <이벤트> session=<id> via=… status=<HTTP 상태> outcome=…` | 푸시 한 번. 토큰은 앞 몇 글자만 나온다 |
-| `commute end session=<id> reason=<arrived\|user\|timeout\|no-token\|plan-removed>` | 세션 종료 |
+| `commute end session=<id> reason=<arrived\|user\|timeout\|no-token\|plan-removed\|push-rejected>` | 세션 종료 |
+| `commute session=<id> update rejected <n> times, closing` | 갱신이 설정 오류로 상한(3번)만큼 거절돼 세션을 닫는다 |
 | `commute records session=<id> written …` | 정확도 기록·요약을 R2에 썼다 |
 | `commute report commute/reports/<날짜>.json written sessions=<n>` | 일일 보고서를 썼다 |
 | `… failed: …` | 단계 실패. 한 세션이 실패해도 다른 세션은 계속 돈다 |
 
 - `commute_session.status`는 `active` 또는 `ended`. `end_reason`은 위 종료 이유다.
 - 보낸 푸시가 `token-dead`로 끝나면 해당 토큰(FCM `UNREGISTERED`면 설치 전체)을 지운다.
+- `retry`(429·5xx)는 받지 않은 것이 확실하니 다음 tick에 다시 보낸다. 요청이 예외나 10초 타임아웃으로 끝나면 `outcome=unconfirmed`다(상대가 받았는지 모른다). iOS 시작이 `unconfirmed`면 Live Activity가 둘 생기지 않게 다시 보내지 않고, 정상 시작처럼 업데이트 토큰을 기다린다(안 오면 갱신 불가). Android 시작과 갱신은 다음 tick에 다시 보낸다.
+- `config`(토큰이 아닌 400·403, 예: `TopicDisallowed`, FCM 403)는 다시 보내도 같다. 시작이 `config`면 바로 `push-rejected`로 닫고(다음 날 다시 시도된다), 갱신은 세션당 3번 거절되면 종료를 한 번 보내고 `push-rejected`로 닫는다. 종료 푸시는 원래 세션당 한 번이다. 새로 만든 APNs JWT·FCM 액세스 토큰으로 다시 보내도 인증 오류면 `config`로 본다.
 
 ### 기록 위치
 

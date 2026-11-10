@@ -43,7 +43,7 @@
 
 1. **자정과 요일 경계.** 나가는 시각이 00:05이고 선행이 10분이면 세션은 전날 23:55에 시작해야 하고, 요일과 공휴일은 나가는 날 기준으로 본다. 기대: 월요일 00:05 예약은 일요일 23:55에 시작하고, 일요일이 공휴일이어도 월요일이 아니면 건너뛰지 않는다. Task 3(`dueStarts`) 테스트로 고정.
 2. **실행기 재시작.** DO가 잠들었다 깨어나거나 배포로 다시 떠도 같은 예약의 세션을 두 번 만들지 않고, 시작 푸시를 다시 보내지 않고, `seq`가 이어지고, APNs JWT를 새로 만들지 않는다. Task 9 테스트(같은 저장소로 만든 두 번째 `RunnerCore`)로 고정.
-3. **토큰이 없거나 늦거나 죽은 경우.** push-to-start 토큰이 없는 기기, 시작 뒤 60초 안에 업데이트 토큰이 오지 않는 세션, `BadDeviceToken`·`Unregistered` 응답. 기대: 시작을 다시 보내 Activity를 둘 만들지 않고, 죽은 토큰은 지우고, 세션은 "갱신 불가"로 기록한다. Task 8, 9 테스트로 고정.
+3. **토큰이 없거나 늦거나 죽은 경우.** push-to-start 토큰이 없는 기기, 시작 뒤 60초 안에 업데이트 토큰이 오지 않는 세션, `BadDeviceToken`·`Unregistered` 응답. 기대: 시작을 다시 보내 Activity를 둘 만들지 않고(시작 요청이 예외·타임아웃으로 끝나 결과를 모를 때도), 죽은 토큰은 지우고, 세션은 "갱신 불가"로 기록한다. Task 8, 9 테스트로 고정.
 4. **원천이 멈춘 경우.** 도착판이 150초 넘게 새로 오지 않으면 시간표·배차간격 추정으로 바꾸고 `etaState: "estimated"`, `positionState: "stale"`로 보낸다. 값이 그대로여도 110초마다 한 번은 보낸다. 기대: 실시간인 척 멈춘 화면이 없다. Task 5, 7 테스트로 고정.
 5. **남의 세션, 끝난 세션, 중복 입력.** 다른 설치의 비밀값으로 보낸 입력은 404, 끝난 세션의 입력은 409, "탔어요"를 두 번 눌러도 상태가 한 번만 바뀐다. 강제 종료 뒤 늦게 도착한 옛 메시지가 최신 값을 덮지 않도록 모든 값에 `seq`가 있다. Task 6, 10 테스트로 고정.
 
@@ -289,7 +289,7 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
 - Consumes: `RouteEstimate`, `estimateRoute`(Task 5), `CommutePlan`, `TransitBoards`, `CommuteConfig`
 - Produces:
   - `type Stage = "walk" | "wait" | "ride" | "arrived" | "ended"`
-  - `type EndReason = "arrived" | "user" | "timeout" | "no-token" | "plan-removed"`
+  - `type EndReason = "arrived" | "user" | "timeout" | "no-token" | "plan-removed" | "push-rejected"`. **[검토 반영]** `push-rejected`는 실행기가 붙이는 값이다(Task 9 규칙 8). D1 `end_reason`은 제약 없는 text라 마이그레이션이 필요 없다.
   - `interface SessionState { boardedBy: ("time" | "user" | null)[]; endReason: EndReason | null; estimates: RouteEstimate[]; fixed: (string | null)[]; initialDestinationEtaAt: number | null; leaveAt: number; legIndex: number; passed: { lineName: string } | null; planId: string; readyAt: number | null; seq: number; sessionId: string; skip: string[]; stage: Stage; startedAt: number }`. JSON으로 그대로 저장한다.
     - `readyAt`(**[검토 반영]**, 규칙 2의 "넘긴 시각"을 담는 필드): 지금 구간의 승차 정류장에 있을 수 있는 시각이다. 첫 `advance`에서 `max(now, leaveAt) + walkMinutes[0]분`으로, 환승 구간은 내린 시각 + 환승 도보로 한 번 정하고 그 뒤로 바꾸지 않는다(매번 `now`로 다시 계산하면 `now >= readyAt`이 되지 않아 `wait`과 규칙 3의 탑승 판단이 걸리지 않는다). `estimateRoute`에는 `max(now, readyAt)`을 준다. `arrived`에서는 목적지에 닿는 시각(내린 시각 + 마지막 도보)이고 규칙 8의 종료 판단에 쓴다. `startSession`은 null로 둔다.
   - `startSession(plan: CommutePlan, due: { leaveAt: number; startAt: number }, sessionId: string): SessionState`
@@ -457,7 +457,9 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
   5. **시작**: 처음 보내는 세션은 iOS면 `apns-start` 토큰으로 시작 요청, Android면 FCM `event: "start"`. 시작 토큰이 없으면 `no-token`으로 닫는다.
   6. **갱신**: iOS는 그 세션의 `apns-activity` 토큰(`session_id`가 같은 것)이 있어야 보낸다. 없으면 `tokenWaitUntil`(시작 + `tokenWaitMs`)까지 기다리고, 지나면 `updatable: false`로 기록하고 **시작을 다시 보내지 않는다.**
   7. **종료**: `stage`가 `ended`가 되면 종료 요청을 보내고 `closeSession`, 저장소에서 세션과 그 세션의 `apns-activity` 토큰을 지운다.
-  8. 응답 분류: `token-dead` → 토큰 삭제. 죽은 것이 FCM 토큰이면 그 설치를 통째로 지운다(Android는 앱을 지우면 설치 ID가 사라져 서버 등록이 고아가 된다, 5.2). iOS는 재설치해도 설치 ID가 이어지므로 토큰만 지운다. `jwt-expired` → JWT를 새로 만들어 한 번만 다시 보낸다. `config` → 로그만. `retry` → 다음 tick에 맡긴다(같은 tick에서 다시 보내지 않는다).
+  8. 응답 분류: `token-dead` → 토큰 삭제. 죽은 것이 FCM 토큰이면 그 설치를 통째로 지운다(Android는 앱을 지우면 설치 ID가 사라져 서버 등록이 고아가 된다, 5.2). iOS는 재설치해도 설치 ID가 이어지므로 토큰만 지운다. `jwt-expired` → JWT를 새로 만들어 한 번만 다시 보낸다(새 JWT·액세스 토큰도 인증 오류면 `config`로 본다). `retry`(429·5xx) → 다음 tick에 맡긴다(같은 tick에서 다시 보내지 않는다).
+     - **[검토 반영]** 요청이 예외나 타임아웃으로 끝나 응답이 없으면 `unconfirmed`로 기록한다(상대가 받았는지 모른다). iOS 시작이 `unconfirmed`면 다시 보내지 않는다(APNs가 이미 받았으면 Activity가 둘이 된다). 보낸 것으로 두고 정상 시작처럼 `tokenWaitUntil`까지 업데이트 토큰을 기다리며, 안 오면 규칙 6대로 갱신 불가다. Android 시작은 같은 알림을 덮어쓰므로 `retry`처럼 다시 보낸다. 갱신의 `unconfirmed`도 다음 tick에 다시 판단한다.
+     - **[검토 반영]** `config`(토큰이 아닌 400·403)는 다시 보내도 같아서 tick마다 보내면 세션당 수백 번 실패한다. 시작이 `config`면 `push-rejected`로 닫는다(다음 날 다시 시도된다). 갱신은 세션당 3번(`PUSH_REJECT_LIMIT`) 거절되면 종료를 한 번 보내고 `push-rejected`로 닫는다. 종료는 원래 세션당 한 번이다.
   9. 보냈으면 `state.seq`를 올리고 `lastContent`, `lastSentAt`을 저장한다. **모든 변경은 tick이 끝나기 전에 저장소에 쓴다.**
 
 - [ ] **Step 1: 실패하는 테스트**

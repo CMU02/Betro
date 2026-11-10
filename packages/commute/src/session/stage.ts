@@ -12,12 +12,17 @@ const NO_SKIP: ReadonlySet<string> = new Set();
 /** 도보(집 → 승차) → 대기(정류장) → 탑승 → 도착(4.2). 끝나면 ended. */
 export type Stage = "walk" | "wait" | "ride" | "arrived" | "ended";
 
+/**
+ * `push-rejected`는 APNs·FCM이 토큰이 아닌 이유(400·403, 예: `TopicDisallowed`)로 시작을 거절했거나
+ * 갱신을 세션당 상한만큼 거절해 실행기가 닫은 세션이다.
+ */
 export type EndReason =
 	| "arrived"
 	| "user"
 	| "timeout"
 	| "no-token"
-	| "plan-removed";
+	| "plan-removed"
+	| "push-rejected";
 
 /** 세션 하나의 상태. JSON으로 그대로 저장한다. */
 export interface SessionState {
