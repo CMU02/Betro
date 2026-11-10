@@ -65,6 +65,7 @@ const TIMETABLE_ARRIVALS = 6;
 const ENDED_KEEP_MS = DAY_MS;
 const HOLIDAY_COUNTRY = "KR";
 const TOKEN_SHOWN_LENGTH = 8;
+const FCM_UNREGISTERED_STATUS = 404;
 /** 키를 지운 로그에도 남을 수 있는 키 모양: 쿼리 `serviceKey=…`, 서울 지하철 경로의 키. */
 const KEY_QUERY = /((?:service)?key=)[^&\s"']+/gi;
 const SUBWAY_KEY_PATH = /(\/api\/subway\/)[^/\s"']+/g;
@@ -481,16 +482,7 @@ export class RunnerCore {
 			return;
 		}
 		const sessionId = crypto.randomUUID();
-		const opened = await plans.openSession({
-			id: sessionId,
-			installId,
-			planId: plan.planId,
-			serviceDate: due.serviceDate,
-			startedAt: now,
-		});
-		if (!opened) {
-			return;
-		}
+		// 실패할 수 있는 조회는 D1 행을 열기 전에 한다. 연 뒤에 실패하면 그날 세션이 다시 열리지 않는다.
 		const platform = platformOf(await this.#tokens(installId));
 		const entry: SessionEntry = {
 			dueAt: due.startAt,
@@ -507,7 +499,23 @@ export class RunnerCore {
 			tokenWaitUntil: null,
 			updatable: true,
 		};
-		await store.put(sessionKey(sessionId), entry);
+		const opened = await plans.openSession({
+			id: sessionId,
+			installId,
+			planId: plan.planId,
+			serviceDate: due.serviceDate,
+			startedAt: now,
+		});
+		if (!opened) {
+			return;
+		}
+		try {
+			await store.put(sessionKey(sessionId), entry);
+		} catch (error) {
+			// 저장소에 세션이 없으면 아무도 닫지 않으니 D1 행을 여기서 닫는다.
+			await plans.closeSession(sessionId, now, "no-token");
+			throw error;
+		}
 		this.#log(
 			`commute start session=${sessionId} plan=${plan.planId} platform=${platform ?? "none"}`
 		);
@@ -1093,7 +1101,13 @@ export class RunnerCore {
 			outcome = result ? classifyFcm(result.status, result.reason) : "retry";
 		}
 		if (outcome === "token-dead") {
-			await this.#ports.tokens.removeInstall(entry.installId);
+			// 설치를 통째로 지우는 것은 UNREGISTERED뿐이다. INVALID_ARGUMENT는 본문 오류에도 나오니 그 토큰 행만 지운다.
+			const unregistered =
+				result?.status === FCM_UNREGISTERED_STATUS &&
+				result.reason === "UNREGISTERED";
+			await (unregistered
+				? this.#ports.tokens.removeInstall(entry.installId)
+				: this.#ports.tokens.remove(row.id));
 		}
 		this.#logPush(id, "fcm", event, row, result, outcome);
 		return outcome;

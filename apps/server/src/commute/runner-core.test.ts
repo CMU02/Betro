@@ -662,6 +662,66 @@ describe("RunnerCore 시작", () => {
 		expect(hosts.get(START_TOKEN)).toBe("api.sandbox.push.apple.com");
 		expect(hosts.get(START_TOKEN_2)).toBe("api.push.apple.com");
 	});
+
+	test("push-to-start 토큰이 없는 기기는 시작 요청 없이 no-token으로 닫고 다음 tick에도 보내지 않는다", async () => {
+		const h = harness();
+		h.db.addPlan(IOS_INSTALL, makePlan(PLAN_IOS));
+		const core = h.core();
+		await tickAt(h, core, T0);
+		expect(h.push.sent).toEqual([]);
+		const [row] = [...h.db.sessions.values()];
+		expect(row?.status).toBe("ended");
+		expect(row?.endReason).toBe("no-token");
+		expect(await sessions(h)).toHaveLength(0);
+
+		await tickAt(h, core, T0 + 30 * SECOND);
+		expect(h.push.sent).toEqual([]);
+		expect(h.db.sessions.size).toBe(1);
+	});
+
+	test("openSession 전에 토큰 조회가 실패해도 다음 tick에 세션이 열린다", async () => {
+		const h = harness();
+		addAndroid(h);
+		const lookup = h.db.tokens.bind(h.db);
+		let failed = false;
+		h.db.tokens = (installId) => {
+			if (!failed) {
+				failed = true;
+				return Promise.reject(new Error("D1 unavailable"));
+			}
+			return lookup(installId);
+		};
+		const core = h.core();
+		await tickAt(h, core, T0);
+		expect(h.push.sent).toEqual([]);
+
+		await tickAt(h, core, T0 + 30 * SECOND);
+		expect(h.push.sent.map(describeSent)).toEqual(["fcm:start"]);
+		expect(await sessions(h)).toHaveLength(1);
+		const [row] = [...h.db.sessions.values()];
+		expect(h.db.sessions.size).toBe(1);
+		expect(row?.status).toBe("active");
+	});
+
+	test("openSession 뒤 저장소 쓰기가 실패하면 D1 세션 행을 닫는다", async () => {
+		const h = harness();
+		addAndroid(h);
+		const put = h.store.put.bind(h.store);
+		let failed = false;
+		h.store.put = (key, value) => {
+			if (!failed && key.startsWith("session:")) {
+				failed = true;
+				return Promise.reject(new Error("storage unavailable"));
+			}
+			return put(key, value);
+		};
+		await tickAt(h, h.core(), T0);
+		expect(h.push.sent).toEqual([]);
+		expect(await sessions(h)).toHaveLength(0);
+		const [row] = [...h.db.sessions.values()];
+		expect(row?.status).toBe("ended");
+		expect(row?.endReason).toBe("no-token");
+	});
 });
 
 describe("RunnerCore iOS 업데이트 토큰", () => {
@@ -730,6 +790,21 @@ describe("RunnerCore 푸시 응답", () => {
 		expect(h.db.installs.has(ANDROID_INSTALL)).toBe(false);
 		expect(h.db.installs.has(ANDROID_INSTALL_2)).toBe(true);
 		expect(await sessions(h)).toHaveLength(1);
+	});
+
+	test("FCM 400 INVALID_ARGUMENT면 그 토큰 행만 지우고 설치와 경로가 남는다", async () => {
+		const h = harness();
+		addAndroid(h);
+		h.push.respond = () => ({ reason: "INVALID_ARGUMENT", status: 400 });
+		await tickAt(h, h.core(), T0);
+		expect(h.push.sent.map(describeSent)).toEqual(["fcm:start"]);
+		expect(h.db.tokenRows).toEqual([]);
+		expect([...h.db.plans.keys()]).toEqual([PLAN_ANDROID]);
+		expect(h.db.installs.has(ANDROID_INSTALL)).toBe(true);
+		const [row] = [...h.db.sessions.values()];
+		expect(row?.status).toBe("ended");
+		expect(row?.endReason).toBe("no-token");
+		expect(await sessions(h)).toHaveLength(0);
 	});
 
 	test("세션 도중 경로를 지우면 다음 tick에 종료 요청이 나가고 plan-removed로 닫는다", async () => {
