@@ -14,6 +14,7 @@
   },
   "enabledPlugins": {
     "firebase@anthropic-plugin-directory": true,
-    "sentry@anthropic-plugin-directory": true
+    "sentry@anthropic-plugin-directory": true,
+    "logo-design@logo-design-skill": true
   }
 }
