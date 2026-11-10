@@ -347,7 +347,10 @@ function orderedLineKeys(
 		...config.busRouteIds,
 	];
 	const known = new Set(keys);
-	const extra = [...new Set(seen)].filter((key) => !known.has(key)).sort();
+	// 키는 ASCII ID라 코드 단위 순서로 둔다(로캘에 따라 달라지지 않게). Set이라 같은 값은 없다.
+	const extra = [...new Set(seen)]
+		.filter((key) => !known.has(key))
+		.sort((a, b) => (a < b ? -1 : 1));
 	return [...keys, ...extra];
 }
 
