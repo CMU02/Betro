@@ -161,11 +161,26 @@
     - `endAll(): Promise<void>`
   - `CommuteTokenReporter`: 앱 시작 때(`ExpoAppDelegateSubscriber`) 관찰을 시작한다. push-to-start 토큰은 `PUT <serverUrl>/v1/push-tokens`에 `{ kind: "apns-start", token, env }`, Activity의 토큰은 `{ kind: "apns-activity", token, env, activityId, sessionId }`(`sessionId`는 `activity.attributes.sessionId`)로 보낸다. `env`는 빌드의 `aps-environment`가 `development`면 `"sandbox"`, 아니면 `"production"`이다. 헤더는 Task 1과 같다. 응답이 2xx가 아니거나 오류면 1초, 3초 뒤 두 번 더 보낸다. `beginBackgroundTask`로 전송 시간을 확보한다. 같은 `(kind, activityId, token)`은 한 번만 보낸다. `CommuteCredentials.load()`가 nil이면 보내지 않는다.
 
-- [ ] **Step 1: 옮기기** — 실험 브랜치의 파일을 `git show spike/mvp2-live-activity:<경로>`로 꺼내 위 경로에 둔다. 실험용 주소(`betro-spike-apns…`)와 `launch`·`activityNew` 보고는 지운다.
-- [ ] **Step 2: 구현** — 위 Interfaces대로. `_layout.tsx`는 `ensureInstallIdentity()` → `ensureRegistered()` → `CommuteActivity.setCredentials(...)` 순으로 부른다(iOS에서만).
+- [x] **Step 1: 옮기기** — 실험 브랜치의 파일을 `git show spike/mvp2-live-activity:<경로>`로 꺼내 위 경로에 둔다. 실험용 주소(`betro-spike-apns…`)와 `launch`·`activityNew` 보고는 지운다.
+- [x] **Step 2: 구현** — 위 Interfaces대로. `_layout.tsx`는 `ensureInstallIdentity()` → `ensureRegistered()` → `CommuteActivity.setCredentials(...)` 순으로 부른다(iOS에서만).
 - [ ] **Step 3: 빌드** — Run: `cd apps/native && bunx expo prebuild --clean -p ios && bun run ios -- --device` / Expected: 앱과 확장이 함께 빌드되고 설치된다. 새 번들 ID라 처음에는 Xcode 계정 로그인과 `-allowProvisioningUpdates`가 필요하다(실험 3).
-- [ ] **Step 4: 기기 확인** — 시작 푸시의 알림 문구가 키 그대로(`commute.start.title`) 보이지 않고 `locales/ko.json`의 문구로 나오는지는 Task 8에서 본다. 여기서는 로컬 서버(`apps/server`의 `bun run dev`, `PUSH_MODE=log`)를 `EXPO_PUBLIC_SERVER_URL`로 두고 앱을 연다. Expected: 서버 로그에 설치 등록과 `apns-start` 토큰 등록이 찍힌다. `startLocal`로 Activity를 만들면 `apns-activity` 토큰이 `sessionId`와 함께 등록된다. 서버를 끄고 `startLocal`을 하면 요청이 세 번(0초, 1초, 3초 간격) 나가고 앱은 멈추지 않는다. Xcode 콘솔에 비밀값과 토큰 전체가 없다.
-- [ ] **Step 5: 커밋** — `feat(native): add the commute Live Activity target and token reporting`
+- [x] **Step 4: 기기 확인** — 시작 푸시의 알림 문구가 키 그대로(`commute.start.title`) 보이지 않고 `locales/ko.json`의 문구로 나오는지는 Task 8에서 본다. 여기서는 로컬 서버(`apps/server`의 `bun run dev`, `PUSH_MODE=log`)를 `EXPO_PUBLIC_SERVER_URL`로 두고 앱을 연다. Expected: 서버 로그에 설치 등록과 `apns-start` 토큰 등록이 찍힌다. `startLocal`로 Activity를 만들면 `apns-activity` 토큰이 `sessionId`와 함께 등록된다. 서버를 끄고 `startLocal`을 하면 요청이 세 번(0초, 1초, 3초 간격) 나가고 앱은 멈추지 않는다. Xcode 콘솔에 비밀값과 토큰 전체가 없다.
+- [x] **Step 5: 커밋** — `feat(native): add the commute Live Activity target and token reporting`
+
+#### Task 3 기기 확인 기록 (2026-11-10, iPhone 16 Pro)
+
+- **Step 3 (부분)**: Debug 빌드가 앱과 확장(`CommuteActivityWidget.appex`)을 함께 만들고 기기에 설치됐다. 다만 Xcode에 Apple 계정이 로그인돼 있지 않아(`No Accounts`) 자동 서명이 앱 그룹(`group.com.cmu02.betro`)이 든 프로파일을 만들지 못했다. 생성된 `ios/`의 권한 파일 두 개에서 앱 그룹만 빼고 기존 프로파일로 서명해 확인했다(저장소 파일은 그대로). **앱 그룹이 든 정식 서명 빌드는 아직 확인하지 못했다.** Xcode 계정 로그인 뒤 `xcodebuild … -allowProvisioningUpdates DEVELOPMENT_TEAM=5JKMP6D4C5`로 다시 빌드해야 한다. `setPlanHeaders`(앱 그룹 `UserDefaults`)는 Task 4에서 처음 쓰인다.
+- **Step 4**: 통과. 로컬 서버(2-C 브랜치, `wrangler dev --ip 0.0.0.0`, `PUSH_MODE=log`)를 `EXPO_PUBLIC_SERVER_URL`로 두었다.
+  - 첫 실행: `POST /v1/installs` 201, `PUT /v1/push-tokens` 204(`apns-start`, `sandbox`). `startLocal` 뒤 `PUT /v1/push-tokens` 204. 로컬 D1 `push_token`에 `apns-start` 1행과 `apns-activity` 1행(`activity_id`와 `session_id`가 `startLocal`에 넘긴 값과 같다).
+  - 503만 답하는 서버: 토큰마다 요청 3번, 첫 요청에서 1.02초, 4.12초 뒤(1초, 3초 간격). 앱은 계속 동작했다.
+  - 서버를 끈 상태: 콘솔에 `status=0 attempt=1…3`, 토큰마다 3번에서 멈췄고 앱은 멈추지 않았다(`startLocal` 성공, 프로세스 유지).
+  - 서버를 다시 켜고 실행: 밀린 `apns-start`와 `apns-activity`가 모두 204로 전달됐다.
+  - 기기 콘솔 4회분(70줄): 64자 이상 hex 0건, `Bearer`·`secret`·`Authorization` 0건, 서버 주소 0건. 토큰은 앞 8자만 찍힌다(`[commute] token kind=… token=808c3b3d… status=… attempt=…`).
+- **관찰**
+  - 중복 방지(`delivered`)는 프로세스 안에서만 유지된다. 앱을 다시 실행하면 `apns-start`와 살아 있는 Activity의 토큰을 한 번씩 다시 보낸다. 서버는 같은 행을 덮어쓴다.
+  - 전달에 실패한 토큰은 다음 토큰 이벤트 때 함께 다시 시도된다.
+  - Metro(JS) 로그에는 기존 코드(`components/push-notifications.tsx`)가 `__DEV__`에서 FCM 토큰 전체를 찍는다. Firebase 콘솔 시험 발송용으로 일부러 둔 줄이라 고치지 않았다. Global Constraints의 "토큰은 앞 8자만"과 어긋나므로 어느 쪽을 따를지 정해야 한다.
+  - `startLocal`을 부를 화면이 아직 없어(Task 4의 "잠금화면 표본" 줄) 실행 12초 뒤 표본 Activity를 띄우는 임시 코드를 커밋하지 않고 넣어 확인했다. 시험용 Activity는 `endAll`로 지웠다.
 
 ---
 
