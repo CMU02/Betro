@@ -13,6 +13,8 @@ export interface PlacesStore {
 	get: () => PlacesState;
 	/** 올린 장소를 `synced`로 바꾼다. 그사이 고쳐져 `updatedAt`이 달라졌으면 그대로 둔다. */
 	markSynced: (placeId: string, updatedAt: number) => void;
+	/** planId를 `pendingDeletes`에 넣는다. 기기에 그 planId를 가진 장소가 있으면 그대로 둔다. */
+	queueDelete: (planId: string) => void;
 	/** 장소를 지우고 그 planId를 `pendingDeletes`에 넣는다. */
 	remove: (placeId: string) => void;
 	replace: (state: PlacesState) => void;
@@ -56,6 +58,14 @@ function removed(state: PlacesState, placeId: string): PlacesState {
 		pendingDeletes,
 		places: state.places.filter((entry) => entry.id !== placeId),
 	};
+}
+
+function queued(state: PlacesState, planId: string): PlacesState {
+	const held = state.places.some((entry) => entry.plan.planId === planId);
+	if (held || state.pendingDeletes.includes(planId)) {
+		return state;
+	}
+	return { ...state, pendingDeletes: [...state.pendingDeletes, planId] };
 }
 
 function synced(
@@ -105,6 +115,9 @@ export function createPlacesStore(kv: SyncKeyValue): PlacesStore {
 		get: () => current,
 		markSynced: (placeId, updatedAt) => {
 			commit(synced(current, placeId, updatedAt));
+		},
+		queueDelete: (planId) => {
+			commit(queued(current, planId));
 		},
 		remove: (placeId) => {
 			commit(removed(current, placeId));

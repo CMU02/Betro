@@ -542,6 +542,95 @@ it("uploads the latest version of a place edited during an earlier upload", asyn
 	expect(store.get().places.map((p) => p.sync)).toEqual(["synced", "synced"]);
 });
 
+it("deletes again a place deleted while its own save is on its way", async () => {
+	const server = fakeServer();
+	const { deps, store } = setup({}, server);
+	let deleting: Promise<unknown> | undefined;
+	server.setOverride((call) => {
+		if (call.method === "PUT" && deleting === undefined) {
+			// DELETE가 서버에 먼저 닿고(지울 것이 없어 204), 그 뒤 PUT이 쓰인다.
+			deleting = deletePlace(deps, "work");
+		}
+	});
+
+	expect(await savePlace(deps, place("work", WORK_PLAN))).toBe("saved");
+	await deleting;
+	expect(store.get()).toEqual({ pendingDeletes: [WORK_PLAN], places: [] });
+	expect(await reconcile(deps)).toEqual({ imported: 0, pushed: 0, removed: 1 });
+	expect(server.plans.has(WORK_PLAN)).toBe(false);
+	expect(store.get()).toEqual({ pendingDeletes: [], places: [] });
+});
+
+it("deletes again a place deleted while reconcile uploads it", async () => {
+	const server = fakeServer();
+	const { deps, store } = setup(
+		{ places: [place("work", WORK_PLAN, { sync: "pending" })] },
+		server
+	);
+	let deleting: Promise<unknown> | undefined;
+	server.setOverride((call) => {
+		if (call.method === "PUT" && deleting === undefined) {
+			deleting = deletePlace(deps, "work");
+		}
+	});
+
+	expect(await reconcile(deps)).toEqual({ imported: 0, pushed: 1, removed: 0 });
+	await deleting;
+	expect(store.get()).toEqual({ pendingDeletes: [WORK_PLAN], places: [] });
+	expect(await reconcile(deps)).toEqual({ imported: 0, pushed: 0, removed: 1 });
+	expect(server.plans.has(WORK_PLAN)).toBe(false);
+	expect(store.get()).toEqual({ pendingDeletes: [], places: [] });
+});
+
+it("keeps the delete pending when its answer comes after the answer of an earlier save", async () => {
+	const server = fakeServer();
+	const { deps, store } = setup({}, server);
+	deps.client = {
+		request: (method, path, body) => {
+			const response = server.client.request(method, path, body);
+			if (method !== "DELETE") {
+				return response;
+			}
+			return new Promise((resolve) => {
+				setTimeout(() => resolve(response), 0);
+			});
+		},
+	};
+	let deleting: Promise<unknown> | undefined;
+	server.setOverride((call) => {
+		if (call.method === "PUT" && deleting === undefined) {
+			deleting = deletePlace(deps, "work");
+		}
+	});
+
+	await savePlace(deps, place("work", WORK_PLAN));
+	expect(await deleting).toBe("pending");
+	expect(store.get()).toEqual({ pendingDeletes: [WORK_PLAN], places: [] });
+	await reconcile(deps);
+	expect(server.plans.has(WORK_PLAN)).toBe(false);
+	expect(store.get()).toEqual({ pendingDeletes: [], places: [] });
+});
+
+it("keeps the delete pending when the save it raced timed out but was stored", async () => {
+	const server = fakeServer();
+	const { deps, store } = setup({}, server);
+	let deleting: Promise<unknown> | undefined;
+	server.setOverride((call) => {
+		if (call.method !== "PUT" || deleting !== undefined) {
+			return;
+		}
+		deleting = deletePlace(deps, "work");
+		server.plans.set(WORK_PLAN, call.body as CommutePlan);
+		return offline;
+	});
+
+	expect(await savePlace(deps, place("work", WORK_PLAN))).toBe("pending");
+	await deleting;
+	expect(store.get()).toEqual({ pendingDeletes: [WORK_PLAN], places: [] });
+	expect(await reconcile(deps)).toEqual({ imported: 0, pushed: 0, removed: 1 });
+	expect(server.plans.has(WORK_PLAN)).toBe(false);
+});
+
 it("sets every planId header once at the end", async () => {
 	const server = fakeServer([planOf(SERVER_PLAN), planOf(WORK_PLAN)]);
 	const { deps, headers } = setup(

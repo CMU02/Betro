@@ -101,6 +101,16 @@ it("queues the plan of a removed place for deletion", () => {
 	expect(store.get().pendingDeletes).toEqual([]);
 });
 
+it("queues a plan for deletion only when no place on the device holds it", () => {
+	const store = createPlacesStore(memoryKv().kv);
+	store.upsert(place("work", WORK_PLAN));
+	store.queueDelete(WORK_PLAN);
+	expect(store.get().pendingDeletes).toEqual([]);
+	store.queueDelete(HOME_PLAN);
+	store.queueDelete(HOME_PLAN);
+	expect(store.get().pendingDeletes).toEqual([HOME_PLAN]);
+});
+
 it("marks a place synced only when its updatedAt still matches", () => {
 	const store = createPlacesStore(memoryKv().kv);
 	store.upsert(place("work", WORK_PLAN, { updatedAt: 2000 }));

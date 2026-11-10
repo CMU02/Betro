@@ -31,6 +31,7 @@ const OK = 200;
 const BAD_REQUEST = 400;
 const NOT_FOUND = 404;
 const CONFLICT = 409;
+const SERVER_ERROR = 500;
 const IMPORTED_ID_PREFIX = "imported-";
 
 function planPath(planId: string): string {
@@ -58,8 +59,57 @@ async function pushHeaders(deps: SyncDeps): Promise<void> {
 	await deps.setHeaders(headersOf(deps.store.get().places, deps.t));
 }
 
-function putPlan(deps: SyncDeps, plan: CommutePlan): Promise<ServerResponse> {
-	return deps.client.request("PUT", planPath(plan.planId), plan);
+/** 저장소마다, 응답을 기다리는 PUT의 planId별 개수. 메모리에만 둔다. */
+const uploadsInFlight = new WeakMap<PlacesStore, Map<string, number>>();
+
+function uploadsOf(store: PlacesStore): Map<string, number> {
+	const existing = uploadsInFlight.get(store);
+	if (existing !== undefined) {
+		return existing;
+	}
+	const created = new Map<string, number>();
+	uploadsInFlight.set(store, created);
+	return created;
+}
+
+function isUploading(deps: SyncDeps, planId: string): boolean {
+	return (uploadsOf(deps.store).get(planId) ?? 0) > 0;
+}
+
+/** 서버가 그 예약을 썼을 수도 있는 응답. 204 말고도 시간 초과(0)와 5xx는 늦게 쓰였을 수 있다. */
+function mayHaveStored(status: number): boolean {
+	return (
+		status === NO_CONTENT ||
+		status === NETWORK_ERROR_STATUS ||
+		status >= SERVER_ERROR
+	);
+}
+
+/**
+ * 예약을 올린다. 응답을 기다리는 사이 그 장소가 지워졌는데 서버가 썼을 수 있으면 planId를 지울 목록에
+ * 다시 넣는다. 그 DELETE가 PUT보다 먼저 서버에 닿아(지울 것이 없어 204) 목록에서 빠졌을 수 있어서다.
+ */
+async function putPlan(
+	deps: SyncDeps,
+	plan: CommutePlan
+): Promise<ServerResponse> {
+	const uploads = uploadsOf(deps.store);
+	const { planId } = plan;
+	uploads.set(planId, (uploads.get(planId) ?? 0) + 1);
+	try {
+		const response = await deps.client.request("PUT", planPath(planId), plan);
+		if (mayHaveStored(response.status)) {
+			deps.store.queueDelete(planId);
+		}
+		return response;
+	} finally {
+		const left = (uploads.get(planId) ?? 1) - 1;
+		if (left > 0) {
+			uploads.set(planId, left);
+		} else {
+			uploads.delete(planId);
+		}
+	}
 }
 
 function deletePlan(deps: SyncDeps, planId: string): Promise<ServerResponse> {
@@ -68,6 +118,24 @@ function deletePlan(deps: SyncDeps, planId: string): Promise<ServerResponse> {
 
 function isDeleted(status: number): boolean {
 	return status === NO_CONTENT || status === NOT_FOUND;
+}
+
+/**
+ * DELETE를 보내고, 서버에서 지워졌다고 볼 수 있으면 지울 목록에서 뺀다. 보낼 때나 받을 때 같은 planId의
+ * PUT이 응답을 기다리고 있었다면 그 PUT이 DELETE 뒤에 쓰였을 수 있어 목록에 남긴다.
+ */
+async function sendDelete(
+	deps: SyncDeps,
+	planId: string
+): Promise<{ cleared: boolean; status: number }> {
+	const uploadingBefore = isUploading(deps, planId);
+	const { status } = await deletePlan(deps, planId);
+	const cleared =
+		isDeleted(status) && !uploadingBefore && !isUploading(deps, planId);
+	if (cleared) {
+		deps.store.clearPendingDelete(planId);
+	}
+	return { cleared, status };
 }
 
 /**
@@ -96,7 +164,10 @@ export async function savePlace(
 	return result;
 }
 
-/** 기기에서 지우고(지울 목록에 들어간다) 서버에서 지운다. 서버가 이미 없다고 해도(404) 지운 것이다. */
+/**
+ * 기기에서 지우고(지울 목록에 들어간다) 서버에서 지운다. 서버가 이미 없다고 해도(404) 지운 것이다.
+ * 같은 예약의 PUT이 응답을 기다리는 중이었으면 지울 목록에 남기고 `pending`이다.
+ */
 export async function deletePlace(
 	deps: SyncDeps,
 	placeId: string
@@ -105,15 +176,10 @@ export async function deletePlace(
 	if (target === undefined) {
 		return "deleted";
 	}
-	const { planId } = target.plan;
 	deps.store.remove(placeId);
-	const { status } = await deletePlan(deps, planId);
-	const deleted = isDeleted(status);
-	if (deleted) {
-		deps.store.clearPendingDelete(planId);
-	}
+	const { cleared } = await sendDelete(deps, target.plan.planId);
 	await pushHeaders(deps);
-	return deleted ? "deleted" : "pending";
+	return cleared ? "deleted" : "pending";
 }
 
 /** 서버 목록의 예약. 읽지 못한 예약은 빼고, 같은 planId는 하나만 남긴다. 목록이 아니면 null. */
@@ -140,12 +206,11 @@ async function sendPendingDeletes(deps: SyncDeps): Promise<number | null> {
 	let removed = 0;
 	for (const planId of deps.store.get().pendingDeletes) {
 		// biome-ignore lint/performance/noAwaitInLoops: one at a time so the first unreachable request stops the rest
-		const { status } = await deletePlan(deps, planId);
+		const { cleared, status } = await sendDelete(deps, planId);
 		if (status === NETWORK_ERROR_STATUS) {
 			return null;
 		}
-		if (isDeleted(status)) {
-			deps.store.clearPendingDelete(planId);
+		if (cleared) {
 			removed += 1;
 		}
 	}
