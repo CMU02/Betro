@@ -13,7 +13,10 @@ const REASON_XML_RE = /returnReasonCode>\s*(\d+)\s*</;
 const REASON_JSON_RE = /"returnReasonCode"\s*:\s*"?(\d+)/;
 const QUOTA_TEXT = "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS";
 
-export type BusRouteOperation = "getStaionByRoute" | "getRoutePath";
+export type BusRouteOperation =
+	| "getStaionByRoute"
+	| "getRoutePath"
+	| "getBusRouteList";
 
 export type BusEnvelope =
 	| { kind: "ok"; items: Record<string, unknown>[] }
@@ -44,7 +47,9 @@ export function busRouteInfoUrl(
 	key: string,
 	busRouteId: string
 ): string {
-	return `${BUS_ROUTE_INFO_BASE}/${operation}?serviceKey=${encodeURIComponent(key)}&busRouteId=${encodeURIComponent(busRouteId)}&resultType=json`;
+	// getBusRouteList는 노선 ID 대신 검색어(strSrch)를 받는다. 검색어는 busRouteId 자리로 넘긴다.
+	const param = operation === "getBusRouteList" ? "strSrch" : "busRouteId";
+	return `${BUS_ROUTE_INFO_BASE}/${operation}?serviceKey=${encodeURIComponent(key)}&${param}=${encodeURIComponent(busRouteId)}&resultType=json`;
 }
 
 /** 키 원문과 인코딩된 키를 모두 `<key>`로 가린다. */

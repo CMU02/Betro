@@ -7,6 +7,7 @@ import { buildBusRoutes } from "./jobs/build-bus-routes";
 import { buildCrosswalk } from "./jobs/build-crosswalk";
 import { buildTimetable } from "./jobs/build-timetable";
 import { buildTracks } from "./jobs/build-tracks";
+import { fetchBusRouteList } from "./jobs/fetch-bus-route-list";
 import { fetchBusRouteXlsx } from "./jobs/fetch-bus-route-xlsx";
 import { fetchBusRoutes } from "./jobs/fetch-bus-routes";
 import { fetchOsm } from "./jobs/fetch-osm";
@@ -114,6 +115,20 @@ const commands: Record<string, CommandHandler> = {
 			dryRun: values["dry-run"] === true,
 		});
 		if (!result.ok) {
+			process.exitCode = 1;
+		}
+	},
+	"fetch:bus-route-list": async () => {
+		const key = process.env.DATA_GO_KR_API_KEY;
+		if (!key) {
+			console.error(BUS_MISSING_KEY_MESSAGE);
+			process.exit(1);
+		}
+		const result = await fetchBusRouteList({
+			dataDir: resolveDataDir(process.env),
+			key,
+		});
+		if (result.stoppedBy !== "none") {
 			process.exitCode = 1;
 		}
 	},

@@ -9,14 +9,17 @@ import {
 	readBusRouteXlsx,
 } from "../sources/bus-route-xlsx";
 import {
+	type BusRouteOperation as AnyBusRouteOperation,
 	type BusEnvelope,
-	type BusRouteOperation,
 	fetchBusRouteOperation,
 	maskKey,
 	parseBusEnvelope,
 	parseRouteStations,
 } from "../sources/seoul-bus-api";
 import { latestBusRouteXlsx } from "./fetch-bus-route-xlsx";
+
+/** 노선마다 부르는 오퍼레이션. 노선 목록 검색(getBusRouteList)은 따로 돈다. */
+type BusRouteOperation = Exclude<AnyBusRouteOperation, "getBusRouteList">;
 
 export const BUS_STATIONS_SOURCE = "bus-route-stations";
 export const BUS_PATH_SOURCE = "bus-route-path";
