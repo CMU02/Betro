@@ -58,8 +58,8 @@ export interface CollectorPorts {
 	config: CollectorConfig;
 	/**
 	 * 다음 alarm까지 이 시간 이상 남으면 이번 tick에서 이력 버퍼를 바로 R2에 쓴다.
-	 * DO는 쉬는 동안 메모리에서 내려갈 수 있고(운영 70~140초, 로컬 약 10초) 그러면 메모리
-	 * 버퍼를 잃는다. 없으면 크기·시간(5분)이 찼을 때와 운행 시간 밖에서만 쓴다.
+	 * DO는 요청·alarm 없이 10초가 지나면 잠들고 그러면 메모리 버퍼를 잃는다. 10초보다 짧게
+	 * 둔다. 없으면 크기·시간(5분)이 찼을 때와 운행 시간 밖에서만 쓴다.
 	 */
 	idleFlushMs?: number;
 	keys: CollectorKeys;

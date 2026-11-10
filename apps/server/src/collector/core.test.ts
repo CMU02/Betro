@@ -18,7 +18,7 @@ import bus6411 from "../../../../packages/realtime/src/__fixtures__/bus-6411.jso
 import busReferenceFixture from "../../../../packages/realtime/src/__fixtures__/bus-reference-6411-150.json";
 import subwayReferenceFixture from "../../../../packages/realtime/src/__fixtures__/subway-reference-sample.json";
 import { SERVICE_ENDED_RECHECK_MS } from "./apply-call";
-import { BACKLOG_RETRY_MS, CollectorCore } from "./core";
+import { BACKLOG_RETRY_MS, CollectorCore, DEFAULT_IDLE_FLUSH_MS } from "./core";
 import { STATE_KEYS } from "./core-state";
 import type {
 	BlobStore,
@@ -276,6 +276,40 @@ async function runAlarms(h: Harness, until: number): Promise<number> {
 	h.clock.now = Math.max(nextAlarmAt, h.clock.now + 1);
 	return h.clock.now < until ? runAlarms(h, until) : nextAlarmAt;
 }
+
+/** Cloudflare는 요청·alarm 없이 10초가 지나면 DO를 재우고 메모리를 비운다. */
+const HIBERNATION_IDLE_MS = 10 * SECOND;
+
+/**
+ * DO alarm처럼 돌리되, 다음 alarm까지 10초 이상 쉬면 메모리를 잃은 것으로 보고 같은 저장소·R2로
+ * `CollectorCore`를 새로 만든다. 그동안의 상류 호출을 모두 돌려준다.
+ */
+async function runHibernatingAlarms(
+	h: Harness,
+	until: number,
+	calls: Harness["calls"] = []
+): Promise<Harness["calls"]> {
+	const { nextAlarmAt } = await h.core.tick();
+	calls.push(...h.calls.splice(0));
+	const idle = nextAlarmAt - h.clock.now;
+	h.clock.now = Math.max(nextAlarmAt, h.clock.now + 1);
+	if (h.clock.now >= until) {
+		return calls;
+	}
+	const next =
+		idle >= HIBERNATION_IDLE_MS
+			? makeHarness({
+					blobs: h.blobs,
+					clock: h.clock,
+					idleFlushMs: h.ports.idleFlushMs,
+					state: h.state,
+				})
+			: h;
+	return runHibernatingAlarms(next, until, calls);
+}
+
+const rawLines = (h: Harness): string[] =>
+	h.blobs.keys("raw/").flatMap((key) => h.blobs.text(key).trim().split("\n"));
 
 const subwayCalls = (h: Harness) =>
 	h.calls.filter((call) => ALL_URL.test(call.url));
@@ -775,5 +809,24 @@ describe("CollectorCore", () => {
 		const roomy = makeHarness({ idleFlushMs: 10 * MINUTE });
 		await roomy.core.tick();
 		expect(roomy.blobs.keys("raw/").length).toBe(0);
+	});
+
+	// 운영에서 본 문제(2026-11-09 20:02~23:00 KST): 지하철과 버스 호출 시각이 서로 어긋나
+	// alarm 간격이 10~60초가 되면, tick마다 DO가 잠들어 그 사이의 이력 버퍼가 사라졌다.
+	it("keeps every raw line when the object hibernates between out-of-phase ticks", async () => {
+		const state = new MemoryState();
+		await state.put(STATE_KEYS.schedule, {
+			nextAt: {
+				[`bus:${ROUTE_150}`]: T0 + 120 * SECOND,
+				[`bus:${ROUTE_6411}`]: T0 + 40 * SECOND,
+				subway: T0,
+			},
+		});
+		const h = makeHarness({ idleFlushMs: DEFAULT_IDLE_FLUSH_MS, state });
+
+		const calls = await runHibernatingAlarms(h, T0 + 10 * MINUTE);
+
+		expect(calls.length).toBeGreaterThanOrEqual(14);
+		expect(rawLines(h).length).toBe(calls.length);
 	});
 });

@@ -14,6 +14,7 @@ import {
 import type { CollectorStartResult } from "./client";
 import {
 	CollectorCore,
+	DEFAULT_IDLE_FLUSH_MS,
 	type SnapshotKind,
 	type SnapshotResponse,
 } from "./core";
@@ -25,12 +26,6 @@ const STARTED_KEY = "started";
 const TICK_FAILURE_RETRY_MS = 60_000;
 /** alarm을 너무 촘촘히 걸지 않는다. */
 const MIN_ALARM_DELAY_MS = 1000;
-/**
- * 다음 alarm까지 이만큼 남으면 이력을 미리 쓴다. 운영에서 쉬는 DO는 70~140초 뒤 내려갈 수 있어
- * 그보다 짧게 둔다(`dev`는 alarm 간격이 약 80초라 사실상 tick마다 조각 하나씩 쓴다).
- */
-const DEFAULT_IDLE_FLUSH_MS = 60_000;
-
 function idleFlushMsOf(env: Env): number {
 	const value = Number(env.HISTORY_IDLE_FLUSH_MS);
 	return Number.isInteger(value) && value > 0 ? value : DEFAULT_IDLE_FLUSH_MS;

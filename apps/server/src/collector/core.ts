@@ -47,6 +47,12 @@ export const REFERENCE_CHECK_MS = 300_000;
 const REFERENCE_RETRY_MS = 60_000;
 /** R2에 못 쓴 이력·보고서가 남았을 때 다시 깨어나는 간격. */
 export const BACKLOG_RETRY_MS = 300_000;
+/**
+ * 다음 alarm까지 이만큼 남으면 이력을 미리 쓴다(`CollectorPorts.idleFlushMs` 운영 기본값).
+ * Cloudflare는 요청·alarm 없이 10초가 지나면 DO를 재우고 메모리를 비우므로 그보다 짧아야 한다.
+ * 60초였을 때는 alarm 간격이 10~60초인 동안 이력이 R2에 쓰이지 않고 사라졌다(2026-11-09).
+ */
+export const DEFAULT_IDLE_FLUSH_MS = 5000;
 /** 한 tick 안에서 동시에 여는 상류 연결 수(Workers 동시 연결 6). */
 const MAX_PARALLEL_CALLS = 6;
 const ETAG_LENGTH = 16;
