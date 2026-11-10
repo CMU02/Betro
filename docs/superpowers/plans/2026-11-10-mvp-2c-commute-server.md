@@ -21,6 +21,7 @@
 - **푸시**(실험 2, 4, 5): Worker의 일반 `fetch`로 APNs에 직접 보낸다. push-to-start 토큰은 재설치·재부팅에도 같고, 업데이트 토큰은 Activity마다 새로 오며 시작 뒤 4초 안에 도착했다. 끝난 Activity의 토큰에도 APNs는 200을 준다. Android는 높은 우선순위 FCM 데이터 메시지로 끊김이 없었고, 강제 종료 중에 보낸 메시지는 나중에 순서가 섞여 도착했다.
 - **Durable Object는 요청·alarm 없이 10초가 지나면 잠들고 메모리를 비운다**(4단계에서 이력을 잃은 원인). 실행기는 재시작해도 이어져야 하는 값을 전부 DO 저장소에 둔다.
 - **공휴일**: `packages/realtime/src/holidays.ts`에 2027년까지의 고정 목록이 있다. 임시공휴일은 들어 있지 않다.
+- **공휴일 API**(2026-11-10 활용신청 승인, 같은 `DATA_GO_KR_API_KEY`로 200 확인): `http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo?ServiceKey=…&solYear=2027&_type=json&numOfRows=100`. `solMonth`를 빼면 그 해 전체가 한 번에 온다(2027년 24건). 항목은 `locdate`(`20270209`, 숫자), `dateName`("대체공휴일(설날)"), `isHoliday`("Y"), `dateKind`("01")다. `response.body.items`는 여러 건이면 `{ item: [...] }`, 한 건이면 `{ item: {...} }`, 0건이면 빈 문자열 `""`이다. 임시공휴일은 지정 뒤 하루 안에 반영된다(활용가이드 v1.4, Google Drive `공공데이터포털 문서/한국천문연구원_천문우주정보_특일_정보제공_서비스`).
 
 ## Global Constraints
 
@@ -489,16 +490,16 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
 
 **Interfaces:**
 - Produces:
-  - `parseRestDays(xmlOrJson: string): { date: string; name: string }[] | null`(한국천문연구원 특일 정보 `getRestDeInfo` 응답, `isHoliday`가 `Y`인 항목만)
-  - `restDaysUrl(key: string, year: number, month: number): string`
-  - `refreshHolidays(deps: { db: Database; fetch: Upstream; key: string; now: number }): Promise<{ fetched: number } | { error: string }>`. 이번 달과 다음 두 달을 받아 `holiday`에 `country: "KR"`로 덮어쓴다. 실패하면 기존 행을 그대로 둔다.
+  - `parseRestDays(json: string): { date: string; name: string }[] | null`(`getRestDeInfo`의 JSON 응답. `isHoliday`가 `"Y"`인 항목만, `locdate` `20270209` → `"2027-02-09"`. `resultCode`가 `"00"`이 아니거나 JSON이 아니면 null)
+  - `restDaysUrl(key: string, year: number): string`(`_type=json`, `numOfRows=100`, `solMonth` 없음)
+  - `refreshHolidays(deps: { db: Database; fetch: Upstream; key: string; now: number; timezone: string }): Promise<{ fetched: number } | { error: string }>`. 올해와 내년을 받아(2건) `holiday`의 그 두 해 `country: "KR"` 행을 통째로 바꾼다(취소된 임시공휴일이 남지 않게). 한 해라도 실패하면 아무것도 바꾸지 않는다. `Upstream`은 `apps/server/src/collector/ports.ts`의 것이다.
   - `isHoliday(country, date)`: `holiday` 테이블에 있거나 `@Betro/realtime/holidays`의 고정 목록에 있으면 true(받아 오기가 한 번도 성공하지 않아도 고정 목록으로 동작한다).
   - cron은 5분마다 돌지만 `refreshHolidays`는 마지막 성공에서 24시간이 지났을 때만 부른다(D1 `holiday.fetched_at`의 최댓값으로 판단).
 
-- [ ] **Step 1: 사용자에게 요청** — 공공데이터포털 "한국천문연구원_특일 정보"(15012690) 활용신청. 같은 `DATA_GO_KR_API_KEY`를 쓴다. 승인 전에도 Step 2~5는 표본으로 진행한다.
+- [ ] **Step 1: 표본 받기** — 2027년 전체(24건), 2026년 12월(`solMonth=12`, 1건), 2026년 11월(0건)을 한 번씩 받아(3건) 키를 지우고 `apps/server/src/commute/__fixtures__/rest-days-{2027,2026-12,2026-11}.json`으로 둔다. Worker secret `DATA_GO_KR_API_KEY`는 이미 있다.
 - [ ] **Step 2: 실패하는 테스트**
-  - 표본 응답(공휴일 2건, 공휴일 아닌 기념일 1건)에서 2건만 나온다. 항목이 하나일 때(배열이 아니라 객체로 오는 경우)와 0건일 때도 처리한다. 오류 응답은 null.
-  - `refreshHolidays`: 성공하면 세 달 치가 들어간다. 둘째 달에서 실패하면 `{ error }`이고 기존 행이 그대로다. 오류 문구에 키가 없다.
+  - 2027년 표본에서 24건이 나오고 `2027-02-09`의 이름이 "대체공휴일(설날)"이다. 한 건 표본(`item`이 객체)에서 1건, 0건 표본(`items`가 `""`)에서 빈 배열. `isHoliday`가 `"N"`인 항목을 섞으면 빠진다. `resultCode: "30"` 응답과 XML 오류 본문은 null.
+  - `refreshHolidays`: 성공하면 두 해 치가 들어가고, 그 해에 있던 옛 행 중 응답에 없는 것은 지워진다. 둘째 해에서 실패하면 `{ error }`이고 기존 행이 그대로다. 오류 문구에 키가 없다.
   - `isHoliday`: 테이블에만 있는 임시공휴일은 true, 고정 목록에만 있는 날도 true, 둘 다 없으면 false.
   - 23시간 전에 받았으면 다시 받지 않는다.
 - [ ] **Step 3: 실패 확인** — Run: `bun test apps/server/src/commute/holidays.test.ts` / Expected: FAIL
