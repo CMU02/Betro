@@ -28,7 +28,7 @@
 - **단정하지 않는다.** 사용자 입력이 없는 동안에는 차량에 대한 사실("지나갔어요")과 조건문("08:10에 나가면")만 쓴다. "놓쳤어요", "늦었어요"는 쓰지 않는다.
 - **오래된 값을 그리지 않는다.** 이미 그린 것보다 `seq`가 작거나 같은 값은 버린다. 끝난 세션의 값도 버린다.
 - 문구는 코드에 직접 쓰지 않는다. 앱과 Android 알림은 `messages-ko.ts`의 키, iOS 확장은 `Localizable.strings`의 같은 키를 쓴다. Android 알림을 JS가 만들기 때문에 Android 문자열 리소스가 아니라 메시지 묶음을 쓴다(스펙 5.10의 "플랫폼 문자열 리소스"에서 Android만 바꾼 것이다. **[설계 판단]**).
-- 서버 주소, 설치 비밀값, 푸시 토큰을 로그에 남기지 않는다(`__DEV__`에서도 토큰은 앞 8자만).
+- 서버 주소, 설치 비밀값, 푸시 토큰을 기기 콘솔과 출퇴근 토큰 보고 로그에 남기지 않는다(`__DEV__`에서도 토큰은 앞 8자만). 예외: `components/push-notifications.tsx`가 `__DEV__`에서 번들러(Metro) 로그에 FCM 토큰 전체를 찍는 줄은 그대로 둔다. 개발자 Mac에만 보이고, 수집기 알림 대상 토큰(`ALERT_FCM_TOKEN`)을 넣을 때 그 값이 필요하다.
 - iOS 최소 버전 17.2. `NSSupportsLiveActivities`와 `NSSupportsLiveActivitiesFrequentUpdates`를 켠다. Android는 `POST_PROMOTED_NOTIFICATIONS` 권한을 선언한다.
 - 포그라운드 서비스와 로컬 알림 보조 경로는 만들지 않는다(실험 4, 5 결정).
 - 범위 밖: 경로 등록과 출퇴근 안내 화면(2-E), 서버(2-C), 기기 위치로 탑승을 판단하는 기능, Android 16 QPR1 실기기의 상태바 칩 확인(기기가 없다. 에뮬레이터 API 36.1로만 본다).
@@ -181,7 +181,7 @@
 - **관찰**
   - 중복 방지(`delivered`)는 프로세스 안에서만 유지된다. 앱을 다시 실행하면 `apns-start`와 살아 있는 Activity의 토큰을 한 번씩 다시 보낸다. 서버는 같은 행을 덮어쓴다.
   - 전달에 실패한 토큰은 다음 토큰 이벤트 때 함께 다시 시도된다.
-  - Metro(JS) 로그에는 기존 코드(`components/push-notifications.tsx`)가 `__DEV__`에서 FCM 토큰 전체를 찍는다. Firebase 콘솔 시험 발송용으로 일부러 둔 줄이라 고치지 않았다. Global Constraints의 "토큰은 앞 8자만"과 어긋나므로 어느 쪽을 따를지 정해야 한다.
+  - Metro(JS) 로그에는 기존 코드(`components/push-notifications.tsx`)가 `__DEV__`에서 FCM 토큰 전체를 찍는다. 일부러 둔 줄이라 그대로 두고, Global Constraints에 예외로 적었다(2026-11-10 사용자 결정).
   - `startLocal`을 부를 화면이 아직 없어(Task 4의 "잠금화면 표본" 줄) 실행 12초 뒤 표본 Activity를 띄우는 임시 코드를 커밋하지 않고 넣어 확인했다. 시험용 Activity는 `endAll`로 지웠다.
 
 ---
