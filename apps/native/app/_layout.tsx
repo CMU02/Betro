@@ -26,6 +26,7 @@ import { shouldShowOnboarding } from "@/lib/onboarding/onboarding";
 import { appPreferences } from "@/lib/preferences/app-preferences";
 import { toUniwindTheme } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
+import { ensureRegistered } from "@/lib/server/app-server";
 import { setAndroidSystemBarsContent } from "@/modules/system-bars";
 import { ENV } from "@/src/env";
 import { queryClient } from "@/utils/orpc";
@@ -37,7 +38,7 @@ configureCrashReporting(appCrashSink, {
 });
 
 /**
- * 설치 ID를 읽거나 만든다. 실패하면 기록만 하고 앱은 계속 쓰며, 다음 실행에 다시 시도한다.
+ * 설치 ID를 읽거나 만들고, 만들었으면 서버에 등록한다. 실패하면 기록만 하고 앱은 계속 쓰며, 다음 실행에 다시 시도한다.
  */
 async function startInstallIdentity(): Promise<void> {
 	try {
@@ -49,7 +50,9 @@ async function startInstallIdentity(): Promise<void> {
 		}
 	} catch (error) {
 		reportError(appCrashSink, error, "install-identity");
+		return;
 	}
+	await ensureRegistered();
 }
 
 startInstallIdentity();
