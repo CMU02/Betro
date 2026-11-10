@@ -1,10 +1,6 @@
 import { useRouter } from "expo-router";
 import { cn } from "heroui-native";
-import {
-	ArrowLeftIcon,
-	ChevronLeftIcon,
-	ShieldCheckIcon,
-} from "lucide-react-native";
+import { ArrowLeftIcon, ChevronLeftIcon } from "lucide-react-native";
 import { useCallback } from "react";
 import { Linking, Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,7 +19,6 @@ import {
 
 const BackIcon = withUniwind(ChevronLeftIcon);
 const AndroidBackIcon = withUniwind(ArrowLeftIcon);
-const ProviderIcon = withUniwind(ShieldCheckIcon);
 
 const TAG_SLOT_WIDTH = 92;
 const BACK_ICON_SIZE = 22;
@@ -38,7 +33,6 @@ function ProviderRow({ provider }: { provider: DataProvider }) {
 	return (
 		<ListRow
 			accessibilityRole="link"
-			icon={ProviderIcon}
 			onPress={handlePress}
 			subtitle={t(provider.subtitleKey)}
 			title={t(provider.titleKey)}
@@ -133,7 +127,7 @@ export default function DataSourcesScreen() {
 					<View className="overflow-hidden rounded-lg bg-bg-surface-raised">
 						{DATA_PROVIDERS.map((provider, index) => (
 							<View key={provider.titleKey}>
-								{index > 0 ? <ListDivider /> : null}
+								{index > 0 ? <ListDivider inset="edge" /> : null}
 								<ProviderRow provider={provider} />
 							</View>
 						))}
