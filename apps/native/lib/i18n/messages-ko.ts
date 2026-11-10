@@ -9,6 +9,46 @@ export const ko = {
 	common: {
 		back: "뒤로",
 	},
+	commute: {
+		lock: {
+			action: {
+				boarded: "탔어요",
+				end: "종료",
+				next: "다음 차 탈게요",
+			},
+			detail: {
+				eta: "{stop} · {eta} 도착",
+				etaEstimated: "{stop} · 약 {eta} 도착",
+				noEta: "{stop}",
+			},
+			header: {
+				fallback: "출퇴근",
+			},
+			minutes: {
+				soon: "곧",
+				value: "{m}분",
+			},
+			status: {
+				arrived: "{stop} 도착",
+				arriving: "곧 도착",
+				beforeLeave: "{leave}에 나가면 {line} {eta} 탑승",
+				passed: "{passedLine}번이 지나갔어요 · 다음 차 {eta}",
+				ride: "하차까지 {n}정거장",
+				rideLast: "이번에 내려요",
+				rideUnknown: "이동 중",
+				stopsAway: "{n}정거장 전",
+				unknown: "위치 확인 중",
+			},
+			suggestion: {
+				line: "{line}번이 {m}분 뒤 와요 · {saves}분 빨리 도착",
+			},
+			tag: {
+				delayed: "지연",
+				estimated: "시간표 추정",
+				live: "실시간",
+			},
+		},
+	},
 	dataSources: {
 		footnote: "공공누리 제1유형 · 갱신 주기는 노선과 시간대에 따라 달라요",
 		intro:
