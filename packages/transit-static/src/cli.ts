@@ -1,5 +1,7 @@
 import { createDb } from "@Betro/db";
 import type { ServiceDay } from "@Betro/db/schema/transit";
+import { statSync } from "node:fs";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { buildBusRoutes } from "./jobs/build-bus-routes";
 import { buildCrosswalk } from "./jobs/build-crosswalk";
@@ -14,6 +16,7 @@ import { fetchStationSearch } from "./jobs/fetch-station-search";
 import { fetchStationXlsx } from "./jobs/fetch-station-xlsx";
 import { fetchTimetableSources } from "./jobs/fetch-timetable-sources";
 import { osmDiscover } from "./jobs/osm-discover";
+import { createWranglerRun, publishD1 } from "./jobs/publish-d1";
 import { reportMatchRate } from "./jobs/report-match-rate";
 import { resolveDatabaseUrl } from "./paths";
 import { resolveDataDir } from "./raw-store";
@@ -193,6 +196,33 @@ const commands: Record<string, CommandHandler> = {
 	},
 	"osm:discover": async () => {
 		await osmDiscover({ dataDir: resolveDataDir(process.env) });
+	},
+	"publish:d1": async (args) => {
+		const { values } = parseArgs({
+			args,
+			options: {
+				"dry-run": { type: "boolean" },
+				remote: { type: "boolean" },
+			},
+		});
+		const dryRun = values["dry-run"] === true;
+		const target = values.remote === true ? "remote" : "local";
+		const result = await publishD1({
+			db: createDb({ DATABASE_URL: resolveDatabaseUrl(process.env) }),
+			dryRun,
+			outDir: join(resolveDataDir(process.env), "d1-publish"),
+			run: createWranglerRun(),
+			target,
+		});
+		const sizeBytes = result.sqlPath ? statSync(result.sqlPath).size : 0;
+		console.log(
+			[
+				`target: ${target}${dryRun ? " (dry-run: 실행하지 않음)" : ""}`,
+				`published: ${result.published.join(", ") || "(없음)"}`,
+				`skipped (이미 D1에 있음): ${result.skipped.join(", ") || "(없음)"}`,
+				`sql: ${result.sqlPath ?? "(없음)"} (${sizeBytes} bytes)`,
+			].join("\n")
+		);
 	},
 	"report:match-rate": async (args) => {
 		const { values } = parseArgs({

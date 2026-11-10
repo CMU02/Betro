@@ -1,0 +1,21 @@
+{
+  "name": "@Betro/realtime",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc -b",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@Betro/db": "workspace:*",
+    "@Betro/transit-static": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@Betro/config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "^6.0.3"
+  }
+}

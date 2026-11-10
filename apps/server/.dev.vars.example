@@ -1,0 +1,15 @@
+# Copy to .dev.vars (gitignored) for `bun run dev`. Never commit real values.
+# Generate a local secret with: openssl rand -base64 32
+BETTER_AUTH_SECRET=
+# Local dev overrides (optional)
+# BETTER_AUTH_URL=http://localhost:8787
+
+# Realtime collector. Local dev never calls upstream APIs: keep UPSTREAM_MODE=fixture
+# (wrangler.jsonc sets "live" for the deployed Worker).
+UPSTREAM_MODE=fixture
+# Placeholders are fine in fixture mode. Real keys live only in Worker secrets.
+SEOUL_OPEN_API_KEY=dummy-key
+DATA_GO_KR_API_KEY=dummy-key
+# Optional FCM alerts. When either is empty, alerts are only logged.
+# FCM_SERVICE_ACCOUNT_JSON=
+# ALERT_FCM_TOKEN=
