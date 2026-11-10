@@ -188,6 +188,8 @@ function text(value: unknown): string {
 	return value === null || value === undefined ? "" : String(value).trim();
 }
 
+const FIRST_SEQ = 1;
+
 function parseStation(
 	item: RawItem
 ): { row: BusRouteStationRow } | { error: string } {
@@ -203,7 +205,11 @@ function parseStation(
 	if (lat === undefined) {
 		return { error: `seq ${seq}: invalid gpsY` };
 	}
-	const apiSectDistM = toNumber(item.fullSectDist);
+	// 경기·인천 노선은 첫 정류소의 fullSectDist가 비어 온다(서울 노선은 "0"). 앞 구간이 없으니 0이다.
+	const apiSectDistM =
+		seq === FIRST_SEQ && text(item.fullSectDist) === ""
+			? 0
+			: toNumber(item.fullSectDist);
 	// DB 컬럼이 정수이므로 음수와 소수는 거른다.
 	if (
 		apiSectDistM === undefined ||

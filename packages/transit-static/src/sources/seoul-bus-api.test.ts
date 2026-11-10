@@ -244,6 +244,34 @@ describe("fetchBusRouteOperation", () => {
 		expect(errors).toHaveLength(2);
 	});
 
+	it("reads a missing fullSectDist on the first stop as 0", () => {
+		// 경기·인천 노선은 첫 정류소의 fullSectDist가 비어 온다(서울 노선은 "0").
+		const base = { gpsX: "127", gpsY: "37", station: "1" };
+		const { rows, errors } = parseRouteStations([
+			{ ...base, fullSectDist: null, seq: "1" },
+			{ ...base, fullSectDist: "264", seq: "2" },
+		]);
+		expect(errors).toEqual([]);
+		expect(rows.map((row) => row.apiSectDistM)).toEqual([0, 264]);
+		expect(parseRouteStations([{ ...base, seq: "1" }]).rows).toHaveLength(1);
+		expect(
+			parseRouteStations([{ ...base, fullSectDist: "", seq: "1" }]).rows
+		).toHaveLength(1);
+	});
+
+	it("still rejects a missing fullSectDist after the first stop", () => {
+		const base = { gpsX: "127", gpsY: "37", station: "1" };
+		const { rows, errors } = parseRouteStations([
+			{ ...base, fullSectDist: null, seq: "2" },
+			{ ...base, fullSectDist: "abc", seq: "1" },
+		]);
+		expect(rows).toHaveLength(0);
+		expect(errors).toEqual([
+			"seq 2: invalid fullSectDist",
+			"seq 1: invalid fullSectDist",
+		]);
+	});
+
 	it("returns parsed envelope and body text", async () => {
 		const body = envelope("0", [{ seq: "1" }]);
 		const fetchImpl = (() =>
