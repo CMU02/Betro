@@ -563,9 +563,37 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
 - Create: `packages/commute/README.md`
 - Modify: `apps/server/README.md`(출퇴근 절: 라우트, secret, `PUSH_MODE`, 실행기 상태 보는 법, 기록 위치), 이 계획 문서(결과 기록)
 
-- [ ] **Step 1: secret** — `APNS_KEY_P8`을 `~/Documents/Betro-APNs/AuthKey_HFSD7YXX9N.p8`에서 표준입력으로 넣는다(화면 출력 없음). `FCM_SERVICE_ACCOUNT_JSON`은 이미 있다. Expected: `wrangler secret list`에 6개.
-- [ ] **Step 2: 배포** — `packages/db`에서 `bun run db:d1-migrations`, `apps/server`에서 `bunx wrangler d1 migrations apply betro --remote`, `PUSH_MODE=send`로 `bun run deploy`. Expected: 수집기는 그대로 돌고(`/v1/snapshot/subway` 200), `GET /v1/commute/plans`는 인증 없이 401.
-- [ ] **Step 3: 서버만으로 한 바퀴** — 시험용 설치를 등록하고, 5분 뒤 시작하는 경로(6411 노량진역 → 고속터미널, 대안 없음)를 넣는다. 토큰은 넣지 않는다. Expected: `wrangler tail`에 세션 시작과 `no-token` 종료, R2 `commute/summaries/…`에 요약 1개, 로그에 키 0건. 끝나면 `DELETE /v1/installs/me`.
-- [ ] **Step 4: 푸시 서버 응답 확인** — 실험 4의 iPhone push-to-start 토큰(sandbox)과 실험 5의 S20 FCM 토큰을 시험용 설치 둘에 등록하고 Step 3의 경로를 한 번씩 돌린다. Expected: 로그에 APNs 시작 `status=200`, FCM start·update·end `status=200`, `token-dead` 0건. 기기에 설치된 실험 빌드는 값 모양이 달라 화면에는 뜨지 않는다. 화면 확인은 2-F의 첫 실기기 확인에서 한다. 끝나면 시험용 설치를 지운다.
-- [ ] **Step 5: 문서와 결과** — README 두 개를 쓰고, 이 문서에 "2-C 결과"(배포 버전, Step 3·4 결과, 버스 도착 예산 사용량)를 적는다.
-- [ ] **Step 6: 커밋** — `docs: document the commute server and record the 2-C run`
+- [x] **Step 1: secret** — `APNS_KEY_P8`을 `~/Documents/Betro-APNs/AuthKey_HFSD7YXX9N.p8`에서 표준입력으로 넣는다(화면 출력 없음). `FCM_SERVICE_ACCOUNT_JSON`은 이미 있다. Expected: `wrangler secret list`에 6개.
+- [x] **Step 2: 배포** — `packages/db`에서 `bun run db:d1-migrations`, `apps/server`에서 `bunx wrangler d1 migrations apply betro --remote`, `PUSH_MODE=send`로 `bun run deploy`. Expected: 수집기는 그대로 돌고(`/v1/snapshot/subway` 200), `GET /v1/commute/plans`는 인증 없이 401.
+- [x] **Step 3: 서버만으로 한 바퀴** — 시험용 설치를 등록하고, 5분 뒤 시작하는 경로(6411 노량진역 → 고속터미널, 대안 없음)를 넣는다. 토큰은 넣지 않는다. Expected: `wrangler tail`에 세션 시작과 `no-token` 종료, R2 `commute/summaries/…`에 요약 1개, 로그에 키 0건. 끝나면 `DELETE /v1/installs/me`.
+- [x] **Step 4: 푸시 서버 응답 확인** — 실험 4의 iPhone push-to-start 토큰(sandbox)과 실험 5의 S20 FCM 토큰을 시험용 설치 둘에 등록하고 Step 3의 경로를 한 번씩 돌린다. Expected: 로그에 APNs 시작 `status=200`, FCM start·update·end `status=200`, `token-dead` 0건. 기기에 설치된 실험 빌드는 값 모양이 달라 화면에는 뜨지 않는다. 화면 확인은 2-F의 첫 실기기 확인에서 한다. 끝나면 시험용 설치를 지운다.
+- [x] **Step 5: 문서와 결과** — README 두 개를 쓰고, 이 문서에 "2-C 결과"(배포 버전, Step 3·4 결과, 버스 도착 예산 사용량)를 적는다.
+- [x] **Step 6: 커밋** — `docs: document the commute server and record the 2-C run`
+
+---
+
+## 2-C 결과 (2026-11-10)
+
+배포: `betro-server` 버전 `76851e32`(커밋 `c1c13da`, `PUSH_MODE=send`). 원격 D1에 `0005_20261110061833_quick_emma_frost.sql`을 적용했고 secret은 6개다. 배포 뒤 `/v1/snapshot/subway` 200(생성 시각 14초 전), 인증 없는 `GET /v1/commute/plans` 401, 수집기 알람은 계속 돈다.
+
+| Step | 결과 |
+|---|---|
+| 3 서버만으로 한 바퀴 | 통과. 17:42 KST에 시험용 설치와 6411(노량진역 → 고속터미널) 경로를 넣었고, 17:47:00 알람에서 `commute start … platform=none` → `commute end … reason=no-token` → `commute records … written records=2`. R2에 `commute/records/2026-11-10/<세션>.ndjson.gz`와 `commute/summaries/2026-11-10/<세션>.json` 1개씩. `wrangler tail` 37KB에서 두 API 키(원문·URL 인코딩)와 설치 secret 0건, `Authorization` 헤더는 `REDACTED`. 끝나고 `DELETE /v1/installs/me` 204, 그 뒤 같은 인증값은 401. |
+| 4 푸시 서버 응답 | 통과. 17:51:00에 두 세션이 함께 시작했다. iOS: APNs 시작 `status=200`(sandbox), Activity 토큰이 오지 않아 17:52:00에 `not updatable: no activity token`(실험 빌드는 토큰을 이 서버에 보고하지 않는다). Android: FCM 시작이 첫 시도에 `status=500 reason=INTERNAL outcome=retry`, 30초 뒤 다음 tick에 `status=200`. 갱신 2건 `status=200`, `end` 입력 뒤 종료 `status=200`. `token-dead` 0건. 두 세션 모두 `reason=user`로 닫혔고 시험용 설치는 지웠다. 기기 화면은 보지 않았다(2-F Task 8). |
+
+- **버스 도착 호출**: Step 4의 두 세션이 같은 노선이라 분당 1건씩 3건(`getArrInfoByRouteAll`). Step 3은 시작하자마자 닫혀 0건.
+- **기록**: 예측 레코드는 tick마다 1건(`method: official`, `stopsAway` 15 → 14 → 13)씩 남았다. 세션을 일찍 끝내 통과 관측이 없으므로 요약의 `predictions`는 비어 있다.
+- **일일 보고서**: 첫 cron(17:45)이 `commute/reports/2026-11-09.json`(세션 0건)을 썼다.
+
+### 배포하면서 고친 것
+
+- `a8e04dc`: iOS 시작 푸시가 예외·타임아웃으로 끝나면 다시 보내지 않는다(Activity가 둘 생기는 것을 막는다). 토큰 문제가 아닌 400/403(`config`)은 시작이면 세션을 `push-rejected`로 닫고, 갱신은 세션당 3번까지만 허용한다. 배포 전에 고쳤다.
+- `74e613d`: 첫 배포(버전 `7c7b64a0`)의 17:45 cron이 `holidays store: D1_ERROR: too many SQL variables`로 실패했다. D1은 한 문장에 바인딩 값을 100개까지만 받는데, 두 해 공휴일(행당 4개)을 한 INSERT로 넣었다. libsql 테스트 DB에는 이 한도가 없어 테스트가 잡지 못했다. 20행씩 나눠 한 batch로 보내게 고치고 다시 배포했다. 17:50 cron은 정상이고 `holiday`에 `KR` 46행(2026-01-01~2027-12-27)이 들어갔다.
+
+### 남은 일
+
+- 지하철 낡음 기준(`staleAfterMs` 150초)이 `dev` 수집 주기(80초)와 원본 지연(약 70초)의 합과 같아 표시가 오갈 수 있다. 지하철 경로로 세션을 돌려 도착판 나이를 재고 값을 정한다.
+- 표시 확인 API의 `shownAt`은 밀리초다(푸시 값의 시각은 초). 2-F Task 4·7에서 맞춘다.
+- 임시공휴일에 `includeHolidays` 경로가 평일 시간표로 추정하는 것, 지원 목록 밖 시간대의 경로가 신호 없이 시작되지 않는 것은 그대로다.
+- 기기 화면 확인과 시작 지연 측정은 2-F Task 8에서 한다.
+
