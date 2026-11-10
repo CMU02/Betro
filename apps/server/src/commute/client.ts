@@ -20,6 +20,8 @@ export interface CommuteRunnerClient {
 		sessionId: string,
 		input: SessionInput
 	) => Promise<InputResult>;
+	/** cron용: 서비스일 하나의 출퇴근 일일 보고서(`commute/reports/<date>.json`). 이미 썼으면 false. */
+	writeDailyReport: (date: string) => Promise<boolean>;
 }
 
 /**
@@ -37,5 +39,6 @@ export function commuteClient(env: Pick<Env, "COMMUTE">): CommuteRunnerClient {
 		healthCheck: () => stub().healthCheck(),
 		input: (installId, sessionId, input) =>
 			stub().input(installId, sessionId, input),
+		writeDailyReport: (date) => stub().writeDailyReport(date),
 	};
 }

@@ -34,6 +34,11 @@ export interface StopBoard {
 	headwayMs: number | null;
 	/** 직전 도착판에는 다가오고 있었는데 지금은 그 정류장을 지난 차량. */
 	passed: { at: number; vehicleId: string }[];
+	/**
+	 * 직전 도착판의 `sourceAt`. `passed`의 차량은 이 시각과 `sourceAt` 사이에 정류장을 지났다
+	 * (정확도 기록의 실제 도착 범위, 5.4). 직전 도착판이 없으면 없다.
+	 */
+	prevSourceAt?: number;
 	/** 출처가 이 값을 만든 시각. 묵음 판단에 쓴다. */
 	sourceAt: number;
 }

@@ -4,7 +4,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { errorText, secretVariants } from "../collector/util";
 import type { Env } from "../worker-env";
-import { runnerPorts, SqlRunnerStore } from "./cf-ports";
+import { runnerPorts, SqlRecordStore, SqlRunnerStore } from "./cf-ports";
 import {
 	type ActiveSession,
 	type InputResult,
@@ -17,6 +17,7 @@ const TICK_FAILURE_RETRY_MS = 60_000;
 const MIN_ALARM_DELAY_MS = 1000;
 const MAX_ID_LENGTH = 128;
 const INPUT_KINDS: ReadonlySet<string> = new Set(["boarded", "next", "end"]);
+const REPORT_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function isId(value: unknown): value is string {
 	return (
@@ -39,12 +40,14 @@ function isSessionInput(value: unknown): value is SessionInput {
  */
 export class CommuteRunner extends DurableObject<Env> {
 	readonly #store: SqlRunnerStore;
+	readonly #records: SqlRecordStore;
 	readonly #log: (line: string) => void;
 	#core: RunnerCore | null = null;
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		this.#store = new SqlRunnerStore(ctx.storage.sql);
+		this.#records = new SqlRecordStore(ctx.storage.sql);
 		const secrets = secretVariants([
 			env.DATA_GO_KR_API_KEY ?? "",
 			env.SEOUL_OPEN_API_KEY ?? "",
@@ -95,6 +98,14 @@ export class CommuteRunner extends DurableObject<Env> {
 		return await this.#getCore().ack(installId, sessionId, at);
 	}
 
+	/** cron용: 서비스일 하나의 일일 보고서를 쓴다(이미 썼으면 false). */
+	async writeDailyReport(date: string): Promise<boolean> {
+		if (typeof date !== "string" || !REPORT_DATE.test(date)) {
+			throw new Error("writeDailyReport needs a YYYY-MM-DD date");
+		}
+		return await this.#getCore().writeDailyReport(date);
+	}
+
 	async alarm(): Promise<void> {
 		let nextAlarmAt: number;
 		try {
@@ -110,7 +121,11 @@ export class CommuteRunner extends DurableObject<Env> {
 
 	#getCore(): RunnerCore {
 		if (this.#core === null) {
-			const { mode, ports } = runnerPorts(this.env, this.#store, this.#log);
+			const { mode, ports } = runnerPorts(
+				this.env,
+				{ records: this.#records, store: this.#store },
+				this.#log
+			);
 			this.#log(
 				`commute runner core push=${mode.push} upstream=${mode.upstream}`
 			);

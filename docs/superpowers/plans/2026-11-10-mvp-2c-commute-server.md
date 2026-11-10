@@ -538,6 +538,7 @@ apps/server/src/collector/            역 도착판 보관과 RPC 추가(Task 4)
   - `dailyReport(date: string, summaries: SessionSummary[]): DailyCommuteReport`
   - `RunnerCore.writeDailyReport(date: string): Promise<boolean>`. `commute/summaries/<date>/`를 읽어 `commute/reports/<date>.json`을 쓴다. cron이 부르고, 실행기는 마지막으로 쓴 날짜를 저장해 하루에 한 번만 쓴다(4단계 일일 보고서와 같은 방식).
   - 제안이 나간 세션은 종료 뒤에도 두 차량이 하차 정류장에 도착하거나 30분이 지날 때까지 그 두 노선의 도착판만 계속 보고 `arrival`을 남긴다(푸시는 보내지 않는다).
+  - **[구현 반영]** `AccuracyRecord`에 `{ kind: "end"; at; sessionId; planId; reason: EndReason }`를 더했다(요약의 `planId`·`endReason`이 나올 곳이 없었다). `suggestion`의 `primary`·`alternative`에는 `afterAlightMs`(하차 예정 → 목적지 도착 예상, 구간이 하나면 마지막 도보)를 더해 "도보를 더해 비교"를 기록만으로 한다. `StopBoard`에 선택 필드 `prevSourceAt`(직전 도착판의 `sourceAt`)을 더해 `arrival.low`로 쓴다. 따라가기는 저장소 키 `follow:<세션ID>`, 마지막 보고서 날짜는 `commuteReportDate`, cron은 `commuteReportDate(now, DEFAULT_TIMEZONE)`(서비스일 D를 D+1 04:00부터)로 `writeDailyReport`를 부른다.
 
 - [ ] **Step 1: 실패하는 테스트**
   - `recordsOf`: tick 하나에서 기본 경로 첫 구간 예측 1건, 대안 2개면 3건. 차량이 정류장을 지난 tick에서 `arrival`의 `low`가 직전 도착판의 `sourceAt`, `high`가 지금 `sourceAt`.

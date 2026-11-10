@@ -200,6 +200,11 @@ describe("busBoards.board", () => {
 		const board = busBoards(stops6411, now, nowMade).board(39);
 		expect(board.passed).toEqual([{ at: nowMade, vehicleId: VEHICLE_A }]);
 		expect(board.approaching.map((a) => a.vehicleId)).toEqual([VEHICLE_B]);
+		// 지난 차량은 직전 응답과 지금 응답 사이에 정류장을 지났다.
+		expect(board.prevSourceAt).toBe(MADE_6411);
+		expect(
+			busBoards(null, now, nowMade).board(39).prevSourceAt
+		).toBeUndefined();
 	});
 
 	it("does not call a vehicle passed when it is still behind the stop", () => {

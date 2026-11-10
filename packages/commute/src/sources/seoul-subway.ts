@@ -112,7 +112,11 @@ export function stationBoard(
 			gone.add(row.trainNo);
 		}
 	}
+	const hasPrev = prev !== null && prev.length > 0;
 	return {
+		...(hasPrev
+			? { prevSourceAt: Math.max(...prev.map((row) => row.sourceAt)) }
+			: {}),
 		approaching,
 		fetchedAt,
 		headwayMs: null,

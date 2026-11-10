@@ -1,4 +1,15 @@
 import {
+	type AccuracyRecord,
+	arrivalRecordOf,
+	dailyReport,
+	type FollowTarget,
+	inputRecordOf,
+	recordsOf,
+	type SessionSummary,
+	suggestionRecordOf,
+	summarize,
+} from "@Betro/commute/accuracy";
+import {
 	dueStart,
 	localParts,
 	startMinutesToCheck,
@@ -55,6 +66,15 @@ const BUDGET_PREFIX = "budget:";
 const STOPPED_PREFIX = "stopped:";
 const APNS_JWT_KEY = "apnsJwt";
 const FCM_ACCESS_KEY = "fcmAccess";
+/** 제안 판정을 위해 하차 정류장까지 따라가는 차량(`follow:<세션ID>`). */
+const FOLLOW_PREFIX = "follow:";
+/** 마지막으로 쓴 일일 보고서의 날짜. */
+const REPORT_DATE_KEY = "commuteReportDate";
+const RECORDS_PREFIX = "commute/records/";
+const SUMMARIES_PREFIX = "commute/summaries/";
+const REPORTS_PREFIX = "commute/reports/";
+const GZIP_TYPE = "application/gzip";
+const JSON_TYPE = "application/json";
 
 const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
@@ -63,6 +83,13 @@ const WATCH_MS = 5 * MINUTE_MS;
 const TIMETABLE_REFRESH_MS = 10 * MINUTE_MS;
 const TIMETABLE_ARRIVALS = 6;
 const ENDED_KEEP_MS = DAY_MS;
+/** 제안이 나간 세션은 끝난 뒤에도 이만큼 두 차량의 하차를 기다린다. */
+const FOLLOW_AFTER_END_MS = 30 * MINUTE_MS;
+/**
+ * 서비스일 D의 보고서는 D+1 04:00부터 쓴다. D의 세션은 늦어도 D+1 03:00 전에 끝나고
+ * (시작 23:5x + 최대 3시간), 제안을 따라가는 30분도 그 안에 끝난다.
+ */
+const REPORT_DELAY_MS = DAY_MS + 4 * 60 * MINUTE_MS;
 const HOLIDAY_COUNTRY = "KR";
 const TOKEN_SHOWN_LENGTH = 8;
 const FCM_UNREGISTERED_STATUS = 404;
@@ -70,6 +97,7 @@ const FCM_UNREGISTERED_STATUS = 404;
 const KEY_QUERY = /((?:service)?key=)[^&\s"']+/gi;
 const SUBWAY_KEY_PATH = /(\/api\/subway\/)[^/\s"']+/g;
 const PEM_LINE_BREAK = /\r?\n|\\n/;
+const encoder = new TextEncoder();
 const MIN_SECRET_LINE = 16;
 
 type Platform = "ios" | "android";
@@ -92,6 +120,8 @@ export interface SessionEntry {
 	serviceDate: string;
 	/** 기기가 처음 그린 시각(ack). */
 	shownAt: number | null;
+	/** 시작 푸시가 나간 시각. 자동 시작 기록(`start`)에 쓴다. */
+	startSentAt: number | null;
 	state: SessionState;
 	timetable: RawBoards["timetable"];
 	timetableAt: number | null;
@@ -123,6 +153,17 @@ interface StationSaved {
 	prev: StationEntry | null;
 }
 
+/**
+ * `follow:<세션ID>`. 제안이 나가면 두 차량을 하차 정류장까지 따라간다. 세션이 열려 있는 동안
+ * `until`은 null이고, 닫히면 `FOLLOW_AFTER_END_MS` 뒤로 정한다. 두 차량이 모두 닿거나 `until`이
+ * 지나면 기록을 요약해 R2에 쓰고 지운다. 쓰기에 실패하면 남겨 두고 다음 tick에 다시 쓴다.
+ */
+interface FollowEntry {
+	items: (FollowTarget & { done: boolean })[];
+	serviceDate: string;
+	until: number | null;
+}
+
 interface EndedMark {
 	endedAt: number;
 	installId: string;
@@ -140,6 +181,54 @@ const sessionKey = (id: string): string => `${SESSION_PREFIX}${id}`;
 const nextMinute = (now: number): number =>
 	Math.floor(now / MINUTE_MS) * MINUTE_MS + MINUTE_MS;
 const dayOf = (now: number): string => localParts(now, DEFAULT_TIMEZONE).date;
+const followKey = (id: string): string => `${FOLLOW_PREFIX}${id}`;
+
+/** cron이 `writeDailyReport`에 넘길 날짜: D+1 04:00(현지)부터 서비스일 D. */
+export function commuteReportDate(now: number, timezone: string): string {
+	return localParts(now - REPORT_DELAY_MS, timezone).date;
+}
+
+async function gzip(text: string): Promise<Uint8Array> {
+	const stream = new Blob([encoder.encode(text)])
+		.stream()
+		.pipeThrough(new CompressionStream("gzip"));
+	return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+function isSummary(value: unknown): value is SessionSummary {
+	if (typeof value !== "object" || value === null) {
+		return false;
+	}
+	const record = value as Record<string, unknown>;
+	return (
+		typeof record.sessionId === "string" &&
+		Array.isArray(record.predictions) &&
+		Array.isArray(record.suggestions)
+	);
+}
+
+function parseSummary(text: string | null): SessionSummary | null {
+	if (text === null) {
+		return null;
+	}
+	try {
+		const parsed: unknown = JSON.parse(text);
+		return isSummary(parsed) ? parsed : null;
+	} catch {
+		return null;
+	}
+}
+
+/** 아직 하차를 보지 못한 따라가는 구간. */
+function followLegs(follows: Map<string, FollowEntry>): Leg[] {
+	return [...follows.values()].flatMap((follow) =>
+		follow.items.filter((item) => !item.done).map((item) => item.leg)
+	);
+}
+
+function sameTarget(a: FollowTarget, b: FollowTarget): boolean {
+	return a.vehicleId === b.vehicleId && legKey(a.leg) === legKey(b.leg);
+}
 
 const defaultSleep = (ms: number): Promise<void> =>
 	new Promise((resolve) => setTimeout(resolve, ms));
@@ -252,6 +341,8 @@ export class RunnerCore {
 	readonly #secrets: readonly string[];
 	readonly #sleep: (ms: number) => Promise<void>;
 	readonly #tokensSeen = new Set<string>();
+	/** 세션별로 이번 걸음에 모은 정확도 기록. 걸음이 끝나기 전에 `records`에 쓴다. */
+	readonly #pending = new Map<string, AccuracyRecord[]>();
 	readonly #warned = new Set<string>();
 	#queue: Promise<unknown> = Promise.resolve();
 
@@ -325,6 +416,31 @@ export class RunnerCore {
 		return { content, planId: entry.state.planId, sessionId: id };
 	}
 
+	/**
+	 * `commute/summaries/<date>/`를 모아 `commute/reports/<date>.json`을 쓴다. 마지막으로 쓴 날짜를
+	 * 저장해 같은 날(또는 그 전 날)은 다시 쓰지 않는다. 썼으면 true.
+	 */
+	writeDailyReport(date: string): Promise<boolean> {
+		return this.#exclusive(async () => {
+			const { blobs, store } = this.#ports;
+			const last = await store.get<string>(REPORT_DATE_KEY);
+			if (last !== undefined && date <= last) {
+				return false;
+			}
+			const keys = await blobs.list(`${SUMMARIES_PREFIX}${date}/`);
+			const texts = await Promise.all(keys.map((found) => blobs.get(found)));
+			const summaries = texts
+				.map(parseSummary)
+				.filter((summary): summary is SessionSummary => summary !== null);
+			const report = dailyReport(date, summaries);
+			const key = `${REPORTS_PREFIX}${date}.json`;
+			await blobs.put(key, encoder.encode(JSON.stringify(report)), JSON_TYPE);
+			await store.put(REPORT_DATE_KEY, date);
+			this.#log(`commute report ${key} written sessions=${report.sessions}`);
+			return true;
+		});
+	}
+
 	#exclusive<T>(fn: () => Promise<T>): Promise<T> {
 		const run = this.#queue.then(fn, fn);
 		this.#queue = run.catch(() => undefined);
@@ -359,10 +475,18 @@ export class RunnerCore {
 		const now = this.#ports.clock();
 		await this.#startDue(now);
 		const entries = await store.list<SessionEntry>(SESSION_PREFIX);
+		const follows = await store.list<FollowEntry>(FOLLOW_PREFIX);
 		let open = 0;
-		if (entries.size > 0) {
+		let following = 0;
+		if (entries.size > 0 || follows.size > 0) {
 			const plans = await this.#plansOf(entries);
-			const raw = await this.#rawBoards(entries, plans, now, true);
+			const raw = await this.#rawBoards(
+				entries,
+				plans,
+				now,
+				true,
+				followLegs(follows)
+			);
 			const boards = assembleBoards(raw, config);
 			// 한 세션씩 차례로 진행한다(JWT·액세스 토큰을 처음 만들 때 겹쳐 만들지 않게).
 			await runLimited([...entries], 1, async ([key, entry]) => {
@@ -371,9 +495,11 @@ export class RunnerCore {
 					open += 1;
 				}
 			});
+			following = await this.#followUp(boards, now);
 		}
-		await this.#prune(now, open);
-		return { nextAlarmAt: open > 0 ? now + config.tickMs : nextMinute(now) };
+		const busy = open + following;
+		await this.#prune(now, busy);
+		return { nextAlarmAt: busy > 0 ? now + config.tickMs : nextMinute(now) };
 	}
 
 	async #stepSafely(
@@ -492,6 +618,7 @@ export class RunnerCore {
 			platform,
 			serviceDate: due.serviceDate,
 			shownAt: null,
+			startSentAt: null,
 			state: startSession(plan, due, sessionId),
 			timetable: { arrivals: {}, rideMs: {} },
 			timetableAt: null,
@@ -547,7 +674,8 @@ export class RunnerCore {
 		entries: Map<string, SessionEntry>,
 		plans: PlanLookup,
 		now: number,
-		pollBus: boolean
+		pollBus: boolean,
+		followed: Leg[] = []
 	): Promise<RawBoards> {
 		const raw: RawBoards = {
 			bus: {},
@@ -574,6 +702,15 @@ export class RunnerCore {
 					stations.add(parseRef(leg.board.stop).id);
 					stations.add(parseRef(leg.alight.stop).id);
 				}
+			}
+		}
+		// 제안을 따라가는 구간은 하차 정류장만 본다(탈 차량이 가깝다고 보지 않는다).
+		for (const leg of followed) {
+			if (leg.mode === "bus") {
+				const routeId = parseRef(leg.line).id;
+				busRoutes.set(routeId, busRoutes.get(routeId) ?? false);
+			} else {
+				stations.add(parseRef(leg.alight.stop).id);
 			}
 		}
 		await Promise.all(
@@ -799,23 +936,50 @@ export class RunnerCore {
 		now: number,
 		input?: SessionInput
 	): Promise<boolean> {
+		try {
+			return await this.#advanceAndSend(id, entry, record, boards, now, input);
+		} finally {
+			await this.#flush(id);
+		}
+	}
+
+	async #advanceAndSend(
+		id: string,
+		entry: SessionEntry,
+		record: PlanRecord | null,
+		boards: TransitBoards,
+		now: number,
+		input: SessionInput | undefined
+	): Promise<boolean> {
 		const { config, store } = this.#ports;
 		const owned =
 			record !== null &&
 			record.installId === entry.installId &&
 			record.plan.enabled;
 		const plan = owned ? record.plan : null;
+		const prev = entry.state;
 		entry.state = plan
 			? advance(entry.state, plan, boards, now, config, input)
 			: endedState(entry.state, "plan-removed");
+		if (plan) {
+			const { timezone } = plan.schedule;
+			this.#note(
+				id,
+				...recordsOf(prev, entry.state, boards, plan, now, timezone)
+			);
+			if (input) {
+				this.#note(id, inputRecordOf(prev, entry.state, input, now));
+			}
+		}
 		const rows = await this.#tokens(entry.installId);
 		if (plan === null || entry.state.stage === "ended") {
 			await this.#finish(id, entry, plan, rows, now);
 			return false;
 		}
 		const content = buildContent(entry.state, plan, now, config);
+		const lastSent = entry.lastContent;
 		const open =
-			entry.lastContent === null
+			lastSent === null
 				? await this.#start(id, entry, content, rows, now)
 				: await this.#update(id, entry, content, rows, now);
 		if (!open) {
@@ -823,8 +987,80 @@ export class RunnerCore {
 			await this.#close(id, entry, rows, now);
 			return false;
 		}
+		const suggestion =
+			entry.lastContent === content ? content.suggestion : null;
+		if (suggestion && lastSent?.suggestion?.rank !== suggestion.rank) {
+			await this.#suggested(id, entry, plan, suggestion.rank, now);
+		}
 		await store.put(sessionKey(id), entry);
 		return true;
+	}
+
+	/** 제안이 나갔다: 기록을 남기고 두 차량을 하차 정류장까지 따라가게 한다. */
+	async #suggested(
+		id: string,
+		entry: SessionEntry,
+		plan: CommutePlan,
+		rank: number,
+		now: number
+	): Promise<void> {
+		const found = suggestionRecordOf(entry.state, plan, rank, now);
+		if (found === null) {
+			return;
+		}
+		this.#note(id, found.record);
+		const { store } = this.#ports;
+		const follow = (await store.get<FollowEntry>(followKey(id))) ?? {
+			items: [],
+			serviceDate: entry.serviceDate,
+			until: null,
+		};
+		for (const target of found.follow) {
+			if (!follow.items.some((item) => sameTarget(item, target))) {
+				follow.items.push({ ...target, done: false });
+			}
+		}
+		await store.put(followKey(id), follow);
+	}
+
+	#note(id: string, ...records: AccuracyRecord[]): void {
+		if (records.length === 0) {
+			return;
+		}
+		const list = this.#pending.get(id) ?? [];
+		list.push(...records);
+		this.#pending.set(id, list);
+	}
+
+	/** 모은 기록을 DO 표에 쓴다. 실패해도 다음 걸음에 다시 쓰지 않는다(기록만 잃는다). */
+	async #flush(id: string): Promise<void> {
+		const list = this.#pending.get(id);
+		this.#pending.delete(id);
+		if (list === undefined || list.length === 0) {
+			return;
+		}
+		try {
+			await this.#ports.records.append(id, list);
+		} catch (error) {
+			this.#log(`commute session=${id} records failed: ${errorText(error)}`);
+		}
+	}
+
+	#noteSend(
+		id: string,
+		content: ContentState,
+		reason: string,
+		outcome: PushOutcome,
+		now: number
+	): void {
+		this.#note(id, {
+			at: now,
+			kind: "send",
+			outcome,
+			reason,
+			seq: content.seq,
+			sessionId: id,
+		});
 	}
 
 	#sent(entry: SessionEntry, content: ContentState, now: number): void {
@@ -858,8 +1094,10 @@ export class RunnerCore {
 					topic: secrets.apnsTopic,
 				})
 			);
+			this.#noteSend(id, content, "start", outcome, now);
 			if (outcome === "ok") {
 				this.#sent(entry, content, now);
+				entry.startSentAt = now;
 				entry.tokenWaitUntil = now + config.tokenWaitMs;
 			}
 			return outcome !== "token-dead";
@@ -870,8 +1108,10 @@ export class RunnerCore {
 				return false;
 			}
 			const outcome = await this.#sendFcm(id, entry, row, "start", content);
+			this.#noteSend(id, content, "start", outcome, now);
 			if (outcome === "ok") {
 				this.#sent(entry, content, now);
+				entry.startSentAt = now;
 			}
 			return outcome !== "token-dead";
 		}
@@ -914,6 +1154,7 @@ export class RunnerCore {
 					topic: secrets.apnsTopic,
 				})
 			);
+			this.#noteSend(id, content, decision.reason, outcome, now);
 			if (outcome === "ok") {
 				this.#sent(entry, content, now);
 			}
@@ -927,6 +1168,7 @@ export class RunnerCore {
 			return true;
 		}
 		const outcome = await this.#sendFcm(id, entry, row, "update", content);
+		this.#noteSend(id, content, decision.reason, outcome, now);
 		if (outcome === "ok") {
 			this.#sent(entry, content, now);
 		}
@@ -989,7 +1231,7 @@ export class RunnerCore {
 			if (row === null) {
 				return;
 			}
-			await this.#sendApns(id, row, "end", (jwt) =>
+			const outcome = await this.#sendApns(id, row, "end", (jwt) =>
 				apnsEndRequest({
 					env: row.env,
 					jwt,
@@ -999,11 +1241,13 @@ export class RunnerCore {
 					topic: this.#ports.secrets.apnsTopic,
 				})
 			);
+			this.#noteSend(id, content, "end", outcome, now);
 			return;
 		}
 		const row = latestToken(rows, (r) => r.kind === "fcm");
 		if (row !== null) {
-			await this.#sendFcm(id, entry, row, "end", content);
+			const outcome = await this.#sendFcm(id, entry, row, "end", content);
+			this.#noteSend(id, content, "end", outcome, now);
 		}
 	}
 
@@ -1030,6 +1274,135 @@ export class RunnerCore {
 		const mark: EndedMark = { endedAt: now, installId: entry.installId };
 		await store.put(`${ENDED_PREFIX}${id}`, mark);
 		this.#log(`commute end session=${id} reason=${reason}`);
+		// Task 11 전에 저장된 세션 항목에는 startSentAt이 없다.
+		const startSentAt = entry.startSentAt ?? null;
+		if (startSentAt !== null) {
+			this.#note(id, {
+				dueAt: entry.dueAt,
+				kind: "start",
+				sentAt: startSentAt,
+				sessionId: id,
+				shownAt: entry.shownAt,
+				tokenAt: entry.tokenAt,
+			});
+		}
+		this.#note(id, {
+			at: now,
+			kind: "end",
+			planId: entry.state.planId,
+			reason,
+			sessionId: id,
+		});
+		await this.#flush(id);
+		await this.#afterClose(id, entry.serviceDate, now);
+	}
+
+	/** 따라갈 차량이 남았으면 30분 기한을 걸고, 아니면 바로 요약해 쓴다. */
+	async #afterClose(
+		id: string,
+		serviceDate: string,
+		now: number
+	): Promise<void> {
+		const { store } = this.#ports;
+		const follow = await store.get<FollowEntry>(followKey(id));
+		if (follow?.items.some((item) => !item.done)) {
+			await store.put(followKey(id), {
+				...follow,
+				until: now + FOLLOW_AFTER_END_MS,
+			});
+			return;
+		}
+		if (await this.#finalize(id, serviceDate)) {
+			await store.delete(followKey(id));
+			return;
+		}
+		// 쓰지 못했으면 다음 tick에 다시 쓴다.
+		await store.put(followKey(id), { items: [], serviceDate, until: now });
+	}
+
+	/**
+	 * 따라가는 차량이 하차 정류장을 지났으면 도착을 남긴다. 끝난 세션의 따라가기가 끝났으면
+	 * (모두 닿았거나 기한이 지났으면) 요약해 쓰고 지운다. 남은 따라가기 수를 돌려준다.
+	 */
+	async #followUp(boards: TransitBoards, now: number): Promise<number> {
+		const { records, store } = this.#ports;
+		// 이번 tick의 세션 걸음이 더한 항목까지 보려고 다시 읽는다.
+		const follows = await store.list<FollowEntry>(FOLLOW_PREFIX);
+		let remaining = 0;
+		await runLimited([...follows], 1, async ([key, follow]) => {
+			const id = key.slice(FOLLOW_PREFIX.length);
+			const arrivals: AccuracyRecord[] = [];
+			for (const item of follow.items) {
+				const arrival = item.done
+					? null
+					: arrivalRecordOf(
+							id,
+							item.leg,
+							"alight",
+							boards.board(item.leg, "alight"),
+							item.vehicleId
+						);
+				if (arrival) {
+					arrivals.push(arrival);
+					item.done = true;
+				}
+			}
+			try {
+				if (arrivals.length > 0) {
+					await records.append(id, arrivals);
+					await store.put(key, follow);
+				}
+				const isOver =
+					follow.until !== null &&
+					(follow.items.every((item) => item.done) || now >= follow.until);
+				if (isOver && (await this.#finalize(id, follow.serviceDate))) {
+					await store.delete(key);
+					return;
+				}
+			} catch (error) {
+				this.#log(`commute follow session=${id} failed: ${errorText(error)}`);
+			}
+			remaining += 1;
+		});
+		return remaining;
+	}
+
+	/**
+	 * 세션의 기록을 꺼내 요약하고 R2에 둘 다 쓴다. 쓰지 못하면 꺼낸 기록을 되돌려 놓고 false.
+	 * 기록에는 설치 ID·토큰·키가 없다(세션 ID와 경로 ID, 교통 데이터뿐이다).
+	 */
+	async #finalize(id: string, serviceDate: string): Promise<boolean> {
+		const { blobs, records } = this.#ports;
+		let drained: AccuracyRecord[] = [];
+		try {
+			drained = await records.drain(id);
+			const summary = summarize(drained);
+			const lines = drained.map((record) => JSON.stringify(record)).join("\n");
+			await blobs.put(
+				`${RECORDS_PREFIX}${serviceDate}/${id}.ndjson.gz`,
+				await gzip(drained.length > 0 ? `${lines}\n` : ""),
+				GZIP_TYPE
+			);
+			await blobs.put(
+				`${SUMMARIES_PREFIX}${serviceDate}/${id}.json`,
+				encoder.encode(JSON.stringify(summary)),
+				JSON_TYPE
+			);
+			this.#log(
+				`commute records session=${id} written records=${drained.length} predictions=${summary.predictions.length}`
+			);
+			return true;
+		} catch (error) {
+			this.#log(`commute records session=${id} failed: ${errorText(error)}`);
+			if (drained.length > 0) {
+				await records.append(id, drained).catch((restoreError: unknown) => {
+					this.#log(
+						`commute records session=${id} restore failed: ${errorText(restoreError)}`
+					);
+				});
+			}
+			return false;
+		}
 	}
 
 	// -------------------------------------------------------------------------

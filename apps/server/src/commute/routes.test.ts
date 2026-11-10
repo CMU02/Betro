@@ -61,6 +61,7 @@ const fakeRunner: CommuteRunnerClient = {
 		}
 		return Promise.resolve(sessionId === SESSION_ID ? "ok" : "not-found");
 	},
+	writeDailyReport: () => Promise.resolve(false),
 };
 
 beforeEach(async () => {

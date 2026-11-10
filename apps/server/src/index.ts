@@ -12,6 +12,7 @@ import { upstreamFor } from "./collector/cf-ports";
 import { collectorClient } from "./collector/client";
 import { commuteClient } from "./commute/client";
 import { refreshHolidaysIfDue } from "./commute/holidays";
+import { commuteReportDate } from "./commute/runner-core";
 import type { Env } from "./worker-env";
 
 // biome-ignore lint/performance/noBarrelFile: wrangler는 Worker 진입점에서 Durable Object 클래스를 export해야 한다.
@@ -50,7 +51,8 @@ export default {
 	/**
 	 * cron(5분마다): 수집기 상태를 보고 알림을 판단한다. 시작한 수집기의 멈춘 alarm도 다시 건다.
 	 * 출퇴근 실행기는 alarm이 없으면 건다(처음 배포 뒤 첫 alarm도 여기서 건다). 공휴일은
-	 * 마지막 성공에서 24시간이 지났을 때만 받는다. 하나가 실패해도 나머지는 돈다.
+	 * 마지막 성공에서 24시간이 지났을 때만 받는다. 출퇴근 일일 보고서는 서비스일 다음 날 04:00부터
+	 * 그날 것을 한 번 쓴다(실행기가 쓴 날짜를 기억한다). 하나가 실패해도 나머지는 돈다.
 	 */
 	async scheduled(
 		_controller: ScheduledController,
@@ -60,6 +62,9 @@ export default {
 		const results = await Promise.allSettled([
 			collectorClient(env).healthCheck(),
 			commuteClient(env).healthCheck(),
+			commuteClient(env).writeDailyReport(
+				commuteReportDate(Date.now(), DEFAULT_TIMEZONE)
+			),
 			refreshHolidaysIfDue({
 				db: createD1Db(env.DB),
 				key: env.DATA_GO_KR_API_KEY ?? "",

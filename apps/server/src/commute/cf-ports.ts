@@ -1,3 +1,4 @@
+import type { AccuracyRecord } from "@Betro/commute/accuracy";
 import { localToEpochMs } from "@Betro/commute/calendar";
 import {
 	type CommuteConfig,
@@ -23,7 +24,11 @@ import {
 import { fcmAccessTokenRequest } from "@Betro/realtime/alerts";
 import { KOREAN_PUBLIC_HOLIDAYS } from "@Betro/realtime/holidays";
 import { serviceDayAt } from "@Betro/realtime/time";
-import type { D1Database, SqlStorage } from "@cloudflare/workers-types";
+import type {
+	D1Database,
+	R2Bucket,
+	SqlStorage,
+} from "@cloudflare/workers-types";
 import { and, eq, inArray } from "drizzle-orm";
 import arrAll150Sample from "../../../../packages/commute/src/__fixtures__/arr-all-150.json";
 import arrAll6411Sample from "../../../../packages/commute/src/__fixtures__/arr-all-6411.json";
@@ -35,10 +40,12 @@ import type { Env } from "../worker-env";
 import type { PushTokenRow } from "./auth";
 import {
 	type BoardSource,
+	type CommuteBlobs,
 	logPushSender,
 	type PlanStore,
 	type PushResult,
 	type PushSender,
+	type RecordStore,
 	type RunnerPorts,
 	type RunnerStore,
 	type TokenStore,
@@ -126,6 +133,87 @@ export class SqlRunnerStore implements RunnerStore {
 				rows.map((row) => [row.key, JSON.parse(row.value) as T] as const)
 			);
 		});
+	}
+}
+
+/**
+ * 정확도 기록 표(DO SQLite). 세션마다 쓴 순서(`id`)대로 꺼낸다. 메모리에 두지 않아 DO가
+ * 잠들거나 다시 떠도 남는다. 생성자에서 표를 만든다.
+ */
+export class SqlRecordStore implements RecordStore {
+	readonly #sql: SqlStorage;
+
+	constructor(sql: SqlStorage) {
+		this.#sql = sql;
+		sql.exec(
+			"CREATE TABLE IF NOT EXISTS accuracy_record (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, body TEXT NOT NULL)"
+		);
+		sql.exec(
+			"CREATE INDEX IF NOT EXISTS accuracy_record_session ON accuracy_record (session_id, id)"
+		);
+	}
+
+	append(sessionId: string, records: AccuracyRecord[]): Promise<void> {
+		return attempt(() => {
+			for (const record of records) {
+				this.#sql.exec(
+					"INSERT INTO accuracy_record (session_id, body) VALUES (?, ?)",
+					sessionId,
+					JSON.stringify(record)
+				);
+			}
+		});
+	}
+
+	drain(sessionId: string): Promise<AccuracyRecord[]> {
+		return attempt(() => {
+			const rows = this.#sql
+				.exec<{ body: string }>(
+					"SELECT body FROM accuracy_record WHERE session_id = ? ORDER BY id",
+					sessionId
+				)
+				.toArray();
+			this.#sql.exec(
+				"DELETE FROM accuracy_record WHERE session_id = ?",
+				sessionId
+			);
+			return rows.map((row) => JSON.parse(row.body) as AccuracyRecord);
+		});
+	}
+}
+
+// ---------------------------------------------------------------------------
+// R2
+
+/** `betro-data`의 출퇴근 기록·요약·보고서. */
+export class R2CommuteBlobs implements CommuteBlobs {
+	readonly #bucket: R2Bucket;
+
+	constructor(bucket: R2Bucket) {
+		this.#bucket = bucket;
+	}
+
+	async get(key: string): Promise<string | null> {
+		const object = await this.#bucket.get(key);
+		return object ? await object.text() : null;
+	}
+
+	/** 목록은 한 번에 1,000개까지라 커서를 따라 끝까지 읽는다. */
+	async list(prefix: string): Promise<string[]> {
+		const keys: string[] = [];
+		const page = async (cursor: string | undefined): Promise<void> => {
+			const listed = await this.#bucket.list({ cursor, prefix });
+			keys.push(...listed.objects.map((object) => object.key));
+			if (listed.truncated) {
+				await page(listed.cursor);
+			}
+		};
+		await page(undefined);
+		return keys;
+	}
+
+	async put(key: string, body: Uint8Array, contentType: string): Promise<void> {
+		await this.#bucket.put(key, body, { httpMetadata: { contentType } });
 	}
 }
 
@@ -529,9 +617,10 @@ export function runnerConfig(env: Env): CommuteConfig {
 /** Durable Object가 `RunnerCore`에 넣는 포트. */
 export function runnerPorts(
 	env: Env,
-	store: RunnerStore,
+	storage: { records: RecordStore; store: RunnerStore },
 	log: (line: string) => void
 ): { mode: { push: string; upstream: string }; ports: RunnerPorts } {
+	const { records, store } = storage;
 	const db = createD1Db(env.DB);
 	const pushMode = env.PUSH_MODE === "send" ? "send" : "log";
 	const upstreamMode = env.UPSTREAM_MODE === "live" ? "live" : "fixture";
@@ -539,6 +628,7 @@ export function runnerPorts(
 	return {
 		mode: { push: pushMode, upstream: upstreamMode },
 		ports: {
+			blobs: new R2CommuteBlobs(env.DATA),
 			boards: boardSource(
 				env,
 				upstreamMode === "live" ? liveUpstream : arrivalFixtureUpstream
@@ -551,6 +641,7 @@ export function runnerPorts(
 				pushMode === "send"
 					? fetchPushSender(serviceAccountJson)
 					: logPushSender(log),
+			records,
 			secrets: {
 				apnsKeyId: env.APNS_KEY_ID ?? "",
 				apnsP8: env.APNS_KEY_P8 ?? "",

@@ -143,6 +143,10 @@ describe("stationBoard", () => {
 		expect(up.passed).toEqual([{ at: SOURCE_2, vehicleId: "6102" }]);
 		expect(up.approaching.map((a) => a.vehicleId)).toEqual(["2104", "2106"]);
 		expect(up.sourceAt).toBe(SOURCE_2);
+		expect(up.prevSourceAt).toBe(SOURCE_1);
+		expect(
+			stationBoard(null, rows2, "up", 0, poll2.fetchedAt).prevSourceAt
+		).toBeUndefined();
 		const down = stationBoard(rows1, rows2, "down", 0, poll2.fetchedAt);
 		expect(down.passed).toEqual([]);
 	});

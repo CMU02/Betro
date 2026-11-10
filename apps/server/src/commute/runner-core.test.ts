@@ -1,3 +1,4 @@
+import type { AccuracyRecord, SessionSummary } from "@Betro/commute/accuracy";
 import {
 	type CommuteConfig,
 	commuteConfig,
@@ -9,19 +10,26 @@ import type { EndReason } from "@Betro/commute/session/stage";
 import type { RouteStopArrival } from "@Betro/commute/sources/seoul-bus";
 import type { TimetablePort } from "@Betro/commute/sources/seoul-subway";
 import { beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { gunzipSync } from "node:zlib";
 import type { PushTokenRow } from "./auth";
 import {
 	type BoardSource,
+	type CommuteBlobs,
 	logPushSender,
 	type PlanStore,
 	type PushResult,
 	type PushSender,
+	type RecordStore,
 	type RunnerStore,
 	type TokenStore,
 	UpstreamStoppedError,
 } from "./ports";
 import { startMinuteOf } from "./routes";
-import { RunnerCore, type SessionEntry } from "./runner-core";
+import {
+	commuteReportDate,
+	RunnerCore,
+	type SessionEntry,
+} from "./runner-core";
 
 const SECOND = 1000;
 const MINUTE = 60_000;
@@ -29,6 +37,7 @@ const MINUTE = 60_000;
 const T0 = Date.UTC(2026, 10, 9, 22, 55);
 const SERVICE_DATE = "2026-11-10";
 const ROUTE_ID = "100100290";
+const ALT_ROUTE_ID = "100100029";
 const BOARD_SEQ = 30;
 const ALIGHT_SEQ = 40;
 const LAST_SEQ = 50;
@@ -191,6 +200,46 @@ class MemoryStore implements RunnerStore {
 			}
 		}
 		return Promise.resolve(out);
+	}
+}
+
+/** DO SQLite 기록 표 대신. 실행기를 새로 만들어도 남는다. */
+class MemoryRecords implements RecordStore {
+	readonly rows = new Map<string, AccuracyRecord[]>();
+
+	append(sessionId: string, records: AccuracyRecord[]): Promise<void> {
+		const rows = this.rows.get(sessionId) ?? [];
+		this.rows.set(sessionId, [...rows, ...structuredClone(records)]);
+		return Promise.resolve();
+	}
+
+	drain(sessionId: string): Promise<AccuracyRecord[]> {
+		const rows = this.rows.get(sessionId) ?? [];
+		this.rows.delete(sessionId);
+		return Promise.resolve(rows);
+	}
+}
+
+/** R2 대신. 쓴 키를 순서대로 남긴다. */
+class MemoryBlobs implements CommuteBlobs {
+	readonly objects = new Map<string, { body: Uint8Array; type: string }>();
+	readonly puts: string[] = [];
+
+	get(key: string): Promise<string | null> {
+		const found = this.objects.get(key);
+		return Promise.resolve(found ? new TextDecoder().decode(found.body) : null);
+	}
+
+	list(prefix: string): Promise<string[]> {
+		return Promise.resolve(
+			[...this.objects.keys()].filter((key) => key.startsWith(prefix)).sort()
+		);
+	}
+
+	put(key: string, body: Uint8Array, contentType: string): Promise<void> {
+		this.puts.push(key);
+		this.objects.set(key, { body, type: contentType });
+		return Promise.resolve();
 	}
 }
 
@@ -418,15 +467,19 @@ function harness(overrides: Partial<CommuteConfig> = {}) {
 	const db = new FakeDb();
 	const push = new FakePush();
 	const boards = new FakeBoards(clock);
+	const records = new MemoryRecords();
+	const blobs = new MemoryBlobs();
 	const config: CommuteConfig = { ...commuteConfig({}), ...overrides };
 	const core = () =>
 		new RunnerCore({
+			blobs,
 			boards,
 			clock: () => clock.now,
 			config,
 			log: (line) => logs.push(line),
 			plans: db,
 			push,
+			records,
 			secrets: {
 				apnsKeyId: "KEYID12345",
 				apnsP8: p8Pem,
@@ -440,7 +493,18 @@ function harness(overrides: Partial<CommuteConfig> = {}) {
 			timezones: [DEFAULT_TIMEZONE],
 			tokens: db,
 		});
-	return { boards, clock, config, core, db, logs, push, store };
+	return {
+		blobs,
+		boards,
+		clock,
+		config,
+		core,
+		db,
+		logs,
+		push,
+		records,
+		store,
+	};
 }
 
 type Harness = ReturnType<typeof harness>;
@@ -1101,5 +1165,263 @@ describe("RunnerCore 로그", () => {
 		} finally {
 			fetchSpy.mockRestore();
 		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 정확도 기록(Task 11)
+
+function recordsKey(sessionId: string): string {
+	return `commute/records/${SERVICE_DATE}/${sessionId}.ndjson.gz`;
+}
+
+function summaryKey(sessionId: string): string {
+	return `commute/summaries/${SERVICE_DATE}/${sessionId}.json`;
+}
+
+function ndjsonOf(h: Harness, sessionId: string): string {
+	const found = h.blobs.objects.get(recordsKey(sessionId));
+	if (!found) {
+		throw new Error("records object missing");
+	}
+	expect(found.type).toBe("application/gzip");
+	return new TextDecoder().decode(gunzipSync(found.body));
+}
+
+async function summaryOf(
+	h: Harness,
+	sessionId: string
+): Promise<SessionSummary | null> {
+	const text = await h.blobs.get(summaryKey(sessionId));
+	return text === null ? null : (JSON.parse(text) as SessionSummary);
+}
+
+/** 기본 경로(6411)에 대안 하나(150, 도보 1분씩). 대안의 A1이 6분 넘게 빠르다. */
+function makeSuggestPlan(planId: string): CommutePlan {
+	const plan = makePlan(planId);
+	plan.routes.push({
+		legs: [
+			{
+				alight: {
+					name: "흑석동",
+					seq: ALIGHT_SEQ,
+					stop: "seoul-bus:119000940",
+				},
+				board: {
+					name: "노량진수산시장",
+					seq: BOARD_SEQ,
+					stop: "seoul-bus:119000930",
+				},
+				line: `seoul-bus:${ALT_ROUTE_ID}`,
+				lineName: "150",
+				mode: "bus",
+			},
+		],
+		rank: 1,
+		walkMinutes: [1, 1],
+	});
+	return plan;
+}
+
+describe("RunnerCore 정확도 기록", () => {
+	test("세션이 끝나면 R2에 기록과 요약이 생기고 기록 표가 빈다. 실행기를 새로 만들어도 그 전 tick의 기록이 들어 있다", async () => {
+		const h = harness();
+		addAndroid(h);
+		const first = h.core();
+		await tickAt(h, first, T0);
+		const [sessionId] = await onlySession(h);
+		expect(await first.ack(ANDROID_INSTALL, sessionId, T0 + 5 * SECOND)).toBe(
+			"ok"
+		);
+		await tickAt(h, first, T0 + 30 * SECOND);
+		expect(h.blobs.puts).toEqual([]);
+
+		const second = h.core();
+		await tickAt(h, second, T0 + 60 * SECOND);
+		h.clock.now = T0 + 70 * SECOND;
+		expect(
+			await second.input(ANDROID_INSTALL, sessionId, { kind: "end" })
+		).toBe("ok");
+
+		expect(h.blobs.puts.sort()).toEqual(
+			[recordsKey(sessionId), summaryKey(sessionId)].sort()
+		);
+		expect(h.records.rows.get(sessionId) ?? []).toEqual([]);
+
+		const text = ndjsonOf(h, sessionId);
+		const records = text
+			.trim()
+			.split("\n")
+			.map((line) => JSON.parse(line) as AccuracyRecord);
+		const predictionAts = records
+			.filter((record) => record.kind === "prediction")
+			.map((record) => record.at);
+		// 처음 실행기가 남긴 tick(T0, T0+30초)도 들어 있다.
+		expect(predictionAts).toEqual([T0, T0 + 30 * SECOND, T0 + 60 * SECOND]);
+		const kinds = new Set(records.map((record) => record.kind));
+		for (const kind of ["start", "send", "input", "end"]) {
+			expect(kinds.has(kind as AccuracyRecord["kind"])).toBe(true);
+		}
+		const prediction = records.find((record) => record.kind === "prediction");
+		expect(prediction).toMatchObject({
+			line: `seoul-bus:${ROUTE_ID}`,
+			method: "official",
+			sessionId,
+			stop: "seoul-bus:119000030",
+			vehicleId: "V1",
+		});
+
+		const summary = await summaryOf(h, sessionId);
+		expect(summary).toMatchObject({
+			endReason: "user",
+			planId: PLAN_ANDROID,
+			sessionId,
+			startDelayMs: 5 * SECOND,
+		});
+
+		const summaryText = (await h.blobs.get(summaryKey(sessionId))) ?? "";
+		const forbidden = [
+			ANDROID_INSTALL,
+			FCM_TOKEN,
+			API_KEY,
+			INSTALL_SECRET,
+			SA_PRIVATE_LINE,
+			"access-",
+		];
+		for (const secret of forbidden) {
+			expect(text).not.toContain(secret);
+			expect(summaryText).not.toContain(secret);
+		}
+	});
+
+	test("토큰이 없어 바로 닫은 세션도 요약을 남긴다", async () => {
+		const h = harness();
+		h.db.addPlan(IOS_INSTALL, makePlan(PLAN_IOS));
+		await tickAt(h, h.core(), T0);
+		const [row] = [...h.db.sessions.values()];
+		const summary = await summaryOf(h, row?.id ?? "");
+		expect(summary).toMatchObject({
+			endReason: "no-token",
+			planId: PLAN_IOS,
+			startDelayMs: null,
+		});
+	});
+
+	test("제안이 나간 세션은 끝난 뒤에도 두 차량이 하차 정류장에 닿을 때까지 도착판만 보고 판정을 남긴다", async () => {
+		const h = harness();
+		h.db.addPlan(ANDROID_INSTALL, makeSuggestPlan(PLAN_ANDROID));
+		h.db.addToken(ANDROID_INSTALL, "fcm", FCM_TOKEN, { env: "production" });
+		/** A1은 08:07에 대안 승차 정류장, 08:17에 하차 정류장에 닿는다. */
+		const altVehicles: SimVehicle[] = [
+			{ arriveBoardAt: T0 + 12 * MINUTE, id: "A1" },
+		];
+		h.boards.handler = (routeId) =>
+			routeStops(
+				routeId === ALT_ROUTE_ID ? altVehicles : h.boards.vehicles,
+				h.clock.now,
+				h.clock.now
+			);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [sessionId] = await onlySession(h);
+		expect(contentOf(h.push.sent[0] as SentRequest).suggestion?.rank).toBe(1);
+
+		h.clock.now = T0 + 30 * SECOND;
+		expect(await core.input(ANDROID_INSTALL, sessionId, { kind: "end" })).toBe(
+			"ok"
+		);
+		expect(h.push.sent.map(describeSent)).toEqual(["fcm:start", "fcm:end"]);
+		// 두 차량이 아직 하차 정류장에 닿지 않아 요약을 미룬다.
+		expect(await summaryOf(h, sessionId)).toBeNull();
+		const following = await tickAt(h, core, T0 + 60 * SECOND);
+		expect(following.nextAlarmAt).toBe(T0 + 60 * SECOND + h.config.tickMs);
+
+		await tickRange(h, core, T0 + 90 * SECOND, T0 + 28 * MINUTE);
+		expect(h.push.sent.map(describeSent)).toEqual(["fcm:start", "fcm:end"]);
+		const summary = await summaryOf(h, sessionId);
+		// V1: 08:21~08:22 사이 하차(가운데 08:21:30) + 3분, A1: 08:16~08:17(08:16:30) + 1분.
+		expect(summary?.suggestions).toEqual([
+			{ gainMs: 7 * MINUTE, verdict: "faster" },
+		]);
+		expect(await h.store.get(`follow:${sessionId}`)).toBeUndefined();
+		expect(h.records.rows.get(sessionId) ?? []).toEqual([]);
+		const idle = await tickAt(h, core, T0 + 28 * MINUTE + 30 * SECOND);
+		expect(idle.nextAlarmAt).toBe(T0 + 29 * MINUTE);
+	});
+
+	test("제안을 따라가던 차량이 30분 안에 닿지 않으면 그때 판정 없이 요약을 쓴다", async () => {
+		const h = harness();
+		h.db.addPlan(ANDROID_INSTALL, makeSuggestPlan(PLAN_ANDROID));
+		h.db.addToken(ANDROID_INSTALL, "fcm", FCM_TOKEN, { env: "production" });
+		const altVehicles: SimVehicle[] = [
+			{ arriveBoardAt: T0 + 12 * MINUTE, id: "A1" },
+		];
+		h.boards.handler = (routeId) =>
+			routeStops(
+				routeId === ALT_ROUTE_ID ? altVehicles : h.boards.vehicles,
+				h.clock.now,
+				h.clock.now
+			);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [sessionId] = await onlySession(h);
+		h.clock.now = T0 + 30 * SECOND;
+		await core.input(ANDROID_INSTALL, sessionId, { kind: "end" });
+		// 도착판이 그 뒤로 비어 차량을 다시 보지 못한다.
+		h.boards.handler = () => [];
+		await tickAt(h, core, T0 + 29 * MINUTE);
+		expect(await summaryOf(h, sessionId)).toBeNull();
+		await tickAt(h, core, T0 + 30 * MINUTE + 30 * SECOND);
+		const summary = await summaryOf(h, sessionId);
+		expect(summary?.suggestions).toEqual([
+			{ gainMs: null, verdict: "unknown" },
+		]);
+		expect(await h.store.get(`follow:${sessionId}`)).toBeUndefined();
+	});
+
+	test("writeDailyReport는 그날 요약을 모아 쓰고, 같은 날짜로 두 번 불러도 R2 쓰기는 한 번이다", async () => {
+		const h = harness();
+		const stored: SessionSummary = {
+			endReason: "arrived",
+			maxSendGapMs: 60_000,
+			planId: PLAN_ANDROID,
+			predictions: [],
+			sessionId: "s1",
+			startDelayMs: 8000,
+			suggestions: [],
+		};
+		await h.blobs.put(
+			`commute/summaries/${SERVICE_DATE}/s1.json`,
+			new TextEncoder().encode(JSON.stringify(stored)),
+			"application/json"
+		);
+		await h.blobs.put(
+			"commute/summaries/2026-11-11/s2.json",
+			new TextEncoder().encode(JSON.stringify({ ...stored, sessionId: "s2" })),
+			"application/json"
+		);
+		const core = h.core();
+		expect(await core.writeDailyReport(SERVICE_DATE)).toBe(true);
+		expect(await core.writeDailyReport(SERVICE_DATE)).toBe(false);
+		expect(await h.core().writeDailyReport(SERVICE_DATE)).toBe(false);
+		const reportKey = `commute/reports/${SERVICE_DATE}.json`;
+		expect(h.blobs.puts.filter((key) => key === reportKey)).toHaveLength(1);
+		const report = JSON.parse((await h.blobs.get(reportKey)) ?? "null") as {
+			date: string;
+			sessions: number;
+			starts: { onTime: number };
+		};
+		expect(report.date).toBe(SERVICE_DATE);
+		expect(report.sessions).toBe(1);
+		expect(report.starts.onTime).toBe(1);
+	});
+
+	test("commuteReportDate는 다음 날 04:00부터 그 전날을 가리킨다", () => {
+		// 2026-11-11 04:00 KST
+		const fourAm = Date.UTC(2026, 10, 10, 19, 0);
+		expect(commuteReportDate(fourAm, DEFAULT_TIMEZONE)).toBe(SERVICE_DATE);
+		expect(commuteReportDate(fourAm - MINUTE, DEFAULT_TIMEZONE)).toBe(
+			"2026-11-09"
+		);
 	});
 });

@@ -212,6 +212,10 @@ export function busBoards(
 	}
 	const latestMadeAt =
 		now.length === 0 ? fetchedAt : Math.max(...now.map((stop) => stop.madeAt));
+	const prevLatestMadeAt =
+		prev === null || prev.length === 0
+			? null
+			: Math.max(...prev.map((stop) => stop.madeAt));
 
 	const board = (seq: number): StopBoard => {
 		const stop = bySeq.get(seq);
@@ -229,7 +233,9 @@ export function busBoards(
 					(seqNowOf.get(vehicle.vehicleId) ?? Number.NEGATIVE_INFINITY) >= seq
 			)
 			.map((vehicle) => ({ at: sourceAt, vehicleId: vehicle.vehicleId }));
+		const prevSourceAt = prevBySeq.get(seq)?.madeAt ?? prevLatestMadeAt;
 		return {
+			...(prevSourceAt === null ? {} : { prevSourceAt }),
 			approaching,
 			fetchedAt,
 			headwayMs:

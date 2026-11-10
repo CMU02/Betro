@@ -1,3 +1,4 @@
+import type { AccuracyRecord } from "@Betro/commute/accuracy";
 import type { CommuteConfig } from "@Betro/commute/config";
 import type { CommutePlan } from "@Betro/commute/plan";
 import type { EndReason } from "@Betro/commute/session/stage";
@@ -81,6 +82,21 @@ export interface BoardSource {
 	watch: (statnIds: string[], until: number) => Promise<void>;
 }
 
+/** 세션별 정확도 기록(DO SQLite 표). 메모리에 두지 않아 실행기가 다시 떠도 남는다. */
+export interface RecordStore {
+	append: (sessionId: string, records: AccuracyRecord[]) => Promise<void>;
+	/** 그 세션의 기록을 쓴 순서대로 돌려주고 지운다. */
+	drain: (sessionId: string) => Promise<AccuracyRecord[]>;
+}
+
+/** 기록·요약·일일 보고서를 두는 곳(R2 `betro-data`의 `commute/`). */
+export interface CommuteBlobs {
+	get: (key: string) => Promise<string | null>;
+	/** 접두사로 시작하는 키 전부. */
+	list: (prefix: string) => Promise<string[]>;
+	put: (key: string, body: Uint8Array, contentType: string) => Promise<void>;
+}
+
 export interface RunnerSecrets {
 	apnsKeyId: string;
 	apnsP8: string;
@@ -90,12 +106,14 @@ export interface RunnerSecrets {
 }
 
 export interface RunnerPorts {
+	blobs: CommuteBlobs;
 	boards: BoardSource;
 	clock: () => number;
 	config: CommuteConfig;
 	log: (line: string) => void;
 	plans: PlanStore;
 	push: PushSender;
+	records: RecordStore;
 	secrets: RunnerSecrets;
 	/** 상류 재시도 백오프. 테스트는 기다리지 않는다. 없으면 `setTimeout`. */
 	sleep?: (ms: number) => Promise<void>;
