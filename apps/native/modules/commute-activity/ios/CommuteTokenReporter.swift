@@ -45,7 +45,8 @@ final class CommuteTokenReporter {
 
   private static let path = "/v1/push-tokens"
   private static let requestTimeout: TimeInterval = 10
-  /// 첫 시도가 실패하면 1초, 그다음 3초 기다렸다가 다시 보낸다.
+  /// 첫 시도가 네트워크 오류(0)나 5xx면 1초, 그다음 3초 기다렸다가 다시 보낸다.
+  /// 401 같은 4xx는 다시 보내도 같으므로 멈추고, 인증값이 다시 넘어올 때(`credentialsDidChange`) 보낸다.
   private static let retryDelaysSeconds: [UInt64] = [1, 3]
 
   private var started = false
@@ -129,7 +130,7 @@ final class CommuteTokenReporter {
     defer { background.end() }
     var status = await Self.put(request)
     log(report, status: status, attempt: 1)
-    for (index, delay) in Self.retryDelaysSeconds.enumerated() where !Self.isSuccess(status) {
+    for (index, delay) in Self.retryDelaysSeconds.enumerated() where Self.isRetryable(status) {
       try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
       status = await Self.put(request)
       log(report, status: status, attempt: index + 2)
@@ -145,6 +146,10 @@ final class CommuteTokenReporter {
 
   private static func isSuccess(_ status: Int) -> Bool {
     (200..<300).contains(status)
+  }
+
+  private static func isRetryable(_ status: Int) -> Bool {
+    status == 0 || status >= 500
   }
 
   private static func request(for report: Report, credentials: CommuteCredentials) -> URLRequest? {
