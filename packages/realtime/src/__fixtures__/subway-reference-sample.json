@@ -1,0 +1,3529 @@
+{
+  "batchIds": {
+    "crosswalk": 8,
+    "timetable": 9,
+    "track": 5
+  },
+  "crosswalk": [
+    {
+      "statnId": "1002000201",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000202",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000203",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000204",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000205",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000206",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000207",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000208",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000209",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000210",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000211",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000212",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000213",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000214",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000215",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000216",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000217",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000218",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000219",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000220",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000221",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000222",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000223",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000224",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000225",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000226",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000227",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000228",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000229",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000230",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000231",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000232",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000233",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000234",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000235",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000236",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000237",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000238",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000239",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000240",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000241",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000242",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002000243",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002002111",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002002112",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002002113",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002002114",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002002341",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002002342",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002002343",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1002002344",
+      "lineKey": "line2"
+    },
+    {
+      "statnId": "1007000709",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000710",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000711",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000712",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000713",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000714",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000715",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000716",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000717",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000718",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000719",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000720",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000721",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000722",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000723",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000724",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000725",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000726",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000727",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000728",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000729",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000730",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000731",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000732",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000733",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000734",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000735",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000736",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000737",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000738",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000739",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000740",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000741",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000742",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000743",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000744",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000745",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000746",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000747",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000748",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000749",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000750",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000751",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000752",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000753",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000754",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000755",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000756",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000757",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000758",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000759",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000760",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1007000761",
+      "lineKey": "line7"
+    },
+    {
+      "statnId": "1077000684",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077000685",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077000686",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077000687",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077000688",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077000689",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077006810",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077006811",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077006812",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077006813",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077006814",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077006815",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077006816",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077006817",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077006818",
+      "lineKey": "shinbundang"
+    },
+    {
+      "statnId": "1077006819",
+      "lineKey": "shinbundang"
+    }
+  ],
+  "trackStations": [
+    {
+      "statnId": "1002000201",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 0,
+      "distanceM": 0
+    },
+    {
+      "statnId": "1002000202",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 1,
+      "distanceM": 669.7
+    },
+    {
+      "statnId": "1002000203",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 2,
+      "distanceM": 1428.1
+    },
+    {
+      "statnId": "1002000204",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 3,
+      "distanceM": 2029.1
+    },
+    {
+      "statnId": "1002000205",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 4,
+      "distanceM": 2935.7
+    },
+    {
+      "statnId": "1002000206",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 5,
+      "distanceM": 3988.7
+    },
+    {
+      "statnId": "1002000207",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 6,
+      "distanceM": 4831.7
+    },
+    {
+      "statnId": "1002000208",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 7,
+      "distanceM": 5634.3
+    },
+    {
+      "statnId": "1002000209",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 8,
+      "distanceM": 6683.2
+    },
+    {
+      "statnId": "1002000210",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 9,
+      "distanceM": 7861.9
+    },
+    {
+      "statnId": "1002000211",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 10,
+      "distanceM": 8687.1
+    },
+    {
+      "statnId": "1002000212",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 11,
+      "distanceM": 9933.7
+    },
+    {
+      "statnId": "1002000213",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 12,
+      "distanceM": 11508.1
+    },
+    {
+      "statnId": "1002000214",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 13,
+      "distanceM": 12225.9
+    },
+    {
+      "statnId": "1002000215",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 14,
+      "distanceM": 14031
+    },
+    {
+      "statnId": "1002000216",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 15,
+      "distanceM": 15303.7
+    },
+    {
+      "statnId": "1002000217",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 16,
+      "distanceM": 16585.2
+    },
+    {
+      "statnId": "1002000218",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 17,
+      "distanceM": 17660.4
+    },
+    {
+      "statnId": "1002000219",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 18,
+      "distanceM": 18617.1
+    },
+    {
+      "statnId": "1002000220",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 19,
+      "distanceM": 19864.5
+    },
+    {
+      "statnId": "1002000221",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 20,
+      "distanceM": 20999.2
+    },
+    {
+      "statnId": "1002000222",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 21,
+      "distanceM": 21879.7
+    },
+    {
+      "statnId": "1002000223",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 22,
+      "distanceM": 23108.2
+    },
+    {
+      "statnId": "1002000224",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 23,
+      "distanceM": 23768.2
+    },
+    {
+      "statnId": "1002000225",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 24,
+      "distanceM": 25440.8
+    },
+    {
+      "statnId": "1002000226",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 25,
+      "distanceM": 27115.5
+    },
+    {
+      "statnId": "1002000227",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 26,
+      "distanceM": 28641.8
+    },
+    {
+      "statnId": "1002000228",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 27,
+      "distanceM": 29701.7
+    },
+    {
+      "statnId": "1002000229",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 28,
+      "distanceM": 30660.3
+    },
+    {
+      "statnId": "1002000230",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 29,
+      "distanceM": 31817.3
+    },
+    {
+      "statnId": "1002000231",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 30,
+      "distanceM": 33593.8
+    },
+    {
+      "statnId": "1002000232",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 31,
+      "distanceM": 34788.3
+    },
+    {
+      "statnId": "1002000233",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 32,
+      "distanceM": 35820.7
+    },
+    {
+      "statnId": "1002000234",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 33,
+      "distanceM": 37629.9
+    },
+    {
+      "statnId": "1002000235",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 34,
+      "distanceM": 38871.3
+    },
+    {
+      "statnId": "1002000236",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 35,
+      "distanceM": 39654.3
+    },
+    {
+      "statnId": "1002000237",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 36,
+      "distanceM": 40959
+    },
+    {
+      "statnId": "1002000238",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 37,
+      "distanceM": 42868
+    },
+    {
+      "statnId": "1002000239",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 38,
+      "distanceM": 43936.7
+    },
+    {
+      "statnId": "1002000240",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 39,
+      "distanceM": 45287.9
+    },
+    {
+      "statnId": "1002000241",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 40,
+      "distanceM": 46105.8
+    },
+    {
+      "statnId": "1002000242",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 41,
+      "distanceM": 47016.1
+    },
+    {
+      "statnId": "1002000243",
+      "trackShapeId": 68,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 42,
+      "distanceM": 47752.6
+    },
+    {
+      "statnId": "1002000201",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 0,
+      "distanceM": 0
+    },
+    {
+      "statnId": "1002000243",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 1,
+      "distanceM": 1012.6
+    },
+    {
+      "statnId": "1002000242",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 2,
+      "distanceM": 1745.4
+    },
+    {
+      "statnId": "1002000241",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 3,
+      "distanceM": 2655.7
+    },
+    {
+      "statnId": "1002000240",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 4,
+      "distanceM": 3473.4
+    },
+    {
+      "statnId": "1002000239",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 5,
+      "distanceM": 4829.4
+    },
+    {
+      "statnId": "1002000238",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 6,
+      "distanceM": 5898.8
+    },
+    {
+      "statnId": "1002000237",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 7,
+      "distanceM": 8006.6
+    },
+    {
+      "statnId": "1002000236",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 8,
+      "distanceM": 9115.6
+    },
+    {
+      "statnId": "1002000235",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 9,
+      "distanceM": 9898.3
+    },
+    {
+      "statnId": "1002000234",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 10,
+      "distanceM": 11144.2
+    },
+    {
+      "statnId": "1002000233",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 11,
+      "distanceM": 12952.1
+    },
+    {
+      "statnId": "1002000232",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 12,
+      "distanceM": 14164.6
+    },
+    {
+      "statnId": "1002000231",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 13,
+      "distanceM": 15188.3
+    },
+    {
+      "statnId": "1002000230",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 14,
+      "distanceM": 16961.4
+    },
+    {
+      "statnId": "1002000229",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 15,
+      "distanceM": 18116.6
+    },
+    {
+      "statnId": "1002000228",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 16,
+      "distanceM": 19075.5
+    },
+    {
+      "statnId": "1002000227",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 17,
+      "distanceM": 20134.9
+    },
+    {
+      "statnId": "1002000226",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 18,
+      "distanceM": 21873.1
+    },
+    {
+      "statnId": "1002000225",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 19,
+      "distanceM": 23339
+    },
+    {
+      "statnId": "1002000224",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 20,
+      "distanceM": 25011.7
+    },
+    {
+      "statnId": "1002000223",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 21,
+      "distanceM": 25669.7
+    },
+    {
+      "statnId": "1002000222",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 22,
+      "distanceM": 26899
+    },
+    {
+      "statnId": "1002000221",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 23,
+      "distanceM": 27780.8
+    },
+    {
+      "statnId": "1002000220",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 24,
+      "distanceM": 28913.9
+    },
+    {
+      "statnId": "1002000219",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 25,
+      "distanceM": 30363.2
+    },
+    {
+      "statnId": "1002000218",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 26,
+      "distanceM": 31372
+    },
+    {
+      "statnId": "1002000217",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 27,
+      "distanceM": 32357.9
+    },
+    {
+      "statnId": "1002000216",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 28,
+      "distanceM": 33734
+    },
+    {
+      "statnId": "1002000215",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 29,
+      "distanceM": 34563.4
+    },
+    {
+      "statnId": "1002000214",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 30,
+      "distanceM": 36357.1
+    },
+    {
+      "statnId": "1002000213",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 31,
+      "distanceM": 37482.2
+    },
+    {
+      "statnId": "1002000212",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 32,
+      "distanceM": 39057.9
+    },
+    {
+      "statnId": "1002000211",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 33,
+      "distanceM": 40301.5
+    },
+    {
+      "statnId": "1002000210",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 34,
+      "distanceM": 41121.5
+    },
+    {
+      "statnId": "1002000209",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 35,
+      "distanceM": 42104.2
+    },
+    {
+      "statnId": "1002000208",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 36,
+      "distanceM": 43156.9
+    },
+    {
+      "statnId": "1002000207",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 37,
+      "distanceM": 43959.1
+    },
+    {
+      "statnId": "1002000206",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 38,
+      "distanceM": 44803.2
+    },
+    {
+      "statnId": "1002000205",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 39,
+      "distanceM": 45854.3
+    },
+    {
+      "statnId": "1002000204",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 40,
+      "distanceM": 46763.7
+    },
+    {
+      "statnId": "1002000203",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 41,
+      "distanceM": 47364.6
+    },
+    {
+      "statnId": "1002000202",
+      "trackShapeId": 69,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 42,
+      "distanceM": 48122.6
+    },
+    {
+      "statnId": "1002000211",
+      "trackShapeId": 70,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "seongsu",
+      "seq": 0,
+      "distanceM": 0
+    },
+    {
+      "statnId": "1002002111",
+      "trackShapeId": 70,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "seongsu",
+      "seq": 1,
+      "distanceM": 2251.8
+    },
+    {
+      "statnId": "1002002112",
+      "trackShapeId": 70,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "seongsu",
+      "seq": 2,
+      "distanceM": 3180.6
+    },
+    {
+      "statnId": "1002002113",
+      "trackShapeId": 70,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "seongsu",
+      "seq": 3,
+      "distanceM": 4099.3
+    },
+    {
+      "statnId": "1002002114",
+      "trackShapeId": 70,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "seongsu",
+      "seq": 4,
+      "distanceM": 5296
+    },
+    {
+      "statnId": "1002002114",
+      "trackShapeId": 71,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "seongsu",
+      "seq": 0,
+      "distanceM": 0
+    },
+    {
+      "statnId": "1002002113",
+      "trackShapeId": 71,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "seongsu",
+      "seq": 1,
+      "distanceM": 1097.8
+    },
+    {
+      "statnId": "1002002112",
+      "trackShapeId": 71,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "seongsu",
+      "seq": 2,
+      "distanceM": 2036.6
+    },
+    {
+      "statnId": "1002002111",
+      "trackShapeId": 71,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "seongsu",
+      "seq": 3,
+      "distanceM": 2938.3
+    },
+    {
+      "statnId": "1002000211",
+      "trackShapeId": 71,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "seongsu",
+      "seq": 4,
+      "distanceM": 5315
+    },
+    {
+      "statnId": "1002000234",
+      "trackShapeId": 72,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "sinjeong",
+      "seq": 0,
+      "distanceM": 0
+    },
+    {
+      "statnId": "1002002341",
+      "trackShapeId": 72,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "sinjeong",
+      "seq": 1,
+      "distanceM": 1018.1
+    },
+    {
+      "statnId": "1002002342",
+      "trackShapeId": 72,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "sinjeong",
+      "seq": 2,
+      "distanceM": 2657.6
+    },
+    {
+      "statnId": "1002002343",
+      "trackShapeId": 72,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "sinjeong",
+      "seq": 3,
+      "distanceM": 4556.5
+    },
+    {
+      "statnId": "1002002344",
+      "trackShapeId": 72,
+      "lineKey": "line2",
+      "direction": "up",
+      "branchKey": "sinjeong",
+      "seq": 4,
+      "distanceM": 5937.8
+    },
+    {
+      "statnId": "1002002344",
+      "trackShapeId": 73,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "sinjeong",
+      "seq": 0,
+      "distanceM": 0
+    },
+    {
+      "statnId": "1002002343",
+      "trackShapeId": 73,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "sinjeong",
+      "seq": 1,
+      "distanceM": 1380.2
+    },
+    {
+      "statnId": "1002002342",
+      "trackShapeId": 73,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "sinjeong",
+      "seq": 2,
+      "distanceM": 3295.1
+    },
+    {
+      "statnId": "1002002341",
+      "trackShapeId": 73,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "sinjeong",
+      "seq": 3,
+      "distanceM": 4932.3
+    },
+    {
+      "statnId": "1002000234",
+      "trackShapeId": 73,
+      "lineKey": "line2",
+      "direction": "down",
+      "branchKey": "sinjeong",
+      "seq": 4,
+      "distanceM": 5950.4
+    },
+    {
+      "statnId": "1007000761",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 0,
+      "distanceM": 0
+    },
+    {
+      "statnId": "1007000760",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 1,
+      "distanceM": 2577.3
+    },
+    {
+      "statnId": "1007000759",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 2,
+      "distanceM": 4203.5
+    },
+    {
+      "statnId": "1007000758",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 3,
+      "distanceM": 5021.5
+    },
+    {
+      "statnId": "1007000757",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 4,
+      "distanceM": 5992.6
+    },
+    {
+      "statnId": "1007000756",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 5,
+      "distanceM": 6955.8
+    },
+    {
+      "statnId": "1007000755",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 6,
+      "distanceM": 7847.5
+    },
+    {
+      "statnId": "1007000754",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 7,
+      "distanceM": 9013.5
+    },
+    {
+      "statnId": "1007000753",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 8,
+      "distanceM": 10001.9
+    },
+    {
+      "statnId": "1007000752",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 9,
+      "distanceM": 10911.1
+    },
+    {
+      "statnId": "1007000751",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 10,
+      "distanceM": 12177.8
+    },
+    {
+      "statnId": "1007000750",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 11,
+      "distanceM": 14465.5
+    },
+    {
+      "statnId": "1007000749",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 12,
+      "distanceM": 15936.7
+    },
+    {
+      "statnId": "1007000748",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 13,
+      "distanceM": 17607.6
+    },
+    {
+      "statnId": "1007000747",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 14,
+      "distanceM": 18840.1
+    },
+    {
+      "statnId": "1007000746",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 15,
+      "distanceM": 20359
+    },
+    {
+      "statnId": "1007000745",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 16,
+      "distanceM": 20977.1
+    },
+    {
+      "statnId": "1007000744",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 17,
+      "distanceM": 22143.2
+    },
+    {
+      "statnId": "1007000743",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 18,
+      "distanceM": 23635.2
+    },
+    {
+      "statnId": "1007000742",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 19,
+      "distanceM": 24682.1
+    },
+    {
+      "statnId": "1007000741",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 20,
+      "distanceM": 25336.1
+    },
+    {
+      "statnId": "1007000740",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 21,
+      "distanceM": 26504.8
+    },
+    {
+      "statnId": "1007000739",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 22,
+      "distanceM": 27349.2
+    },
+    {
+      "statnId": "1007000738",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 23,
+      "distanceM": 28364.2
+    },
+    {
+      "statnId": "1007000737",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 24,
+      "distanceM": 30403.1
+    },
+    {
+      "statnId": "1007000736",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 25,
+      "distanceM": 31402.6
+    },
+    {
+      "statnId": "1007000735",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 26,
+      "distanceM": 32508.8
+    },
+    {
+      "statnId": "1007000734",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 27,
+      "distanceM": 34685
+    },
+    {
+      "statnId": "1007000733",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 28,
+      "distanceM": 35454.6
+    },
+    {
+      "statnId": "1007000732",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 29,
+      "distanceM": 36383.4
+    },
+    {
+      "statnId": "1007000731",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 30,
+      "distanceM": 37259.1
+    },
+    {
+      "statnId": "1007000730",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 31,
+      "distanceM": 38257.7
+    },
+    {
+      "statnId": "1007000729",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 32,
+      "distanceM": 39250.8
+    },
+    {
+      "statnId": "1007000728",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 33,
+      "distanceM": 41315.9
+    },
+    {
+      "statnId": "1007000727",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 34,
+      "distanceM": 42538.7
+    },
+    {
+      "statnId": "1007000726",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 35,
+      "distanceM": 43228.8
+    },
+    {
+      "statnId": "1007000725",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 36,
+      "distanceM": 44389.3
+    },
+    {
+      "statnId": "1007000724",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 37,
+      "distanceM": 45489
+    },
+    {
+      "statnId": "1007000723",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 38,
+      "distanceM": 46366.2
+    },
+    {
+      "statnId": "1007000722",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 39,
+      "distanceM": 47146.3
+    },
+    {
+      "statnId": "1007000721",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 40,
+      "distanceM": 48015.6
+    },
+    {
+      "statnId": "1007000720",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 41,
+      "distanceM": 48861.9
+    },
+    {
+      "statnId": "1007000719",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 42,
+      "distanceM": 49737.8
+    },
+    {
+      "statnId": "1007000718",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 43,
+      "distanceM": 50840.6
+    },
+    {
+      "statnId": "1007000717",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 44,
+      "distanceM": 51711.4
+    },
+    {
+      "statnId": "1007000716",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 45,
+      "distanceM": 52468
+    },
+    {
+      "statnId": "1007000715",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 46,
+      "distanceM": 53695.7
+    },
+    {
+      "statnId": "1007000714",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 47,
+      "distanceM": 54824.5
+    },
+    {
+      "statnId": "1007000713",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 48,
+      "distanceM": 55957.2
+    },
+    {
+      "statnId": "1007000712",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 49,
+      "distanceM": 57206.4
+    },
+    {
+      "statnId": "1007000711",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 50,
+      "distanceM": 58606.9
+    },
+    {
+      "statnId": "1007000710",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 51,
+      "distanceM": 60205.9
+    },
+    {
+      "statnId": "1007000709",
+      "trackShapeId": 84,
+      "lineKey": "line7",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 52,
+      "distanceM": 61545.4
+    },
+    {
+      "statnId": "1007000709",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 0,
+      "distanceM": 0
+    },
+    {
+      "statnId": "1007000710",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 1,
+      "distanceM": 1500.8
+    },
+    {
+      "statnId": "1007000711",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 2,
+      "distanceM": 3130.1
+    },
+    {
+      "statnId": "1007000712",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 3,
+      "distanceM": 4516.5
+    },
+    {
+      "statnId": "1007000713",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 4,
+      "distanceM": 5792.3
+    },
+    {
+      "statnId": "1007000714",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 5,
+      "distanceM": 6725.9
+    },
+    {
+      "statnId": "1007000715",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 6,
+      "distanceM": 7854.6
+    },
+    {
+      "statnId": "1007000716",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 7,
+      "distanceM": 9082.2
+    },
+    {
+      "statnId": "1007000717",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 8,
+      "distanceM": 9942.8
+    },
+    {
+      "statnId": "1007000718",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 9,
+      "distanceM": 10709.1
+    },
+    {
+      "statnId": "1007000719",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 10,
+      "distanceM": 11811.8
+    },
+    {
+      "statnId": "1007000720",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 11,
+      "distanceM": 12688.5
+    },
+    {
+      "statnId": "1007000721",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 12,
+      "distanceM": 13534.7
+    },
+    {
+      "statnId": "1007000722",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 13,
+      "distanceM": 14401.2
+    },
+    {
+      "statnId": "1007000723",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 14,
+      "distanceM": 15177.7
+    },
+    {
+      "statnId": "1007000724",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 15,
+      "distanceM": 16056.3
+    },
+    {
+      "statnId": "1007000725",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 16,
+      "distanceM": 17156.2
+    },
+    {
+      "statnId": "1007000726",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 17,
+      "distanceM": 18316.2
+    },
+    {
+      "statnId": "1007000727",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 18,
+      "distanceM": 19209.7
+    },
+    {
+      "statnId": "1007000728",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 19,
+      "distanceM": 20229.7
+    },
+    {
+      "statnId": "1007000729",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 20,
+      "distanceM": 22492.1
+    },
+    {
+      "statnId": "1007000730",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 21,
+      "distanceM": 23284.3
+    },
+    {
+      "statnId": "1007000731",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 22,
+      "distanceM": 24283.2
+    },
+    {
+      "statnId": "1007000732",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 23,
+      "distanceM": 25158.5
+    },
+    {
+      "statnId": "1007000733",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 24,
+      "distanceM": 26087.7
+    },
+    {
+      "statnId": "1007000734",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 25,
+      "distanceM": 26854.4
+    },
+    {
+      "statnId": "1007000735",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 26,
+      "distanceM": 29229.1
+    },
+    {
+      "statnId": "1007000736",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 27,
+      "distanceM": 30132.5
+    },
+    {
+      "statnId": "1007000737",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 28,
+      "distanceM": 31130.2
+    },
+    {
+      "statnId": "1007000738",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 29,
+      "distanceM": 33167.5
+    },
+    {
+      "statnId": "1007000739",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 30,
+      "distanceM": 34182.5
+    },
+    {
+      "statnId": "1007000740",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 31,
+      "distanceM": 35033.2
+    },
+    {
+      "statnId": "1007000741",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 32,
+      "distanceM": 36197.6
+    },
+    {
+      "statnId": "1007000742",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 33,
+      "distanceM": 36941.7
+    },
+    {
+      "statnId": "1007000743",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 34,
+      "distanceM": 37898.5
+    },
+    {
+      "statnId": "1007000744",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 35,
+      "distanceM": 39393.5
+    },
+    {
+      "statnId": "1007000745",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 36,
+      "distanceM": 40560.7
+    },
+    {
+      "statnId": "1007000746",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 37,
+      "distanceM": 41392.2
+    },
+    {
+      "statnId": "1007000747",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 38,
+      "distanceM": 42694.5
+    },
+    {
+      "statnId": "1007000748",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 39,
+      "distanceM": 44021.7
+    },
+    {
+      "statnId": "1007000749",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 40,
+      "distanceM": 45592.7
+    },
+    {
+      "statnId": "1007000750",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 41,
+      "distanceM": 47273
+    },
+    {
+      "statnId": "1007000751",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 42,
+      "distanceM": 49349.6
+    },
+    {
+      "statnId": "1007000752",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 43,
+      "distanceM": 50617.9
+    },
+    {
+      "statnId": "1007000753",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 44,
+      "distanceM": 51527.1
+    },
+    {
+      "statnId": "1007000754",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 45,
+      "distanceM": 52514.1
+    },
+    {
+      "statnId": "1007000755",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 46,
+      "distanceM": 53679.9
+    },
+    {
+      "statnId": "1007000756",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 47,
+      "distanceM": 54572.5
+    },
+    {
+      "statnId": "1007000757",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 48,
+      "distanceM": 55535.4
+    },
+    {
+      "statnId": "1007000758",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 49,
+      "distanceM": 56506.4
+    },
+    {
+      "statnId": "1007000759",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 50,
+      "distanceM": 57518.9
+    },
+    {
+      "statnId": "1007000760",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 51,
+      "distanceM": 58950.8
+    },
+    {
+      "statnId": "1007000761",
+      "trackShapeId": 85,
+      "lineKey": "line7",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 52,
+      "distanceM": 61727.7
+    },
+    {
+      "statnId": "1077006819",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 0,
+      "distanceM": 0
+    },
+    {
+      "statnId": "1077006818",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 1,
+      "distanceM": 1809.8
+    },
+    {
+      "statnId": "1077006817",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 2,
+      "distanceM": 4147.7
+    },
+    {
+      "statnId": "1077006816",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 3,
+      "distanceM": 6276
+    },
+    {
+      "statnId": "1077006815",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 4,
+      "distanceM": 7954.2
+    },
+    {
+      "statnId": "1077006814",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 5,
+      "distanceM": 9987.3
+    },
+    {
+      "statnId": "1077006813",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 6,
+      "distanceM": 11621.1
+    },
+    {
+      "statnId": "1077006812",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 7,
+      "distanceM": 13554.5
+    },
+    {
+      "statnId": "1077006811",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 8,
+      "distanceM": 16590.2
+    },
+    {
+      "statnId": "1077006810",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 9,
+      "distanceM": 24792.4
+    },
+    {
+      "statnId": "1077000689",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 10,
+      "distanceM": 27659.3
+    },
+    {
+      "statnId": "1077000688",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 11,
+      "distanceM": 29278
+    },
+    {
+      "statnId": "1077000687",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 12,
+      "distanceM": 30880.3
+    },
+    {
+      "statnId": "1077000686",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 13,
+      "distanceM": 31646.2
+    },
+    {
+      "statnId": "1077000685",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 14,
+      "distanceM": 32404.2
+    },
+    {
+      "statnId": "1077000684",
+      "trackShapeId": 105,
+      "lineKey": "shinbundang",
+      "direction": "up",
+      "branchKey": "main",
+      "seq": 15,
+      "distanceM": 33079.8
+    },
+    {
+      "statnId": "1077000684",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 0,
+      "distanceM": 0
+    },
+    {
+      "statnId": "1077000685",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 1,
+      "distanceM": 676.6
+    },
+    {
+      "statnId": "1077000686",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 2,
+      "distanceM": 1434
+    },
+    {
+      "statnId": "1077000687",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 3,
+      "distanceM": 2200.5
+    },
+    {
+      "statnId": "1077000688",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 4,
+      "distanceM": 3797.6
+    },
+    {
+      "statnId": "1077000689",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 5,
+      "distanceM": 5424.1
+    },
+    {
+      "statnId": "1077006810",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 6,
+      "distanceM": 8285.6
+    },
+    {
+      "statnId": "1077006811",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 7,
+      "distanceM": 16487.9
+    },
+    {
+      "statnId": "1077006812",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 8,
+      "distanceM": 19525.9
+    },
+    {
+      "statnId": "1077006813",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 9,
+      "distanceM": 21458.9
+    },
+    {
+      "statnId": "1077006814",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 10,
+      "distanceM": 23093.3
+    },
+    {
+      "statnId": "1077006815",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 11,
+      "distanceM": 25129.7
+    },
+    {
+      "statnId": "1077006816",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 12,
+      "distanceM": 26808.1
+    },
+    {
+      "statnId": "1077006817",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 13,
+      "distanceM": 28933.5
+    },
+    {
+      "statnId": "1077006818",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 14,
+      "distanceM": 31287.2
+    },
+    {
+      "statnId": "1077006819",
+      "trackShapeId": 106,
+      "lineKey": "shinbundang",
+      "direction": "down",
+      "branchKey": "main",
+      "seq": 15,
+      "distanceM": 33227.9
+    }
+  ],
+  "trips": [
+    {
+      "id": 41840,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "5588",
+      "originStatnId": "1002000234",
+      "destinationStatnId": "1002002344",
+      "express": "local"
+    },
+    {
+      "id": 41949,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "5585",
+      "originStatnId": "1002002344",
+      "destinationStatnId": "1002000234",
+      "express": "local"
+    },
+    {
+      "id": 42533,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2206",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42534,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2208",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42535,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2210",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42536,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2212",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42537,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2214",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42538,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2216",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42539,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2218",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42540,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2220",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42541,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2222",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42542,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2224",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42543,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2226",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42544,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2228",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42545,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2230",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42546,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "2232",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42767,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2219",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42768,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2221",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42769,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2223",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42770,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2225",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42771,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2227",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42772,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2229",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42773,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2231",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42774,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2233",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42775,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2235",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42776,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2237",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42777,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2239",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42778,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2241",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42779,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2243",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42780,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2245",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42781,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2247",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42782,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2249",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 42783,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "2251",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 43742,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "1588",
+      "originStatnId": "1002002114",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 43743,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "1590",
+      "originStatnId": "1002002114",
+      "destinationStatnId": "1002000211",
+      "express": "local"
+    },
+    {
+      "id": 43902,
+      "lineKey": "line2",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "1587",
+      "originStatnId": "1002000211",
+      "destinationStatnId": "1002002114",
+      "express": "local"
+    },
+    {
+      "id": 48887,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7004",
+      "originStatnId": "1007000727",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48888,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7006",
+      "originStatnId": "1007000729",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48889,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7008",
+      "originStatnId": "1007000735",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48890,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7010",
+      "originStatnId": "1007000743",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48891,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7012",
+      "originStatnId": "1007000750",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48892,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7014",
+      "originStatnId": "1007000750",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48893,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7016",
+      "originStatnId": "1007000761",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48921,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7152",
+      "originStatnId": "1007000750",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48922,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7156",
+      "originStatnId": "1007000750",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48923,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7160",
+      "originStatnId": "1007000750",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48924,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7164",
+      "originStatnId": "1007000750",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48925,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7168",
+      "originStatnId": "1007000750",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48926,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7172",
+      "originStatnId": "1007000750",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48927,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7176",
+      "originStatnId": "1007000750",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48928,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7180",
+      "originStatnId": "1007000750",
+      "destinationStatnId": "1007000709",
+      "express": "local"
+    },
+    {
+      "id": 48999,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7181",
+      "originStatnId": "1007000709",
+      "destinationStatnId": "1007000750",
+      "express": "local"
+    },
+    {
+      "id": 49000,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7185",
+      "originStatnId": "1007000709",
+      "destinationStatnId": "1007000750",
+      "express": "local"
+    },
+    {
+      "id": 49001,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7189",
+      "originStatnId": "1007000709",
+      "destinationStatnId": "1007000750",
+      "express": "local"
+    },
+    {
+      "id": 49002,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7193",
+      "originStatnId": "1007000709",
+      "destinationStatnId": "1007000750",
+      "express": "local"
+    },
+    {
+      "id": 49003,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7197",
+      "originStatnId": "1007000709",
+      "destinationStatnId": "1007000750",
+      "express": "local"
+    },
+    {
+      "id": 49004,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7201",
+      "originStatnId": "1007000709",
+      "destinationStatnId": "1007000750",
+      "express": "local"
+    },
+    {
+      "id": 49005,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7205",
+      "originStatnId": "1007000709",
+      "destinationStatnId": "1007000750",
+      "express": "local"
+    },
+    {
+      "id": 49006,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7209",
+      "originStatnId": "1007000709",
+      "destinationStatnId": "1007000750",
+      "express": "local"
+    },
+    {
+      "id": 49007,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7213",
+      "originStatnId": "1007000709",
+      "destinationStatnId": "1007000750",
+      "express": "local"
+    },
+    {
+      "id": 49008,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7217",
+      "originStatnId": "1007000709",
+      "destinationStatnId": "1007000750",
+      "express": "local"
+    },
+    {
+      "id": 49364,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7018",
+      "originStatnId": "1007000750",
+      "destinationStatnId": "1007000710",
+      "express": "local"
+    },
+    {
+      "id": 49403,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7154",
+      "originStatnId": "1007000761",
+      "destinationStatnId": "1007000710",
+      "express": "local"
+    },
+    {
+      "id": 49404,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7158",
+      "originStatnId": "1007000761",
+      "destinationStatnId": "1007000710",
+      "express": "local"
+    },
+    {
+      "id": 49405,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7162",
+      "originStatnId": "1007000761",
+      "destinationStatnId": "1007000710",
+      "express": "local"
+    },
+    {
+      "id": 49406,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7166",
+      "originStatnId": "1007000761",
+      "destinationStatnId": "1007000710",
+      "express": "local"
+    },
+    {
+      "id": 49407,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7170",
+      "originStatnId": "1007000761",
+      "destinationStatnId": "1007000710",
+      "express": "local"
+    },
+    {
+      "id": 49408,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7174",
+      "originStatnId": "1007000761",
+      "destinationStatnId": "1007000710",
+      "express": "local"
+    },
+    {
+      "id": 49409,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7178",
+      "originStatnId": "1007000761",
+      "destinationStatnId": "1007000710",
+      "express": "local"
+    },
+    {
+      "id": 49410,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7182",
+      "originStatnId": "1007000761",
+      "destinationStatnId": "1007000710",
+      "express": "local"
+    },
+    {
+      "id": 49411,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7186",
+      "originStatnId": "1007000761",
+      "destinationStatnId": "1007000710",
+      "express": "local"
+    },
+    {
+      "id": 49412,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7190",
+      "originStatnId": "1007000761",
+      "destinationStatnId": "1007000710",
+      "express": "local"
+    },
+    {
+      "id": 49413,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "up",
+      "trainNo": "7194",
+      "originStatnId": "1007000761",
+      "destinationStatnId": "1007000710",
+      "express": "local"
+    },
+    {
+      "id": 49521,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7171",
+      "originStatnId": "1007000710",
+      "destinationStatnId": "1007000761",
+      "express": "local"
+    },
+    {
+      "id": 49522,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7175",
+      "originStatnId": "1007000710",
+      "destinationStatnId": "1007000761",
+      "express": "local"
+    },
+    {
+      "id": 49523,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7179",
+      "originStatnId": "1007000710",
+      "destinationStatnId": "1007000761",
+      "express": "local"
+    },
+    {
+      "id": 49524,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7183",
+      "originStatnId": "1007000710",
+      "destinationStatnId": "1007000761",
+      "express": "local"
+    },
+    {
+      "id": 49525,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7187",
+      "originStatnId": "1007000710",
+      "destinationStatnId": "1007000761",
+      "express": "local"
+    },
+    {
+      "id": 49526,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7191",
+      "originStatnId": "1007000710",
+      "destinationStatnId": "1007000761",
+      "express": "local"
+    },
+    {
+      "id": 49527,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7195",
+      "originStatnId": "1007000710",
+      "destinationStatnId": "1007000761",
+      "express": "local"
+    },
+    {
+      "id": 49528,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7199",
+      "originStatnId": "1007000710",
+      "destinationStatnId": "1007000761",
+      "express": "local"
+    },
+    {
+      "id": 49529,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7203",
+      "originStatnId": "1007000710",
+      "destinationStatnId": "1007000761",
+      "express": "local"
+    },
+    {
+      "id": 49530,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7207",
+      "originStatnId": "1007000710",
+      "destinationStatnId": "1007000761",
+      "express": "local"
+    },
+    {
+      "id": 49531,
+      "lineKey": "line7",
+      "serviceDay": "weekday",
+      "direction": "down",
+      "trainNo": "7211",
+      "originStatnId": "1007000710",
+      "destinationStatnId": "1007000761",
+      "express": "local"
+    }
+  ]
+}

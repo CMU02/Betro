@@ -307,3 +307,29 @@ warning(적재하고 `qualityFlags`에 남긴다). `window-miss`와 `zero-length
 - **6516 (100100576) seq 57~60 회차**: 모양은 은행나무입구사거리 → 백산초 옆을 지나(24,531m) → 삼화약국(24,987m) → 은행나무입구사거리로 가며, API 57→58 = 752m(모양 769m)와 맞는다. API는 그다음 삼화약국 → 백산초.금천청소년문화의집(174m) → 60(396m)을 내는데 모양에는 이 구간이 없다(모양 삼화약국→60은 248m). 그래서 seq 59는 58과 같은 거리에 놓여 `stop-off-shape`(159.3m)와 58→59 `zero-length-segment`가 난다.
 
 실데이터 회귀 테스트 `src/bus/assemble.integration.test.ts`는 `data/raw/bus-route-path/`가 있을 때만 돈다. 6411, 순환 노선, 6516, 9409가 error 없이 조립되고 정류소 거리가 seq 순으로 줄지 않는지만 본다. 위 경고 자체는 원본을 다시 받으면 사라질 수 있으므로 고정하지 않는다.
+
+## D1 업로드 (`publish:d1`)
+
+로컬 `local.db`(libsql)에서 만든 현재 배치를 Cloudflare D1 `betro`(바인딩 `DB`)로 올린다. 키는 필요 없고, wrangler는 `apps/server`에 설치된 것을 `--config ../../apps/server/wrangler.jsonc`로 부른다.
+
+```bash
+# 0. D1 스키마 맞추기 (처음 한 번, 마이그레이션이 바뀔 때마다). apps/server에서:
+#    bunx wrangler d1 migrations apply betro --local   (원격은 --remote)
+bun transit publish:d1 --dry-run           # SQL 파일만 만들고 실행하지 않음 (크기 확인)
+bun transit publish:d1                     # 로컬 D1 (wrangler dev가 쓰는 .wrangler/state)
+bun transit publish:d1 --remote            # 원격 D1
+```
+
+동작:
+
+1. D1의 `reference_batch`(`id, kind, source_manifest`)를 `wrangler d1 execute betro --json --command`로 읽는다.
+2. `local.db`의 현재 배치(종류마다 정확히 1개, `station_crosswalk`·`track`·`timetable`·`bus_route`) 중 D1에 같은 id가 없는 것만 내보낸다. 같은 id가 있고 종류·manifest가 같으면 건너뛰고, 다르면 오류로 멈춘다(아무것도 실행하지 않는다).
+3. `data/d1-publish/<UTC 시각>.sql`에 INSERT 문과 현재 배치 표시(`UPDATE reference_batch SET is_current = (id = <id>) WHERE kind = '<kind>'`)를 쓴다.
+4. `--dry-run`이 아니면 `wrangler d1 execute betro --file <sql> --local|--remote --yes`로 실행한다.
+
+규칙:
+
+- **로컬 id를 그대로 넣는다.** `reference_batch`와 자식 행(`station_crosswalk`, `track_shape`→`track_station`, `timetable_trip`→`timetable_stop_time`, `bus_route`→`bus_route_shape`/`bus_route_stop`/`bus_route_segment`)의 id가 `local.db`와 D1에서 같다. 그래서 `local.db`가 유일한 원본이어야 한다. `local.db`를 지우고 새로 빌드하면 id가 다시 1부터 매겨져 D1의 이전 배치와 부딪치므로, 그때는 D1을 비우고(마이그레이션부터 다시) 올린다.
+- D1에는 이전 배치가 남는다. 문제가 생기면 D1에서 `is_current`만 이전 배치로 되돌린다.
+- D1은 쿼리 하나에 바인딩 변수 100개까지만 받으므로 바인딩을 쓰지 않고 SQL 리터럴로 쓴다(문자열 `'` 이스케이프, JSON 컬럼은 JSON 문자열, boolean 0/1, timestamp_ms 정수, null은 `NULL`). 문 하나는 `D1_MAX_STATEMENT_BYTES`(90,000바이트, D1 한도 100KB 안) 이하로 나눈다. 한 행이 이 한도를 넘으면 오류로 멈춘다(2026-11-04 기준 가장 긴 행은 버스 노선 모양 약 74KB).
+- 부모 테이블 문이 자식보다 먼저 온다(D1은 외래 키를 검사한다).
