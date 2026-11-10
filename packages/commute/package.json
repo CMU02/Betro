@@ -1,0 +1,19 @@
+{
+  "name": "@Betro/commute",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc -b",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@Betro/config": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "^6.0.3"
+  }
+}

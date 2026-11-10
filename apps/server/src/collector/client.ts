@@ -1,6 +1,7 @@
 import type { CollectorStatus } from "@Betro/realtime/metrics";
 import type { Env } from "../worker-env";
 import type { SnapshotKind, SnapshotResponse } from "./core";
+import type { StationRowsEntry } from "./core-state";
 
 /** 수집기 Durable Object 이름. 이름 하나 = 인스턴스 하나. */
 export const COLLECTOR_NAME = "collector-v1";
@@ -19,9 +20,15 @@ export interface CollectorClient {
 	status: () => Promise<CollectorStatus>;
 }
 
-/** cron이 쓰는 메서드까지 포함한 클라이언트. */
+/** cron과 출퇴근 실행기가 쓰는 메서드까지 포함한 클라이언트. */
 export interface CollectorRpcClient extends CollectorClient {
 	healthCheck: () => Promise<void>;
+	/** 등록한 역 중 행을 받은 역의 최근 ALL 행. */
+	stationRows: (
+		statnIds: string[]
+	) => Promise<Record<string, StationRowsEntry>>;
+	/** 출퇴근 세션이 보는 역을 `until`까지 등록한다. */
+	watchStations: (statnIds: string[], until: number) => Promise<void>;
 }
 
 /**
@@ -39,6 +46,8 @@ export function collectorClient(
 		healthCheck: () => stub().healthCheck(),
 		snapshot: (kind) => stub().snapshot(kind),
 		start: () => stub().start(),
+		stationRows: (statnIds) => stub().stationRows(statnIds),
 		status: () => stub().status(),
+		watchStations: (statnIds, until) => stub().watchStations(statnIds, until),
 	};
 }

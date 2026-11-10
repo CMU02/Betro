@@ -873,3 +873,105 @@ describe("CollectorCore", () => {
 		expect(report.ok).toBe(false);
 	});
 });
+
+describe("CollectorCore station boards", () => {
+	const GANGNAM = "1002000222";
+	/** 표본 ALL 응답에 행이 없는 역. */
+	const NO_ROWS = "1002000999";
+	const DOBONGSAN = "1007000745";
+	/** 표본 강남역 행의 recptnDt "2026-11-03 13:03:59"(KST) */
+	const GANGNAM_SOURCE_AT = Date.UTC(2026, 10, 3, 4, 3, 59);
+
+	it("keeps the rows of watched stations from each ALL response", async () => {
+		const h = makeHarness();
+		await h.core.watchStations([GANGNAM, NO_ROWS], T0 + 10 * MINUTE);
+		await h.core.tick();
+		expect(subwayCalls(h).length).toBeGreaterThan(0);
+		const boards = await h.core.stationRows([GANGNAM, DOBONGSAN]);
+		expect(Object.keys(boards)).toEqual([GANGNAM]);
+		expect(boards[GANGNAM]).toEqual({
+			fetchedAt: T0,
+			rows: [
+				{
+					arvlCd: "99",
+					barvlSec: 260,
+					direction: "down",
+					ordkey: "01003성수0",
+					sourceAt: GANGNAM_SOURCE_AT,
+					trainNo: "2229",
+				},
+				{
+					arvlCd: "99",
+					barvlSec: 430,
+					direction: "down",
+					ordkey: "02004성수0",
+					sourceAt: GANGNAM_SOURCE_AT,
+					trainNo: "2231",
+				},
+				{
+					arvlCd: "2",
+					barvlSec: 10,
+					direction: "up",
+					ordkey: "11000성수0",
+					sourceAt: GANGNAM_SOURCE_AT,
+					trainNo: "2226",
+				},
+				{
+					arvlCd: "99",
+					barvlSec: 240,
+					direction: "up",
+					ordkey: "12004성수0",
+					sourceAt: GANGNAM_SOURCE_AT,
+					trainNo: "3228",
+				},
+			],
+		});
+		// 등록했지만 응답에 행이 없는 역은 빈 행으로 남는다(받았지만 열차가 없었다).
+		expect(await h.core.stationRows([NO_ROWS])).toEqual({
+			[NO_ROWS]: { fetchedAt: T0, rows: [] },
+		});
+	});
+
+	it("keeps the rows across a restart", async () => {
+		const first = makeHarness();
+		await first.core.watchStations([GANGNAM], T0 + 10 * MINUTE);
+		await first.core.tick();
+		const before = await first.core.stationRows([GANGNAM]);
+		expect(before).toHaveProperty([GANGNAM, "rows", "length"], 4);
+		const second = makeHarness({ clock: first.clock, state: first.state });
+		expect(await second.core.stationRows([GANGNAM])).toEqual(before);
+	});
+
+	it("forgets a station on the first tick after its watch expires", async () => {
+		const h = makeHarness();
+		await h.core.watchStations([GANGNAM], T0 + 5 * MINUTE);
+		await h.core.tick();
+		expect(Object.keys(await h.core.stationRows([GANGNAM]))).toEqual([GANGNAM]);
+		h.clock.now = T0 + 6 * MINUTE;
+		await h.core.tick();
+		expect(await h.core.stationRows([GANGNAM])).toEqual({});
+	});
+
+	it("extends a watch instead of shortening it", async () => {
+		const h = makeHarness();
+		await h.core.watchStations([GANGNAM], T0 + 30 * MINUTE);
+		await h.core.watchStations([GANGNAM], T0 + 5 * MINUTE);
+		await h.core.tick();
+		h.clock.now = T0 + 6 * MINUTE;
+		await h.core.tick();
+		expect(Object.keys(await h.core.stationRows([GANGNAM]))).toEqual([GANGNAM]);
+	});
+
+	it("never stores key text with the station rows", async () => {
+		const keys: CollectorKeys = { bus: "q/r+s=", subway: "a/b+c=" };
+		const h = makeHarness({ keys });
+		await h.core.watchStations([GANGNAM], T0 + 10 * MINUTE);
+		await h.core.tick();
+		const stored = h.state.kv.get(STATE_KEYS.boards) ?? "";
+		expect(stored).toContain(GANGNAM);
+		for (const secret of [keys.subway, keys.bus]) {
+			expect(stored).not.toContain(secret);
+			expect(stored).not.toContain(encodeURIComponent(secret));
+		}
+	});
+});

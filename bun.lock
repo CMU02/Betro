@@ -84,12 +84,14 @@
       "dependencies": {
         "@Betro/api": "workspace:*",
         "@Betro/auth": "workspace:*",
+        "@Betro/commute": "workspace:*",
         "@Betro/db": "workspace:*",
         "@Betro/realtime": "workspace:*",
         "@orpc/openapi": "catalog:",
         "@orpc/server": "catalog:",
         "@orpc/zod": "catalog:",
         "better-auth": "catalog:",
+        "drizzle-orm": "catalog:",
         "hono": "^4.13.16",
         "zod": "catalog:",
       },
@@ -168,6 +170,17 @@
         "typescript": "^6.0.3",
       },
     },
+    "packages/commute": {
+      "name": "@Betro/commute",
+      "dependencies": {
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@Betro/config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "^6.0.3",
+      },
+    },
     "packages/config": {
       "name": "@Betro/config",
       "version": "0.0.0",
@@ -175,6 +188,7 @@
     "packages/db": {
       "name": "@Betro/db",
       "dependencies": {
+        "@Betro/commute": "workspace:*",
         "@libsql/client": "0.18.0",
         "drizzle-orm": "catalog:",
         "libsql": "catalog:",
@@ -280,6 +294,8 @@
     "@Betro/api": ["@Betro/api@workspace:packages/api"],
 
     "@Betro/auth": ["@Betro/auth@workspace:packages/auth"],
+
+    "@Betro/commute": ["@Betro/commute@workspace:packages/commute"],
 
     "@Betro/config": ["@Betro/config@workspace:packages/config"],
 

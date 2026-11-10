@@ -10,9 +10,15 @@
     { "pattern": "betro-status.cmu02-studio.com", "custom_domain": true }
   ],
   "durable_objects": {
-    "bindings": [{ "name": "COLLECTOR", "class_name": "Collector" }]
+    "bindings": [
+      { "name": "COLLECTOR", "class_name": "Collector" },
+      { "name": "COMMUTE", "class_name": "CommuteRunner" }
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Collector"] }],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Collector"] },
+    { "tag": "v2", "new_sqlite_classes": ["CommuteRunner"] }
+  ],
   "r2_buckets": [{ "binding": "DATA", "bucket_name": "betro-data" }],
   "triggers": { "crons": ["*/5 * * * *"] },
   "d1_databases": [
@@ -30,6 +36,11 @@
     "STATUS_HOST": "betro-status.cmu02-studio.com",
     "COLLECTOR_MODE": "dev",
     // 로컬 .dev.vars는 UPSTREAM_MODE=fixture로 덮어써서 상류를 부르지 않는다.
-    "UPSTREAM_MODE": "live"
+    "UPSTREAM_MODE": "live",
+    // 출퇴근 푸시. "send"일 때만 APNs·FCM에 보낸다. 로컬 .dev.vars는 "log"로 둔다.
+    "PUSH_MODE": "send",
+    "APNS_KEY_ID": "HFSD7YXX9N",
+    "APNS_TEAM_ID": "5JKMP6D4C5",
+    "APNS_TOPIC": "com.cmu02.betro"
   }
 }
