@@ -10,7 +10,10 @@ import {
 	busMetaOf,
 	busRouteRow,
 	directionView,
+	filterBranchChoices,
+	filterStopChoices,
 	isBranchUnavailable,
+	isNoMatch,
 	type LegStep,
 	lookupView,
 	previousStep,
@@ -347,4 +350,74 @@ it("keeps the route type and region of a picked bus route for the device", () =>
 		routeType: "8",
 	});
 	expect(busMetaOf(SEOUL_341)).toEqual({ region: "seoul", routeType: "3" });
+});
+
+it("filters boarding stops by name, ignoring case, spaces and dots", () => {
+	const choices = boardChoices(STOPS, t);
+	const labels = (query: string) =>
+		filterStopChoices(choices, query).map((choice) => choice.label);
+	expect(labels("")).toEqual(STOPS.map((entry) => entry.name));
+	expect(labels("   ")).toEqual(STOPS.map((entry) => entry.name));
+	expect(labels(" 잠실 ")).toEqual(["잠실역.롯데월드", "잠실새내역"]);
+	expect(labels("잠실역 롯데")).toEqual(["잠실역.롯데월드"]);
+	expect(labels("잠실역롯데월드")).toEqual(["잠실역.롯데월드"]);
+	expect(labels("역삼역·포스코")).toEqual(["역삼역.포스코사거리"]);
+	expect(labels("강남")).toEqual(["강남역"]);
+	expect(labels("신촌")).toEqual([]);
+	expect(
+		filterStopChoices(boardChoices([stop(1, "DMC역")]), "dmc")
+	).toHaveLength(1);
+});
+
+it("keeps the same-name sub and the last-stop lock of the full list when filtering", () => {
+	const loop = filterStopChoices(boardChoices(LOOP_STOPS, t), "서초구청");
+	expect(loop.map((choice) => choice.sub)).toEqual([
+		"교대역 방면",
+		"양재역 방면",
+	]);
+	const last = filterStopChoices(boardChoices(STOPS, t), "강남역");
+	expect(last.map((choice) => choice.disabled)).toEqual([true]);
+});
+
+it("treats a query of only spaces and dots as no query", () => {
+	expect(filterStopChoices(boardChoices(STOPS), " . · ")).toHaveLength(
+		STOPS.length
+	);
+	expect(isNoMatch(" . · ", 0)).toBe(false);
+	expect(isNoMatch("", 0)).toBe(false);
+	expect(isNoMatch("신촌", 0)).toBe(true);
+	expect(isNoMatch("잠실", 2)).toBe(false);
+});
+
+it("filters boarding stations per branch and keeps each branch's heading", () => {
+	const branches = subwayBoardChoices(LINE2_BRANCHES);
+	const all = filterBranchChoices(branches, "");
+	expect(all.showHeadings).toBe(true);
+	expect(all.branches.map((entry) => entry.index)).toEqual([0, 1]);
+	expect(all.branches.map((entry) => entry.branch)).toEqual(branches);
+
+	const seongsu = filterBranchChoices(branches, "성수");
+	// 본선이 걸러져도 남은 지선은 원래 머리("성수지선")와 순번을 그대로 쓴다
+	expect(seongsu.showHeadings).toBe(true);
+	expect(seongsu.branches).toEqual([
+		{
+			branch: {
+				branchKey: "seongsu",
+				stations: [
+					{ disabled: false, name: "성수", stop: "seoul-subway:1002000211" },
+				],
+			},
+			index: 1,
+		},
+	]);
+
+	expect(
+		filterBranchChoices(branches, "잠실").branches.map((entry) =>
+			entry.branch.stations.map((station) => station.name)
+		)
+	).toEqual([["잠실", "잠실새내"]]);
+	expect(filterBranchChoices(branches, "신촌").branches).toEqual([]);
+
+	const single = filterBranchChoices(branches.slice(0, 1), "강남");
+	expect(single.showHeadings).toBe(false);
 });

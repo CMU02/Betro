@@ -220,6 +220,67 @@ export function isBranchUnavailable(
 	return !branch.stations.some((station) => station.stop === board);
 }
 
+/** 이름 검색에서 무시하는 글자: 공백, 마침표, 가운뎃점("잠실역.롯데월드"를 "잠실역 롯데"로 찾게). */
+const IGNORED_IN_SEARCH = /[\s.·]/g;
+
+/** 검색어와 이름을 같은 꼴로 맞춘다. 공백·'.'·'·'를 빼고 소문자로. */
+function searchKey(text: string): string {
+	return text.replace(IGNORED_IN_SEARCH, "").toLowerCase();
+}
+
+/**
+ * 승차 정류장 이름 검색. 공백·'.'·'·'와 대소문자를 무시하고 이름 일부가 맞으면 남긴다.
+ * 검색어가 비었으면(공백·점뿐이어도) 전부. `sub`와 `disabled`는 전체 목록에서 정한 값을 그대로 둔다.
+ */
+export function filterStopChoices(
+	choices: StopChoice[],
+	query: string
+): StopChoice[] {
+	const key = searchKey(query);
+	if (key === "") {
+		return choices;
+	}
+	return choices.filter((choice) => searchKey(choice.label).includes(key));
+}
+
+export interface FilteredBranch {
+	branch: BranchChoices;
+	/** 거르기 전 목록에서의 순번. 모르는 지선의 "갈래 N"이 거른 뒤에도 바뀌지 않게. */
+	index: number;
+}
+
+/**
+ * 승차역 이름 검색. 지선마다 역을 거르고, 맞는 역이 없는 지선은 뺀다. 지선 머리는 거르기 전
+ * 지선 수로 정해서, 검색으로 지선이 하나만 남아도 어느 지선인지 보인다.
+ */
+export function filterBranchChoices(
+	branches: BranchChoices[],
+	query: string
+): { branches: FilteredBranch[]; showHeadings: boolean } {
+	const key = searchKey(query);
+	const filtered: FilteredBranch[] = [];
+	for (const [index, branch] of branches.entries()) {
+		const stations =
+			key === ""
+				? branch.stations
+				: branch.stations.filter((station) =>
+						searchKey(station.name).includes(key)
+					);
+		if (stations.length > 0) {
+			filtered.push({
+				branch: key === "" ? branch : { ...branch, stations },
+				index,
+			});
+		}
+	}
+	return { branches: filtered, showHeadings: branches.length > 1 };
+}
+
+/** 검색어가 있는데 맞는 것이 하나도 없는지. 검색어가 공백·점뿐이면 검색하지 않은 것으로 본다. */
+export function isNoMatch(query: string, matches: number): boolean {
+	return searchKey(query) !== "" && matches === 0;
+}
+
 /** 고른 지하철 구간. 노선 ID는 조회 API의 `seoul-subway:<lineKey>`를 그대로 쓴다. */
 export function subwayLeg(
 	line: SubwayLine,

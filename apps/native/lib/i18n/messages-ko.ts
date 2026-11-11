@@ -159,6 +159,11 @@ export const ko = {
 			topBarSubway: "하차역",
 		},
 		board: {
+			/** 승차 이름 검색에 맞는 것이 없을 때. `{q}`는 입력한 검색어다. */
+			noStation: "'{q}'에 맞는 역이 없어요",
+			noStop: "'{q}'에 맞는 정류장이 없어요",
+			searchStation: "역 이름 검색",
+			searchStop: "정류장 이름 검색",
 			title: "어디서 타나요?",
 			topBar: "승차 정류장",
 			topBarSubway: "승차역",

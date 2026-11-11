@@ -23,14 +23,17 @@ import { t } from "@/lib/i18n/t";
 import type { MessageKey } from "@/lib/i18n/translate";
 import {
 	alightChoices,
-	type BranchChoices,
 	boardChoices,
 	branchLabel,
 	busLeg,
 	busRouteRow,
 	type DirectionView,
 	directionView,
+	type FilteredBranch,
+	filterBranchChoices,
+	filterStopChoices,
 	isBranchUnavailable,
+	isNoMatch,
 	type LookupView,
 	lookupView,
 	type StationPick,
@@ -405,6 +408,47 @@ function Footer({
 	);
 }
 
+/** 16c·16d 승차 이름 검색칸(Figma `SearchBar` Idle). 목록을 먼저 보게 자동으로 고르지 않는다. */
+function BoardSearch({
+	onChange,
+	placeholderKey,
+	query,
+}: {
+	onChange: (query: string) => void;
+	placeholderKey: MessageKey;
+	query: string;
+}) {
+	return (
+		<TextField
+			accessibilityLabel={t(placeholderKey)}
+			onChangeText={onChange}
+			placeholder={t(placeholderKey)}
+			returnKeyType="search"
+			search={{ clearLabel: t("legPicker.search.clear") }}
+			value={query}
+		/>
+	);
+}
+
+/** 승차 검색에 맞는 것이 없을 때의 한 줄 안내. */
+function NoMatch({
+	messageKey,
+	query,
+}: {
+	messageKey: MessageKey;
+	query: string;
+}) {
+	return (
+		<AppText
+			accessibilityLiveRegion="polite"
+			className="text-text-tertiary"
+			variant="caption"
+		>
+			{t(messageKey, { q: query.trim() })}
+		</AppText>
+	);
+}
+
 /** 16a 수단. 버스와 지하철. */
 export function ModeStep({
 	onBus,
@@ -475,6 +519,7 @@ export function BusSearchStep({
 				onChangeText={setQuery}
 				placeholder={t("legPicker.search.placeholder")}
 				returnKeyType="search"
+				search={{ clearLabel: t("legPicker.search.clear") }}
 				value={query}
 			/>
 			{view === "hint" ? (
@@ -527,7 +572,10 @@ function useBusStops(route: BusRouteMatch) {
 	});
 }
 
-/** 16c 승차 정류장. 마지막 정류장은 고를 수 없다. */
+/**
+ * 16c 승차 정류장. 마지막 정류장은 고를 수 없다. 이름으로 거를 수 있고, 고른 정류장이 걸러져
+ * 보이지 않아도 선택은 남아 "다음"을 누를 수 있다.
+ */
 export function BusBoardStep({
 	onPick,
 	route,
@@ -537,6 +585,7 @@ export function BusBoardStep({
 }) {
 	const stops = useBusStops(route);
 	const [board, setBoard] = useState<BusStop | null>(null);
+	const [query, setQuery] = useState("");
 	const retry = useCallback(() => {
 		stops.refetch().catch(() => undefined);
 	}, [stops]);
@@ -545,7 +594,10 @@ export function BusBoardStep({
 			onPick(board);
 		}
 	}, [board, onPick]);
-	const choices = stops.data?.ok ? boardChoices(stops.data.value.stops, t) : [];
+	const choices = filterStopChoices(
+		stops.data?.ok ? boardChoices(stops.data.value.stops, t) : [],
+		query
+	);
 	return (
 		<StepLayout
 			footer={
@@ -562,19 +614,28 @@ export function BusBoardStep({
 				onRetry={retry}
 				view={lookupView(stops.isFetching ? undefined : stops.data)}
 			>
-				<Card>
-					{choices.map((choice, index) => (
-						<View key={`${choice.stop.stop}-${choice.stop.seq}`}>
-							{index > 0 ? <ListDivider inset="edge" /> : null}
-							<BusStopRow
-								choice={choice}
-								onPick={setBoard}
-								selected={board?.seq === choice.stop.seq}
-								sub={choice.sub}
-							/>
-						</View>
-					))}
-				</Card>
+				<BoardSearch
+					onChange={setQuery}
+					placeholderKey="legPicker.board.searchStop"
+					query={query}
+				/>
+				{isNoMatch(query, choices.length) ? (
+					<NoMatch messageKey="legPicker.board.noStop" query={query} />
+				) : (
+					<Card>
+						{choices.map((choice, index) => (
+							<View key={`${choice.stop.stop}-${choice.stop.seq}`}>
+								{index > 0 ? <ListDivider inset="edge" /> : null}
+								<BusStopRow
+									choice={choice}
+									onPick={setBoard}
+									selected={board?.seq === choice.stop.seq}
+									sub={choice.sub}
+								/>
+							</View>
+						))}
+					</Card>
+				)}
 			</LookupGate>
 		</StepLayout>
 	);
@@ -689,22 +750,23 @@ function useSubwayStations(line: SubwayLine) {
 	});
 }
 
-/** 지선마다 머리와 역 목록. 지선이 하나면 머리를 그리지 않는다. */
+/** 지선마다 머리와 역 목록. 노선의 지선이 하나면(`showHeadings` false) 머리를 그리지 않는다. */
 function BranchList({
 	board,
 	branches,
 	onPick,
 	selected,
+	showHeadings,
 }: {
 	board: StationPick | null;
-	branches: BranchChoices[];
+	branches: FilteredBranch[];
 	onPick: (station: StationPick) => void;
 	selected: string | null;
+	showHeadings: boolean;
 }) {
-	const showHeadings = branches.length > 1;
 	return (
 		<>
-			{branches.map((branch, branchIndex) => {
+			{branches.map(({ branch, index: branchIndex }) => {
 				const unavailable =
 					board !== null && isBranchUnavailable(branch, board.stop);
 				return (
@@ -748,7 +810,7 @@ function BranchList({
 	);
 }
 
-/** 16d 승차역. */
+/** 16d 승차역. 이름으로 거를 수 있고, 고른 역이 걸러져 보이지 않아도 선택은 남는다. */
 export function SubwayBoardStep({
 	line,
 	onPick,
@@ -766,9 +828,11 @@ export function SubwayBoardStep({
 			onPick(board);
 		}
 	}, [board, onPick]);
-	const branches = stations.data?.ok
-		? subwayBoardChoices(stations.data.value)
-		: [];
+	const [query, setQuery] = useState("");
+	const list = filterBranchChoices(
+		stations.data?.ok ? subwayBoardChoices(stations.data.value) : [],
+		query
+	);
 	return (
 		<StepLayout
 			footer={
@@ -785,11 +849,20 @@ export function SubwayBoardStep({
 				onRetry={retry}
 				view={lookupView(stations.isFetching ? undefined : stations.data)}
 			>
+				<BoardSearch
+					onChange={setQuery}
+					placeholderKey="legPicker.board.searchStation"
+					query={query}
+				/>
+				{isNoMatch(query, list.branches.length) ? (
+					<NoMatch messageKey="legPicker.board.noStation" query={query} />
+				) : null}
 				<BranchList
 					board={null}
-					branches={branches}
+					branches={list.branches}
 					onPick={setBoard}
 					selected={board?.stop ?? null}
+					showHeadings={list.showHeadings}
 				/>
 			</LookupGate>
 		</StepLayout>
@@ -869,9 +942,13 @@ export function SubwayAlightStep({
 	const retryDirection = useCallback(() => {
 		direction.refetch().catch(() => undefined);
 	}, [direction]);
-	const branches = stations.data?.ok
-		? subwayAlightChoices(stations.data.value, board.stop)
-		: [];
+	// 하차역은 검색하지 않는다. 빈 검색어로 지선 머리와 순번만 정한다.
+	const list = filterBranchChoices(
+		stations.data?.ok
+			? subwayAlightChoices(stations.data.value, board.stop)
+			: [],
+		""
+	);
 	const directionState =
 		alight === null
 			? null
@@ -905,9 +982,10 @@ export function SubwayAlightStep({
 			>
 				<BranchList
 					board={board}
-					branches={branches}
+					branches={list.branches}
 					onPick={setAlight}
 					selected={alight?.stop ?? null}
+					showHeadings={list.showHeadings}
 				/>
 			</LookupGate>
 		</StepLayout>
