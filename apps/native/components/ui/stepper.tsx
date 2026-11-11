@@ -69,7 +69,7 @@ export function Stepper({ label, max, min, onChange, value }: StepperProps) {
 			>
 				<Minus colorClassName="accent-icon-primary" size={ICON_SIZE} />
 			</Pressable>
-			<AppText className="w-11 text-center" variant="labelM">
+			<AppText className="w-11 text-center" variant="dataM">
 				{valueText}
 			</AppText>
 			<Pressable

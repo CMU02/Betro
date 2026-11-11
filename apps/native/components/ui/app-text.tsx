@@ -2,7 +2,7 @@ import { cn } from "heroui-native";
 import { Text, type TextProps } from "react-native";
 import { TEXT_STYLES, type TextVariant } from "@/theme/typography";
 
-const MAX_FONT_SIZE_MULTIPLIER = 1.3;
+export const MAX_FONT_SIZE_MULTIPLIER = 1.3;
 
 export interface AppTextProps extends TextProps {
 	className?: string;

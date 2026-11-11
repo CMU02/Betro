@@ -386,6 +386,7 @@ apps/server/src/commute/runner-core.ts  진행 중 세션 응답에 경로별 �
   - `type LineBadgeInput = { mode: "bus"; routeType: string; region: "seoul" | "gyeonggi" | "incheon"; name: string } | { mode: "subway"; line: string; name: string }`
   - `lineBadgeModel(input: LineBadgeInput): { colorToken: string; label: string; regionKey: MessageKey | null }`
   - 등록된 구간(`Leg`)에는 `routeType`과 `region`이 없다. `Place`의 구간에서 배지를 만들 때 버스는 `routeType` "3"(간선), `region` "seoul"로 두고 이름만 보여 준다. 정확한 색은 조회 결과가 있는 구간 고르기 화면에서만 쓴다.
+  - 전용 토큰이 없는 지하철 노선(서해선 1093, 경강선 1081, 신림선 1094, 모르는 키)은 `colorToken`이 null 이고, `LineBadge`가 `bg-bg-control`과 `text-text-primary`로 중립 배지를 그린다. 다른 노선의 고유색을 빌리지 않는다. 이 세 노선의 전용 색은 Figma에 변수가 생기면 추가한다.
   - `LineBadge(props)`: 모델을 그린다. 배지에는 항상 글자가 있다.
   - `routeType` → 색: 1 airport, 2 village, 3 trunk, 4 branch, 5 circular, 6 express. 7·8은 express 색에 지역 라벨("인천", "경기")을 붙인다. 모르는 값은 trunk.
 

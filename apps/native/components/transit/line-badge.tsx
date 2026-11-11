@@ -44,25 +44,30 @@ const DARK_TEXT_TOKENS: ReadonlySet<TransitTokenName> = new Set([
 	"line/ui-sinseol",
 ]);
 
+const NEUTRAL_BG_CLASS = "bg-bg-control";
+
+function textClassOf(colorToken: TransitTokenName | null): string {
+	if (colorToken === null) {
+		return "text-text-primary";
+	}
+	return DARK_TEXT_TOKENS.has(colorToken)
+		? "text-text-on-accent"
+		: "text-white";
+}
+
 /** Figma `BusBadge`(4:47). 배지 안은 항상 글자이고, 경기·인천은 옆에 지역 글자가 붙는다. */
 export function LineBadge(props: LineBadgeInput) {
 	const { colorToken, label, regionKey } = lineBadgeModel(props);
+	const isNeutral = colorToken === null;
 	return (
 		<View className="flex-row items-center gap-1">
 			<View
 				className={cn(
 					"h-[22px] min-w-10 items-center justify-center rounded-xs px-[7px]",
-					BG_CLASS[colorToken]
+					isNeutral ? NEUTRAL_BG_CLASS : BG_CLASS[colorToken]
 				)}
 			>
-				<AppText
-					className={
-						DARK_TEXT_TOKENS.has(colorToken)
-							? "text-text-on-accent"
-							: "text-white"
-					}
-					variant="caption"
-				>
+				<AppText className={textClassOf(colorToken)} variant="caption">
 					{label}
 				</AppText>
 			</View>

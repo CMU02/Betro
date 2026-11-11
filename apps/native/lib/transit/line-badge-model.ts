@@ -8,7 +8,8 @@ export type LineBadgeInput =
 	| { mode: "subway"; line: string; name: string };
 
 export interface LineBadgeModel {
-	colorToken: TransitTokenName;
+	/** null 은 전용 토큰이 없는 노선(서해선·경강선·신림선, 모르는 노선). 중립색으로 그린다. */
+	colorToken: TransitTokenName | null;
 	/** 배지 안의 글자. 색만으로 구분하지 않도록 항상 비어 있지 않다. */
 	label: string;
 	/** 경기·인천 노선 옆에 붙는 지역 글자. 서울은 null. */
@@ -17,8 +18,6 @@ export interface LineBadgeModel {
 
 const EMPTY_LABEL = "-";
 const DEFAULT_BUS_COLOR: TransitTokenName = "bus/trunk";
-/** 모르는 지하철 노선은 중립에 가까운 아이콘색 대신 기존 토큰 하나로 둔다. */
-const DEFAULT_SUBWAY_COLOR: TransitTokenName = "line/1";
 const SUBWAY_KEY_PREFIX = "seoul-subway:";
 
 /** 서울 버스 API의 routeType. 7 인천, 8 경기는 광역 색에 지역 글자를 붙인다. */
@@ -99,7 +98,7 @@ export function lineBadgeModel(input: LineBadgeInput): LineBadgeModel {
 		? input.line.slice(SUBWAY_KEY_PREFIX.length)
 		: input.line;
 	return {
-		colorToken: SUBWAY_COLOR_BY_LINE[key] ?? DEFAULT_SUBWAY_COLOR,
+		colorToken: SUBWAY_COLOR_BY_LINE[key] ?? null,
 		label: labelOf(input.name),
 		regionKey: null,
 	};

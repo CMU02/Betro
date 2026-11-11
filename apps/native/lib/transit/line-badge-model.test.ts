@@ -85,14 +85,16 @@ describe("lineBadgeModel subway", () => {
 		expect(model.colorToken).toBe("line/sinbundang");
 	});
 
-	it("falls back to a real token for an unknown line and keeps the name", () => {
-		const model = lineBadgeModel({
-			line: "seoul-subway:nope",
-			mode: "subway",
-			name: "새 노선",
-		});
-		expect(model.colorToken in TRANSIT_COLORS).toBe(true);
-		expect(model.label).toBe("새 노선");
+	it.each([
+		["seoul-subway:1093", "서해선"],
+		["seoul-subway:1081", "경강선"],
+		["seoul-subway:1094", "신림선"],
+		["seoul-subway:nope", "새 노선"],
+	])("%s has no transit token, so it is neutral (null)", (line, name) => {
+		const model = lineBadgeModel({ line, mode: "subway", name });
+		expect(model.colorToken).toBeNull();
+		expect(model.label).toBe(name);
+		expect(model.regionKey).toBeNull();
 	});
 
 	it("only returns tokens that exist", () => {
