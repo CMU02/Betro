@@ -239,12 +239,47 @@ it("sends the waiting deletes and saves a new place again when they free the lim
 	});
 });
 
-it("keeps a new place pending when the waiting delete still cannot go through (409)", async () => {
+it("drops a new place at the limit when the waiting delete keeps failing on the server (409)", async () => {
 	const server = fakeServer([planOf(GYM_PLAN)]);
 	const { deps, store } = setup({ pendingDeletes: [GYM_PLAN] }, server);
 	server.setOverride((call) =>
-		call.method === "PUT" ? LIMIT : { json: null, status: 503 }
+		call.method === "PUT" ? LIMIT : { json: null, status: 500 }
 	);
+
+	expect(await savePlace(deps, place("work", WORK_PLAN))).toBe("limit");
+	expect(server.requests()).toEqual([
+		`PUT /v1/commute/plans/${WORK_PLAN}`,
+		`DELETE /v1/commute/plans/${GYM_PLAN}`,
+		`PUT /v1/commute/plans/${WORK_PLAN}`,
+	]);
+	expect(store.get()).toEqual({ pendingDeletes: [GYM_PLAN], places: [] });
+});
+
+it("keeps an edited place pending at the limit when the waiting delete keeps failing on the server (409)", async () => {
+	const server = fakeServer([planOf(GYM_PLAN), planOf(HOME_PLAN)]);
+	const { deps, store } = setup(
+		{
+			pendingDeletes: [GYM_PLAN],
+			places: [place("home", HOME_PLAN, { kind: "home" })],
+		},
+		server
+	);
+	server.setOverride((call) =>
+		call.method === "PUT" ? LIMIT : { json: null, status: 500 }
+	);
+	const edited = place("home", HOME_PLAN, { kind: "home", name: "본가" });
+
+	expect(await savePlace(deps, edited)).toBe("limit");
+	expect(store.get()).toEqual({
+		pendingDeletes: [GYM_PLAN],
+		places: [{ ...edited, sync: "pending", updatedAt: NOW }],
+	});
+});
+
+it("keeps a new place pending when the waiting delete cannot reach the server (409)", async () => {
+	const server = fakeServer([planOf(GYM_PLAN)]);
+	const { deps, store } = setup({ pendingDeletes: [GYM_PLAN] }, server);
+	server.setOverride((call) => (call.method === "PUT" ? LIMIT : offline));
 	const work = place("work", WORK_PLAN);
 
 	expect(await savePlace(deps, work)).toBe("pending");

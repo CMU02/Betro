@@ -152,20 +152,20 @@ function holdsSave(
 
 /**
  * 409(설치당 예약 한도)를 받은 저장의 결과. 그사이 맞추기가 같은 저장을 올려 `synced`로 바꿨으면 `saved`다.
- * 기기에 지울 것이 남아 있으면 그 삭제가 자리를 비울 수 있으니 장소를 `pending`으로 두고 다음 맞추기에 맡긴다.
- * 지울 것이 없을 때 새 장소는 기기에서도 지우고(지울 목록에도 넣지 않는다), 이미 기기에 있던 장소는 고친 값
- * 그대로 `pending`으로 둔다(고치던 화면이 없는 장소를 보지 않게). 기기의 항목이 더는 이 `pending` 저장이
- * 아니면(그사이 고쳐지거나 지워졌으면) 지우지 않는다.
+ * 밀린 삭제를 보내다 서버에 닿지 못했으면 그 삭제가 자리를 비울 수 있으니 장소를 `pending`으로 두고 다음
+ * 맞추기에 맡긴다. 그 밖에는 `limit`이다. 새 장소는 기기에서도 지우고(지울 목록에도 넣지 않는다), 이미 기기에
+ * 있던 장소는 고친 값 그대로 `pending`으로 둔다(고치던 화면이 없는 장소를 보지 않게). 기기의 항목이 더는 이
+ * `pending` 저장이 아니면(그사이 고쳐지거나 지워졌으면) 지우지 않는다.
  */
 function limitResult(
 	deps: SyncDeps,
 	stored: Place,
-	isNew: boolean
+	{ deletesUnreachable, isNew }: { deletesUnreachable: boolean; isNew: boolean }
 ): SaveResult {
 	if (holdsSave(deps, stored, "synced")) {
 		return "saved";
 	}
-	if (deps.store.get().pendingDeletes.length > 0) {
+	if (deletesUnreachable) {
 		return "pending";
 	}
 	if (isNew && holdsSave(deps, stored, "pending")) {
@@ -175,26 +175,39 @@ function limitResult(
 	return "limit";
 }
 
+/** 올리기의 마지막 응답. `deletesUnreachable`이면 409 뒤 밀린 삭제를 보내다 서버에 닿지 못했다. */
+interface PutPlaceResult {
+	deletesUnreachable: boolean;
+	response: ServerResponse;
+}
+
 /**
- * 장소를 올린다. 409인데 기기에 지울 것이 남아 있으면 서버는 아직 그만큼 더 들고 있으므로, 밀린 삭제를 먼저
- * 보내고 하나라도 지워졌으면 한 번 더 올린다.
+ * 장소를 올린다. 409인데 기기에 지울 것이 남아 있으면 서버는 아직 그만큼 더 들고 있을 수 있으므로, 밀린 삭제를
+ * 먼저 보내고 서버에 닿았으면(지워졌다는 답이 없어도, 예를 들어 500이어도) 장소가 아직 이 기기의 `pending`일 때
+ * 한 번 더 올린다. 그 재시도도 409면 지울 것이 남아 있어도 `limitResult`가 `limit`으로 본다.
  */
 async function putPlace(
 	deps: SyncDeps,
 	stored: Place
-): Promise<ServerResponse> {
+): Promise<PutPlaceResult> {
 	const first = await putPlan(deps, stored.plan);
 	if (
 		first.status !== CONFLICT ||
 		deps.store.get().pendingDeletes.length === 0
 	) {
-		return first;
+		return { deletesUnreachable: false, response: first };
 	}
 	const removed = await sendPendingDeletes(deps);
-	if (removed === null || removed === 0 || !stillPending(deps, stored.id)) {
-		return first;
+	if (removed === null) {
+		return { deletesUnreachable: true, response: first };
 	}
-	return putPlan(deps, stored.plan);
+	if (stillPending(deps, stored.id) === undefined) {
+		return { deletesUnreachable: false, response: first };
+	}
+	return {
+		deletesUnreachable: false,
+		response: await putPlan(deps, stored.plan),
+	};
 }
 
 /**
@@ -208,7 +221,8 @@ export async function savePlace(
 	const isNew = !deps.store.get().places.some((entry) => entry.id === place.id);
 	const stored: Place = { ...place, sync: "pending", updatedAt: deps.now() };
 	deps.store.upsert(stored);
-	const { json, status } = await putPlace(deps, stored);
+	const { deletesUnreachable, response } = await putPlace(deps, stored);
+	const { json, status } = response;
 	let result: SaveResult = "pending";
 	if (status === NO_CONTENT) {
 		deps.store.markSynced(stored.id, stored.updatedAt);
@@ -216,7 +230,7 @@ export async function savePlace(
 	} else if (status === BAD_REQUEST) {
 		result = { rejected: rejectedIssues(json) };
 	} else if (status === CONFLICT) {
-		result = limitResult(deps, stored, isNew);
+		result = limitResult(deps, stored, { deletesUnreachable, isNew });
 	}
 	await pushHeaders(deps);
 	return result;
