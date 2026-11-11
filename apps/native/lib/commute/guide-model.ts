@@ -1,7 +1,13 @@
-import type { Leg, Route } from "@Betro/commute/plan";
+import { localParts, localToEpochMs } from "@Betro/commute/calendar";
+import type { Leg, Route, Schedule } from "@Betro/commute/plan";
 
 import type { MessageKey, MessageParams } from "../i18n/translate";
-import { badgeOf, daysLabel, timeLabel } from "../places/place-card-model";
+import {
+	badgeOf,
+	DAY_KEYS,
+	daysLabel,
+	timeLabel,
+} from "../places/place-card-model";
 import type { BusMetaMap, Place } from "../places/places";
 import { headerOf, placeNameOf } from "../places/plan-headers";
 import type { LineBadgeInput } from "../transit/line-badge-model";
@@ -57,7 +63,10 @@ export interface ActiveGuide {
 
 export interface IdleGuide {
 	kind: "idle";
-	/** "평일 08:10에 나가요 · 08:00부터 잠금화면에 떠요". 서버에 올라가기 전이면 "… · 아직 서버에 저장되지 않았어요" */
+	/**
+	 * "내일 08:10에 나가요 · 08:00부터 잠금화면에 떠요". 앞 글자는 다음에 나가는 날("오늘", "내일", "월").
+	 * 서버에 올라가기 전이면 등록한 요일로 "평일 08:10에 나가요 · 아직 서버에 저장되지 않았어요"
+	 */
 	next: string;
 	routes: GuideRouteRow[];
 }
@@ -75,6 +84,14 @@ export interface GuideInput {
 
 const SECONDS_PER_MINUTE = 60;
 const MINUTES_PER_DAY = 24 * 60;
+const MS_PER_SECOND = 1000;
+const MS_PER_MINUTE = SECONDS_PER_MINUTE * MS_PER_SECOND;
+/**
+ * 다음 나가는 날을 찾는 범위(오늘부터 며칠 뒤까지). 한 요일만 등록하고 그 요일의 시작이 전날 밤이면
+ * 이미 지난 시작 다음은 8일 뒤 나가는 날이다(월요일 23:57, 화요일 00:05 출발만 등록 → 다음 주 화요일).
+ */
+const LEAVE_DAY_SEARCH = 8;
+const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 /**
  * 17은 `card.actions`를 쓰지 않고 "안내 종료" 버튼을 따로 둔다. 플랫폼에 따라 달라지는 것은
  * `actions`뿐이라 어느 값을 넘겨도 화면에 보이는 글자는 같다.
@@ -110,17 +127,86 @@ function linesArrow(legs: Leg[], t: Translate): string {
 	);
 }
 
-function nextLine(place: Place, t: Translate): string {
-	const { days, leadMinutes, leaveMinute } = place.plan.schedule;
-	const show = leaveMinute - leadMinutes;
-	const params = {
-		days: daysLabel(days, t),
-		leave: timeLabel(leaveMinute),
+/** `YYYY-MM-DD`에서 `offset`일 뒤의 날짜와 그 요일(0=일). */
+function shiftDate(
+	date: string,
+	offset: number
+): { date: string; weekday: number } {
+	const [, year, month, day] = DATE_PATTERN.exec(date) ?? [];
+	const shifted = new Date(
+		Date.UTC(Number(year), Number(month) - 1, Number(day) + offset)
+	);
+	return {
+		date: shifted.toISOString().slice(0, "YYYY-MM-DD".length),
+		weekday: shifted.getUTCDay(),
 	};
+}
+
+/**
+ * 다음 안내가 걸리는 나가는 날. 오늘부터 며칠 뒤(`offset`)인지와 그 요일. 서버(`dueStart`)처럼
+ * 나가는 날짜의 요일을 `days`와 맞추고, 안내 시작(나가는 시각 - `leadMinutes`)이 `now`보다 뒤인
+ * 첫 날을 고른다. 시작이 전날 밤인 경우도 같은 규칙이다. 공휴일은 앱이 모르니 따지지 않는다.
+ */
+export function nextLeaveDay(
+	schedule: Pick<Schedule, "days" | "leadMinutes" | "leaveMinute">,
+	now: number,
+	timezone: string
+): { offset: number; weekday: number } | null {
+	const nowMs = now * MS_PER_SECOND;
+	const today = localParts(nowMs, timezone).date;
+	const leadMs = schedule.leadMinutes * MS_PER_MINUTE;
+	for (let offset = 0; offset <= LEAVE_DAY_SEARCH; offset += 1) {
+		const { date, weekday } = shiftDate(today, offset);
+		if (!schedule.days.includes(weekday)) {
+			continue;
+		}
+		const startMs =
+			localToEpochMs(date, schedule.leaveMinute, timezone) - leadMs;
+		if (nowMs < startMs) {
+			return { offset, weekday };
+		}
+	}
+	return null;
+}
+
+/** "오늘", "내일", 그 밖은 요일 한 글자("목"). 나가는 날을 못 찾으면 등록한 요일("평일"). */
+function leaveDayLabel(
+	schedule: Schedule,
+	now: number,
+	timezone: string,
+	t: Translate
+): string {
+	const next = nextLeaveDay(schedule, now, timezone);
+	if (next === null) {
+		return daysLabel(schedule.days, t);
+	}
+	if (next.offset === 0) {
+		return t("commuteGuide.next.today");
+	}
+	if (next.offset === 1) {
+		return t("commuteGuide.next.tomorrow");
+	}
+	return t(DAY_KEYS[next.weekday] ?? "places.day.mon");
+}
+
+function nextLine(
+	place: Place,
+	now: number,
+	timezone: string,
+	t: Translate
+): string {
+	const { schedule } = place.plan;
+	const { days, leadMinutes, leaveMinute } = schedule;
+	const show = leaveMinute - leadMinutes;
+	const leave = timeLabel(leaveMinute);
 	// 서버에 올라가기 전에는 잠금화면 예약이 없으니 "…부터 잠금화면에 떠요"라고 말하지 않는다.
 	if (place.sync === "pending") {
-		return t("commuteGuide.next.notSynced", params);
+		return t("commuteGuide.next.notSynced", {
+			days: daysLabel(days, t),
+			leave,
+		});
 	}
+	const params = { day: leaveDayLabel(schedule, now, timezone, t), leave };
 	if (show < 0) {
 		return t("commuteGuide.next.previousDay", {
 			...params,
@@ -130,10 +216,11 @@ function nextLine(place: Place, t: Translate): string {
 	return t("commuteGuide.next.sameDay", { ...params, show: timeLabel(show) });
 }
 
-function idleGuide(place: Place, t: Translate): IdleGuide {
+function idleGuide(input: GuideInput): IdleGuide {
+	const { now, place, t, timezone } = input;
 	return {
 		kind: "idle",
-		next: nextLine(place, t),
+		next: nextLine(place, now, timezone, t),
 		routes: byRank(place.plan.routes).map((route) => ({
 			badge: route.legs.map((leg) => badgeOf(leg, place.busMeta)),
 			label: t(
@@ -270,9 +357,9 @@ function activeGuide(
  * 아니면 다음 안내 시각과 등록한 경로 목록이다.
  */
 export function guideModel(input: GuideInput): GuideModel {
-	const { place, session, t } = input;
+	const { place, session } = input;
 	if (session === null || session.planId !== place.plan.planId) {
-		return idleGuide(place, t);
+		return idleGuide(input);
 	}
 	return activeGuide(session, input);
 }

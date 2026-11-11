@@ -70,12 +70,15 @@ export const ko = {
 		/** 버스 노선 이름. 지하철은 노선 이름("2호선") 그대로 쓴다. */
 		lineBus: "{name}번",
 		lineJoiner: " · ",
+		/** 다음 안내. `{day}`는 다음에 나가는 날("오늘", "내일", 요일 한 글자)이다. */
 		next: {
 			label: "다음 안내",
-			/** 서버에 올라가기 전에는 예약이 동작한다고 말하지 않는다. */
+			/** 서버에 올라가기 전에는 예약이 동작한다고 말하지 않는다. `{days}`는 등록한 요일이다. */
 			notSynced: "{days} {leave}에 나가요 · 아직 서버에 저장되지 않았어요",
-			previousDay: "{days} {leave}에 나가요 · 전날 {show}부터 잠금화면에 떠요",
-			sameDay: "{days} {leave}에 나가요 · {show}부터 잠금화면에 떠요",
+			previousDay: "{day} {leave}에 나가요 · 전날 {show}부터 잠금화면에 떠요",
+			sameDay: "{day} {leave}에 나가요 · {show}부터 잠금화면에 떠요",
+			today: "오늘",
+			tomorrow: "내일",
 		},
 		others: {
 			note: "등록한 대안 경로만 비교해요",

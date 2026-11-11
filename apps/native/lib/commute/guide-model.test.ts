@@ -7,11 +7,19 @@ import { headerOf } from "../places/plan-headers";
 import type { LineBadgeInput } from "../transit/line-badge-model";
 import fixture from "./__fixtures__/lock-screen-cases.json";
 import type { ContentState } from "./content-state";
-import { guideModel, guideTitle, sessionStripModel } from "./guide-model";
+import {
+	guideModel,
+	guideTitle,
+	nextLeaveDay,
+	sessionStripModel,
+} from "./guide-model";
 import { lockScreenModel } from "./lock-screen-model";
 import type { ActiveSessionView, SessionRouteView } from "./session-client";
 
-const NOW = 1_794_265_200; // 2026-11-10 08:00 KST
+const NOW = 1_794_265_200; // 2026-11-10(화) 08:00 KST
+const MINUTE = 60;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
 const TIMEZONE = "Asia/Seoul";
 const PLAN_ID = "7d1f3c2a-9b8e-4c5d-a6f7-0e1d2c3b4a59";
 const OTHER_PLAN_ID = "0b6c1f0e-3f7a-4c1d-9e2b-5a4d3c2b1a00";
@@ -148,7 +156,8 @@ describe("guideModel idle", () => {
 		});
 		expect(model).toEqual({
 			kind: "idle",
-			next: "평일 08:10에 나가요 · 08:00부터 잠금화면에 떠요",
+			// NOW는 화요일 08:00, 오늘 안내가 막 시작한 시각이라 다음은 수요일(내일)이다.
+			next: "내일 08:10에 나가요 · 08:00부터 잠금화면에 떠요",
 			routes: [
 				{
 					badge: [
@@ -187,7 +196,7 @@ describe("guideModel idle", () => {
 			timezone: TIMEZONE,
 		});
 		expect(model.kind === "idle" && model.next).toBe(
-			"평일 00:05에 나가요 · 전날 23:55부터 잠금화면에 떠요"
+			"내일 00:05에 나가요 · 전날 23:55부터 잠금화면에 떠요"
 		);
 	});
 
@@ -200,7 +209,7 @@ describe("guideModel idle", () => {
 			timezone: TIMEZONE,
 		});
 		expect(model.kind === "idle" && model.next).toBe(
-			"월·수·금 08:10에 나가요 · 07:40부터 잠금화면에 떠요"
+			"내일 08:10에 나가요 · 07:40부터 잠금화면에 떠요"
 		);
 	});
 
@@ -224,8 +233,76 @@ describe("guideModel idle", () => {
 			timezone: TIMEZONE,
 		});
 		expect(synced.kind === "idle" && synced.next).toBe(
-			"평일 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
+			"내일 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
 		);
+	});
+
+	it("names the day the next start falls on: today, tomorrow or a weekday", () => {
+		const nextAt = (now: number, overrides = {}) => {
+			const model = guideModel({
+				now,
+				place: placeOf(overrides),
+				session: null,
+				t,
+				timezone: TIMEZONE,
+			});
+			return model.kind === "idle" ? model.next : "";
+		};
+		// 화요일 07:59, 08:00(시작 정각), 08:01
+		expect(nextAt(NOW - MINUTE)).toBe(
+			"오늘 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
+		);
+		expect(nextAt(NOW)).toBe("내일 08:10에 나가요 · 08:00부터 잠금화면에 떠요");
+		expect(nextAt(NOW + MINUTE)).toBe(
+			"내일 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
+		);
+		// 금요일 18:00 → 토·일은 등록하지 않아 월요일
+		expect(nextAt(NOW + 3 * DAY + 10 * HOUR)).toBe(
+			"월 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
+		);
+		// 월요일에만 등록했고 오늘(화)은 아니다 → 다음 주 월요일
+		expect(nextAt(NOW - 2 * HOUR, { days: [1] })).toBe(
+			"월 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
+		);
+	});
+
+	it("labels the leave day when the start is the evening before", () => {
+		const nextAt = (now: number, days = [1, 2, 3, 4, 5]) => {
+			const model = guideModel({
+				now,
+				place: placeOf({ days, leaveMinute: 5 }),
+				session: null,
+				t,
+				timezone: TIMEZONE,
+			});
+			return model.kind === "idle" ? model.next : "";
+		};
+		const TUESDAY_2350 = NOW + 15 * HOUR + 50 * MINUTE;
+		// 수요일 00:05에 나가고 화요일 23:55에 뜬다
+		expect(nextAt(TUESDAY_2350)).toBe(
+			"내일 00:05에 나가요 · 전날 23:55부터 잠금화면에 떠요"
+		);
+		// 23:55가 지나면 그다음 날(목요일 00:05)
+		expect(nextAt(TUESDAY_2350 + 6 * MINUTE)).toBe(
+			"목 00:05에 나가요 · 전날 23:55부터 잠금화면에 떠요"
+		);
+		// 금요일 23:56: 토·일 00:05는 등록하지 않았고 월요일 00:05(일요일 23:55 시작)
+		expect(nextAt(TUESDAY_2350 + 3 * DAY + 6 * MINUTE)).toBe(
+			"월 00:05에 나가요 · 전날 23:55부터 잠금화면에 떠요"
+		);
+		// 화요일에만 등록, 월요일 23:57: 이번 화요일 시작(23:55)이 지나 다음 주 화요일
+		expect(nextAt(NOW - 8 * HOUR - 3 * MINUTE, [2])).toBe(
+			"화 00:05에 나가요 · 전날 23:55부터 잠금화면에 떠요"
+		);
+	});
+
+	it("finds no leave day when no weekday is registered", () => {
+		const schedule = { days: [], leadMinutes: 10, leaveMinute: 490 };
+		expect(nextLeaveDay(schedule, NOW, TIMEZONE)).toBeNull();
+		expect(nextLeaveDay({ ...schedule, days: [2] }, NOW, TIMEZONE)).toEqual({
+			offset: 7,
+			weekday: 2,
+		});
 	});
 
 	it("is idle when the running session belongs to another place", () => {

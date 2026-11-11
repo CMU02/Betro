@@ -29,7 +29,7 @@ const TIME_DIGITS = 2;
 const DAYS_PER_WEEK = 7;
 
 /** `days`의 값은 0 일요일 ~ 6 토요일이다. */
-const DAY_KEYS = [
+export const DAY_KEYS = [
 	"places.day.sun",
 	"places.day.mon",
 	"places.day.tue",
