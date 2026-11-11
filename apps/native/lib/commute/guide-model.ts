@@ -57,7 +57,7 @@ export interface ActiveGuide {
 
 export interface IdleGuide {
 	kind: "idle";
-	/** "평일 08:10에 나가요 · 08:00부터 잠금화면에 떠요" */
+	/** "평일 08:10에 나가요 · 08:00부터 잠금화면에 떠요". 서버에 올라가기 전이면 "… · 아직 서버에 저장되지 않았어요" */
 	next: string;
 	routes: GuideRouteRow[];
 }
@@ -117,6 +117,10 @@ function nextLine(place: Place, t: Translate): string {
 		days: daysLabel(days, t),
 		leave: timeLabel(leaveMinute),
 	};
+	// 서버에 올라가기 전에는 잠금화면 예약이 없으니 "…부터 잠금화면에 떠요"라고 말하지 않는다.
+	if (place.sync === "pending") {
+		return t("commuteGuide.next.notSynced", params);
+	}
 	if (show < 0) {
 		return t("commuteGuide.next.previousDay", {
 			...params,

@@ -202,6 +202,30 @@ describe("guideModel idle", () => {
 		);
 	});
 
+	it("does not promise the lock screen before the place reaches the server", () => {
+		const pending = guideModel({
+			now: NOW,
+			place: { ...placeOf(), sync: "pending" },
+			session: null,
+			t,
+			timezone: TIMEZONE,
+		});
+		const next = pending.kind === "idle" ? pending.next : "";
+		expect(next).not.toContain("잠금화면에 떠요");
+		expect(next).toBe("평일 08:10에 나가요 · 아직 서버에 저장되지 않았어요");
+
+		const synced = guideModel({
+			now: NOW,
+			place: placeOf(),
+			session: null,
+			t,
+			timezone: TIMEZONE,
+		});
+		expect(synced.kind === "idle" && synced.next).toBe(
+			"평일 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
+		);
+	});
+
 	it("is idle when the running session belongs to another place", () => {
 		const model = guideModel({
 			now: NOW,
