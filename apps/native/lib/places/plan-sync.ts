@@ -138,20 +138,37 @@ async function sendDelete(
 	return { cleared, status };
 }
 
+/** 기기의 그 장소가 아직 이 저장(같은 `updatedAt`)이고 `sync`가 그 값인지. */
+function holdsSave(
+	deps: SyncDeps,
+	stored: Place,
+	sync: Place["sync"]
+): boolean {
+	const latest = deps.store
+		.get()
+		.places.find((entry) => entry.id === stored.id);
+	return latest?.sync === sync && latest.updatedAt === stored.updatedAt;
+}
+
 /**
- * 409(설치당 예약 한도)를 받은 저장의 결과. 기기에 지울 것이 남아 있으면 그 삭제가 자리를 비울 수 있으니
- * 장소를 `pending`으로 두고 다음 맞추기에 맡긴다. 지울 것이 없을 때 새 장소는 기기에서도 지우고(지울 목록에도
- * 넣지 않는다), 이미 기기에 있던 장소는 고친 값 그대로 `pending`으로 둔다(고치던 화면이 없는 장소를 보지 않게).
+ * 409(설치당 예약 한도)를 받은 저장의 결과. 그사이 맞추기가 같은 저장을 올려 `synced`로 바꿨으면 `saved`다.
+ * 기기에 지울 것이 남아 있으면 그 삭제가 자리를 비울 수 있으니 장소를 `pending`으로 두고 다음 맞추기에 맡긴다.
+ * 지울 것이 없을 때 새 장소는 기기에서도 지우고(지울 목록에도 넣지 않는다), 이미 기기에 있던 장소는 고친 값
+ * 그대로 `pending`으로 둔다(고치던 화면이 없는 장소를 보지 않게). 기기의 항목이 더는 이 `pending` 저장이
+ * 아니면(그사이 고쳐지거나 지워졌으면) 지우지 않는다.
  */
 function limitResult(
 	deps: SyncDeps,
 	stored: Place,
 	isNew: boolean
 ): SaveResult {
+	if (holdsSave(deps, stored, "synced")) {
+		return "saved";
+	}
 	if (deps.store.get().pendingDeletes.length > 0) {
 		return "pending";
 	}
-	if (isNew) {
+	if (isNew && holdsSave(deps, stored, "pending")) {
 		deps.store.remove(stored.id);
 		deps.store.clearPendingDelete(stored.plan.planId);
 	}

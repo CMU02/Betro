@@ -272,6 +272,49 @@ it("drops a new place when the server is still at its limit after the waiting de
 	expect(store.get()).toEqual({ pendingDeletes: [], places: [] });
 });
 
+it("reports saved when reconcile stores the same save while the waiting deletes go out (409)", async () => {
+	const server = fakeServer([planOf(GYM_PLAN)]);
+	const { deps, store } = setup({ pendingDeletes: [GYM_PLAN] }, server);
+	server.setOverride((call) => {
+		if (call.method === "DELETE") {
+			// 그사이 맞추기가 같은 장소를 비어 있던 자리에 올리고 synced로 바꾼다.
+			server.plans.set(WORK_PLAN, planOf(WORK_PLAN));
+			store.markSynced("work", NOW);
+			return;
+		}
+		return call.method === "PUT" && !server.plans.has(WORK_PLAN)
+			? LIMIT
+			: undefined;
+	});
+	const work = place("work", WORK_PLAN);
+
+	expect(await savePlace(deps, work)).toBe("saved");
+	expect(store.get()).toEqual({
+		pendingDeletes: [],
+		places: [{ ...work, sync: "synced", updatedAt: NOW }],
+	});
+	expect(server.plans.has(WORK_PLAN)).toBe(true);
+});
+
+it("does not drop a new place that a newer save replaced while the waiting deletes go out (409)", async () => {
+	const server = fakeServer([planOf(GYM_PLAN)]);
+	const { deps, store } = setup({ pendingDeletes: [GYM_PLAN] }, server);
+	const newer = place("work", WORK_PLAN, { name: "본사", updatedAt: NOW + 1 });
+	server.setOverride((call) => {
+		if (call.method === "DELETE") {
+			server.plans.set(WORK_PLAN, newer.plan);
+			store.upsert(newer);
+			return;
+		}
+		return call.method === "PUT" && !server.plans.has(WORK_PLAN)
+			? LIMIT
+			: undefined;
+	});
+
+	await savePlace(deps, place("work", WORK_PLAN));
+	expect(store.get()).toEqual({ pendingDeletes: [], places: [newer] });
+});
+
 for (const status of [0, 401, 500, 503]) {
 	it(`keeps the place pending on the device when the upload gets ${status}`, async () => {
 		const { deps, headers, server, store } = setup();
