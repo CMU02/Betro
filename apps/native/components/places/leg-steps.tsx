@@ -20,6 +20,7 @@ import {
 } from "react";
 import {
 	ActivityIndicator,
+	Keyboard,
 	type LayoutChangeEvent,
 	Pressable,
 	ScrollView,
@@ -165,6 +166,7 @@ function StepLayout({
 			<ScrollView
 				contentContainerClassName="gap-3 px-4 pt-2 pb-6"
 				contentContainerStyle={footer ? undefined : { paddingBottom: bottom }}
+				keyboardDismissMode="on-drag"
 				keyboardShouldPersistTaps="handled"
 				onContentSizeChange={scroll?.onContentSizeChange}
 				onLayout={scroll?.onLayout}
@@ -687,7 +689,11 @@ export function BusBoardStep({
 	route: BusRouteMatch;
 }) {
 	const stops = useBusStops(route);
-	const [board, setBoard] = useState<BusStop | null>(null);
+	const [board, setBoardState] = useState<BusStop | null>(null);
+	const setBoard = useCallback((stop: BusStop) => {
+		Keyboard.dismiss();
+		setBoardState(stop);
+	}, []);
 	const [query, setQuery] = useState("");
 	const retry = useCallback(() => {
 		stops.refetch().catch(() => undefined);
@@ -944,7 +950,11 @@ export function SubwayBoardStep({
 	onPick: (station: StationPick) => void;
 }) {
 	const stations = useSubwayStations(line);
-	const [board, setBoard] = useState<StationPick | null>(null);
+	const [board, setBoardState] = useState<StationPick | null>(null);
+	const setBoard = useCallback((pick: StationPick) => {
+		Keyboard.dismiss();
+		setBoardState(pick);
+	}, []);
 	const retry = useCallback(() => {
 		stations.refetch().catch(() => undefined);
 	}, [stations]);
