@@ -447,7 +447,7 @@ export function ModeStep({
 	);
 }
 
-/** 16b 버스 노선 검색. 입력이 300ms 멈춘 뒤 찾는다. */
+/** 16b 버스 노선 검색. 열리면 바로 입력할 수 있게 검색칸을 고르고, 입력이 300ms 멈춘 뒤 찾는다. */
 export function BusSearchStep({
 	onPick,
 }: {
@@ -471,6 +471,7 @@ export function BusSearchStep({
 		<StepLayout>
 			<TextField
 				accessibilityLabel={t("legPicker.search.placeholder")}
+				autoFocus
 				onChangeText={setQuery}
 				placeholder={t("legPicker.search.placeholder")}
 				returnKeyType="search"

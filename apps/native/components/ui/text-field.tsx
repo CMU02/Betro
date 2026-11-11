@@ -5,6 +5,8 @@ import { TEXT_STYLES } from "@/theme/typography";
 
 export interface TextFieldProps {
 	accessibilityLabel: string;
+	/** true면 화면이 열리자마자 입력란에 커서를 두고 키보드를 연다. 기본 false. */
+	autoFocus?: boolean;
 	/** false면 글자를 바꿀 수 없다. 기본 true. */
 	editable?: boolean;
 	onChangeText: (text: string) => void;
@@ -16,6 +18,7 @@ export interface TextFieldProps {
 /** 한 줄 입력란. 글자는 `bodyM`, 배경은 `bg/control`. */
 export function TextField({
 	accessibilityLabel,
+	autoFocus,
 	editable,
 	onChangeText,
 	placeholder,
@@ -27,6 +30,7 @@ export function TextField({
 			accessibilityLabel={accessibilityLabel}
 			autoCapitalize="none"
 			autoCorrect={false}
+			autoFocus={autoFocus}
 			className="h-12 rounded-lg bg-bg-control px-4 text-text-primary"
 			cursorColorClassName="accent-text-primary"
 			editable={editable}
