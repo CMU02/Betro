@@ -12,13 +12,14 @@ import {
 	ShieldCheckIcon,
 	ZapIcon,
 } from "lucide-react-native";
-import { type ReactNode, useCallback } from "react";
+import { useCallback } from "react";
 import { Alert, Pressable, View } from "react-native";
 import { withUniwind } from "uniwind";
 
 import { AppText } from "@/components/ui/app-text";
 import { ListDivider, ListRow } from "@/components/ui/list-row";
 import { Screen } from "@/components/ui/screen";
+import { Section } from "@/components/ui/section";
 import { useAppTheme } from "@/contexts/app-theme-context";
 import {
 	isCrashReportingActive,
@@ -54,19 +55,6 @@ const MAP_QUALITY_LABEL_KEY = {
 	high3d: "settings.mapQuality.high3d",
 	standard: "settings.mapQuality.standard",
 } as const satisfies Record<string, MessageKey>;
-
-function Section({ children, title }: { children: ReactNode; title: string }) {
-	return (
-		<View className="gap-2">
-			<AppText className="text-text-secondary" variant="labelS">
-				{title}
-			</AppText>
-			<View className="overflow-hidden rounded-lg bg-bg-surface-raised">
-				{children}
-			</View>
-		</View>
-	);
-}
 
 function ThemeOption({
 	label,

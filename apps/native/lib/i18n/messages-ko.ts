@@ -8,6 +8,7 @@
 export const ko = {
 	common: {
 		back: "뒤로",
+		minutes: "{m}분",
 	},
 	commute: {
 		lock: {
@@ -235,5 +236,11 @@ export const ko = {
 		favorites: "즐겨찾기",
 		map: "지도",
 		settings: "설정",
+	},
+	transit: {
+		region: {
+			gyeonggi: "경기",
+			incheon: "인천",
+		},
 	},
 } as const;
