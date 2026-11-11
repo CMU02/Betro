@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 서버가 보내는 출퇴근 푸시로 iOS Live Activity·다이내믹 아일랜드와 Android 진행 중 알림을 띄우고 갱신하고 끝내며, 잠금화면의 "탔어요", "다음 차 탈게요" 버튼이 앱을 열지 않고 서버에 입력을 보내게 만든다.
+**Goal:** 서버가 보내는 출퇴근 푸시로 iOS Live Activity·다이내믹 아일랜드와 Android 진행 중 알림을 띄우고 갱신하고 끝낸다. 카드에는 지금 구간과 남은 구간의 승차 정보가 보인다. Android의 "종료" 버튼은 앱을 열지 않고 서버에 입력을 보낸다(2026-11-11 변경: "탔어요", "다음 차 탈게요" 버튼은 없다).
 
 **Architecture:** 푸시 값(`ContentState` v1, 2-C가 정함)을 화면 모델로 바꾸는 규칙을 TypeScript 순수 함수 하나(`lock-screen-model.ts`)로 두고 `bun test`로 고정한다. Android는 FCM 백그라운드 처리기가 JS에서 이 모델을 만들어 Kotlin 모듈에 넘기므로 문구가 앱의 메시지 묶음 한 곳에서 나온다. iOS 위젯 확장은 JS를 돌릴 수 없어 같은 규칙을 Swift로 한 번 더 구현하고, 같은 표본 값의 기대 문구를 JSON 한 파일로 공유해 두 구현을 맞춘다. 기기 인증값(설치 ID, 비밀값)은 앱이 네이티브 모듈에 건네 iOS는 모듈 전용 키체인 항목에, Android는 헤드리스 JS가 보안 저장소에서 읽는다.
 
@@ -33,6 +33,20 @@
 - 포그라운드 서비스와 로컬 알림 보조 경로는 만들지 않는다(실험 4, 5 결정).
 - 범위 밖: 경로 등록과 출퇴근 안내 화면(2-E), 서버(2-C), 기기 위치로 탑승을 판단하는 기능, Android 16 QPR1 실기기의 상태바 칩 확인(기기가 없다. 에뮬레이터 API 36.1로만 본다).
 - 선행: Task 1~3은 바로 할 수 있다. Task 4부터는 2-E의 Figma 수정(18 Live Activity, 19 Dynamic Island, 18 Live Update에 4.3의 위계와 버튼을 반영)이 끝나 있어야 한다. Task 8은 2-C가 배포돼 있어야 한다.
+
+## 2026-11-11 변경: 버튼 제거, 남은 구간 **[사용자 결정]**
+
+사용자가 2026-11-11에 잠금화면과 17의 "탔어요", "다음 차 탈게요" 버튼을 빼고, 카드에 남은 구간의 승차 정보를 모두 보여 주기로 정했다(스펙 4.3 개정, 근거는 "누르는 일이 번거롭다"). 탑승은 서버가 시각으로만 추정한다. 아래가 이 계획에서 바뀌는 것이고, 각 Task 본문보다 앞선다.
+
+- **푸시 값과 잠금화면 모델은 2-E Task 2A가 바꾼다.** `ContentState.nextLegs`를 더하고(`v`는 1 그대로), `LockScreenModel`의 `progress`를 지우고 `nextLegs`(최대 2줄)·`moreLegs`("외 N구간")를 더한다. `actions`는 iOS `[]`, Android `["end"]`이다. Swift 구조체의 `nextLegs` 필드도 그 Task에서 더한다. 위 "잠금화면 문구 표"의 버튼 줄과 `status.beforeLeave` 문구는 2-E Task 2A의 표가 대신한다.
+- **Task 4**: 진행 표시를 그리지 않는다. 지금 구간(배지 + 상태 + 남은 분·상세) 아래에 남은 구간 줄을 그린다. 레이아웃은 Figma `LiveActivity`(87:2420)의 2026-11-11 변형과 `NextLegRow`, `LegBadge · S`다. 카드는 모든 사례에서 160pt 이하다. 표본 대조의 "구간 3개 사례의 진행 표시" 기대는 "남은 구간 2줄과 '외 1구간'이 잘리지 않는다"로 바꾼다.
+- **Task 5(iOS 잠금화면 버튼)는 하지 않는다.** App Intents와 `CommuteInputSender`를 만들지 않는다.
+- **Task 6**: 버튼은 "종료" 하나다(`actionLabels`는 `end`만). 남은 구간 줄을 Android 알림에 넣을 수 있는지 먼저 확인한다. Android 16의 상단 고정(promoted ongoing) 알림은 허용되는 스타일과 커스텀 뷰 금지 조건이 있다. 그래서 `ProgressStyle` 또는 `BigTextStyle` 본문 줄로 승격이 유지되는지 공식 문서와 에뮬레이터 API 36.1로 본다. 안 되면 Android는 지금 구간만 보여 주고 그 사실을 이 문서에 적는다. `ProgressStyle`을 쓴다면 점의 수는 구간 수로 정한다(진행 표시 컴포넌트는 쓰지 않는다).
+- **Task 7**: `handleCommuteAction`의 `kind`는 `"end"`뿐이다. "탔어요" 기기 확인을 지운다.
+- **Task 8**: 시나리오 3·4를 아래로 바꾼다.
+  - 3: 버스를 그대로 타면, 그 차량이 승차 정류장을 지난 다음 갱신에서 "하차까지 N정거장"이 된다.
+  - 4: 환승 경로에서 둘째 구간 줄의 시각이 첫 구간 하차 예상에 맞춰 바뀌고, 첫 구간을 내린 뒤에는 둘째 구간이 지금 구간이 된다.
+- **Review Focus 3**(잠긴 기기에서 버튼)은 Android "종료"에만 해당한다. **Review Focus 5**는 "남은 구간이 3개일 때 두 줄과 '외 1구간'이 잘리지 않는다"로 바꾼다.
 
 ## 잠금화면 문구 표 **[설계 판단]**
 
@@ -189,7 +203,7 @@
 
 ---
 
-### Task 5: iOS 잠금화면 버튼
+### Task 5: iOS 잠금화면 버튼 — 하지 않음 (2026-11-11 변경)
 
 **Files:**
 - Create: `apps/native/targets/commute-activity/CommuteIntents.swift`(앱 타깃에도 포함되게 모듈 `ios/`에 심볼릭 링크), `apps/native/modules/commute-activity/ios/CommuteInputSender.swift`
