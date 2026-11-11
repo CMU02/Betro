@@ -60,10 +60,6 @@ const ISSUE_NOTICES: Record<
 	},
 };
 
-/**
- * 임시 값을 저장할 장소로 만든다. 기타 장소는 이름이 있어야 한다(`name-required`).
- * 종류 이름이 따로 있는 장소(집, 회사, 학교)는 이름을 비워 둔다. `sync`는 `savePlace`가 다시 정한다.
- */
 /** 경로에 남은 버스 노선의 `busMeta`만. 지운 구간의 노선은 장소에 남기지 않는다. */
 function busMetaInRoutes(
 	busMeta: BusMetaMap,
@@ -81,6 +77,10 @@ function busMetaInRoutes(
 	return kept;
 }
 
+/**
+ * 임시 값을 저장할 장소로 만든다. 기타 장소는 이름이 있어야 한다(`name-required`).
+ * 종류 이름이 따로 있는 장소(집, 회사, 학교)는 이름을 비워 둔다. `sync`는 `savePlace`가 다시 정한다.
+ */
 export function placeFromDraft(
 	draft: SetupDraft,
 	now: number
