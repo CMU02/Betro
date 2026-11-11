@@ -46,13 +46,19 @@ const DARK_TEXT_TOKENS: ReadonlySet<TransitTokenName> = new Set([
 
 const NEUTRAL_BG_CLASS = "bg-bg-control";
 
+/**
+ * 노선색 배경의 흰 글자. Figma `BusBadge` 라벨(4:36)과 `LegBadge · S` 라벨(114:1591)은 의미 변수가 아닌
+ * 원시 변수 `--primitive-neutral-0`(#ffffff, 두 테마 같음)에 묶여 있고, tokens.ts는 원시 변수를 두지 않는다.
+ */
+const ON_TRANSIT_TEXT_CLASS = "text-white";
+
 function textClassOf(colorToken: TransitTokenName | null): string {
 	if (colorToken === null) {
 		return "text-text-primary";
 	}
 	return DARK_TEXT_TOKENS.has(colorToken)
 		? "text-text-on-accent"
-		: "text-white";
+		: ON_TRANSIT_TEXT_CLASS;
 }
 
 /** "m"은 22pt 배지(Figma `BusBadge`), "s"는 한 줄 20pt 행에 들어가는 16pt 배지(Figma `LegBadge · S` 114:1598). */

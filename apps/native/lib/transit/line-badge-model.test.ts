@@ -97,6 +97,24 @@ describe("lineBadgeModel subway", () => {
 		expect(model.regionKey).toBeNull();
 	});
 
+	it.each([
+		["line2", "line/2"],
+		["1002", "line/2"],
+	])("reads %s without a source prefix as the line key", (line, colorToken) => {
+		expect(
+			lineBadgeModel({ line, mode: "subway", name: "2호선" }).colorToken
+		).toBe(colorToken);
+	});
+
+	it.each(["", "seoul-subway:", "unknown:1002"])(
+		"draws %p as neutral instead of throwing",
+		(line) => {
+			const model = lineBadgeModel({ line, mode: "subway", name: "2호선" });
+			expect(model.colorToken).toBeNull();
+			expect(model.label).toBe("2호선");
+		}
+	);
+
 	it("only returns tokens that exist", () => {
 		for (const routeType of ["1", "2", "3", "4", "5", "6", "7", "8", "x"]) {
 			expect(lineBadgeModel(bus(routeType)).colorToken in TRANSIT_COLORS).toBe(

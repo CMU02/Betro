@@ -1,3 +1,5 @@
+import { parseRef } from "@Betro/commute/refs";
+
 import type { MessageKey } from "@/lib/i18n/translate";
 import type { TransitTokenName } from "@/theme/tokens";
 
@@ -18,7 +20,6 @@ export interface LineBadgeModel {
 
 const EMPTY_LABEL = "-";
 const DEFAULT_BUS_COLOR: TransitTokenName = "bus/trunk";
-const SUBWAY_KEY_PREFIX = "seoul-subway:";
 
 /** 서울 버스 API의 routeType. 7 인천, 8 경기는 광역 색에 지역 글자를 붙인다. */
 const BUS_COLOR_BY_ROUTE_TYPE: Record<string, TransitTokenName> = {
@@ -84,6 +85,18 @@ function labelOf(name: string): string {
 	return trimmed === "" ? EMPTY_LABEL : trimmed;
 }
 
+/**
+ * 노선 참조(`seoul-subway:line2`)의 id. 접두사가 없거나 읽을 수 없는 값(`line2`, `1002`, 빈 값)은
+ * 그대로 찾는다. 푸시 값으로 만든 배지는 노선 키가 비어 있다.
+ */
+function subwayKeyOf(line: string): string {
+	try {
+		return parseRef(line).id;
+	} catch {
+		return line;
+	}
+}
+
 export function lineBadgeModel(input: LineBadgeInput): LineBadgeModel {
 	if (input.mode === "bus") {
 		return {
@@ -94,11 +107,8 @@ export function lineBadgeModel(input: LineBadgeInput): LineBadgeModel {
 				REGION_KEY_BY_REGION[input.region],
 		};
 	}
-	const key = input.line.startsWith(SUBWAY_KEY_PREFIX)
-		? input.line.slice(SUBWAY_KEY_PREFIX.length)
-		: input.line;
 	return {
-		colorToken: SUBWAY_COLOR_BY_LINE[key] ?? null,
+		colorToken: SUBWAY_COLOR_BY_LINE[subwayKeyOf(input.line)] ?? null,
 		label: labelOf(input.name),
 		regionKey: null,
 	};
