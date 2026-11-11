@@ -104,7 +104,7 @@ export function AddRowButton({
 	return (
 		<Pressable
 			accessibilityRole="button"
-			className="h-10 flex-row items-center gap-1.5 self-start rounded-md px-4 active:bg-bg-hover"
+			className="h-10 flex-row items-center gap-1.5 self-stretch rounded-md px-4 active:bg-bg-hover"
 			onPress={onPress}
 		>
 			<Plus colorClassName="accent-icon-primary" size={ADD_ICON_SIZE} />
