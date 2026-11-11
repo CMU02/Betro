@@ -2,6 +2,8 @@ import { describe, expect, it } from "bun:test";
 import type { ServerClient, ServerResponse } from "@/lib/server/api-client";
 import {
 	busRouteStops,
+	REF_STALE_MS,
+	refStaleTime,
 	searchBusRoutes,
 	subwayDirection,
 	subwayLines,
@@ -236,5 +238,24 @@ describe("subwayDirection", () => {
 			ok: false,
 			reason: "invalid",
 		});
+	});
+});
+
+describe("refStaleTime", () => {
+	it("keeps a successful lookup fresh for ten minutes", () => {
+		expect(REF_STALE_MS).toBe(600_000);
+		expect(refStaleTime({ state: { data: { ok: true } } })).toBe(REF_STALE_MS);
+	});
+
+	it.each(["offline", "unavailable", "not-found", "invalid", "not-direct"])(
+		"treats a %s failure as stale right away",
+		(reason) => {
+			const data = { ok: false, reason };
+			expect(refStaleTime({ state: { data } })).toBe(0);
+		}
+	);
+
+	it("treats a query with no data yet as stale", () => {
+		expect(refStaleTime({ state: { data: undefined } })).toBe(0);
 	});
 });

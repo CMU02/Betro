@@ -44,6 +44,7 @@ import {
 	type BusRouteMatch,
 	type BusStop,
 	busRouteStops,
+	refStaleTime,
 	type SubwayLine,
 	searchBusRoutes,
 	subwayDirection,
@@ -60,8 +61,6 @@ const Search = withUniwind(SearchIcon);
 const WifiOff = withUniwind(WifiOffIcon);
 
 const SEARCH_DEBOUNCE_MS = 300;
-/** 조회 데이터는 하루에 한 번 바뀐다. 한 번 받은 것은 등록하는 동안 다시 받지 않는다. */
-const REF_STALE_MS = 10 * 60 * 1000;
 const ROW_ICON_SIZE = 20;
 const STATE_ICON_SIZE = 32;
 const BOTTOM_PADDING = 8;
@@ -461,7 +460,7 @@ export function BusSearchStep({
 		enabled: trimmed !== "",
 		queryFn: () => searchBusRoutes(serverClient, trimmed),
 		queryKey: ["ref", "bus-routes", trimmed],
-		staleTime: REF_STALE_MS,
+		staleTime: refStaleTime,
 	});
 	const view = searchView(debounced, search.data, search.isFetching);
 	const retry = useCallback(() => {
@@ -523,7 +522,7 @@ function useBusStops(route: BusRouteMatch) {
 	return useQuery({
 		queryFn: () => busRouteStops(serverClient, route.line),
 		queryKey: ["ref", "bus-stops", route.line],
-		staleTime: REF_STALE_MS,
+		staleTime: refStaleTime,
 	});
 }
 
@@ -652,7 +651,7 @@ export function SubwayLineStep({
 	const lines = useQuery({
 		queryFn: () => subwayLines(serverClient),
 		queryKey: ["ref", "subway-lines"],
-		staleTime: REF_STALE_MS,
+		staleTime: refStaleTime,
 	});
 	const retry = useCallback(() => {
 		lines.refetch().catch(() => undefined);
@@ -685,7 +684,7 @@ function useSubwayStations(line: SubwayLine) {
 	return useQuery({
 		queryFn: () => subwayStations(serverClient, line.line),
 		queryKey: ["ref", "subway-stations", line.line],
-		staleTime: REF_STALE_MS,
+		staleTime: refStaleTime,
 	});
 }
 
@@ -861,7 +860,7 @@ export function SubwayAlightStep({
 		queryFn: () =>
 			subwayDirection(serverClient, line.line, board.stop, alight?.stop ?? ""),
 		queryKey: ["ref", "subway-direction", line.line, board.stop, alight?.stop],
-		staleTime: REF_STALE_MS,
+		staleTime: refStaleTime,
 	});
 	const retryStations = useCallback(() => {
 		stations.refetch().catch(() => undefined);

@@ -6,6 +6,19 @@ export type RefResult<T> =
 	| { ok: true; value: T }
 	| { ok: false; reason: RefFailure };
 
+/** 조회 데이터는 하루에 한 번 바뀐다. 한 번 받은 것은 등록하는 동안 다시 받지 않는다. */
+export const REF_STALE_MS = 10 * 60 * 1000;
+
+/**
+ * `RefResult`를 담는 쿼리의 `staleTime`. 조회 함수는 실패해도 throw하지 않으므로, 실패(오프라인·503·시간 초과)가
+ * 성공처럼 10분 동안 캐시되지 않게 성공만 신선하게 둔다.
+ */
+export function refStaleTime(query: {
+	state: { data?: { ok: boolean } | undefined };
+}): number {
+	return query.state.data?.ok ? REF_STALE_MS : 0;
+}
+
 const regionSchema = z.enum(["seoul", "gyeonggi", "incheon"]);
 
 const busRouteMatchSchema = z.object({
