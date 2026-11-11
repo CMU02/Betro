@@ -23,7 +23,7 @@ import {
 } from "@/lib/places/leg-picker-model";
 import type { BusMeta } from "@/lib/places/places";
 import { appSetupDraft } from "@/lib/places/setup-draft";
-import { parseRouteIndex, routeWithLeg } from "@/lib/places/setup-form-model";
+import { draftWithLeg, parseRouteIndex } from "@/lib/places/setup-form-model";
 import type { BusRouteMatch, BusStop, SubwayLine } from "@/lib/ref/ref-client";
 
 const TITLE_KEYS: Record<LegStep["kind"], MessageKey> = {
@@ -161,15 +161,13 @@ export default function LegPickerScreen() {
 		(leg: Leg, busMeta?: BusMeta) => {
 			const current = appSetupDraft.get();
 			if (current !== null && routeIndex !== null) {
-				if (busMeta !== undefined) {
-					appSetupDraft.update({
-						busMeta: { ...current.busMeta, [leg.line]: busMeta },
-					});
-				}
-				appSetupDraft.setRoute(
+				const { busMeta: nextBusMeta, routes } = draftWithLeg(
+					current,
 					routeIndex,
-					routeWithLeg(current.routes, routeIndex, leg)
+					leg,
+					busMeta
 				);
+				appSetupDraft.update({ busMeta: nextBusMeta, routes });
 			}
 			router.back();
 		},

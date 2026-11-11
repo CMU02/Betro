@@ -3,7 +3,7 @@ import type { Leg } from "@Betro/commute/plan";
 import type { MessageKey, MessageParams } from "../i18n/translate";
 import type { LineBadgeInput } from "../transit/line-badge-model";
 import { badgeOf } from "./place-card-model";
-import type { BusMetaMap, Place, PlaceKind } from "./places";
+import type { BusMeta, BusMetaMap, Place, PlaceKind } from "./places";
 import { placeNameOf } from "./plan-headers";
 import type { SaveResult } from "./plan-sync";
 import {
@@ -286,6 +286,35 @@ export function routeWithLeg(
 	leg: Leg
 ): RouteDraft {
 	return addLeg(routes[routeIndex] ?? emptyRoute(), leg);
+}
+
+/**
+ * 구간 고르기가 고른 구간을 넣은 임시 값. `routeIndex`가 경로 수와 같으면 새 대안으로 더하고, 그보다 크거나
+ * 음수면 그대로 돌려준다. 버스 구간이면 고른 노선의 종류·지역(`busMeta`)을 `leg.line` 키로 같이 둔다.
+ */
+export function draftWithLeg(
+	draft: SetupDraft,
+	routeIndex: number,
+	leg: Leg,
+	busMeta?: BusMeta
+): SetupDraft {
+	const count = draft.routes.length;
+	if (!Number.isInteger(routeIndex) || routeIndex < 0 || routeIndex > count) {
+		return draft;
+	}
+	const route = routeWithLeg(draft.routes, routeIndex, leg);
+	const routes =
+		routeIndex === count
+			? [...draft.routes, route]
+			: draft.routes.map((entry, i) => (i === routeIndex ? route : entry));
+	return {
+		...draft,
+		busMeta:
+			busMeta === undefined
+				? draft.busMeta
+				: { ...draft.busMeta, [leg.line]: busMeta },
+		routes,
+	};
 }
 
 export function canAddLeg(route: RouteDraft): boolean {

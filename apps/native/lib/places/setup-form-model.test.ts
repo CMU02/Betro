@@ -3,6 +3,8 @@ import type { Leg } from "@Betro/commute/plan";
 import { expect, it } from "bun:test";
 
 import { t } from "../i18n/t";
+import type { BusRouteMatch, BusStop } from "../ref/ref-client";
+import { busLeg, busMetaOf } from "./leg-picker-model";
 import { addLeg, emptyRoute, type RouteDraft } from "./route-draft";
 import type { SetupDraft } from "./setup-draft";
 import {
@@ -10,6 +12,7 @@ import {
 	canAddLeg,
 	dateFromMinute,
 	destinationName,
+	draftWithLeg,
 	issueNotices,
 	minuteFromDate,
 	parseRouteIndex,
@@ -289,4 +292,59 @@ it("saves the bus line meta of the lines still in the routes next to the plan, n
 	});
 	expect(result.place.plan).not.toHaveProperty("busMeta");
 	expect(JSON.stringify(result.place.plan)).not.toContain("gyeonggi");
+});
+
+const GYEONGGI_M5107: BusRouteMatch = {
+	line: "seoul-bus:234000884",
+	name: "M5107광주",
+	region: "gyeonggi",
+	routeType: "8",
+	shortName: "M5107",
+};
+
+function busStop(seq: number, name: string): BusStop {
+	return {
+		arsId: null,
+		directionName: null,
+		name,
+		seq,
+		stop: `seoul-bus:2000${seq}`,
+	};
+}
+
+it("keeps the meta of a picked Gyeonggi bus line under the same key as its leg", () => {
+	const leg = busLeg(
+		GYEONGGI_M5107,
+		busStop(1, "경기광주역"),
+		busStop(4, "서울역버스환승센터")
+	);
+	const existing = { [BUS_LEG.line]: { region: "seoul", routeType: "3" } };
+	const draft = draftOf({ busMeta: existing });
+
+	const next = draftWithLeg(draft, 0, leg, busMetaOf(GYEONGGI_M5107));
+
+	expect(next.busMeta).toEqual({
+		...existing,
+		[leg.line]: { region: "gyeonggi", routeType: "8" },
+	});
+	expect(Object.keys(next.busMeta)).toContain(leg.line);
+	expect(next.routes).toEqual([routeOf(BUS_LEG, leg)]);
+	expect(draft.busMeta).toEqual(existing);
+});
+
+it("adds a subway leg as a new alternative and leaves the bus meta as it was", () => {
+	const draft = draftOf();
+	const next = draftWithLeg(draft, 1, SUBWAY_LEG);
+	expect(next.routes).toEqual([routeOf(BUS_LEG), routeOf(SUBWAY_LEG)]);
+	expect(next.busMeta).toBe(draft.busMeta);
+	expect({ ...next, busMeta: {}, routes: [] }).toEqual({
+		...draft,
+		busMeta: {},
+		routes: [],
+	});
+});
+
+it("leaves the draft as it was for a route index past the end", () => {
+	const draft = draftOf();
+	expect(draftWithLeg(draft, 3, SUBWAY_LEG)).toBe(draft);
 });
