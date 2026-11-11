@@ -162,6 +162,28 @@ export const ko = {
 		settingsHint: "설정에서 언제든 바꿀 수 있어요",
 	},
 	places: {
+		add: "장소 추가",
+		addHint: "집, 회사, 학교처럼 자주 가는 곳을 등록해요",
+		alternatives: "대안 {n}개",
+		/** 카드와 빈 상태의 요일 이름. 월요일부터 읽는다. */
+		day: {
+			fri: "금",
+			mon: "월",
+			sat: "토",
+			sun: "일",
+			thu: "목",
+			tue: "화",
+			wed: "수",
+		},
+		dayJoiner: "·",
+		daysEvery: "매일",
+		daysWeekdays: "평일",
+		daysWeekend: "주말",
+		edit: "{name} 고치기",
+		empty: {
+			body: "장소마다 자주 타는 경로와 나가는 시각을 저장해 두면, 그 시각에 맞춰 잠금화면에 띄워 드려요.",
+			title: "자주 가는 곳을 등록해 보세요",
+		},
 		/** 잠금화면과 17 화면의 머리줄. `{name}`은 종류 이름이나 기타 장소의 이름이다. */
 		header: {
 			home: "퇴근 · {name}까지",
@@ -171,12 +193,18 @@ export const ko = {
 		},
 		/** 서버에서 가져와 이름이 없는 장소(재설치 뒤 맞추기) */
 		importedName: "가져온 경로",
+		intro:
+			"장소마다 자주 타는 경로와 나가는 시각을 저장해 두면, 그 시각에 맞춰 잠금화면에 띄워 드려요.",
 		kind: {
 			home: "집",
 			other: "기타",
 			school: "학교",
 			work: "회사",
 		},
+		legArrow: "{from} → {to}",
+		notSynced: "아직 서버에 저장되지 않았어요",
+		openGuide: "{name} 출퇴근 안내 열기",
+		schedule: "{days} {time} 출발",
 	},
 	push: {
 		defaultTitle: "알림",
