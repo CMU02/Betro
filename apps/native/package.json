@@ -21,6 +21,7 @@
     "@mj-studio/react-native-naver-map": "^2.10.0",
     "@orpc/client": "catalog:",
     "@orpc/tanstack-query": "catalog:",
+    "@react-native-community/datetimepicker": "9.2.1",
     "@react-native-firebase/app": "^27.1.0",
     "@react-native-firebase/messaging": "^27.1.0",
     "@sentry/react-native": "~8.28.0",

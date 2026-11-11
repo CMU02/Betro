@@ -156,6 +156,9 @@ function StackLayout() {
 				<Stack.Protected guard={!showOnboarding}>
 					<Stack.Screen name="(tabs)" />
 					<Stack.Screen name="settings/data-sources" />
+					<Stack.Screen name="places/new" />
+					<Stack.Screen name="places/[placeId]" />
+					<Stack.Screen name="places/leg" />
 				</Stack.Protected>
 				<Stack.Protected guard={showOnboarding}>
 					<Stack.Screen name="onboarding" />

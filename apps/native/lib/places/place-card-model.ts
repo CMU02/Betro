@@ -68,7 +68,8 @@ function daysLabel(days: number[], t: Translate): string {
 		.join(t("places.dayJoiner"));
 }
 
-function timeLabel(leaveMinute: number): string {
+/** 24시간 `HH:MM`. 예: 490 → "08:10" */
+export function timeLabel(leaveMinute: number): string {
 	const hours = Math.floor(leaveMinute / MINUTES_PER_HOUR);
 	const minutes = leaveMinute % MINUTES_PER_HOUR;
 	return `${String(hours).padStart(TIME_DIGITS, "0")}:${String(minutes).padStart(TIME_DIGITS, "0")}`;
@@ -90,7 +91,7 @@ export function scheduleLabel(
  * 저장된 구간에는 버스 종류(routeType)와 지역이 없다. 종류를 모르는 버스는 `routeType: ""`로 두어
  * 기본 색으로 그리고, 지역은 서울로 둔다(`LineBadgeInput`이 요구하는 값).
  */
-function badgeOf(leg: Leg): LineBadgeInput {
+export function badgeOf(leg: Leg): LineBadgeInput {
 	if (leg.mode === "subway") {
 		return { line: leg.line, mode: "subway", name: leg.lineName };
 	}

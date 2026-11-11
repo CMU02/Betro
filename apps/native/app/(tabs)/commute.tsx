@@ -18,8 +18,7 @@ const EMPTY_ICON_SIZE = 40;
 
 const EmptyBriefcase = withUniwind(BriefcaseIcon);
 
-/** 16, 17 화면은 Task 8, 9에서 만든다. 그 전에는 타입 검사가 경로를 모르므로 `never`로 넘긴다. */
-const NEW_PLACE_HREF = "/places/new" as never;
+const NEW_PLACE_HREF = "/places/new";
 
 /** 15 내 장소. 장소가 없으면 빈 상태, 있으면 카드 목록과 "장소 추가". */
 export default function CommuteTab() {
@@ -28,11 +27,16 @@ export default function CommuteTab() {
 
 	const addPlace = useCallback(() => router.push(NEW_PLACE_HREF), [router]);
 	const openGuide = useCallback(
+		// 17 화면은 Task 9에서 만든다. 그 전에는 타입 검사가 경로를 모르므로 `never`로 넘긴다.
 		(place: Place) => router.push(`/commute/${place.id}` as never),
 		[router]
 	);
 	const editPlace = useCallback(
-		(place: Place) => router.push(`/places/${place.id}` as never),
+		(place: Place) =>
+			router.push({
+				params: { placeId: place.id },
+				pathname: "/places/[placeId]",
+			}),
 		[router]
 	);
 
