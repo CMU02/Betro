@@ -4,6 +4,7 @@ import { describe, expect, it } from "bun:test";
 import { t } from "../i18n/t";
 import type { Place } from "../places/places";
 import { headerOf } from "../places/plan-headers";
+import type { LineBadgeInput } from "../transit/line-badge-model";
 import fixture from "./__fixtures__/lock-screen-cases.json";
 import type { ContentState } from "./content-state";
 import { guideModel, guideTitle, sessionStripModel } from "./guide-model";
@@ -70,6 +71,7 @@ function placeOf(overrides: Partial<CommutePlan["schedule"]> = {}): Place {
 		},
 	};
 	return {
+		busMeta: {},
 		id: "place-1",
 		kind: "work",
 		name: "",
@@ -446,4 +448,43 @@ describe("sessionStripModel", () => {
 			})
 		).toBeNull();
 	});
+});
+
+it("draws buses with the line meta kept on the device, idle and active", () => {
+	const gyeonggi = { region: "gyeonggi", routeType: "8" } as const;
+	const place: Place = {
+		...placeOf(),
+		busMeta: { [BUS_341.line]: gyeonggi, [BUS_360.line]: gyeonggi },
+	};
+	const bus341: LineBadgeInput = { mode: "bus", name: "341", ...gyeonggi };
+	const bus360: LineBadgeInput = { mode: "bus", name: "360", ...gyeonggi };
+
+	const idle = guideModel({
+		now: NOW,
+		place,
+		session: null,
+		t,
+		timezone: TIMEZONE,
+	});
+	expect(
+		idle.kind === "idle" ? idle.routes.map((r) => r.badge[0]) : []
+	).toEqual([
+		bus341,
+		bus360,
+		{ line: "seoul-subway:line8", mode: "subway", name: "8호선" },
+	]);
+
+	const active = guideModel({
+		now: NOW,
+		place,
+		session: sessionOf([view(0, MAIN_ETA), view(1, MAIN_ETA)], {
+			content: CONTENT,
+		}),
+		t,
+		timezone: TIMEZONE,
+	});
+	expect(active.kind === "active" ? active.cardBadge : null).toEqual(bus341);
+	expect(active.kind === "active" ? active.others[0]?.badge : null).toEqual([
+		bus360,
+	]);
 });

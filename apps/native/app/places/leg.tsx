@@ -16,7 +16,12 @@ import {
 import { TopBar } from "@/components/ui/top-bar";
 import { t } from "@/lib/i18n/t";
 import type { MessageKey } from "@/lib/i18n/translate";
-import { type LegStep, previousStep } from "@/lib/places/leg-picker-model";
+import {
+	busMetaOf,
+	type LegStep,
+	previousStep,
+} from "@/lib/places/leg-picker-model";
+import type { BusMeta } from "@/lib/places/places";
 import { appSetupDraft } from "@/lib/places/setup-draft";
 import { parseRouteIndex, routeWithLeg } from "@/lib/places/setup-form-model";
 import type { BusRouteMatch, BusStop, SubwayLine } from "@/lib/ref/ref-client";
@@ -38,10 +43,19 @@ function StepBody({
 	setStep,
 	step,
 }: {
-	onDone: (leg: Leg) => void;
+	onDone: (leg: Leg, busMeta?: BusMeta) => void;
 	setStep: (step: LegStep) => void;
 	step: LegStep;
 }) {
+	// 버스 구간에는 노선 종류·지역이 없어서, 고른 노선에서 따로 넘겨 배지 색을 기기에 남긴다.
+	const finishBus = useCallback(
+		(leg: Leg) => {
+			if (step.kind === "bus-alight") {
+				onDone(leg, busMetaOf(step.route));
+			}
+		},
+		[onDone, step]
+	);
 	const pickRoute = useCallback(
 		(route: BusRouteMatch) => setStep({ kind: "bus-board", route }),
 		[setStep]
@@ -84,7 +98,11 @@ function StepBody({
 			return <BusBoardStep onPick={pickBoard} route={step.route} />;
 		case "bus-alight":
 			return (
-				<BusAlightStep board={step.board} onDone={onDone} route={step.route} />
+				<BusAlightStep
+					board={step.board}
+					onDone={finishBus}
+					route={step.route}
+				/>
 			);
 		case "subway-line":
 			return <SubwayLineStep onPick={pickLine} />;
@@ -140,9 +158,14 @@ export default function LegPickerScreen() {
 	}, [step]);
 
 	const finish = useCallback(
-		(leg: Leg) => {
+		(leg: Leg, busMeta?: BusMeta) => {
 			const current = appSetupDraft.get();
 			if (current !== null && routeIndex !== null) {
+				if (busMeta !== undefined) {
+					appSetupDraft.update({
+						busMeta: { ...current.busMeta, [leg.line]: busMeta },
+					});
+				}
 				appSetupDraft.setRoute(
 					routeIndex,
 					routeWithLeg(current.routes, routeIndex, leg)

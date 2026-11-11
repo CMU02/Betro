@@ -2,7 +2,7 @@ import type { Leg } from "@Betro/commute/plan";
 
 import type { MessageKey, MessageParams } from "../i18n/translate";
 import type { LineBadgeInput } from "../transit/line-badge-model";
-import type { Place } from "./places";
+import type { BusMetaMap, Place } from "./places";
 import { placeNameOf } from "./plan-headers";
 
 type Translate = (key: MessageKey, params?: MessageParams) => string;
@@ -89,14 +89,21 @@ export function scheduleLabel(
 }
 
 /**
- * 저장된 구간에는 버스 종류(routeType)와 지역이 없다. 종류를 모르는 버스는 `routeType: ""`로 두어
- * 기본 색으로 그리고, 지역은 서울로 둔다(`LineBadgeInput`이 요구하는 값).
+ * 저장된 구간에는 버스 종류(routeType)와 지역이 없어서 기기에 둔 `busMeta`에서 찾는다. 맵에 없는 버스
+ * (맵이 생기기 전에 저장한 장소, 서버에서 가져온 장소)는 `routeType: ""`로 두어 기본 색으로 그리고,
+ * 지역은 서울로 둔다(`LineBadgeInput`이 요구하는 값).
  */
-export function badgeOf(leg: Leg): LineBadgeInput {
+export function badgeOf(leg: Leg, busMeta: BusMetaMap): LineBadgeInput {
 	if (leg.mode === "subway") {
 		return { line: leg.line, mode: "subway", name: leg.lineName };
 	}
-	return { mode: "bus", name: leg.lineName, region: "seoul", routeType: "" };
+	const meta = busMeta[leg.line];
+	return {
+		mode: "bus",
+		name: leg.lineName,
+		region: meta?.region ?? "seoul",
+		routeType: meta?.routeType ?? "",
+	};
 }
 
 export function placeCardModel(place: Place, t: Translate): PlaceCardModel {
@@ -109,7 +116,7 @@ export function placeCardModel(place: Place, t: Translate): PlaceCardModel {
 				? null
 				: t("places.alternatives", { n: alternativeCount }),
 		legs: (main?.legs ?? []).map((leg) => ({
-			badge: badgeOf(leg),
+			badge: badgeOf(leg, place.busMeta),
 			from: leg.board.name,
 			to: leg.alight.name,
 		})),

@@ -50,6 +50,7 @@ function planOf(planId: string): CommutePlan {
 
 function place(id: string, planId: string, overrides: Partial<Place> = {}) {
 	const base: Place = {
+		busMeta: {},
 		id,
 		kind: "work",
 		name: "",
@@ -370,6 +371,7 @@ it("imports a plan that only the server has as an unnamed other place", async ()
 	expect(await reconcile(deps)).toEqual({ imported: 1, pushed: 0, removed: 0 });
 	expect(store.get().places).toEqual([
 		{
+			busMeta: {},
 			id: expect.any(String),
 			kind: "other",
 			name: "",
@@ -731,4 +733,18 @@ it("sets every planId header once at the end", async () => {
 			[WORK_PLAN]: "출근 · 회사까지",
 		},
 	]);
+});
+
+it("uploads only the plan and keeps the bus line meta on the device", async () => {
+	const { deps, server, store } = setup();
+	const work = place("work", WORK_PLAN, {
+		busMeta: {
+			"seoul-bus:100100341": { region: "gyeonggi", routeType: "8" },
+		},
+	});
+
+	expect(await savePlace(deps, work)).toBe("saved");
+	expect(server.calls[0]?.body).toEqual(work.plan);
+	expect(JSON.stringify(server.calls[0]?.body)).not.toContain("busMeta");
+	expect(store.get().places[0]?.busMeta).toEqual(work.busMeta);
 });

@@ -53,6 +53,7 @@ function routeOf(...legs: Leg[]): RouteDraft {
 
 function draftOf(overrides: Partial<SetupDraft> = {}): SetupDraft {
 	return {
+		busMeta: {},
 		days: [1, 2, 3, 4, 5],
 		includeHolidays: false,
 		kind: "work",
@@ -155,7 +156,7 @@ it("converts between minute of day and a picker date by wall clock", () => {
 });
 
 it("lists walk and ride rows with walk labels toward the next stop", () => {
-	const rows = routeRows(routeOf(BUS_LEG, SUBWAY_LEG), "회사", t);
+	const rows = routeRows(routeOf(BUS_LEG, SUBWAY_LEG), {}, "회사", t);
 	expect(rows.map((row) => row.kind)).toEqual([
 		"walk",
 		"ride",
@@ -184,7 +185,7 @@ it("lists walk and ride rows with walk labels toward the next stop", () => {
 		legIndex: 1,
 		title: "역삼 → 강남",
 	});
-	expect(routeRows(emptyRoute(), "회사", t)).toEqual([]);
+	expect(routeRows(emptyRoute(), {}, "회사", t)).toEqual([]);
 });
 
 it("names the destination after the kind, or the typed name", () => {
@@ -254,4 +255,38 @@ it("reads the route index from the screen parameter", () => {
 	expect(parseRouteIndex("1.5", 3)).toBeNull();
 	expect(parseRouteIndex(undefined, 1)).toBeNull();
 	expect(parseRouteIndex(["0", "1"], 1)).toBe(0);
+});
+
+it("draws a ride row with the bus line meta of the draft", () => {
+	const rows = routeRows(
+		routeOf(BUS_LEG),
+		{ [BUS_LEG.line]: { region: "gyeonggi", routeType: "8" } },
+		"회사",
+		t
+	);
+	expect(rows[1]).toMatchObject({
+		badge: { mode: "bus", name: "341", region: "gyeonggi", routeType: "8" },
+	});
+});
+
+it("saves the bus line meta of the lines still in the routes next to the plan, not in it", () => {
+	const result = placeFromDraft(
+		draftOf({
+			busMeta: {
+				[BUS_LEG.line]: { region: "gyeonggi", routeType: "8" },
+				"seoul-bus:removed": { region: "seoul", routeType: "3" },
+			},
+			routes: [routeOf(BUS_LEG), routeOf(SUBWAY_LEG)],
+		}),
+		1
+	);
+	expect(result.ok).toBe(true);
+	if (!result.ok) {
+		return;
+	}
+	expect(result.place.busMeta).toEqual({
+		[BUS_LEG.line]: { region: "gyeonggi", routeType: "8" },
+	});
+	expect(result.place.plan).not.toHaveProperty("busMeta");
+	expect(JSON.stringify(result.place.plan)).not.toContain("gyeonggi");
 });

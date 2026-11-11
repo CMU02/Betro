@@ -36,6 +36,7 @@ function planOf(planId: string): CommutePlan {
 
 function place(kind: PlaceKind, name: string, planId: string): Place {
 	return {
+		busMeta: {},
 		id: `place-${planId}`,
 		kind,
 		name,

@@ -1,8 +1,10 @@
-import type { Place, PlaceKind } from "./places";
+import type { BusMetaMap, Place, PlaceKind } from "./places";
 import { emptyRoute, type RouteDraft } from "./route-draft";
 
 /** 등록 화면이 열려 있는 동안만 사는 값. 구간 고르기 화면이 고른 구간을 여기에 쓰고 돌아온다. */
 export interface SetupDraft {
+	/** 구간 고르기에서 고른 버스 노선의 종류·지역. 저장할 때 장소에 같이 둔다(서버에는 보내지 않는다). */
+	busMeta: BusMetaMap;
 	days: number[];
 	includeHolidays: boolean;
 	kind: PlaceKind;
@@ -47,6 +49,7 @@ function draftOfPlace(place: Place): SetupDraft {
 			walkMinutes: [...route.walkMinutes],
 		}));
 	return {
+		busMeta: { ...place.busMeta },
 		days: [...schedule.days],
 		includeHolidays: schedule.includeHolidays,
 		kind: place.kind,
@@ -95,6 +98,7 @@ export function createSetupDraft(): SetupDraftStore {
 			set(
 				place === null
 					? {
+							busMeta: {},
 							days: [...DEFAULT_DAYS],
 							includeHolidays: false,
 							kind: DEFAULT_KIND,

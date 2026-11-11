@@ -2,7 +2,7 @@ import type { Leg, Route } from "@Betro/commute/plan";
 
 import type { MessageKey, MessageParams } from "../i18n/translate";
 import { badgeOf, daysLabel, timeLabel } from "../places/place-card-model";
-import type { Place } from "../places/places";
+import type { BusMetaMap, Place } from "../places/places";
 import { headerOf, placeNameOf } from "../places/plan-headers";
 import type { LineBadgeInput } from "../transit/line-badge-model";
 import type { ContentState } from "./content-state";
@@ -135,7 +135,7 @@ function idleGuide(place: Place, t: Translate): IdleGuide {
 		kind: "idle",
 		next: nextLine(place, t),
 		routes: byRank(place.plan.routes).map((route) => ({
-			badge: route.legs.map(badgeOf),
+			badge: route.legs.map((leg) => badgeOf(leg, place.busMeta)),
 			label: t(
 				route.rank === 0
 					? "commuteGuide.routeLabel.main"
@@ -190,7 +190,7 @@ function compareRow(
 				: t("commuteGuide.arrival", {
 						time: formatClock(destination, timezone),
 					}),
-		badge: route.legs.map(badgeOf),
+		badge: route.legs.map((leg) => badgeOf(leg, input.place.busMeta)),
 		diff: diffLine(mainEta, destination, t),
 		rank: route.rank,
 		stops: stopsOf(route.legs, t),
@@ -205,6 +205,7 @@ function compareRow(
 /** 푸시 값에는 노선 키가 없어서, 장소의 기본 경로에서 같은 구간을 찾아 배지를 만든다. */
 function badgeAt(
 	main: Route | undefined,
+	busMeta: BusMetaMap,
 	index: number,
 	fallback: { lineName: string; mode: "bus" | "subway" }
 ): LineBadgeInput {
@@ -214,7 +215,7 @@ function badgeAt(
 		leg.mode === fallback.mode &&
 		leg.lineName === fallback.lineName
 	) {
-		return badgeOf(leg);
+		return badgeOf(leg, busMeta);
 	}
 	if (fallback.mode === "subway") {
 		return { line: "", mode: "subway", name: fallback.lineName };
@@ -252,10 +253,10 @@ function activeGuide(
 	const card = cardOf(content, input);
 	return {
 		card,
-		cardBadge: badgeAt(main, content.legIndex, content),
+		cardBadge: badgeAt(main, input.place.busMeta, content.legIndex, content),
 		kind: "active",
 		nextLegBadges: card.nextLegs.map((leg, offset) =>
-			badgeAt(main, content.legIndex + 1 + offset, leg)
+			badgeAt(main, input.place.busMeta, content.legIndex + 1 + offset, leg)
 		),
 		others: routes
 			.filter((route) => route.rank !== 0)
@@ -313,7 +314,7 @@ export function sessionStripModel(input: {
 	const card = cardOf(content, { ...input, place });
 	const main = place.plan.routes.find((route) => route.rank === 0);
 	return {
-		badge: badgeAt(main, content.legIndex, content),
+		badge: badgeAt(main, place.busMeta, content.legIndex, content),
 		header: t("commuteGuide.strip.header", { header: card.header }),
 		placeId: place.id,
 		status:

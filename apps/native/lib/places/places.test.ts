@@ -39,6 +39,9 @@ function planOf(planId: string): CommutePlan {
 }
 
 const WORK: Place = {
+	busMeta: {
+		"seoul-bus:100100341": { region: "gyeonggi", routeType: "8" },
+	},
 	id: "place-work",
 	kind: "work",
 	name: "회사",
@@ -48,6 +51,7 @@ const WORK: Place = {
 };
 
 const GYM: Place = {
+	busMeta: {},
 	id: "place-gym",
 	kind: "other",
 	name: "헬스장",
@@ -120,4 +124,34 @@ it("returns an empty state for null, broken JSON and other shapes", () => {
 	expect(parsePlacesState("{not json")).toEqual(EMPTY);
 	expect(parsePlacesState("[]")).toEqual(EMPTY);
 	expect(parsePlacesState(JSON.stringify({ version: 1 }))).toEqual(EMPTY);
+});
+
+it("reads a place saved before busMeta existed with an empty map", () => {
+	const { busMeta: _dropped, ...legacy } = WORK;
+	const raw = JSON.stringify({
+		pendingDeletes: [],
+		places: [legacy],
+		version: 1,
+	});
+	expect(parsePlacesState(raw).places).toEqual([{ ...WORK, busMeta: {} }]);
+});
+
+it("keeps the place but drops busMeta entries that do not parse", () => {
+	const raw = JSON.stringify({
+		pendingDeletes: [],
+		places: [
+			{
+				...WORK,
+				busMeta: {
+					"seoul-bus:1": { region: "mars", routeType: "8" },
+					"seoul-bus:2": { region: "gyeonggi", routeType: 8 },
+					"seoul-bus:3": "x",
+					"seoul-bus:100100341": { region: "gyeonggi", routeType: "8" },
+				},
+			},
+			{ ...GYM, busMeta: ["x"] },
+		],
+		version: 1,
+	});
+	expect(parsePlacesState(raw).places).toEqual([WORK, GYM]);
 });

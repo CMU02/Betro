@@ -7,6 +7,7 @@ import {
 	boardChoices,
 	branchLabel,
 	busLeg,
+	busMetaOf,
 	busRouteRow,
 	directionView,
 	isBranchUnavailable,
@@ -338,4 +339,12 @@ it("reads the direction lookup as checking, ready, not direct or failed", () => 
 		"failed"
 	);
 	expect(directionView(undefined, false)).toBe("checking");
+});
+
+it("keeps the route type and region of a picked bus route for the device", () => {
+	expect(busMetaOf(GYEONGGI_M5107)).toEqual({
+		region: "gyeonggi",
+		routeType: "8",
+	});
+	expect(busMetaOf(SEOUL_341)).toEqual({ region: "seoul", routeType: "3" });
 });

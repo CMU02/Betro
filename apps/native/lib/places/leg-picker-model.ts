@@ -10,6 +10,7 @@ import type {
 	SubwayLine,
 } from "../ref/ref-client";
 import type { LineBadgeInput } from "../transit/line-badge-model";
+import type { BusMeta } from "./places";
 
 type Translate = (key: MessageKey, params?: MessageParams) => string;
 
@@ -174,6 +175,11 @@ export function busLeg(
 		lineName: route.shortName,
 		mode: "bus",
 	};
+}
+
+/** 고른 버스 노선의 종류·지역. 구간(`Leg`)에는 담지 않고 기기의 `busMeta`에 둔다. */
+export function busMetaOf(route: BusRouteMatch): BusMeta {
+	return { region: route.region, routeType: route.routeType };
 }
 
 /** 승차역 후보. 모든 지선의 모든 역을 고를 수 있다. */

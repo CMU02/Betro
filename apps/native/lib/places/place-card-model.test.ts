@@ -2,6 +2,7 @@ import type { CommutePlan, Leg, Route } from "@Betro/commute/plan";
 import { expect, it } from "bun:test";
 
 import { t } from "../i18n/t";
+import { lineBadgeModel } from "../transit/line-badge-model";
 import {
 	placeCardModel,
 	placeCardSummary,
@@ -51,6 +52,7 @@ function placeOf(
 		},
 	};
 	return {
+		busMeta: {},
 		id: "place-1",
 		kind: "work",
 		name: "회사",
@@ -139,4 +141,38 @@ it("joins the schedule and the alternative count into the card summary", () => {
 	expect(
 		placeCardSummary(placeCardModel(placeOf({ alternatives: 2 }), t), t)
 	).toBe("평일 08:10 출발 · 대안 2개");
+});
+
+const GYEONGGI_LEG: Leg = {
+	...BUS_LEG,
+	line: "seoul-bus:234000884",
+	lineName: "M5107",
+};
+
+it("draws a Gyeonggi express bus with its region and the express color from the device's line meta", () => {
+	const model = placeCardModel(
+		placeOf({
+			busMeta: { [GYEONGGI_LEG.line]: { region: "gyeonggi", routeType: "8" } },
+			legs: [GYEONGGI_LEG, BUS_LEG],
+		}),
+		t
+	);
+	const badge = model.legs[0]?.badge;
+	expect(badge).toEqual({
+		mode: "bus",
+		name: "M5107",
+		region: "gyeonggi",
+		routeType: "8",
+	});
+	expect(badge && lineBadgeModel(badge)).toMatchObject({
+		colorToken: "bus/express",
+		regionKey: "transit.region.gyeonggi",
+	});
+	// 맵에 없는 버스(맵이 생기기 전에 저장한 장소)는 지금처럼 기본 색이다.
+	expect(model.legs[1]?.badge).toEqual({
+		mode: "bus",
+		name: "341",
+		region: "seoul",
+		routeType: "",
+	});
 });

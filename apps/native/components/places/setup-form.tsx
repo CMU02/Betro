@@ -28,7 +28,7 @@ import { reportError } from "@/lib/crash/crash-reporting";
 import { t } from "@/lib/i18n/t";
 import type { MessageKey } from "@/lib/i18n/translate";
 import { appSyncDeps } from "@/lib/places/app-places";
-import type { Place, PlaceKind } from "@/lib/places/places";
+import type { BusMetaMap, Place, PlaceKind } from "@/lib/places/places";
 import { deletePlace, savePlace } from "@/lib/places/plan-sync";
 import type { RouteDraft } from "@/lib/places/route-draft";
 import { runSave } from "@/lib/places/save-flow";
@@ -105,12 +105,14 @@ function KindChip({
 
 /** 경로 하나의 카드. 기본 경로(0)와 대안(1~)이 같은 모양이다. */
 function DraftRouteCard({
+	busMeta,
 	destination,
 	index,
 	onAddLeg,
 	route,
 	routes,
 }: {
+	busMeta: BusMetaMap;
 	destination: string;
 	index: number;
 	onAddLeg: (routeIndex: number) => void;
@@ -148,7 +150,7 @@ function DraftRouteCard({
 			onAddLeg={handleAddLeg}
 			onRemoveLeg={handleRemoveLeg}
 			onWalkChange={handleWalk}
-			rows={routeRows(route, destination, t)}
+			rows={routeRows(route, busMeta, destination, t)}
 		/>
 	);
 }
@@ -268,6 +270,7 @@ function SetupBody({
 				<SectionTitle title={t("placeSetup.sections.route")} />
 				{primary ? (
 					<DraftRouteCard
+						busMeta={draft.busMeta}
 						destination={destination}
 						index={0}
 						onAddLeg={onAddLeg}
@@ -281,6 +284,7 @@ function SetupBody({
 				<SectionTitle title={t("placeSetup.sections.alternatives")} />
 				{alternatives.map((route, offset) => (
 					<DraftRouteCard
+						busMeta={draft.busMeta}
 						destination={destination}
 						index={offset + 1}
 						// biome-ignore lint/suspicious/noArrayIndexKey: alternatives have no id of their own; the rank is their position

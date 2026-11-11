@@ -45,6 +45,7 @@ function existingPlace(): Place {
 		},
 	};
 	return {
+		busMeta: { [BUS_LEG.line]: { region: "gyeonggi", routeType: "8" } },
 		id: "place-gym",
 		kind: "other",
 		name: "헬스장",
@@ -62,6 +63,7 @@ it("starts a new place with the defaults", () => {
 	const draft = createSetupDraft();
 	draft.start(null, IDS);
 	expect(draft.get()).toEqual({
+		busMeta: {},
 		days: [1, 2, 3, 4, 5],
 		includeHolidays: false,
 		kind: "work",
@@ -77,6 +79,7 @@ it("starts from an existing place with its values and the primary route first", 
 	const draft = createSetupDraft();
 	draft.start(existingPlace(), IDS);
 	expect(draft.get()).toEqual({
+		busMeta: { [BUS_LEG.line]: { region: "gyeonggi", routeType: "8" } },
 		days: [1, 3, 5],
 		includeHolidays: true,
 		kind: "other",

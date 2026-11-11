@@ -52,6 +52,7 @@ const HOME_PLAN = "1b2c3d4e-5f60-4718-8a9b-0c1d2e3f4a5b";
 
 function place(id: string, planId: string, overrides: Partial<Place> = {}) {
 	const base: Place = {
+		busMeta: {},
 		id,
 		kind: "work",
 		name: "회사",

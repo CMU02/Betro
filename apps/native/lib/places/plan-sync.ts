@@ -331,6 +331,8 @@ function importServerOnly(
 		known.add(plan.planId);
 		usedIds.add(id);
 		imported.push({
+			// 서버 예약에는 버스 노선 종류·지역이 없어 기본 색으로 그린다.
+			busMeta: {},
 			id,
 			kind: "other",
 			name: "",

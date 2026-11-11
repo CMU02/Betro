@@ -1,13 +1,26 @@
 import { type CommutePlan, parsePlan } from "@Betro/commute/plan";
 import { z } from "zod";
 
+import type { BusRegion } from "../transit/line-badge-model";
+
 export type PlaceKind = "home" | "work" | "school" | "other";
+
+/** 구간 고르기에서 고른 버스 노선의 종류와 지역. 저장된 구간(`Leg`)에는 없어서 배지 색을 여기서 찾는다. */
+export interface BusMeta {
+	region: BusRegion;
+	routeType: string;
+}
+
+/** 버스 구간의 `line` → `BusMeta`. */
+export type BusMetaMap = Record<string, BusMeta>;
 
 /**
  * 기기에만 두는 장소. 이름과 종류는 서버에 보내지 않고, `plan`만 서버에 올린다(스펙 5.2).
  * `updatedAt`은 epoch 밀리초이고, 올리는 도중에 고친 장소를 `synced`로 잘못 표시하지 않는 데 쓴다.
+ * `busMeta`도 기기에만 둔다(서버 계약 `CommutePlan`은 바꾸지 않는다). 맵이 생기기 전에 저장한 장소는 비어 있다.
  */
 export interface Place {
+	busMeta: BusMetaMap;
 	id: string;
 	kind: PlaceKind;
 	name: string;
@@ -34,6 +47,11 @@ const placeFieldsSchema = z.object({
 	updatedAt: z.number().finite(),
 });
 
+const busMetaSchema = z.object({
+	region: z.enum(["seoul", "gyeonggi", "incheon"]),
+	routeType: z.string(),
+});
+
 export function emptyPlacesState(): PlacesState {
 	return { pendingDeletes: [], places: [] };
 }
@@ -53,6 +71,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * 배지 색에만 쓰는 값이라 읽지 못한 항목만 버리고 장소는 살린다. 키가 없거나 객체가 아니면 빈 맵이다.
+ * `Object.fromEntries`로 만들어 `__proto__` 같은 키도 그냥 값으로 둔다.
+ */
+function parseBusMeta(value: unknown): BusMetaMap {
+	if (!isRecord(value)) {
+		return {};
+	}
+	const entries: [string, BusMeta][] = [];
+	for (const [line, entry] of Object.entries(value)) {
+		const meta = busMetaSchema.safeParse(entry);
+		if (meta.success) {
+			entries.push([line, meta.data]);
+		}
+	}
+	return Object.fromEntries(entries);
+}
+
 function parsePlace(value: unknown): Place | null {
 	if (!isRecord(value)) {
 		return null;
@@ -65,7 +101,11 @@ function parsePlace(value: unknown): Place | null {
 	if (!plan.ok) {
 		return null;
 	}
-	return { ...fields.data, plan: plan.plan };
+	return {
+		...fields.data,
+		busMeta: parseBusMeta(value.busMeta),
+		plan: plan.plan,
+	};
 }
 
 function parsePlaces(value: unknown): Place[] {
