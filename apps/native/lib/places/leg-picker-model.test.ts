@@ -4,8 +4,10 @@ import { t } from "../i18n/t";
 import type { BusRouteMatch, BusStop, SubwayBranch } from "../ref/ref-client";
 import {
 	alightChoices,
+	alightScrollOffset,
 	boardChoices,
 	branchLabel,
+	busAlightScrollTarget,
 	busLeg,
 	busMetaOf,
 	busRouteRow,
@@ -19,6 +21,7 @@ import {
 	previousStep,
 	searchView,
 	subwayAlightChoices,
+	subwayAlightScrollTarget,
 	subwayBoardChoices,
 	subwayLeg,
 } from "./leg-picker-model";
@@ -420,4 +423,81 @@ it("filters boarding stations per branch and keeps each branch's heading", () =>
 
 	const single = filterBranchChoices(branches.slice(0, 1), "강남");
 	expect(single.showHeadings).toBe(false);
+});
+
+it("scrolls the bus alight list to the boarding stop, matched by seq", () => {
+	const board = LOOP_STOPS[2] as BusStop;
+	// 순환 노선의 두 "서초구청" 중 seq가 같은 쪽(세 번째 줄)
+	expect(busAlightScrollTarget(alightChoices(LOOP_STOPS, board), board)).toBe(
+		2
+	);
+	expect(
+		busAlightScrollTarget(
+			alightChoices(STOPS, STOPS[0] as BusStop),
+			STOPS[0] as BusStop
+		)
+	).toBe(0);
+	expect(busAlightScrollTarget([], board)).toBeNull();
+});
+
+it("scrolls the subway alight list to the boarding station in its branch", () => {
+	const seongsu = subwayAlightChoices(
+		LINE2_BRANCHES,
+		"seoul-subway:1002002111"
+	);
+	expect(subwayAlightScrollTarget(seongsu, "seoul-subway:1002002111")).toEqual({
+		branch: 1,
+		station: 1,
+	});
+	expect(
+		subwayAlightScrollTarget(
+			subwayAlightChoices(LINE2_BRANCHES, "seoul-subway:1002000216"),
+			"seoul-subway:1002000216"
+		)
+	).toEqual({ branch: 0, station: 0 });
+	expect(subwayAlightScrollTarget(seongsu, "seoul-subway:0000")).toBeNull();
+});
+
+it("scrolls to the first branch and first place a station appears in", () => {
+	const shared = { name: "신도림", stop: "seoul-subway:1002000234" };
+	const branches = subwayAlightChoices(
+		[
+			{
+				branchKey: "main",
+				// 순환선: 같은 역이 처음과 끝에 두 번 나온다
+				stations: [
+					{ name: "시청", stop: "seoul-subway:1002000201" },
+					shared,
+					{ name: "을지로입구", stop: "seoul-subway:1002000202" },
+					shared,
+				],
+			},
+			{ branchKey: "sinjeong", stations: [shared] },
+		],
+		shared.stop
+	);
+	expect(subwayAlightScrollTarget(branches, shared.stop)).toEqual({
+		branch: 0,
+		station: 1,
+	});
+});
+
+it("puts the target row near the top without scrolling past the end", () => {
+	const gap = 12;
+	// 목록이 길면 그 줄이 맨 위에서 gap만큼 아래에 온다
+	expect(
+		alightScrollOffset({ contentHeight: 2000, rowY: 600, viewportHeight: 500 })
+	).toBe(600 - gap);
+	// 맨 위 근처 줄은 0보다 위로 올리지 않는다
+	expect(
+		alightScrollOffset({ contentHeight: 2000, rowY: 4, viewportHeight: 500 })
+	).toBe(0);
+	// 끝 근처 줄은 목록 끝이 화면 아래에 닿을 때까지만
+	expect(
+		alightScrollOffset({ contentHeight: 2000, rowY: 1900, viewportHeight: 500 })
+	).toBe(1500);
+	// 목록이 화면보다 짧으면 움직이지 않는다
+	expect(
+		alightScrollOffset({ contentHeight: 300, rowY: 200, viewportHeight: 500 })
+	).toBe(0);
 });

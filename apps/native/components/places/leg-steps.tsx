@@ -8,8 +8,23 @@ import {
 	TrainFrontIcon,
 	WifiOffIcon,
 } from "lucide-react-native";
-import { memo, type ReactNode, useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import {
+	type ComponentRef,
+	memo,
+	type ReactNode,
+	type RefObject,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
+import {
+	ActivityIndicator,
+	type LayoutChangeEvent,
+	Pressable,
+	ScrollView,
+	View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { withUniwind } from "uniwind";
 import { LineBadge } from "@/components/transit/line-badge";
@@ -23,8 +38,10 @@ import { t } from "@/lib/i18n/t";
 import type { MessageKey } from "@/lib/i18n/translate";
 import {
 	alightChoices,
+	alightScrollOffset,
 	boardChoices,
 	branchLabel,
+	busAlightScrollTarget,
 	busLeg,
 	busRouteRow,
 	type DirectionView,
@@ -40,6 +57,7 @@ import {
 	type StopChoice,
 	searchView,
 	subwayAlightChoices,
+	subwayAlightScrollTarget,
 	subwayBoardChoices,
 	subwayLeg,
 } from "@/lib/places/leg-picker-model";
@@ -121,13 +139,24 @@ function Card({ children }: { children: ReactNode }) {
 	);
 }
 
+type ScrollViewRef = ComponentRef<typeof ScrollView>;
+
+/** 스크롤을 직접 움직여야 하는 단계(하차)가 `StepLayout`의 ScrollView에 넘기는 것. */
+interface StepScroll {
+	onContentSizeChange: (width: number, height: number) => void;
+	onLayout: (event: LayoutChangeEvent) => void;
+	ref: RefObject<ScrollViewRef | null>;
+}
+
 /** 한 단계의 화면. 내용은 스크롤되고, `footer`("이 구간 추가")는 아래에 고정된다. */
 function StepLayout({
 	children,
 	footer,
+	scroll,
 }: {
 	children: ReactNode;
 	footer?: ReactNode;
+	scroll?: StepScroll;
 }) {
 	const insets = useSafeAreaInsets();
 	const bottom = insets.bottom + BOTTOM_PADDING;
@@ -137,6 +166,9 @@ function StepLayout({
 				contentContainerClassName="gap-3 px-4 pt-2 pb-6"
 				contentContainerStyle={footer ? undefined : { paddingBottom: bottom }}
 				keyboardShouldPersistTaps="handled"
+				onContentSizeChange={scroll?.onContentSizeChange}
+				onLayout={scroll?.onLayout}
+				ref={scroll?.ref}
 			>
 				{children}
 			</ScrollView>
@@ -150,6 +182,77 @@ function StepLayout({
 			) : null}
 		</>
 	);
+}
+
+/** 하차 목록에서 처음 보이게 할 줄에 붙이는 것. */
+interface ScrollTargetRow {
+	onLayout: () => void;
+	ref: RefObject<View | null>;
+}
+
+/**
+ * 하차 목록이 처음 그려지면 승차 줄(`row`)이 화면 맨 위 근처에 오게 한 번만 스크롤한다.
+ * 줄의 위치는 스크롤 내용 기준으로 재고, 내용 높이와 화면 높이를 알아야 끝을 넘지 않게 맞출 수 있다.
+ */
+function useScrollToRowOnce(): { row: ScrollTargetRow; scroll: StepScroll } {
+	const scrollRef = useRef<ScrollViewRef>(null);
+	const rowRef = useRef<View>(null);
+	const sizes = useRef<{
+		content: number | null;
+		rowY: number | null;
+		viewport: number | null;
+	}>({ content: null, rowY: null, viewport: null });
+	const done = useRef<boolean>(false);
+	const scrollIfReady = useCallback(() => {
+		const { content, rowY, viewport } = sizes.current;
+		// 목록이 그려지기 전(불러오는 중) 내용 높이로는 맞추지 않는다. 그 줄이 내용 안에 있을 때만.
+		if (
+			done.current ||
+			content === null ||
+			rowY === null ||
+			viewport === null ||
+			rowY >= content
+		) {
+			return;
+		}
+		done.current = true;
+		scrollRef.current?.scrollTo({
+			animated: false,
+			y: alightScrollOffset({
+				contentHeight: content,
+				rowY,
+				viewportHeight: viewport,
+			}),
+		});
+	}, []);
+	const onRowLayout = useCallback(() => {
+		const inner = scrollRef.current?.getInnerViewRef();
+		if (done.current || !inner || !rowRef.current) {
+			return;
+		}
+		rowRef.current.measureLayout(inner, (_x, y) => {
+			sizes.current.rowY = y;
+			scrollIfReady();
+		});
+	}, [scrollIfReady]);
+	const onContentSizeChange = useCallback(
+		(_width: number, height: number) => {
+			sizes.current.content = height;
+			scrollIfReady();
+		},
+		[scrollIfReady]
+	);
+	const onLayout = useCallback(
+		(event: LayoutChangeEvent) => {
+			sizes.current.viewport = event.nativeEvent.layout.height;
+			scrollIfReady();
+		},
+		[scrollIfReady]
+	);
+	return {
+		row: { onLayout: onRowLayout, ref: rowRef },
+		scroll: { onContentSizeChange, onLayout, ref: scrollRef },
+	};
 }
 
 function Loading() {
@@ -641,7 +744,7 @@ export function BusBoardStep({
 	);
 }
 
-/** 16c 하차 정류장. 승차 정류장과 그 앞은 고를 수 없다. */
+/** 16c 하차 정류장. 승차 정류장과 그 앞은 고를 수 없다. 열리면 승차 정류장 줄까지 내려 보인다. */
 export function BusAlightStep({
 	board,
 	onDone,
@@ -659,6 +762,8 @@ export function BusAlightStep({
 	const choices = stops.data?.ok
 		? alightChoices(stops.data.value.stops, board, t)
 		: [];
+	const target = busAlightScrollTarget(choices, board);
+	const { row, scroll } = useScrollToRowOnce();
 	const done = useCallback(() => {
 		if (alight !== null) {
 			onDone(busLeg(route, board, alight));
@@ -673,6 +778,7 @@ export function BusAlightStep({
 					onPress={done}
 				/>
 			}
+			scroll={scroll}
 		>
 			<RouteHeader route={route} />
 			<StepHeader
@@ -686,8 +792,13 @@ export function BusAlightStep({
 				<Card>
 					{choices.map((choice, index) => {
 						const isBoard = choice.stop.seq === board.seq;
+						const isTarget = index === target;
 						return (
-							<View key={`${choice.stop.stop}-${choice.stop.seq}`}>
+							<View
+								key={`${choice.stop.stop}-${choice.stop.seq}`}
+								onLayout={isTarget ? row.onLayout : undefined}
+								ref={isTarget ? row.ref : undefined}
+							>
 								{index > 0 ? <ListDivider inset="edge" /> : null}
 								<BusStopRow
 									choice={choice}
@@ -755,18 +866,25 @@ function BranchList({
 	board,
 	branches,
 	onPick,
+	scrollTarget,
 	selected,
 	showHeadings,
 }: {
 	board: StationPick | null;
 	branches: FilteredBranch[];
 	onPick: (station: StationPick) => void;
+	/** 처음 보이게 할 줄(`branches` 안의 자리)과 그 줄에 붙일 것. 하차역 목록에서만. */
+	scrollTarget?: {
+		branch: number;
+		row: ScrollTargetRow;
+		station: number;
+	} | null;
 	selected: string | null;
 	showHeadings: boolean;
 }) {
 	return (
 		<>
-			{branches.map(({ branch, index: branchIndex }) => {
+			{branches.map(({ branch, index: branchIndex }, position) => {
 				const unavailable =
 					board !== null && isBranchUnavailable(branch, board.stop);
 				return (
@@ -782,26 +900,33 @@ function BranchList({
 							</AppText>
 						) : null}
 						<Card>
-							{branch.stations.map((station, index) => (
-								<View
-									// biome-ignore lint/suspicious/noArrayIndexKey: a loop branch lists the same station twice, so the position is part of its identity
-									key={`${station.stop}-${index}`}
-								>
-									{index > 0 ? <ListDivider inset="edge" /> : null}
-									<StationRow
-										disabled={station.disabled}
-										name={station.name}
-										onPick={onPick}
-										selected={selected === station.stop}
-										stop={station.stop}
-										sub={
-											board?.stop === station.stop
-												? t("legPicker.boardMark")
-												: null
-										}
-									/>
-								</View>
-							))}
+							{branch.stations.map((station, index) => {
+								const isTarget =
+									scrollTarget?.branch === position &&
+									scrollTarget.station === index;
+								return (
+									<View
+										// biome-ignore lint/suspicious/noArrayIndexKey: a loop branch lists the same station twice, so the position is part of its identity
+										key={`${station.stop}-${index}`}
+										onLayout={isTarget ? scrollTarget?.row.onLayout : undefined}
+										ref={isTarget ? scrollTarget?.row.ref : undefined}
+									>
+										{index > 0 ? <ListDivider inset="edge" /> : null}
+										<StationRow
+											disabled={station.disabled}
+											name={station.name}
+											onPick={onPick}
+											selected={selected === station.stop}
+											stop={station.stop}
+											sub={
+												board?.stop === station.stop
+													? t("legPicker.boardMark")
+													: null
+											}
+										/>
+									</View>
+								);
+							})}
 						</Card>
 					</View>
 				);
@@ -917,7 +1042,10 @@ function DirectionNotice({
 	return null;
 }
 
-/** 16d 하차역. 고르면 두 역 사이 방향을 묻고, 한 번에 못 가면(`not-direct`) 다시 고르게 한다. */
+/**
+ * 16d 하차역. 고르면 두 역 사이 방향을 묻고, 한 번에 못 가면(`not-direct`) 다시 고르게 한다.
+ * 열리면 승차역이 있는 지선의 승차역 줄까지 내려 보인다.
+ */
 export function SubwayAlightStep({
 	board,
 	line,
@@ -949,6 +1077,11 @@ export function SubwayAlightStep({
 			: [],
 		""
 	);
+	const target = subwayAlightScrollTarget(
+		list.branches.map((entry) => entry.branch),
+		board.stop
+	);
+	const { row, scroll } = useScrollToRowOnce();
 	const directionState =
 		alight === null
 			? null
@@ -970,6 +1103,7 @@ export function SubwayAlightStep({
 					onPress={done}
 				/>
 			}
+			scroll={scroll}
 		>
 			<LineHeader line={line} />
 			<StepHeader
@@ -984,6 +1118,7 @@ export function SubwayAlightStep({
 					board={board}
 					branches={list.branches}
 					onPick={setAlight}
+					scrollTarget={target === null ? null : { ...target, row }}
 					selected={alight?.stop ?? null}
 					showHeadings={list.showHeadings}
 				/>

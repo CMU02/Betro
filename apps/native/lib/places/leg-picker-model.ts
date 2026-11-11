@@ -281,6 +281,57 @@ export function isNoMatch(query: string, matches: number): boolean {
 	return searchKey(query) !== "" && matches === 0;
 }
 
+/** 하차 목록을 처음 열 때 승차 줄 위에 남겨 두는 높이(pt). 바로 위 줄 끝이 살짝 보이게. */
+const ALIGHT_SCROLL_GAP = 12;
+
+/**
+ * 16c 하차 목록에서 처음 보이게 할 줄(승차 정류장)의 순번. 순환 노선은 같은 정류장 ID가 두 번
+ * 나오므로 `seq`로 찾는다. 없으면 null.
+ */
+export function busAlightScrollTarget(
+	choices: StopChoice[],
+	board: BusStop
+): number | null {
+	const index = choices.findIndex((choice) => choice.stop.seq === board.seq);
+	return index === -1 ? null : index;
+}
+
+/**
+ * 16d 하차 목록에서 처음 보이게 할 줄. 승차역이 있는 첫 지선에서 승차역이 처음 나오는 자리
+ * (순환 지선은 같은 역이 두 번 나온다). 없으면 null.
+ */
+export function subwayAlightScrollTarget(
+	branches: BranchChoices[],
+	board: string
+): { branch: number; station: number } | null {
+	for (const [branch, entry] of branches.entries()) {
+		const station = entry.stations.findIndex(
+			(candidate) => candidate.stop === board
+		);
+		if (station !== -1) {
+			return { branch, station };
+		}
+	}
+	return null;
+}
+
+/**
+ * 그 줄(`rowY`, 스크롤 내용 맨 위 기준)이 화면 맨 위 근처에 오게 하는 스크롤 위치.
+ * 0보다 작게, 목록 끝이 화면 아래를 넘게 올리지 않는다.
+ */
+export function alightScrollOffset({
+	contentHeight,
+	rowY,
+	viewportHeight,
+}: {
+	contentHeight: number;
+	rowY: number;
+	viewportHeight: number;
+}): number {
+	const maxOffset = Math.max(0, contentHeight - viewportHeight);
+	return Math.min(Math.max(0, rowY - ALIGHT_SCROLL_GAP), maxOffset);
+}
+
 /** 고른 지하철 구간. 노선 ID는 조회 API의 `seoul-subway:<lineKey>`를 그대로 쓴다. */
 export function subwayLeg(
 	line: SubwayLine,
