@@ -205,6 +205,7 @@ export const ko = {
 		notSynced: "아직 서버에 저장되지 않았어요",
 		openGuide: "{name} 출퇴근 안내 열기",
 		schedule: "{days} {time} 출발",
+		summaryWithAlternatives: "{schedule} · {alternatives}",
 	},
 	push: {
 		defaultTitle: "알림",

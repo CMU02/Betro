@@ -116,3 +116,17 @@ export function placeCardModel(place: Place, t: Translate): PlaceCardModel {
 		title: placeNameOf(place, t),
 	};
 }
+
+/** 카드 아래 줄. "평일 08:10 출발", 대안이 있으면 "평일 08:10 출발 · 대안 2개" */
+export function placeCardSummary(
+	model: Pick<PlaceCardModel, "alternatives" | "schedule">,
+	t: Translate
+): string {
+	if (model.alternatives === null) {
+		return model.schedule;
+	}
+	return t("places.summaryWithAlternatives", {
+		alternatives: model.alternatives,
+		schedule: model.schedule,
+	});
+}

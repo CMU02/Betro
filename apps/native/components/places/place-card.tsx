@@ -13,7 +13,10 @@ import { withUniwind } from "uniwind";
 import { LineBadge } from "@/components/transit/line-badge";
 import { AppText } from "@/components/ui/app-text";
 import { t } from "@/lib/i18n/t";
-import { placeCardModel } from "@/lib/places/place-card-model";
+import {
+	placeCardModel,
+	placeCardSummary,
+} from "@/lib/places/place-card-model";
 import type { Place, PlaceKind } from "@/lib/places/places";
 
 const KIND_ICON_SIZE = 24;
@@ -55,9 +58,7 @@ export const PlaceCard = memo(function PlaceCardView({
 	const model = placeCardModel(place, t);
 	const handleOpen = useCallback(() => onOpen(place), [onOpen, place]);
 	const handleEdit = useCallback(() => onEdit(place), [onEdit, place]);
-	const summary = [model.schedule, model.alternatives]
-		.filter((part) => part !== null)
-		.join(" · ");
+	const summary = placeCardSummary(model, t);
 	return (
 		<View className="gap-3 rounded-lg bg-bg-surface-raised p-4">
 			<View className="flex-row items-center gap-3">
@@ -109,7 +110,7 @@ export const PlaceCard = memo(function PlaceCardView({
 			</Pressable>
 			{model.notSynced ? (
 				<View className="flex-row items-center gap-1.5">
-					<View className="size-1.5 rounded-full bg-status-warning" />
+					<View className="size-1.5 rounded-full bg-status-estimated" />
 					<AppText className="text-text-secondary" variant="caption">
 						{t("places.notSynced")}
 					</AppText>

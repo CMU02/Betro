@@ -2,7 +2,11 @@ import type { CommutePlan, Leg, Route } from "@Betro/commute/plan";
 import { expect, it } from "bun:test";
 
 import { t } from "../i18n/t";
-import { placeCardModel, scheduleLabel } from "./place-card-model";
+import {
+	placeCardModel,
+	placeCardSummary,
+	scheduleLabel,
+} from "./place-card-model";
 import type { Place } from "./places";
 
 const BUS_LEG: Leg = {
@@ -126,4 +130,13 @@ it("titles by kind, by name for other, and by the imported name when empty", () 
 
 it("builds the schedule text from the plan", () => {
 	expect(placeCardModel(placeOf(), t).schedule).toBe("평일 08:10 출발");
+});
+
+it("joins the schedule and the alternative count into the card summary", () => {
+	expect(placeCardSummary(placeCardModel(placeOf(), t), t)).toBe(
+		"평일 08:10 출발"
+	);
+	expect(
+		placeCardSummary(placeCardModel(placeOf({ alternatives: 2 }), t), t)
+	).toBe("평일 08:10 출발 · 대안 2개");
 });
