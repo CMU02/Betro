@@ -1,6 +1,6 @@
 import { DEFAULT_LEAD_MINUTES } from "@Betro/commute/config";
 import { randomUUID } from "expo-crypto";
-import { useRouter } from "expo-router";
+import { Stack, useNavigation, useRouter } from "expo-router";
 import { Trash2Icon } from "lucide-react-native";
 import {
 	useCallback,
@@ -9,7 +9,7 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { BackHandler, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { withUniwind } from "uniwind";
 
@@ -31,6 +31,7 @@ import { appSyncDeps } from "@/lib/places/app-places";
 import type { Place, PlaceKind } from "@/lib/places/places";
 import { deletePlace, savePlace } from "@/lib/places/plan-sync";
 import type { RouteDraft } from "@/lib/places/route-draft";
+import { runSave } from "@/lib/places/save-flow";
 import { appSetupDraft, type SetupDraft } from "@/lib/places/setup-draft";
 import {
 	canAddAlternative,
@@ -41,7 +42,6 @@ import {
 	removeLegAt,
 	removeRoute,
 	routeRows,
-	saveOutcome,
 	setupTitle,
 	setWalkAt,
 	toggleDay,
@@ -54,6 +54,9 @@ const FOOTER_BOTTOM_PADDING = 8;
 const LEG_PICKER_PATH = "/places/leg";
 /** 임시 값이 시작되기 전 한 번 그릴 때 새 장소 제목에 쓰는 값 */
 const NEW_PLACE_TITLE_SOURCE = { kind: "work", name: "" } as const;
+/** 저장하는 동안 입력란 묶음이 터치를 받지 않게 한다. */
+const LOCKED_STYLE = { pointerEvents: "none" } as const;
+const UNLOCKED_STYLE = { pointerEvents: "auto" } as const;
 
 const KINDS: readonly { key: MessageKey; kind: PlaceKind }[] = [
 	{ key: "places.kind.home", kind: "home" },
@@ -188,12 +191,15 @@ function DeletePlaceButton({ onDelete }: { onDelete: () => void }) {
 
 function SetupBody({
 	draft,
+	locked,
 	mode,
 	notices,
 	onAddLeg,
 	onDelete,
 }: {
 	draft: SetupDraft;
+	/** 저장 중이면 true. 이미 눌러 둔 이름 칸에도 더 쓰지 못하게 한다. */
+	locked: boolean;
 	mode: "new" | "edit";
 	notices: ReturnType<typeof issueNotices>;
 	onAddLeg: (routeIndex: number) => void;
@@ -249,6 +255,7 @@ function SetupBody({
 					<SectionTitle title={t("placeSetup.name.label")} />
 					<TextField
 						accessibilityLabel={t("placeSetup.name.label")}
+						editable={!locked}
 						onChangeText={changeName}
 						placeholder={t("placeSetup.name.placeholder")}
 						returnKeyType="done"
@@ -354,22 +361,53 @@ export function SetupForm({ mode, place }: SetupFormProps) {
 	const [attempted, setAttempted] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState<MessageKey | null>(null);
-	/** 저장·삭제가 도는 중이면 true. 두 번 눌러 PUT이 두 번 나가지 않게 한다. */
+	/**
+	 * 저장·삭제가 도는 중이면 true. 두 번 눌러 PUT이 두 번 나가지 않게 하고, 저장 중에는 뒤로 가기와
+	 * 구간 고르기도 막는다. 느린 저장이 끝나 `router.back()`이 다른 화면을 닫지 않게 하기 위해서다.
+	 */
 	const busy = useRef<boolean>(false);
+	const navigation = useNavigation();
+	/** 언마운트된 뒤 끝난 저장이 닫기나 문구를 부르지 않게 한다. */
+	const mounted = useRef<boolean>(true);
+
+	useEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
+
+	useEffect(() => {
+		// 쉴 때는 false를 돌려준다. 위에 올라온 구간 고르기 화면의 뒤로 가기를 삼키지 않게 한다.
+		const subscription = BackHandler.addEventListener(
+			"hardwareBackPress",
+			() => busy.current
+		);
+		return () => subscription.remove();
+	}, []);
 
 	useEffect(() => {
 		appSetupDraft.start(initialPlace, ids);
 		return () => appSetupDraft.clear();
 	}, [initialPlace, ids]);
 
-	const close = useCallback(() => router.back(), [router]);
+	const close = useCallback(() => {
+		if (busy.current) {
+			return;
+		}
+		router.back();
+	}, [router]);
 
 	const openLegPicker = useCallback(
-		(routeIndex: number) =>
+		(routeIndex: number) => {
+			if (busy.current) {
+				return;
+			}
 			router.push({
 				params: { route: String(routeIndex) },
 				pathname: LEG_PICKER_PATH,
-			}),
+			});
+		},
 		[router]
 	);
 
@@ -383,25 +421,17 @@ export function SetupForm({ mode, place }: SetupFormProps) {
 			setAttempted(true);
 			return;
 		}
-		busy.current = true;
-		setSaving(true);
-		setSaveError(null);
-		try {
-			const outcome = saveOutcome(await savePlace(appSyncDeps, built.place));
-			if (outcome.kind === "close") {
-				// 임시 값은 화면이 닫힐 때(언마운트) 지운다. 먼저 지우면 닫히는 동안 빈 화면이 보인다.
-				router.back();
-				return;
-			}
-			setSaveError(outcome.message);
-		} catch (error) {
-			reportError(appCrashSink, error, "place-save");
-			setSaveError("placeSetup.save.rejected");
-		} finally {
-			busy.current = false;
-			setSaving(false);
-		}
-	}, [router]);
+		await runSave({
+			// 임시 값은 화면이 닫힐 때(언마운트) 지운다. 먼저 지우면 닫히는 동안 빈 화면이 보인다.
+			close: () => router.back(),
+			isOpen: () => mounted.current && navigation.isFocused(),
+			lock: busy,
+			save: () => savePlace(appSyncDeps, built.place),
+			setSaving,
+			showError: setSaveError,
+			sink: appCrashSink,
+		});
+	}, [navigation, router]);
 
 	/**
 	 * 기기에서는 `deletePlace`를 부르는 순간 지워지므로 서버 응답(최대 10초)을 기다리지 않고 닫는다.
@@ -429,6 +459,8 @@ export function SetupForm({ mode, place }: SetupFormProps) {
 
 	return (
 		<View className="flex-1 bg-bg-canvas" style={{ paddingTop: insets.top }}>
+			{/* 저장하는 동안 iOS 밀어서 뒤로 가기를 막는다. */}
+			<Stack.Screen options={{ gestureEnabled: !saving }} />
 			<TopBar
 				onBack={close}
 				title={setupTitle(
@@ -442,13 +474,21 @@ export function SetupForm({ mode, place }: SetupFormProps) {
 				keyboardShouldPersistTaps="handled"
 			>
 				{draft === null ? null : (
-					<SetupBody
-						draft={draft}
-						mode={mode}
-						notices={notices}
-						onAddLeg={openLegPicker}
-						onDelete={remove}
-					/>
+					<View
+						accessibilityElementsHidden={saving}
+						className="gap-6"
+						importantForAccessibility={saving ? "no-hide-descendants" : "auto"}
+						style={saving ? LOCKED_STYLE : UNLOCKED_STYLE}
+					>
+						<SetupBody
+							draft={draft}
+							locked={saving}
+							mode={mode}
+							notices={notices}
+							onAddLeg={openLegPicker}
+							onDelete={remove}
+						/>
+					</View>
 				)}
 			</ScrollView>
 			<View
