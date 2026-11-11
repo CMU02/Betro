@@ -125,5 +125,16 @@ export function createSetupDraft(): SetupDraftStore {
 	};
 }
 
+/**
+ * 등록 화면이 자기 임시 값을 다시 시작해야 하는지. 비었거나(위에 쌓였던 같은 장소의 화면이 닫히며 지웠다)
+ * 다른 장소의 값이면(위에 쌓였던 다른 등록 화면이 바꿨다) true다.
+ */
+export function draftNeedsRestart(
+	draft: SetupDraft | null,
+	placeId: string
+): boolean {
+	return draft?.placeId !== placeId;
+}
+
 /** 앱 전체가 쓰는 등록 화면 임시 값 하나. */
 export const appSetupDraft = createSetupDraft();

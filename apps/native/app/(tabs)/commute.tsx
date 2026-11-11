@@ -17,6 +17,7 @@ import {
 	useEpochSeconds,
 } from "@/lib/commute/use-active-session";
 import { t } from "@/lib/i18n/t";
+import { useOpenLock } from "@/lib/navigation/use-open-lock";
 import { appPlaces } from "@/lib/places/app-places";
 import type { Place } from "@/lib/places/places";
 import { usePlaces } from "@/lib/places/use-places";
@@ -41,7 +42,12 @@ export default function CommuteTab() {
 		timezone: DEFAULT_TIMEZONE,
 	});
 
-	const addPlace = useCallback(() => router.push(NEW_PLACE_HREF), [router]);
+	// "장소 추가"와 카드 연필이 잠금 하나를 나눠 써서, 빠르게 이어 눌러도 16이 하나만 열린다.
+	const openSetupOnce = useOpenLock();
+	const addPlace = useCallback(
+		() => openSetupOnce(() => router.push(NEW_PLACE_HREF)),
+		[openSetupOnce, router]
+	);
 	const openGuideById = useCallback(
 		(placeId: string) =>
 			router.push({ params: { placeId }, pathname: "/commute/[placeId]" }),
@@ -53,11 +59,13 @@ export default function CommuteTab() {
 	);
 	const editPlace = useCallback(
 		(place: Place) =>
-			router.push({
-				params: { placeId: place.id },
-				pathname: "/places/[placeId]",
-			}),
-		[router]
+			openSetupOnce(() =>
+				router.push({
+					params: { placeId: place.id },
+					pathname: "/places/[placeId]",
+				})
+			),
+		[openSetupOnce, router]
 	);
 
 	if (places.length === 0) {

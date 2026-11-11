@@ -3,7 +3,7 @@ import { expect, it } from "bun:test";
 
 import type { Place } from "./places";
 import { addLeg, emptyRoute } from "./route-draft";
-import { createSetupDraft } from "./setup-draft";
+import { createSetupDraft, draftNeedsRestart } from "./setup-draft";
 
 const IDS = {
 	placeId: "place-new",
@@ -187,4 +187,18 @@ it("does not tell subscribers when clearIf leaves the draft alone", () => {
 	});
 	draft.clearIf("place-other");
 	expect(calls).toBe(0);
+});
+
+it("restarts a form's draft only when the draft is gone or belongs to another place", () => {
+	const draft = createSetupDraft();
+	expect(draftNeedsRestart(draft.get(), IDS.placeId)).toBe(true);
+	draft.start(null, IDS);
+	expect(draftNeedsRestart(draft.get(), IDS.placeId)).toBe(false);
+	// 위에 쌓인 다른 등록 화면이 자기 값으로 바꿨다.
+	draft.start(existingPlace(), IDS);
+	expect(draftNeedsRestart(draft.get(), IDS.placeId)).toBe(true);
+	expect(draftNeedsRestart(draft.get(), "place-gym")).toBe(false);
+	// 같은 장소를 연 위 화면이 닫히며 지웠다.
+	draft.clearIf("place-gym");
+	expect(draftNeedsRestart(draft.get(), "place-gym")).toBe(true);
 });

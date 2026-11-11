@@ -1,6 +1,6 @@
 import { DEFAULT_LEAD_MINUTES } from "@Betro/commute/config";
 import { randomUUID } from "expo-crypto";
-import { Stack, useNavigation, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useNavigation, useRouter } from "expo-router";
 import { Trash2Icon } from "lucide-react-native";
 import {
 	useCallback,
@@ -32,7 +32,11 @@ import type { BusMetaMap, Place, PlaceKind } from "@/lib/places/places";
 import { deletePlace, savePlace } from "@/lib/places/plan-sync";
 import type { RouteDraft } from "@/lib/places/route-draft";
 import { runSave } from "@/lib/places/save-flow";
-import { appSetupDraft, type SetupDraft } from "@/lib/places/setup-draft";
+import {
+	appSetupDraft,
+	draftNeedsRestart,
+	type SetupDraft,
+} from "@/lib/places/setup-draft";
 import {
 	canAddAlternative,
 	canAddLeg,
@@ -390,12 +394,33 @@ export function SetupForm({ mode, place }: SetupFormProps) {
 		return () => subscription.remove();
 	}, []);
 
+	/**
+	 * 이 화면이 보이는 동안 임시 값이 이 화면의 것이 아니면 다시 시작한다. 빠르게 두 번 눌러 등록 화면이 둘
+	 * 쌓였다가 위 화면이 닫히면, 그 화면이 바꾸거나(다른 장소) 지운(같은 장소) 임시 값 때문에 이 화면이 비지
+	 * 않게 한다. 위 화면이 닫히며 지우는 때와 이 화면이 다시 보이는 때의 순서가 정해져 있지 않아, 다시 보일 때와
+	 * 보이는 동안 임시 값이 바뀔 때 둘 다 확인한다. 위에 화면이 올라와 있으면(구간 고르기 포함) 건드리지 않는다.
+	 */
+	const restartIfLost = useCallback(() => {
+		const placeId = initialPlace?.id ?? ids.placeId;
+		if (
+			navigation.isFocused() &&
+			draftNeedsRestart(appSetupDraft.get(), placeId)
+		) {
+			appSetupDraft.start(initialPlace, ids);
+		}
+	}, [ids, initialPlace, navigation]);
+
+	// 아래 시작 효과보다 먼저 둔다. 닫힐 때 구독을 먼저 풀어, 이 화면이 지운 임시 값을 다시 시작하지 않게 한다.
+	useEffect(() => appSetupDraft.subscribe(restartIfLost), [restartIfLost]);
+
 	useEffect(() => {
 		appSetupDraft.start(initialPlace, ids);
 		// 이 화면이 시작한 임시 값만 지운다. 그사이 다른 등록 화면이 시작한 값은 남긴다.
 		const placeId = initialPlace?.id ?? ids.placeId;
 		return () => appSetupDraft.clearIf(placeId);
 	}, [initialPlace, ids]);
+
+	useFocusEffect(restartIfLost);
 
 	const close = useCallback(() => {
 		if (busy.current) {
