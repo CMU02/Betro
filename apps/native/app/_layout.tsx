@@ -159,6 +159,7 @@ function StackLayout() {
 					<Stack.Screen name="places/new" />
 					<Stack.Screen name="places/[placeId]" />
 					<Stack.Screen name="places/leg" />
+					<Stack.Screen name="commute/[placeId]" />
 				</Stack.Protected>
 				<Stack.Protected guard={showOnboarding}>
 					<Stack.Screen name="onboarding" />

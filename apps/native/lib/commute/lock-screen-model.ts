@@ -44,7 +44,8 @@ const DELAYED_MINUTES = 5;
 const MS_PER_SECOND = 1000;
 const MAX_NEXT_LEG_LINES = 2;
 
-function formatClock(epochSeconds: number, timezone: string): string {
+/** 24시간 `HH:MM`. 17 화면도 같은 규칙으로 쓴다. */
+export function formatClock(epochSeconds: number, timezone: string): string {
 	return new Intl.DateTimeFormat("en-GB", {
 		hour: "2-digit",
 		hourCycle: "h23",

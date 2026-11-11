@@ -55,19 +55,33 @@ function textClassOf(colorToken: TransitTokenName | null): string {
 		: "text-white";
 }
 
+/** "m"은 22pt 배지(Figma `BusBadge`), "s"는 한 줄 20pt 행에 들어가는 16pt 배지(Figma `LegBadge · S` 114:1598). */
+export type LineBadgeSize = "m" | "s";
+
+const CONTAINER_BY_SIZE: Record<LineBadgeSize, string> = {
+	m: "h-[22px] min-w-10 px-[7px]",
+	s: "h-4 px-1.5",
+};
+
+export type LineBadgeProps = LineBadgeInput & { size?: LineBadgeSize };
+
 /** Figma `BusBadge`(4:47). 배지 안은 항상 글자이고, 경기·인천은 옆에 지역 글자가 붙는다. */
-export function LineBadge(props: LineBadgeInput) {
-	const { colorToken, label, regionKey } = lineBadgeModel(props);
+export function LineBadge({ size = "m", ...input }: LineBadgeProps) {
+	const { colorToken, label, regionKey } = lineBadgeModel(input);
 	const isNeutral = colorToken === null;
 	return (
 		<View className="flex-row items-center gap-1">
 			<View
 				className={cn(
-					"h-[22px] min-w-10 items-center justify-center rounded-xs px-[7px]",
+					"items-center justify-center rounded-xs",
+					CONTAINER_BY_SIZE[size],
 					isNeutral ? NEUTRAL_BG_CLASS : BG_CLASS[colorToken]
 				)}
 			>
-				<AppText className={textClassOf(colorToken)} variant="caption">
+				<AppText
+					className={textClassOf(colorToken)}
+					variant={size === "s" ? "micro" : "caption"}
+				>
 					{label}
 				</AppText>
 			</View>

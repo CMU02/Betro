@@ -1,14 +1,21 @@
+import { DEFAULT_TIMEZONE } from "@Betro/commute/config";
 import { useRouter } from "expo-router";
 import { BriefcaseIcon } from "lucide-react-native";
 import { useCallback } from "react";
 import { View } from "react-native";
 import { withUniwind } from "uniwind";
 
+import { SessionStrip } from "@/components/commute/session-strip";
 import { AddPlaceCard, PlaceCard } from "@/components/places/place-card";
 import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Screen } from "@/components/ui/screen";
+import { sessionStripModel } from "@/lib/commute/guide-model";
+import {
+	useActiveSession,
+	useEpochSeconds,
+} from "@/lib/commute/use-active-session";
 import { t } from "@/lib/i18n/t";
 import { appPlaces } from "@/lib/places/app-places";
 import type { Place } from "@/lib/places/places";
@@ -24,12 +31,25 @@ const NEW_PLACE_HREF = "/places/new";
 export default function CommuteTab() {
 	const router = useRouter();
 	const { places } = usePlaces(appPlaces);
+	const { state } = useActiveSession({ enabled: places.length > 0 });
+	const now = useEpochSeconds();
+	const strip = sessionStripModel({
+		now,
+		places,
+		session: state?.session ?? null,
+		t,
+		timezone: DEFAULT_TIMEZONE,
+	});
 
 	const addPlace = useCallback(() => router.push(NEW_PLACE_HREF), [router]);
-	const openGuide = useCallback(
-		// 17 화면은 Task 9에서 만든다. 그 전에는 타입 검사가 경로를 모르므로 `never`로 넘긴다.
-		(place: Place) => router.push(`/commute/${place.id}` as never),
+	const openGuideById = useCallback(
+		(placeId: string) =>
+			router.push({ params: { placeId }, pathname: "/commute/[placeId]" }),
 		[router]
+	);
+	const openGuide = useCallback(
+		(place: Place) => openGuideById(place.id),
+		[openGuideById]
 	);
 	const editPlace = useCallback(
 		(place: Place) =>
@@ -69,6 +89,9 @@ export default function CommuteTab() {
 	return (
 		<Screen scroll title={t("tabs.commute")}>
 			<View className="gap-3 px-4 pt-2 pb-4">
+				{strip === null ? null : (
+					<SessionStrip model={strip} onOpen={openGuideById} />
+				)}
 				<AppText className="text-text-secondary" variant="bodyS">
 					{t("places.intro")}
 				</AppText>

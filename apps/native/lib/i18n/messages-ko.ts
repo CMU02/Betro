@@ -57,6 +57,43 @@ export const ko = {
 			},
 		},
 	},
+	/** 17 출퇴근 안내 */
+	commuteGuide: {
+		arrival: "{time} 도착",
+		checking: "연결을 확인하고 있어요",
+		diff: {
+			earlier: "{m}분 빨리",
+			later: "{m}분 늦게",
+		},
+		end: "안내 종료",
+		endFailed: "보내지 못했어요. 다시 눌러 주세요",
+		/** 버스 노선 이름. 지하철은 노선 이름("2호선") 그대로 쓴다. */
+		lineBus: "{name}번",
+		lineJoiner: " · ",
+		next: {
+			label: "다음 안내",
+			previousDay: "{days} {leave}에 나가요 · 전날 {show}부터 잠금화면에 떠요",
+			sameDay: "{days} {leave}에 나가요 · {show}부터 잠금화면에 떠요",
+		},
+		others: {
+			note: "등록한 대안 경로만 비교해요",
+			title: "같은 곳으로 가는 다른 방법",
+		},
+		routeLabel: {
+			alternative: "대안 · {lines}",
+			main: "기본 경로 · {lines}",
+		},
+		routes: {
+			note: "경로를 고치려면 내 장소에서 연필을 눌러요",
+			title: "등록한 경로",
+		},
+		/** 15 맨 위 진행 중 세션 띠 */
+		strip: {
+			header: "{header} 안내 중",
+			status: "{status} · {minutes}",
+		},
+		title: "{name} 가는 길",
+	},
 	dataSources: {
 		footnote: "공공누리 제1유형 · 갱신 주기는 노선과 시간대에 따라 달라요",
 		intro:

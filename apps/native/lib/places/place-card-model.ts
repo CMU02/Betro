@@ -52,7 +52,8 @@ function sameDays(days: readonly number[], expected: readonly number[]) {
 	);
 }
 
-function daysLabel(days: number[], t: Translate): string {
+/** "평일", "주말", "매일", 그 밖은 "월·수·금"처럼 월요일부터. */
+export function daysLabel(days: number[], t: Translate): string {
 	const unique = [...new Set(days)];
 	if (unique.length === DAYS_PER_WEEK) {
 		return t("places.daysEvery");
