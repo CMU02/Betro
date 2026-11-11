@@ -350,6 +350,30 @@ it("does not drop a new place that a newer save replaced while the waiting delet
 	expect(store.get()).toEqual({ pendingDeletes: [], places: [newer] });
 });
 
+it("does not upload the older plan again when a newer pending save replaced it during the deletes (409)", async () => {
+	const server = fakeServer([planOf(GYM_PLAN)]);
+	const { deps, store } = setup({ pendingDeletes: [GYM_PLAN] }, server);
+	const newer = place("work", WORK_PLAN, {
+		name: "본사",
+		sync: "pending",
+		updatedAt: NOW + 1,
+	});
+	server.setOverride((call) => {
+		if (call.method === "DELETE") {
+			store.upsert(newer);
+			return;
+		}
+		return call.method === "PUT" && server.plans.size > 0 ? LIMIT : undefined;
+	});
+
+	await savePlace(deps, place("work", WORK_PLAN));
+	expect(server.requests()).toEqual([
+		`PUT /v1/commute/plans/${WORK_PLAN}`,
+		`DELETE /v1/commute/plans/${GYM_PLAN}`,
+	]);
+	expect(store.get().places).toEqual([newer]);
+});
+
 for (const status of [0, 401, 500, 503]) {
 	it(`keeps the place pending on the device when the upload gets ${status}`, async () => {
 		const { deps, headers, server, store } = setup();

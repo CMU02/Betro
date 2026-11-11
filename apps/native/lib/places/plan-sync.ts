@@ -183,8 +183,8 @@ interface PutPlaceResult {
 
 /**
  * 장소를 올린다. 409인데 기기에 지울 것이 남아 있으면 서버는 아직 그만큼 더 들고 있을 수 있으므로, 밀린 삭제를
- * 먼저 보내고 서버에 닿았으면(지워졌다는 답이 없어도, 예를 들어 500이어도) 장소가 아직 이 기기의 `pending`일 때
- * 한 번 더 올린다. 그 재시도도 409면 지울 것이 남아 있어도 `limitResult`가 `limit`으로 본다.
+ * 먼저 보내고 서버에 닿았으면(지워졌다는 답이 없어도, 예를 들어 500이어도) 기기가 아직 이 `pending` 저장(같은
+ * `updatedAt`)을 들고 있을 때 한 번 더 올린다. 그 재시도도 409면 지울 것이 남아 있어도 `limitResult`가 `limit`으로 본다.
  */
 async function putPlace(
 	deps: SyncDeps,
@@ -201,7 +201,8 @@ async function putPlace(
 	if (removed === null) {
 		return { deletesUnreachable: true, response: first };
 	}
-	if (stillPending(deps, stored.id) === undefined) {
+	// 그사이 더 새 저장이 들어왔으면 옛 값을 다시 올리지 않는다(새 저장이 뒤에 도착한 옛 PUT에 덮이지 않게).
+	if (!holdsSave(deps, stored, "pending")) {
 		return { deletesUnreachable: false, response: first };
 	}
 	return {
