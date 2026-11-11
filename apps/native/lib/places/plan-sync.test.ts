@@ -195,6 +195,82 @@ it("drops a new place from the device when the server is at its limit (409)", as
 	expect(headers).toEqual([{ [HOME_PLAN]: "퇴근 · 집까지" }]);
 });
 
+const LIMIT: ServerResponse = {
+	json: { error: "too many plans" },
+	status: 409,
+};
+
+it("keeps an already stored pending place with its edit when the server is at its limit (409)", async () => {
+	const { deps, server, store } = setup({
+		places: [place("gym", GYM_PLAN, { kind: "other", sync: "pending" })],
+	});
+	server.setOverride(() => LIMIT);
+	const edited = place("gym", GYM_PLAN, {
+		kind: "other",
+		name: "수영장",
+		sync: "pending",
+	});
+
+	expect(await savePlace(deps, edited)).toBe("limit");
+	expect(store.get()).toEqual({
+		pendingDeletes: [],
+		places: [{ ...edited, sync: "pending", updatedAt: NOW }],
+	});
+});
+
+it("sends the waiting deletes and saves a new place again when they free the limit (409)", async () => {
+	const server = fakeServer([planOf(GYM_PLAN)]);
+	const { deps, store } = setup({ pendingDeletes: [GYM_PLAN] }, server);
+	server.setOverride((call) =>
+		call.method === "PUT" && server.plans.has(GYM_PLAN) ? LIMIT : undefined
+	);
+	const work = place("work", WORK_PLAN);
+
+	expect(await savePlace(deps, work)).toBe("saved");
+	expect(server.requests()).toEqual([
+		`PUT /v1/commute/plans/${WORK_PLAN}`,
+		`DELETE /v1/commute/plans/${GYM_PLAN}`,
+		`PUT /v1/commute/plans/${WORK_PLAN}`,
+	]);
+	expect(store.get()).toEqual({
+		pendingDeletes: [],
+		places: [{ ...work, sync: "synced", updatedAt: NOW }],
+	});
+});
+
+it("keeps a new place pending when the waiting delete still cannot go through (409)", async () => {
+	const server = fakeServer([planOf(GYM_PLAN)]);
+	const { deps, store } = setup({ pendingDeletes: [GYM_PLAN] }, server);
+	server.setOverride((call) =>
+		call.method === "PUT" ? LIMIT : { json: null, status: 503 }
+	);
+	const work = place("work", WORK_PLAN);
+
+	expect(await savePlace(deps, work)).toBe("pending");
+	expect(server.requests()).toEqual([
+		`PUT /v1/commute/plans/${WORK_PLAN}`,
+		`DELETE /v1/commute/plans/${GYM_PLAN}`,
+	]);
+	expect(store.get()).toEqual({
+		pendingDeletes: [GYM_PLAN],
+		places: [{ ...work, sync: "pending", updatedAt: NOW }],
+	});
+});
+
+it("drops a new place when the server is still at its limit after the waiting deletes (409)", async () => {
+	const server = fakeServer([planOf(GYM_PLAN)]);
+	const { deps, store } = setup({ pendingDeletes: [GYM_PLAN] }, server);
+	server.setOverride((call) => (call.method === "PUT" ? LIMIT : undefined));
+
+	expect(await savePlace(deps, place("work", WORK_PLAN))).toBe("limit");
+	expect(server.requests()).toEqual([
+		`PUT /v1/commute/plans/${WORK_PLAN}`,
+		`DELETE /v1/commute/plans/${GYM_PLAN}`,
+		`PUT /v1/commute/plans/${WORK_PLAN}`,
+	]);
+	expect(store.get()).toEqual({ pendingDeletes: [], places: [] });
+});
+
 for (const status of [0, 401, 500, 503]) {
 	it(`keeps the place pending on the device when the upload gets ${status}`, async () => {
 		const { deps, headers, server, store } = setup();

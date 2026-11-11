@@ -139,16 +139,59 @@ async function sendDelete(
 }
 
 /**
+ * 409(설치당 예약 한도)를 받은 저장의 결과. 기기에 지울 것이 남아 있으면 그 삭제가 자리를 비울 수 있으니
+ * 장소를 `pending`으로 두고 다음 맞추기에 맡긴다. 지울 것이 없을 때 새 장소는 기기에서도 지우고(지울 목록에도
+ * 넣지 않는다), 이미 기기에 있던 장소는 고친 값 그대로 `pending`으로 둔다(고치던 화면이 없는 장소를 보지 않게).
+ */
+function limitResult(
+	deps: SyncDeps,
+	stored: Place,
+	isNew: boolean
+): SaveResult {
+	if (deps.store.get().pendingDeletes.length > 0) {
+		return "pending";
+	}
+	if (isNew) {
+		deps.store.remove(stored.id);
+		deps.store.clearPendingDelete(stored.plan.planId);
+	}
+	return "limit";
+}
+
+/**
+ * 장소를 올린다. 409인데 기기에 지울 것이 남아 있으면 서버는 아직 그만큼 더 들고 있으므로, 밀린 삭제를 먼저
+ * 보내고 하나라도 지워졌으면 한 번 더 올린다.
+ */
+async function putPlace(
+	deps: SyncDeps,
+	stored: Place
+): Promise<ServerResponse> {
+	const first = await putPlan(deps, stored.plan);
+	if (
+		first.status !== CONFLICT ||
+		deps.store.get().pendingDeletes.length === 0
+	) {
+		return first;
+	}
+	const removed = await sendPendingDeletes(deps);
+	if (removed === null || removed === 0 || !stillPending(deps, stored.id)) {
+		return first;
+	}
+	return putPlan(deps, stored.plan);
+}
+
+/**
  * 기기에 `pending`으로 먼저 쓰고 서버에 올린다. 서버가 받으면 `synced`로 바꾼다.
- * 409(설치당 예약 한도)는 새 장소를 올릴 때만 나므로 기기에서도 지운다(지울 목록에도 넣지 않는다).
+ * 409(설치당 예약 한도)는 `limitResult`가 정한다.
  */
 export async function savePlace(
 	deps: SyncDeps,
 	place: Place
 ): Promise<SaveResult> {
+	const isNew = !deps.store.get().places.some((entry) => entry.id === place.id);
 	const stored: Place = { ...place, sync: "pending", updatedAt: deps.now() };
 	deps.store.upsert(stored);
-	const { json, status } = await putPlan(deps, stored.plan);
+	const { json, status } = await putPlace(deps, stored);
 	let result: SaveResult = "pending";
 	if (status === NO_CONTENT) {
 		deps.store.markSynced(stored.id, stored.updatedAt);
@@ -156,9 +199,7 @@ export async function savePlace(
 	} else if (status === BAD_REQUEST) {
 		result = { rejected: rejectedIssues(json) };
 	} else if (status === CONFLICT) {
-		deps.store.remove(stored.id);
-		deps.store.clearPendingDelete(stored.plan.planId);
-		result = "limit";
+		result = limitResult(deps, stored, isNew);
 	}
 	await pushHeaders(deps);
 	return result;
