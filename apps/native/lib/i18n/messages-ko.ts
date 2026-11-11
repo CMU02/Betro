@@ -396,6 +396,8 @@ export const ko = {
 		openGuide: "{name} 출퇴근 안내 열기",
 		schedule: "{days} {time} 출발",
 		summaryWithAlternatives: "{schedule} · {alternatives}",
+		/** 15 화면 제목. 탭 이름(`tabs.commute`)과 다르다. */
+		title: "내 장소",
 	},
 	push: {
 		defaultTitle: "알림",

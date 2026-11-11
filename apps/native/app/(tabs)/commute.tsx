@@ -70,7 +70,7 @@ export default function CommuteTab() {
 
 	if (places.length === 0) {
 		return (
-			<Screen scroll title={t("tabs.commute")}>
+			<Screen scroll title={t("places.title")}>
 				<View className="flex-1 justify-center px-4 pb-12">
 					<EmptyState
 						action={
@@ -95,7 +95,7 @@ export default function CommuteTab() {
 	}
 
 	return (
-		<Screen scroll title={t("tabs.commute")}>
+		<Screen scroll title={t("places.title")}>
 			<View className="gap-3 px-4 pt-2 pb-4">
 				{strip === null ? null : (
 					<SessionStrip model={strip} onOpen={openGuideById} />
