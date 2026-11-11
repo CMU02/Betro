@@ -87,7 +87,7 @@
 - **도보 시간 기본값**: 출발지 → 첫 승차 5분, 환승 사이 3분, 마지막 하차 → 목적지 5분. 0~60분에서 1분 단위로 고친다.
 - **저장 순서**: 기기에 먼저 쓰고 서버에 올린다. 서버에 못 올린 장소는 "아직 서버에 저장되지 않았어요"로 표시하고 앱이 앞으로 올 때마다 다시 올린다. 서버에 올라가기 전에는 그 예약이 동작한다고 말하지 않는다.
 - **재설치 뒤 맞추기**(5.2가 2단계로 미룬 것): iOS는 재설치해도 설치 ID가 남아 서버에 예약이 그대로 있다. 앱을 열 때 서버 목록을 받아, 기기가 모르는 예약은 종류 "기타", 이름 "가져온 경로"인 장소로 가져온다. 지우지 않는 이유는 사용자가 등록한 것이고, 보이지 않는 예약이 잠금화면을 띄우면 안 되기 때문이다.
-- **17에는 지도를 넣지 않는다.** 세션 카드, 버튼, 등록한 경로 비교만 둔다.
+- **17에는 지도를 넣지 않는다.** 세션 카드, 등록한 경로 비교, "안내 종료"만 둔다. "탔어요", "다음 차 탈게요"는 두지 않는다(2026-11-11 사용자 결정).
 - **등록 화면의 임시 값**(고르는 중인 경로)은 화면 사이에서 모듈 수준 저장소(`setup-draft.ts`) 하나로 주고받는다. 구간 고르기 화면이 고른 구간을 거기에 쓰고 돌아온다.
 
 ## Review Focus
@@ -96,7 +96,7 @@
 2. **재설치·서버 쪽 삭제**: 기기 저장소가 비었는데 서버에 예약이 있으면 가져온다. 기기에는 있는데 서버에 없으면(서버가 설치를 지운 경우) 다시 올린다. 두 경우 모두 같은 예약이 두 번 생기지 않는다.
 3. **고를 수 없는 구간**: 버스 하차 정류장이 승차보다 앞이거나 같다. 지하철 두 역이 한 번에 이어지지 않는다(`not-direct`). 지선이 여러 개인 노선에서 다른 지선의 역을 고른다. 이름이 같은 정류장이 한 노선에 두 번 나온다(순환, 왕복).
 4. **조회가 안 될 때**: 검색어가 비었다, 결과가 0건이다, 503이다, 응답이 느리다(10초). 번호가 같은 서울·경기·인천 노선이 지역 표시로 구분된다.
-5. **한도와 경계**: 구간 4개, 대안 3개, 장소 16개(서버 409), 요일을 하나도 고르지 않음, 00:05에 나가는 예약(잠금화면은 전날 23:55에 뜬다), 17을 보는 중에 세션이 끝남(버튼 409).
+5. **한도와 경계**: 구간 4개, 대안 3개, 장소 16개(서버 409), 요일을 하나도 고르지 않음, 00:05에 나가는 예약(잠금화면은 전날 23:55에 뜬다), 17을 보는 중에 세션이 끝남("안내 종료" 409).
 
 각 항목의 테스트는 아래 Task의 Step에 들어 있다.
 
@@ -190,6 +190,77 @@ apps/server/src/commute/runner-core.ts  진행 중 세션 응답에 경로별 �
 - [ ] **Step 5: 커밋** — `feat(server): return per-route estimates with the active commute session`
 
 배포는 Task 10에서 한다(2-D의 조회 API 배포와 같은 `develop`에서).
+
+---
+
+### Task 2A: 남은 구간을 푸시 값에 싣고, 잠금화면 모델에서 버튼과 진행 표시 빼기 (2026-11-11 추가)
+
+스펙 개정(2026-11-11, 4.3·5.3 "푸시 값 v1"의 `nextLegs`)을 코드에 옮긴다. 사용자가 잠금화면과 17의 "탔어요", "다음 차 탈게요" 버튼을 빼고, 카드에 남은 구간의 승차 정보를 모두 보이기로 정했다. 탑승은 서버가 시각으로만 추정한다(`stage.ts` `checkPassed`, 이미 있다). Swift 쪽은 구조체에 필드만 더하고, 그리기는 2-F Task 4다.
+
+**Files:**
+- Modify: `packages/commute/src/session/content.ts`, `content.test.ts`, `apps/server/README.md`(푸시 값 절)
+- Modify: `apps/native/lib/commute/content-state.ts`, `content-state.test.ts`, `lock-screen-model.ts`, `lock-screen-model.test.ts`, `__fixtures__/lock-screen-cases.json`, `lib/i18n/messages-ko.ts`
+- Modify: `apps/native/targets/commute-activity/CommuteActivityAttributes.swift`(모듈 쪽은 심볼릭 링크라 같이 바뀐다)
+
+**Interfaces:**
+- Consumes: `RouteEstimate.legs[i].boardEtaAt`, `.etaState`, `Route.legs[i].board.name`, `state.legIndex`, `state.stage`
+- Produces:
+  ```ts
+  // packages/commute/src/session/content.ts 와 apps/native/lib/commute/content-state.ts 에 같은 모양
+  interface NextLegContent { boardEtaEpoch: number | null; etaState: "live" | "estimated"; lineName: string; mode: "bus" | "subway"; stopName: string }
+  interface ContentState { /* v1 필드 그대로 */ nextLegs: NextLegContent[]; v: 1 }
+  // lock-screen-model.ts
+  type LockScreenAction = "end";
+  interface LockScreenModel {
+    actions: LockScreenAction[];          // iOS [], Android ["end"]
+    nextLegs: { lineName: string; mode: "bus" | "subway"; text: string }[];   // 최대 2개
+    moreLegs: string | null;              // 남은 구간이 3개 이상이면 "외 {n}구간"(n = 남은 수 - 2), 아니면 null
+    /* progress 는 지운다. 그 밖의 필드는 그대로 */
+  }
+  ```
+  - 서버 `buildContent`: 기본 경로의 `legIndex + 1`부터 끝까지 순서대로(최대 3개). `stopName`은 그 구간의 `board.name`, `boardEtaEpoch`는 그 구간 추정의 `boardEtaAt`(초, 내림), 없으면 null. `stage`가 `arrived`·`ended`면 `[]`. 서버는 키를 늘 보낸다.
+  - 앱 `parseContentState`: `nextLegs`가 없으면 `[]`(배포된 서버와 옛 값). 있는데 배열이 아니거나 항목 하나라도 모양이 틀리면 전체가 null(지금 `suggestion`과 같은 엄격함). `v`는 1 그대로다.
+  - Swift: `public struct NextLeg: Codable, Hashable { lineName, mode, stopName: String; boardEtaEpoch: Double?; etaState: String }`, `public var nextLegs: [NextLeg]?`(옵셔널이라 키가 없어도 디코딩된다). `init`에 `nextLegs: [NextLeg]? = nil`.
+  - 문구(`commute.lock.*`):
+    | 키 | 문구 | 조건 |
+    |---|---|---|
+    | `nextLeg.eta` | `{stop} · {eta} 승차` | `boardEtaEpoch` 있음, `etaState: live` |
+    | `nextLeg.etaEstimated` | `{stop} · 약 {eta} 승차` | `boardEtaEpoch` 있음, `estimated` |
+    | `nextLeg.noEta` | `{stop}` | `boardEtaEpoch` 없음 |
+    | `nextLeg.more` | `외 {n}구간` | 남은 구간 3개 이상 |
+    | `status.beforeLeave` (바꿈) | `{leave}에 나가세요` | 그대로 |
+    | `detail.beforeLeave` (새로) | `{stop} · {eta} 탑승` | `status.beforeLeave`를 쓸 때의 상세 |
+    `action.boarded`, `action.next` 키는 지운다. `action.end`는 남긴다.
+  - `decideSend`: `nextLegs` 길이나 어느 항목의 `lineName`이 바뀌면 높은 우선순위(10). 어느 항목의 `boardEtaEpoch` 분이나 `etaState`가 바뀌면 낮은 우선순위(5).
+
+- [ ] **Step 1: 실패하는 테스트**
+  - `content.test.ts`:
+    - 구간 3개 경로의 첫 구간 `wait`에서 `nextLegs`가 2개이고, 각각 둘째·셋째 구간의 승차 정류장 이름과 추정 `boardEtaAt / 1000`(내림)이다.
+    - 같은 경로 셋째 구간 `wait`에서 `[]`.
+    - 1구간 경로에서 `[]`.
+    - `arrived`에서 `[]`.
+    - 추정이 없으면 `boardEtaEpoch: null`, `etaState: "estimated"`.
+    - `decideSend`: 둘째 구간 시각만 1분 바뀌면 `priority: 5`. 남은 구간 수가 바뀌면 `10`. 같은 분 안에서 초만 바뀌면 보내지 않는다.
+  - `content-state.test.ts`:
+    - `nextLegs` 없는 v1 값 → `nextLegs: []`.
+    - 정상 2개 → 그대로.
+    - 항목에 `stopName`이 없으면 null.
+    - `nextLegs: "x"` → null.
+  - `lock-screen-model.test.ts`:
+    - iOS `actions`는 모든 단계에서 `[]`, Android는 `["end"]`.
+    - 남은 구간 1개 → `nextLegs` 1줄, `moreLegs: null`.
+    - 3개 → 2줄과 "외 1구간".
+    - 추정 시각 → "잠실역 · 약 08:36 승차".
+    - 시각 없음 → "잠실역".
+    - 나가기 전 → 상태 "08:10에 나가세요", 상세 "천호역.현대백화점 · 08:15 탑승".
+    - `progress` 필드가 없다.
+  - `lock-screen-cases.json`에 남은 구간 0·1·3개 사례를 더하고 기대 문구를 고친다. 버튼 기대값을 지운다.
+- [ ] **Step 2: 실패 확인** — Run: `bun test packages/commute apps/native/lib/commute` / Expected: 새 테스트가 FAIL.
+- [ ] **Step 3: 구현** — 위 Interfaces대로. `lock-screen-model.ts`의 `actionsOf`에서 `boarded`·`next`를 지우고, `progressOf`를 지우고 남은 구간 줄을 만든다. Swift는 구조체만 고친다.
+- [ ] **Step 4: 통과 확인** — 세 게이트. 그리고 Swift 타입 검사 — Run: `xcrun --sdk iphoneos swiftc -typecheck -target arm64-apple-ios17.2 apps/native/targets/commute-activity/CommuteActivityAttributes.swift` / Expected: 오류 없음.
+- [ ] **Step 5: 커밋** — `feat(commute): send the remaining legs and drop the boarding buttons`
+
+배포는 Task 10에서 Task 2와 함께 한다. 옛 앱은 `nextLegs`를 무시하고, 새 앱은 옛 서버의 값을 `[]`로 읽으므로 배포 순서가 어긋나도 카드는 멈추지 않는다.
 
 ---
 
@@ -405,10 +476,10 @@ apps/server/src/commute/runner-core.ts  진행 중 세션 응답에 경로별 �
   // session-client.ts
   interface ActiveSessionView { content: ContentState; planId: string; routes: SessionRouteView[]; sessionId: string }
   fetchActiveSession(client): Promise<{ ok: true; session: ActiveSessionView | null } | { ok: false; reason: "offline" | "invalid" }>
-  sendSessionInput(client, sessionId: string, kind: "boarded" | "next" | "end"): Promise<"ok" | "ended" | "failed">   // 204, 404·409, 그 밖
+  endSession(client, sessionId: string): Promise<"ok" | "ended" | "failed">   // POST …/input { kind: "end" }. 204, 404·409, 그 밖
   // guide-model.ts
   guideModel(input: { now: number; place: Place; session: ActiveSessionView | null; t; timezone: string }): {
-    kind: "active"; card: LockScreenModel; actions: ("boarded" | "next" | "end")[];
+    kind: "active"; card: LockScreenModel;   // card.nextLegs·moreLegs 도 그대로 그린다
     others: { arrival: string | null; badge: LineBadgeInput[]; diff: string | null; tag: "live" | "estimated" }[];
   } | {
     kind: "idle"; next: string;        // "평일 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
@@ -417,15 +488,15 @@ apps/server/src/commute/runner-core.ts  진행 중 세션 응답에 경로별 �
   ```
   - 세션의 `planId`가 이 장소의 것이 아니면 `idle`이다.
   - `others`는 등록한 대안만, `rank` 순서로 넣는다. `arrival`은 목적지 도착 예상("08:41 도착"), 없으면 null. `diff`는 기본 경로와의 차이("6분 빨리", "3분 늦게")이고 둘 중 하나라도 예상이 없거나 차이가 1분 미만이면 null이다.
-  - `actions`는 `card.actions`에 "end"를 항상 더한 것이다(앱 화면에서는 언제든 끝낼 수 있다).
+  - 버튼은 "안내 종료" 하나이고 모든 단계에서 보인다. `card.actions`는 17에서 쓰지 않는다.
   - `next`의 두 번째 시각은 나가는 시각에서 `leadMinutes`를 뺀 것이고, 자정을 넘으면 "전날 23:55부터"로 쓴다(Review Focus 5).
 
 - [ ] **Step 1: 실패하는 테스트**
-  - `session-client.test.ts`: `session: null`, 정상, `content`가 파싱되지 않는 응답(`invalid`), `status` 0. 입력 204 / 409 / 404 / 500.
-  - `guide-model.test.ts`: 세션 없음 → `idle`과 `next` 문구(08:10 → "08:00부터", 00:05 → "전날 23:55부터"). 다른 장소의 세션 → `idle`. 진행 중 → `card`가 `lockScreenModel`과 같고, 대안 2개가 `rank` 순서로, `diff`가 "6분 빨리" / "3분 늦게" / null(예상 없음) / null(30초 차이). 탑승 뒤에는 `actions`가 `["end"]`.
+  - `session-client.test.ts`: `session: null`, 정상, `content`가 파싱되지 않는 응답(`invalid`), `status` 0. `endSession` 204 / 409 / 404 / 500, 본문 `kind`가 `"end"`.
+  - `guide-model.test.ts`: 세션 없음 → `idle`과 `next` 문구(08:10 → "08:00부터", 00:05 → "전날 23:55부터"). 다른 장소의 세션 → `idle`. 진행 중 → `card`가 `lockScreenModel`과 같고, 대안 2개가 `rank` 순서로, `diff`가 "6분 빨리" / "3분 늦게" / null(예상 없음) / null(30초 차이). 구간 2개 경로의 첫 구간에서 `card.nextLegs`가 1줄이다.
 - [ ] **Step 2: 실패 확인**
-- [ ] **Step 3: 구현** — `useActiveSession`은 `useQuery`로 화면이 보이는 동안 15초마다 다시 받는다. 버튼을 누르면 `sendSessionInput` 뒤 바로 다시 받는다. `"ended"`면 세션 없음 상태로 바꾸고, `"failed"`면 "보내지 못했어요. 다시 눌러 주세요"를 보인다. 누른 직후 화면을 미리 바꾸지 않는다(서버 값만 그린다). `offline`이면 마지막 값을 그대로 두고 "연결을 확인하고 있어요"를 보인다.
-- [ ] **Step 4: 통과 확인** — 세 게이트. 로컬 서버(`UPSTREAM_MODE=fixture`, `PUSH_MODE=log`)에 2분 뒤 시작하는 경로를 등록하고 17을 연다. Expected: 시작 전 `idle`, 시작 뒤 세션 카드와 버튼, "탔어요"를 누르면 다음 응답에서 탑승 단계로 바뀌고 버튼이 "안내 종료"만 남는다. "안내 종료" 뒤 `idle`.
+- [ ] **Step 3: 구현** — `useActiveSession`은 `useQuery`로 화면이 보이는 동안 15초마다 다시 받는다. "안내 종료"를 누르면 `endSession` 뒤 바로 다시 받는다. `"ended"`면 세션 없음 상태로 바꾸고, `"failed"`면 "보내지 못했어요. 다시 눌러 주세요"를 보인다. 누른 직후 화면을 미리 바꾸지 않는다(서버 값만 그린다). `offline`이면 마지막 값을 그대로 두고 "연결을 확인하고 있어요"를 보인다.
+- [ ] **Step 4: 통과 확인** — 세 게이트. 로컬 서버(`UPSTREAM_MODE=fixture`, `PUSH_MODE=log`)에 2분 뒤 시작하는 경로를 등록하고 17을 연다. Expected: 시작 전 `idle`, 시작 뒤 세션 카드(환승 경로면 남은 구간 줄)와 "안내 종료"만 보이고 "탔어요", "다음 차 탈게요"는 없다. "안내 종료" 뒤 `idle`.
 - [ ] **Step 5: 커밋** — `feat(native): show the active commute and compare registered routes`
 
 ---
@@ -437,7 +508,7 @@ apps/server/src/commute/runner-core.ts  진행 중 세션 응답에 경로별 �
 **Files:**
 - Modify: `apps/native/README.md`(화면과 저장 구조), `apps/server/README.md`(Task 2의 응답), 이 계획 문서("2-E 결과")
 
-- [ ] **Step 1: 서버 배포** — Task 2가 병합된 `develop`에서 `apps/server`의 `bun run deploy`. Expected: `/v1/snapshot/subway` 200, 인증 없는 `/v1/commute/sessions/active` 401.
+- [ ] **Step 1: 서버 배포** — Task 2·2A가 병합된 `develop`에서 `apps/server`의 `bun run deploy`. Expected: `/v1/snapshot/subway` 200, 인증 없는 `/v1/commute/sessions/active` 401.
 - [ ] **Step 2: iPhone** — `EXPO_PUBLIC_SERVER_URL=https://betro.cmu02-studio.com`으로 빌드해 설치한다. 스펙 7.2의 뒷부분을 끝까지 간다: 내 장소 등록(버스 1구간, 지하철 1구간, 환승 2구간, 경기 노선 1개) → 15에 카드 → 3분 뒤 시작하는 예약 → 17에서 세션 카드와 비교 → "안내 종료". Expected: 각 단계가 시안과 같고, 서버 D1 `commute_plan`에 장소 이름과 주소가 없다.
 - [ ] **Step 3: 오프라인과 재설치(Review Focus 1, 2)** — 비행기 모드에서 장소를 저장한다 → 표시가 보인다 → 네트워크를 켜고 앱을 다시 연다 → 표시가 사라지고 서버에 예약이 있다. 앱을 지우고 다시 설치한다 → "가져온 경로" 카드가 예약 수만큼 보인다.
 - [ ] **Step 4: Android(S20)** — Step 2와 같은 흐름. 시각 고르기와 뒤로 가기 동작을 본다.
