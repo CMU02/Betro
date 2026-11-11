@@ -156,8 +156,8 @@ describe("guideModel idle", () => {
 		});
 		expect(model).toEqual({
 			kind: "idle",
-			// NOW는 화요일 08:00, 오늘 안내가 막 시작한 시각이라 다음은 수요일(내일)이다.
-			next: "내일 08:10에 나가요 · 08:00부터 잠금화면에 떠요",
+			// NOW는 화요일 08:00, 오늘 안내가 막 시작하는 시각이다. 서버가 3분 안에 세션을 열므로 아직 오늘이다.
+			next: "오늘 08:10에 나가요 · 08:00부터 잠금화면에 떠요",
 			routes: [
 				{
 					badge: [
@@ -233,7 +233,7 @@ describe("guideModel idle", () => {
 			timezone: TIMEZONE,
 		});
 		expect(synced.kind === "idle" && synced.next).toBe(
-			"내일 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
+			"오늘 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
 		);
 	});
 
@@ -248,12 +248,15 @@ describe("guideModel idle", () => {
 			});
 			return model.kind === "idle" ? model.next : "";
 		};
-		// 화요일 07:59, 08:00(시작 정각), 08:01
+		// 화요일 07:59, 08:00(시작 정각), 08:02(서버가 세션을 여는 3분 안), 08:03(3분이 지남)
 		expect(nextAt(NOW - MINUTE)).toBe(
 			"오늘 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
 		);
-		expect(nextAt(NOW)).toBe("내일 08:10에 나가요 · 08:00부터 잠금화면에 떠요");
-		expect(nextAt(NOW + MINUTE)).toBe(
+		expect(nextAt(NOW)).toBe("오늘 08:10에 나가요 · 08:00부터 잠금화면에 떠요");
+		expect(nextAt(NOW + 2 * MINUTE + 59)).toBe(
+			"오늘 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
+		);
+		expect(nextAt(NOW + 3 * MINUTE)).toBe(
 			"내일 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
 		);
 		// 금요일 18:00 → 토·일은 등록하지 않아 월요일
@@ -282,16 +285,16 @@ describe("guideModel idle", () => {
 		expect(nextAt(TUESDAY_2350)).toBe(
 			"내일 00:05에 나가요 · 전날 23:55부터 잠금화면에 떠요"
 		);
-		// 23:55가 지나면 그다음 날(목요일 00:05)
-		expect(nextAt(TUESDAY_2350 + 6 * MINUTE)).toBe(
+		// 23:55에 시작하고 세션을 여는 3분도 지나면(23:59) 그다음 날(목요일 00:05)
+		expect(nextAt(TUESDAY_2350 + 9 * MINUTE)).toBe(
 			"목 00:05에 나가요 · 전날 23:55부터 잠금화면에 떠요"
 		);
-		// 금요일 23:56: 토·일 00:05는 등록하지 않았고 월요일 00:05(일요일 23:55 시작)
-		expect(nextAt(TUESDAY_2350 + 3 * DAY + 6 * MINUTE)).toBe(
+		// 금요일 23:59: 토·일 00:05는 등록하지 않았고 월요일 00:05(일요일 23:55 시작)
+		expect(nextAt(TUESDAY_2350 + 3 * DAY + 9 * MINUTE)).toBe(
 			"월 00:05에 나가요 · 전날 23:55부터 잠금화면에 떠요"
 		);
-		// 화요일에만 등록, 월요일 23:57: 이번 화요일 시작(23:55)이 지나 다음 주 화요일
-		expect(nextAt(NOW - 8 * HOUR - 3 * MINUTE, [2])).toBe(
+		// 화요일에만 등록, 월요일 23:59: 이번 화요일 시작(23:55)과 3분이 지나 다음 주 화요일
+		expect(nextAt(NOW - 8 * HOUR - MINUTE, [2])).toBe(
 			"화 00:05에 나가요 · 전날 23:55부터 잠금화면에 떠요"
 		);
 	});
@@ -299,7 +302,10 @@ describe("guideModel idle", () => {
 	it("finds no leave day when no weekday is registered", () => {
 		const schedule = { days: [], leadMinutes: 10, leaveMinute: 490 };
 		expect(nextLeaveDay(schedule, NOW, TIMEZONE)).toBeNull();
-		expect(nextLeaveDay({ ...schedule, days: [2] }, NOW, TIMEZONE)).toEqual({
+		// 화요일 08:03: 오늘 시작(08:00)과 세션을 여는 3분이 지났다
+		expect(
+			nextLeaveDay({ ...schedule, days: [2] }, NOW + 3 * MINUTE, TIMEZONE)
+		).toEqual({
 			offset: 7,
 			weekday: 2,
 		});

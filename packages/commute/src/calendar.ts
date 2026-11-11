@@ -15,7 +15,8 @@ export interface DueStart {
 const MINUTE_MS = 60_000;
 const DAY_MINUTES = 1440;
 const HOUR_MINUTES = 60;
-const START_WINDOW_MINUTES = 3;
+/** 서버가 안내 시작 시각부터 이 시간 안에 세션을 연다. 앱도 이 사이는 "오늘" 안내로 본다. */
+export const START_WINDOW_MINUTES = 3;
 const CHECK_MINUTES = 3;
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 

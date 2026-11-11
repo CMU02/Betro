@@ -1,4 +1,8 @@
-import { localParts, localToEpochMs } from "@Betro/commute/calendar";
+import {
+	localParts,
+	localToEpochMs,
+	START_WINDOW_MINUTES,
+} from "@Betro/commute/calendar";
 import type { Leg, Route, Schedule } from "@Betro/commute/plan";
 
 import type { MessageKey, MessageParams } from "../i18n/translate";
@@ -144,8 +148,8 @@ function shiftDate(
 
 /**
  * 다음 안내가 걸리는 나가는 날. 오늘부터 며칠 뒤(`offset`)인지와 그 요일. 서버(`dueStart`)처럼
- * 나가는 날짜의 요일을 `days`와 맞추고, 안내 시작(나가는 시각 - `leadMinutes`)이 `now`보다 뒤인
- * 첫 날을 고른다. 시작이 전날 밤인 경우도 같은 규칙이다. 공휴일은 앱이 모르니 따지지 않는다.
+ * 나가는 날짜의 요일을 `days`와 맞추고, 안내 시작(나가는 시각 - `leadMinutes`)에 서버가 세션을 여는
+ * 3분(`START_WINDOW_MINUTES`)을 더한 시각이 `now`보다 뒤인 첫 날을 고른다. 시작이 전날 밤인 경우도 같은 규칙이다. 공휴일은 앱이 모르니 따지지 않는다.
  */
 export function nextLeaveDay(
 	schedule: Pick<Schedule, "days" | "leadMinutes" | "leaveMinute">,
@@ -162,7 +166,8 @@ export function nextLeaveDay(
 		}
 		const startMs =
 			localToEpochMs(date, schedule.leaveMinute, timezone) - leadMs;
-		if (nowMs < startMs) {
+		// 서버는 시작 시각부터 3분 안에 세션을 연다. 그 사이 세션이 아직 안 왔으면 오늘 안내가 곧 온다.
+		if (nowMs < startMs + START_WINDOW_MINUTES * MS_PER_MINUTE) {
 			return { offset, weekday };
 		}
 	}
