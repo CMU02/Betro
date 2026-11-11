@@ -388,7 +388,9 @@ export function SetupForm({ mode, place }: SetupFormProps) {
 
 	useEffect(() => {
 		appSetupDraft.start(initialPlace, ids);
-		return () => appSetupDraft.clear();
+		// 이 화면이 시작한 임시 값만 지운다. 그사이 다른 등록 화면이 시작한 값은 남긴다.
+		const placeId = initialPlace?.id ?? ids.placeId;
+		return () => appSetupDraft.clearIf(placeId);
 	}, [initialPlace, ids]);
 
 	const close = useCallback(() => {

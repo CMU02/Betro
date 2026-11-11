@@ -157,3 +157,31 @@ it("returns the same value between changes so React can subscribe to it", () => 
 	draft.start(null, IDS);
 	expect(draft.get()).toBe(draft.get());
 });
+
+it("clears with clearIf only when the draft belongs to that place", () => {
+	const draft = createSetupDraft();
+	draft.start(null, IDS);
+	draft.clearIf("place-other");
+	expect(draft.get()?.placeId).toBe("place-new");
+	draft.clearIf("place-new");
+	expect(draft.get()).toBeNull();
+});
+
+it("keeps a newer form's draft when an older form closes after it started", () => {
+	const draft = createSetupDraft();
+	draft.start(null, IDS);
+	draft.start(existingPlace(), IDS);
+	draft.clearIf(IDS.placeId);
+	expect(draft.get()?.placeId).toBe("place-gym");
+});
+
+it("does not tell subscribers when clearIf leaves the draft alone", () => {
+	const draft = createSetupDraft();
+	draft.start(null, IDS);
+	let calls = 0;
+	draft.subscribe(() => {
+		calls += 1;
+	});
+	draft.clearIf("place-other");
+	expect(calls).toBe(0);
+});

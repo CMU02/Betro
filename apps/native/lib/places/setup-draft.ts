@@ -16,6 +16,11 @@ export interface SetupDraft {
 
 export interface SetupDraftStore {
 	clear: () => void;
+	/**
+	 * 임시 값이 그 장소의 것일 때만 지운다. 등록 화면이 둘 열렸을 때 먼저 연 화면이 닫히면서
+	 * 나중에 연 화면의 임시 값을 지우지 않게 한다.
+	 */
+	clearIf: (placeId: string) => void;
 	get: () => SetupDraft | null;
 	/** 있는 경로를 바꾸거나, `index`가 경로 수와 같으면 끝에 더한다. 그 밖의 `index`는 무시한다. */
 	setRoute: (index: number, route: RouteDraft) => void;
@@ -66,6 +71,11 @@ export function createSetupDraft(): SetupDraftStore {
 
 	return {
 		clear: () => set(null),
+		clearIf: (placeId) => {
+			if (draft?.placeId === placeId) {
+				set(null);
+			}
+		},
 		get: () => draft,
 		setRoute: (index, route) => {
 			if (draft === null) {
