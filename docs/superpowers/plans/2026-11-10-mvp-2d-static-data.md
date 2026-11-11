@@ -108,12 +108,24 @@
 **Files:**
 - Modify: `packages/transit-static/README.md`(버스 명령 순서, 범위 규칙, 실측), 이 계획 문서(결과 기록)
 
-- [ ] **Step 1: 노선 목록** — Run: `bun transit fetch:bus-route-list` / Expected: `stoppedBy: none`, 호출 16건. routeType 7·8 합계가 645 근처(±10%)다. 크게 모자라면 보충 검색어를 더하고 다시 돌린다. 유형별 개수를 기록한다.
-- [ ] **Step 2: 노선 원본** — Run: `bun transit fetch:bus-routes` / Expected: `getStaionByRoute`는 새 노선(경기·인천 약 645건)만, `getRoutePath`는 마을 약 253건 + 경기·인천 약 645건을 부른다. 950건에서 `stoppedBy: budget`으로 멈추면 다음 날(KST 00시 이후) 다시 돌려 `stoppedBy: none`이 될 때까지 반복한다.
-- [ ] **Step 3: 조립 확인** — Run: `bun transit build:bus-routes --dry-run` / Expected: 보고서 `ok: true`. 지역별 적재 가능 비율, 제외된 노선과 사유, 마을버스 수가 253 근처인지 본다. 경기·인천 비율이 90%에 못 미치면 멈추고 보고서의 오류 유형을 사용자에게 보인다.
-- [ ] **Step 4: 적재** — Run: `cd packages/db && DATABASE_URL=file:<저장소>/local.db bun run db:migrate`, `bun transit build:bus-routes` / Expected: 새 `bus_route` 배치가 현재 배치가 된다. `select region, count(*) from bus_route where batch_id = <새 배치> group by region`에 세 지역이 나온다.
-- [ ] **Step 5: D1** — Run: `cd apps/server && bunx wrangler d1 migrations apply betro --local`, `bun transit publish:d1 --dry-run`(SQL 크기 확인), `bun transit publish:d1`. 로컬에서 Task 4·5의 라우트를 확인한 뒤 `--remote`로 같은 순서를 돌린다. / Expected: 원격 D1의 현재 `bus_route` 배치 노선 수가 로컬과 같다. 수집기는 5분 안에 새 배치를 읽고 계속 돈다(`dev` 두 노선은 그대로 범위 안이다).
-- [ ] **Step 6: 기록과 커밋** — README와 이 문서에 실측(유형별 노선 수, 정류소·구간 수, 제외 노선, 호출 수, D1 SQL 크기)을 적는다. `docs(transit-static): record the village and regional bus load`
+- [x] **Step 1: 노선 목록** — Run: `bun transit fetch:bus-route-list` / Expected: `stoppedBy: none`, 호출 16건. routeType 7·8 합계가 645 근처(±10%)다. 크게 모자라면 보충 검색어를 더하고 다시 돌린다. 유형별 개수를 기록한다.
+- [x] **Step 2: 노선 원본** — Run: `bun transit fetch:bus-routes` / Expected: `getStaionByRoute`는 새 노선(경기·인천 약 645건)만, `getRoutePath`는 마을 약 253건 + 경기·인천 약 645건을 부른다. 950건에서 `stoppedBy: budget`으로 멈추면 다음 날(KST 00시 이후) 다시 돌려 `stoppedBy: none`이 될 때까지 반복한다.
+- [x] **Step 3: 조립 확인** — Run: `bun transit build:bus-routes --dry-run` / Expected: 보고서 `ok: true`. 지역별 적재 가능 비율, 제외된 노선과 사유, 마을버스 수가 253 근처인지 본다. 경기·인천 비율이 90%에 못 미치면 멈추고 보고서의 오류 유형을 사용자에게 보인다.
+- [x] **Step 4: 적재** — Run: `cd packages/db && DATABASE_URL=file:<저장소>/local.db bun run db:migrate`, `bun transit build:bus-routes` / Expected: 새 `bus_route` 배치가 현재 배치가 된다. `select region, count(*) from bus_route where batch_id = <새 배치> group by region`에 세 지역이 나온다.
+- [x] **Step 5: D1** — Run: `cd apps/server && bunx wrangler d1 migrations apply betro --local`, `bun transit publish:d1 --dry-run`(SQL 크기 확인), `bun transit publish:d1`. 로컬에서 Task 4·5의 라우트를 확인한 뒤 `--remote`로 같은 순서를 돌린다. / Expected: 원격 D1의 현재 `bus_route` 배치 노선 수가 로컬과 같다. 수집기는 5분 안에 새 배치를 읽고 계속 돈다(`dev` 두 노선은 그대로 범위 안이다).
+- [x] **Step 6: 기록과 커밋** — README와 이 문서에 실측(유형별 노선 수, 정류소·구간 수, 제외 노선, 호출 수, D1 SQL 크기)을 적는다. `docs(transit-static): record the village and regional bus load`
+
+#### Task 3 결과 (2026-11-11)
+
+- **노선 목록**(2026-11-10): 검색어 16개, 호출 16건, `stoppedBy: none`. 1,349개 노선(routeType 7: 38, 8: 590 → 경기·인천 628, 공표 645 대비 −2.6%).
+- **노선 원본**: 2026-11-10에 950건에서 하루 한도로 멈췄고, 2026-11-11에 이어 받아 `stoppedBy: none`. 이날 호출 `getStaionByRoute` 396(950 건너뜀), `getRoutePath` 380(906 건너뜀). `outOfScope` 44, `notFound` 17, `failed` 0.
+- **조립**(배치 10, `ok: true`): 노선 1,346 중 범위 안 1,302(적재 1,283, 제외 19), 범위 밖 44. seoul 674/674(100%), regional 609/628(97.0%, 기준 90%). 마을 247(공표 253). 정류소 84,944, 구간 83,661. 제외 19개는 모두 경기·인천: `route-not-found` 17(`getRoutePath` headerCd 4. 원본을 다시 받아도 같다고 보고 다시 부르지 않았다), `shape-too-short` 2(M6463인천, M6464인천). 목록은 README "검증 결과 코드".
+- **적재**: `local.db`에 마이그레이션 후 배치 10이 현재 배치. 지역별 seoul 674, gyeonggi 574, incheon 35.
+- **D1**
+  - 로컬: `0006` 적용이 `duplicate column name: region`으로 실패했다. 이 워크트리의 로컬 D1에 이름을 바꾸기 전의 `0005_20261110062424_bus_route_region.sql`(커밋된 적 없음)이 이미 적용돼 있었다. 열 정의(`region` TEXT NOT NULL DEFAULT 'seoul', `short_name` TEXT NOT NULL DEFAULT '')가 `0006`과 같고 `bus_route`가 비어 있음을 확인한 뒤, 로컬 `d1_migrations`에만 `0006`을 적용됨으로 넣었다. 원격에는 옛 파일이 적용된 적이 없다.
+  - `publish:d1 --dry-run` 76.9MB(로컬에 배치 5·8·9·10), 로컬 게시 후 원격: `0006` 적용(4 commands), `publish:d1 --remote`는 배치 10만 46.5MB(5·8·9는 이미 있음). 원격 현재 버스 배치 10, 지역별 노선 수가 로컬과 같다. 게시 직후 `/v1/snapshot/subway` 200.
+  - 운영 중인 서버(develop 배포본)는 `currentBusRouteIds`에 routeType 7·8 필터가 없다. 수집기가 `dev` 모드(두 노선)라 지금은 영향이 없지만, Task 6 배포 전에는 `prod`로 바꾸지 않는다.
+- **조회 API 로컬 확인**(Task 4·5 라우트, 로컬 D1): `q=6411` → `seoul-bus:100100290`, `q=M5107` → `M5107광주`(gyeonggi, shortName `M5107`)와 `M5107(예약)수원`(shortName `M5107예`, 원천 `busRouteAbrv` 그대로), `q=1000` → 고양·구리(gyeonggi), 인천(incheon) 순, `q=서초` → 마을버스 서초01~03. M5107 정류장 61개.
 
 ---
 
@@ -176,7 +188,7 @@
 - [ ] **Step 2: 실패 확인** — Run: `bun test apps/server/src/ref/subway.test.ts` / Expected: FAIL
 - [ ] **Step 3: 구현** — 방향 값은 수집기 관측의 `direction`과 같은 뜻이어야 한다(2-C가 도착판을 방향으로 거른다). `track_shape.direction`이 그 값이다.
 - [ ] **Step 4: 통과 확인** — Run: `bun test && bun run check-types` / Expected: PASS
-- [ ] **Step 5: 실데이터 확인** — 로컬 D1(`bun run dev`)에서 다음을 부른다. Expected: 2호선 강남 → 교대가 `up`(수집기 이벤트에서 내선이 `up`이다), 시청 → 충정로가 한 정거장, 강남 → 까치산이 404, 7호선 가산디지털단지 → 고속터미널이 한 방향으로 나온다. 2호선 본선만 순환으로 잡힌다. 결과가 다르면 `isLoop` 기준을 고치고 테스트에 그 사례를 더한다.
+- [x] **Step 5: 실데이터 확인** — (2026-11-11, 로컬 D1: 강남 → 교대 `up` 1, 시청 → 충정로 `down` 1, 강남 → 까치산 404 `not-direct`, 신도림 → 까치산 `up` 4, 가산디지털단지 → 고속터미널 `up` 12, 2호선 가지 main 43·seongsu 5·sinjeong 5. 기대와 같다.) 로컬 D1(`bun run dev`)에서 다음을 부른다. Expected: 2호선 강남 → 교대가 `up`(수집기 이벤트에서 내선이 `up`이다), 시청 → 충정로가 한 정거장, 강남 → 까치산이 404, 7호선 가산디지털단지 → 고속터미널이 한 방향으로 나온다. 2호선 본선만 순환으로 잡힌다. 결과가 다르면 `isLoop` 기준을 고치고 테스트에 그 사례를 더한다.
 - [ ] **Step 6: 커밋** — `feat(server): add subway line, station and direction lookup`
 
 ---
