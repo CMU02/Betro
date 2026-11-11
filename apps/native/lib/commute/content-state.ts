@@ -15,6 +15,17 @@ export interface ContentStateSuggestion {
 	savesMinutes: number;
 }
 
+/** 기본 경로에서 지금 구간 뒤에 남은 구간 하나(서버 `NextLegContent`와 같은 모양). */
+export interface NextLegContent {
+	/** 그 구간의 승차 예상(epoch 초). */
+	boardEtaEpoch: number | null;
+	etaState: EtaState;
+	lineName: string;
+	mode: CommuteMode;
+	/** 그 구간의 승차 정류장(역). */
+	stopName: string;
+}
+
 export interface ContentState {
 	delayMinutes: number;
 	destinationEtaEpoch: number | null;
@@ -25,6 +36,8 @@ export interface ContentState {
 	legIndex: number;
 	lineName: string;
 	mode: CommuteMode;
+	/** 지금 구간 뒤에 남은 구간(최대 3개). 배포된 옛 서버의 값에는 없어서 []로 읽는다. */
+	nextLegs: NextLegContent[];
 	passed: { lineName: string } | null;
 	positionState: PositionState;
 	sentAt: number;
@@ -107,6 +120,45 @@ function parseSuggestion(
 	};
 }
 
+function parseNextLeg(value: unknown): NextLegContent | undefined {
+	if (!isRecord(value)) {
+		return;
+	}
+	const boardEtaEpoch = nullableNumber(value.boardEtaEpoch);
+	const { etaState, lineName, mode, stopName } = value;
+	if (
+		boardEtaEpoch === undefined ||
+		!(
+			oneOf<EtaState>(etaState, ETA_STATES) &&
+			isString(lineName) &&
+			oneOf<CommuteMode>(mode, MODES) &&
+			isString(stopName)
+		)
+	) {
+		return;
+	}
+	return { boardEtaEpoch, etaState, lineName, mode, stopName };
+}
+
+/** 키가 없으면 [](옛 값). 배열이 아니거나 항목 하나라도 모양이 틀리면 undefined(잘못된 값). */
+function parseNextLegs(value: unknown): NextLegContent[] | undefined {
+	if (value === undefined) {
+		return [];
+	}
+	if (!Array.isArray(value)) {
+		return;
+	}
+	const legs: NextLegContent[] = [];
+	for (const item of value) {
+		const leg = parseNextLeg(item);
+		if (leg === undefined) {
+			return;
+		}
+		legs.push(leg);
+	}
+	return legs;
+}
+
 /** 모르는 필드는 버린다. 버전이나 필수 필드의 타입이 다르면 null. */
 export function parseContentState(input: unknown): ContentState | null {
 	if (!(isRecord(input) && input.v === 1)) {
@@ -131,6 +183,7 @@ export function parseContentState(input: unknown): ContentState | null {
 	const destinationEtaEpoch = nullableNumber(input.destinationEtaEpoch);
 	const passed = parsePassed(input.passed);
 	const suggestion = parseSuggestion(input.suggestion);
+	const nextLegs = parseNextLegs(input.nextLegs);
 	if (
 		!(
 			oneOf<CommuteStage>(stage, STAGES) &&
@@ -150,7 +203,8 @@ export function parseContentState(input: unknown): ContentState | null {
 		leaveEpoch === undefined ||
 		destinationEtaEpoch === undefined ||
 		passed === undefined ||
-		suggestion === undefined
+		suggestion === undefined ||
+		nextLegs === undefined
 	) {
 		return null;
 	}
@@ -164,6 +218,7 @@ export function parseContentState(input: unknown): ContentState | null {
 		legIndex,
 		lineName,
 		mode,
+		nextLegs,
 		passed,
 		positionState,
 		sentAt,

@@ -10,9 +10,10 @@ const NOW = 1_794_265_200; // 2026-11-10 08:00 KST
 
 interface Case {
 	expected: {
-		actions: string[];
 		detail: string;
 		minutes: string | null;
+		moreLegs: string | null;
+		nextLegs: { lineName: string; mode: "bus" | "subway"; text: string }[];
 		status: string;
 		suggestion: string | null;
 		tag: string;
@@ -77,7 +78,8 @@ for (const item of cases) {
 		expect(model.minutes).toBe(item.expected.minutes);
 		expect(model.tag).toBe(item.expected.tag);
 		expect(model.suggestion).toBe(item.expected.suggestion);
-		expect(model.actions).toEqual(item.expected.actions as never);
+		expect(model.nextLegs).toEqual(item.expected.nextLegs);
+		expect(model.moreLegs).toBe(item.expected.moreLegs);
 		if (item.header) {
 			expect(model.header).toBe(item.header);
 		}
@@ -138,46 +140,100 @@ it("tags", () => {
 	expect(stale.tagLabel).toBe("시간표 추정");
 });
 
-it("actions per platform and stage", () => {
-	expect(lockScreenModel(state({ stage: "walk" }), deps()).actions).toEqual([
-		"boarded",
-		"next",
-	]);
-	expect(lockScreenModel(state({ stage: "ride" }), deps()).actions).toEqual([]);
-	expect(
-		lockScreenModel(state({ stage: "wait" }), deps({ platform: "android" }))
-			.actions
-	).toEqual(["boarded", "next", "end"]);
-	expect(
-		lockScreenModel(state({ stage: "ride" }), deps({ platform: "android" }))
-			.actions
-	).toEqual(["end"]);
+const STAGES = ["walk", "wait", "ride", "arrived", "ended"] as const;
+
+it("actions: iOS has none and Android has only end, at every stage", () => {
+	for (const stage of STAGES) {
+		expect(lockScreenModel(state({ stage }), deps()).actions).toEqual([]);
+		expect(
+			lockScreenModel(state({ stage }), deps({ platform: "android" })).actions
+		).toEqual(["end"]);
+	}
 });
 
-it("progress nodes grow with leg count", () => {
-	expect(lockScreenModel(state({ legCount: 1 }), deps()).progress.nodes).toBe(
-		4
-	);
-	expect(lockScreenModel(state({ legCount: 3 }), deps()).progress.nodes).toBe(
-		8
-	);
-	const second = lockScreenModel(
-		state({ legCount: 3, legIndex: 1, stage: "wait" }),
+const JAMSIL_0836 = NOW + 36 * 60;
+const SUBWAY_LEG = {
+	boardEtaEpoch: JAMSIL_0836,
+	etaState: "live",
+	lineName: "2호선",
+	mode: "subway",
+	stopName: "잠실역",
+} as const;
+
+it("one remaining leg is one line without the rest count", () => {
+	const model = lockScreenModel(
+		state({ legCount: 2, legIndex: 0, nextLegs: [SUBWAY_LEG] }),
 		deps()
 	);
-	expect(second.progress.current).toBe(3);
-	expect(
-		lockScreenModel(state({ legCount: 3, legIndex: 1, stage: "walk" }), deps())
-			.progress.current
-	).toBe(2);
-	expect(
-		lockScreenModel(state({ legCount: 3, legIndex: 1, stage: "ride" }), deps())
-			.progress.current
-	).toBe(3.5);
-	expect(
-		lockScreenModel(state({ legCount: 3, stage: "arrived" }), deps()).progress
-			.current
-	).toBe(7);
+	expect(model.nextLegs).toEqual([
+		{ lineName: "2호선", mode: "subway", text: "잠실역 · 08:36 승차" },
+	]);
+	expect(model.moreLegs).toBeNull();
+});
+
+it("three remaining legs are two lines and the rest count", () => {
+	const model = lockScreenModel(
+		state({
+			legCount: 4,
+			legIndex: 0,
+			nextLegs: [
+				SUBWAY_LEG,
+				{
+					...SUBWAY_LEG,
+					lineName: "341",
+					mode: "bus",
+					stopName: "잠실역.롯데월드",
+				},
+				{ ...SUBWAY_LEG, lineName: "3412", mode: "bus", stopName: "강동구청" },
+			],
+		}),
+		deps()
+	);
+	expect(model.nextLegs.map((leg) => leg.lineName)).toEqual(["2호선", "341"]);
+	expect(model.moreLegs).toBe("외 1구간");
+});
+
+it("an estimated remaining leg says about", () => {
+	const model = lockScreenModel(
+		state({ nextLegs: [{ ...SUBWAY_LEG, etaState: "estimated" }] }),
+		deps()
+	);
+	expect(model.nextLegs[0]?.text).toBe("잠실역 · 약 08:36 승차");
+});
+
+it("a remaining leg without a time shows the stop only", () => {
+	const model = lockScreenModel(
+		state({
+			nextLegs: [{ ...SUBWAY_LEG, boardEtaEpoch: null, etaState: "estimated" }],
+		}),
+		deps()
+	);
+	expect(model.nextLegs[0]?.text).toBe("잠실역");
+});
+
+it("no remaining legs is no lines", () => {
+	const model = lockScreenModel(state({ nextLegs: [] }), deps());
+	expect(model.nextLegs).toEqual([]);
+	expect(model.moreLegs).toBeNull();
+});
+
+it("before leave says when to go and when to board", () => {
+	const model = lockScreenModel(
+		state({
+			etaEpoch: NOW + 15 * 60,
+			leaveEpoch: NOW + 10 * 60,
+			legIndex: 0,
+			stage: "walk",
+			stopName: "천호역.현대백화점",
+		}),
+		deps()
+	);
+	expect(model.status).toBe("08:10에 나가세요");
+	expect(model.detail).toBe("천호역.현대백화점 · 08:15 탑승");
+});
+
+it("has no progress field", () => {
+	expect(lockScreenModel(state({}), deps())).not.toHaveProperty("progress");
 });
 
 it("uses the fallback header when none is stored", () => {

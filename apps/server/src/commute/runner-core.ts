@@ -365,6 +365,7 @@ function endedContentFrom(
 ): ContentState {
 	return {
 		...last,
+		nextLegs: [],
 		passed: null,
 		sentAt: Math.floor(now / 1000),
 		seq: state.seq + 1,

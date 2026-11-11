@@ -960,6 +960,7 @@ describe("RunnerCore 푸시 응답", () => {
 		const end = h.push.sent.at(-1) as SentRequest;
 		expect(contentOf(end).stage).toBe("ended");
 		expect(contentOf(end).seq).toBe(2);
+		expect(contentOf(end).nextLegs).toEqual([]);
 		const [row] = [...h.db.sessions.values()];
 		expect(row?.status).toBe("ended");
 		expect(row?.endReason).toBe("plan-removed");

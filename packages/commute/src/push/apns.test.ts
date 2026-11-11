@@ -26,6 +26,7 @@ const STATE: ContentState = {
 	legIndex: 0,
 	lineName: "6411",
 	mode: "bus",
+	nextLegs: [],
 	passed: null,
 	positionState: "live",
 	sentAt: 1_800_000_000,

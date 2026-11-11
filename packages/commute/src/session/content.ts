@@ -8,6 +8,19 @@ const MS_PER_MINUTE = 60_000;
 const SECONDS_PER_MINUTE = 60;
 const PRIORITY_STAGE = 10;
 const PRIORITY_CHANGE = 5;
+/** 남은 구간은 경로의 구간 한도(4개)에서 지금 구간을 뺀 3개까지다. */
+const MAX_NEXT_LEGS = 3;
+
+/** 기본 경로에서 지금 구간 뒤에 남은 구간 하나(스펙 5.3 `nextLegs`). */
+export interface NextLegContent {
+	/** 그 구간의 승차 예상(epoch 초). 앞 구간에서 잡은 차량을 탔다고 보고 계산한 값. */
+	boardEtaEpoch: number | null;
+	etaState: "live" | "estimated";
+	lineName: string;
+	mode: "bus" | "subway";
+	/** 그 구간의 승차 정류장(역). */
+	stopName: string;
+}
 
 /** 푸시로 보내는 값 v1(스펙 5.3). 시각은 epoch 초. 문장은 기기가 만든다. */
 export interface ContentState {
@@ -24,6 +37,8 @@ export interface ContentState {
 	legIndex: number;
 	lineName: string;
 	mode: "bus" | "subway";
+	/** 지금 구간 뒤에 남은 구간(최대 3개). 마지막 구간이거나 arrived·ended면 []. */
+	nextLegs: NextLegContent[];
 	passed: { lineName: string } | null;
 	positionState: "live" | "stale" | "none";
 	sentAt: number;
@@ -136,6 +151,32 @@ function suggestionOf(
 	};
 }
 
+function nextLegsOf(
+	state: SessionState,
+	route: Route | undefined,
+	legIndex: number,
+	primary: RouteEstimate | undefined
+): NextLegContent[] {
+	if (
+		route === undefined ||
+		state.stage === "arrived" ||
+		state.stage === "ended"
+	) {
+		return [];
+	}
+	const first = legIndex + 1;
+	return route.legs.slice(first, first + MAX_NEXT_LEGS).map((leg, offset) => {
+		const estimate = primary?.legs[first + offset];
+		return {
+			boardEtaEpoch: toEpochOrNull(estimate?.boardEtaAt),
+			etaState: estimate?.etaState ?? "estimated",
+			lineName: leg.lineName,
+			mode: leg.mode,
+			stopName: leg.board.name,
+		};
+	});
+}
+
 /** 지금 상태를 푸시 값으로 만든다. seq는 보낼 때마다 오르므로 state.seq + 1. */
 export function buildContent(
 	state: SessionState,
@@ -170,6 +211,7 @@ export function buildContent(
 		legIndex,
 		lineName: leg?.lineName ?? "",
 		mode: leg?.mode ?? "bus",
+		nextLegs: nextLegsOf(state, route, legIndex, primary),
 		passed: state.passed ? { lineName: state.passed.lineName } : null,
 		positionState: legEstimate?.positionState ?? "none",
 		sentAt: toEpoch(now),
@@ -182,8 +224,43 @@ export function buildContent(
 	};
 }
 
+/** 배포 전에 저장된 옛 값에는 `nextLegs`가 없다. 그때는 남은 구간이 없던 것으로 본다. */
+function nextLegsIn(content: {
+	nextLegs?: readonly NextLegContent[];
+}): readonly NextLegContent[] {
+	return content.nextLegs ?? [];
+}
+
+function isNextLegsStageChange(
+	prev: ContentState,
+	next: ContentState
+): boolean {
+	const before = nextLegsIn(prev);
+	const after = nextLegsIn(next);
+	return (
+		before.length !== after.length ||
+		after.some((leg, index) => leg.lineName !== before[index]?.lineName)
+	);
+}
+
+function isNextLegsValueChange(
+	prev: ContentState,
+	next: ContentState
+): boolean {
+	const before = nextLegsIn(prev);
+	return nextLegsIn(next).some((leg, index) => {
+		const old = before[index];
+		return (
+			old === undefined ||
+			minuteOf(old.boardEtaEpoch) !== minuteOf(leg.boardEtaEpoch) ||
+			old.etaState !== leg.etaState
+		);
+	});
+}
+
 function isStageChange(prev: ContentState, next: ContentState): boolean {
 	return (
+		isNextLegsStageChange(prev, next) ||
 		prev.stage !== next.stage ||
 		prev.legIndex !== next.legIndex ||
 		prev.lineName !== next.lineName ||
@@ -201,7 +278,8 @@ function isValueChange(prev: ContentState, next: ContentState): boolean {
 		prev.etaState !== next.etaState ||
 		prev.delayMinutes !== next.delayMinutes ||
 		prev.suggestion?.savesMinutes !== next.suggestion?.savesMinutes ||
-		minuteOf(prev.destinationEtaEpoch) !== minuteOf(next.destinationEtaEpoch)
+		minuteOf(prev.destinationEtaEpoch) !== minuteOf(next.destinationEtaEpoch) ||
+		isNextLegsValueChange(prev, next)
 	);
 }
 

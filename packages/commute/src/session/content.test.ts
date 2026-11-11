@@ -45,7 +45,29 @@ const altSubwayLeg: SubwayLeg = {
 	mode: "subway",
 };
 
+const transferSubwayLeg: SubwayLeg = {
+	alight: { name: "고속터미널", stop: "seoul-subway:1009000923" },
+	board: { name: "흑석", stop: "seoul-subway:1009000920" },
+	direction: "down",
+	line: "seoul-subway:line9",
+	lineName: "9호선",
+	mode: "subway",
+};
+
+const transferBusLeg: BusLeg = {
+	alight: { name: "서초역", seq: 18, stop: "seoul-bus:122000201" },
+	board: { name: "고속터미널", seq: 11, stop: "seoul-bus:122000102" },
+	line: "seoul-bus:100100643",
+	lineName: "643",
+	mode: "bus",
+};
+
 const primary: Route = { legs: [busLeg], rank: 0, walkMinutes: [5, 3] };
+const threeLegs: Route = {
+	legs: [busLeg, transferSubwayLeg, transferBusLeg],
+	rank: 0,
+	walkMinutes: [5, 3, 3, 5],
+};
 const alt1: Route = { legs: [altBusLeg], rank: 1, walkMinutes: [2, 4] };
 const alt2: Route = { legs: [altSubwayLeg], rank: 2, walkMinutes: [6, 4] };
 
@@ -65,6 +87,7 @@ function planOf(routes: Route[]): CommutePlan {
 }
 
 const plan = planOf([primary, alt1, alt2]);
+const transferPlan = planOf([threeLegs]);
 
 function legEstimate(overrides: Partial<LegEstimate> = {}): LegEstimate {
 	return {
@@ -119,6 +142,7 @@ function content(overrides: Partial<ContentState> = {}): ContentState {
 		legIndex: 0,
 		lineName: "6411",
 		mode: "bus",
+		nextLegs: [],
 		passed: null,
 		positionState: "live",
 		sentAt: epoch(at(1)),
@@ -365,6 +389,136 @@ describe("buildContent", () => {
 	});
 });
 
+describe("buildContent nextLegs", () => {
+	/** 구간 3개 경로의 추정. 둘째 구간은 시간표 추정, 셋째 구간은 실시간. */
+	function transferEstimate(): RouteEstimate {
+		return {
+			destinationEtaAt: at(58),
+			legs: [
+				legEstimate(),
+				legEstimate({
+					alightEtaAt: at(48),
+					boardEtaAt: at(36, 40) + 500,
+					etaState: "estimated",
+					method: "headway",
+				}),
+				legEstimate({ alightEtaAt: at(57), boardEtaAt: at(52) }),
+			],
+			rank: 0,
+		};
+	}
+
+	function transferState(overrides: Partial<SessionState> = {}): SessionState {
+		return stateOf({
+			boardedBy: [null, null, null],
+			estimates: [transferEstimate()],
+			fixed: ["B", null, null],
+			stage: "wait",
+			...overrides,
+		});
+	}
+
+	it("구간 3개 경로의 첫 구간 wait에서 둘째·셋째 구간의 승차 정류장과 승차 예상", () => {
+		const result = buildContent(transferState(), transferPlan, at(14), config);
+		expect(result.nextLegs).toEqual([
+			{
+				boardEtaEpoch: epoch(at(36, 40)),
+				etaState: "estimated",
+				lineName: "9호선",
+				mode: "subway",
+				stopName: "흑석",
+			},
+			{
+				boardEtaEpoch: epoch(at(52)),
+				etaState: "live",
+				lineName: "643",
+				mode: "bus",
+				stopName: "고속터미널",
+			},
+		]);
+	});
+
+	it("첫 구간 ride에서도 뒤 구간 둘을 담는다", () => {
+		const result = buildContent(
+			transferState({ stage: "ride" }),
+			transferPlan,
+			at(26),
+			config
+		);
+		expect(result.nextLegs.map((leg) => leg.lineName)).toEqual([
+			"9호선",
+			"643",
+		]);
+	});
+
+	it("둘째 구간에서는 셋째 구간 하나", () => {
+		const result = buildContent(
+			transferState({ legIndex: 1 }),
+			transferPlan,
+			at(34),
+			config
+		);
+		expect(result.nextLegs.map((leg) => leg.stopName)).toEqual(["고속터미널"]);
+	});
+
+	it("같은 경로 셋째 구간 wait에서는 []", () => {
+		const result = buildContent(
+			transferState({ legIndex: 2 }),
+			transferPlan,
+			at(50),
+			config
+		);
+		expect(result.nextLegs).toEqual([]);
+	});
+
+	it("1구간 경로에서는 []", () => {
+		const result = buildContent(stateOf(), plan, at(1), config);
+		expect(result.nextLegs).toEqual([]);
+	});
+
+	it("arrived와 ended에서는 []", () => {
+		for (const stage of ["arrived", "ended"] as const) {
+			const result = buildContent(
+				transferState({ stage }),
+				transferPlan,
+				at(58),
+				config
+			);
+			expect(result.nextLegs).toEqual([]);
+		}
+	});
+
+	it("추정이 없으면 boardEtaEpoch null, etaState estimated", () => {
+		const result = buildContent(
+			transferState({ estimates: [] }),
+			transferPlan,
+			at(1),
+			config
+		);
+		expect(result.nextLegs).toEqual([
+			{
+				boardEtaEpoch: null,
+				etaState: "estimated",
+				lineName: "9호선",
+				mode: "subway",
+				stopName: "흑석",
+			},
+			{
+				boardEtaEpoch: null,
+				etaState: "estimated",
+				lineName: "643",
+				mode: "bus",
+				stopName: "고속터미널",
+			},
+		]);
+	});
+
+	it("구간 3개 경로의 값도 2KB보다 작다", () => {
+		const result = buildContent(transferState(), transferPlan, at(14), config);
+		expect(JSON.stringify(result).length).toBeLessThan(2048);
+	});
+});
+
 describe("decideSend", () => {
 	const NOW = at(2);
 
@@ -489,6 +643,97 @@ describe("decideSend", () => {
 		expect(
 			decideSend(content(), content(), NOW - 109_000, NOW, config)
 		).toEqual({ send: false });
+	});
+
+	describe("nextLegs", () => {
+		const last = NOW - 30_000;
+		const second = {
+			boardEtaEpoch: epoch(at(36)),
+			etaState: "estimated" as const,
+			lineName: "9호선",
+			mode: "subway" as const,
+			stopName: "흑석",
+		};
+		const third = {
+			boardEtaEpoch: epoch(at(52)),
+			etaState: "live" as const,
+			lineName: "643",
+			mode: "bus" as const,
+			stopName: "고속터미널",
+		};
+		const prev = content({ legCount: 3, nextLegs: [second, third] });
+
+		it("둘째 구간 시각만 1분 바뀌면 5 change", () => {
+			const next = content({
+				legCount: 3,
+				nextLegs: [
+					{ ...second, boardEtaEpoch: second.boardEtaEpoch + 60 },
+					third,
+				],
+			});
+			expect(decideSend(prev, next, last, NOW, config)).toEqual({
+				priority: 5,
+				reason: "change",
+				send: true,
+			});
+		});
+
+		it("어느 구간의 etaState만 바뀌면 5 change", () => {
+			const next = content({
+				legCount: 3,
+				nextLegs: [{ ...second, etaState: "live" }, third],
+			});
+			expect(decideSend(prev, next, last, NOW, config)).toEqual({
+				priority: 5,
+				reason: "change",
+				send: true,
+			});
+		});
+
+		it("남은 구간 수가 바뀌면 10 stage", () => {
+			const next = content({ legCount: 3, nextLegs: [third] });
+			expect(decideSend(prev, next, last, NOW, config)).toEqual({
+				priority: 10,
+				reason: "stage",
+				send: true,
+			});
+		});
+
+		it("어느 구간의 노선이 바뀌면 10 stage", () => {
+			const next = content({
+				legCount: 3,
+				nextLegs: [second, { ...third, lineName: "740" }],
+			});
+			expect(decideSend(prev, next, last, NOW, config)).toEqual({
+				priority: 10,
+				reason: "stage",
+				send: true,
+			});
+		});
+
+		it("같은 분 안에서 초만 바뀌면 보내지 않는다", () => {
+			const next = content({
+				legCount: 3,
+				nextLegs: [
+					{ ...second, boardEtaEpoch: second.boardEtaEpoch + 20 },
+					{ ...third, boardEtaEpoch: third.boardEtaEpoch + 59 },
+				],
+			});
+			expect(decideSend(prev, next, last, NOW, config)).toEqual({
+				send: false,
+			});
+		});
+
+		it("nextLegs가 없는 옛 값(배포 전에 저장된 값)은 []로 본다", () => {
+			const { nextLegs: _dropped, ...rest } = content();
+			const old = rest as ContentState;
+			expect(decideSend(old, content(), last, NOW, config)).toEqual({
+				send: false,
+			});
+			expect(
+				decideSend(old, content({ nextLegs: [third] }), last, NOW, config)
+			).toEqual({ priority: 10, reason: "stage", send: true });
+		});
 	});
 
 	it("lastSentAt이 null이면 heartbeat로 보낸다", () => {

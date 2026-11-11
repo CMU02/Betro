@@ -12,11 +12,10 @@ export const ko = {
 	commute: {
 		lock: {
 			action: {
-				boarded: "탔어요",
 				end: "종료",
-				next: "다음 차 탈게요",
 			},
 			detail: {
+				beforeLeave: "{stop} · {eta} 탑승",
 				eta: "{stop} · {eta} 도착",
 				etaEstimated: "{stop} · 약 {eta} 도착",
 				noEta: "{stop}",
@@ -28,10 +27,16 @@ export const ko = {
 				soon: "곧",
 				value: "{m}분",
 			},
+			nextLeg: {
+				eta: "{stop} · {eta} 승차",
+				etaEstimated: "{stop} · 약 {eta} 승차",
+				more: "외 {n}구간",
+				noEta: "{stop}",
+			},
 			status: {
 				arrived: "{stop} 도착",
 				arriving: "곧 도착",
-				beforeLeave: "{leave}에 나가면 {line} {eta} 탑승",
+				beforeLeave: "{leave}에 나가세요",
 				passedBus: "{passedLine}번이 지나갔어요 · 다음 차 {eta}",
 				passedSubway: "{passedLine} 열차가 지나갔어요 · 다음 열차 {eta}",
 				ride: "하차까지 {n}정거장",

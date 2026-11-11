@@ -168,6 +168,14 @@ R2에서 직접 확인하려면 객체 목록에서 그날 `raw/` 조각 수를 
 - 지하철은 수집기의 역별 도착 행을 받아 쓰고, 버스는 노선별 도착 API를 직접 부른다. 상류 401·429, 한도 초과가 나면 그날은 버스 호출을 멈춘다.
 - 로컬 `.dev.vars`의 `UPSTREAM_MODE=fixture`에서는 상류를 부르지 않고 `packages/commute/src/__fixtures__`의 표본을 쓴다.
 
+### 푸시 값
+
+푸시(APNs `content-state`, FCM `data.state`)와 `GET /v1/commute/sessions/active`의 `content`는 같은 값 `ContentState` v1이다. 필드와 보낼지 판단은 스펙 5.3 "푸시 값 v1"과 `packages/commute/src/session/content.ts`가 원본이다.
+
+- `nextLegs`(2026-11-11에 더함): 기본 경로에서 지금 구간 뒤에 남은 구간을 순서대로 담는다(최대 3개). 항목은 `{ mode, lineName, stopName, boardEtaEpoch, etaState }`이고 `stopName`은 그 구간의 승차 정류장(역), `boardEtaEpoch`는 그 구간 추정의 승차 예상(초, 내림, 없으면 `null`)이다. 마지막 구간이거나 `arrived`·`ended`면 `[]`다. 서버는 키를 늘 보낸다.
+- `v`는 1 그대로다. 옛 앱은 `nextLegs`를 무시하고, 새 앱은 키가 없는 옛 서버의 값을 `[]`로 읽는다. 배포 전에 실행기에 저장된 마지막 값에 키가 없어도 `decideSend`는 `[]`로 본다.
+- 보낼지 판단: `nextLegs`의 길이나 어느 항목의 `lineName`이 바뀌면 높은 우선순위(10), 어느 항목의 `boardEtaEpoch` 분이나 `etaState`가 바뀌면 낮은 우선순위(5).
+
 ### 푸시 모드 (`PUSH_MODE`)
 
 - `log`: APNs·FCM을 부르지 않고 `push (log) <이벤트> host=<호스트>` 줄만 남긴다. 보낸 것으로 치고 상태 200을 돌려받은 것처럼 이어간다. 로컬 `.dev.vars`의 값이고, 변수가 없을 때의 기본값이다.
