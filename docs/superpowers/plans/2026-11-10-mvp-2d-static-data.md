@@ -198,6 +198,13 @@
 **Files:**
 - Modify: `apps/server/README.md`(조회 API 절), 이 계획 문서(결과)
 
-- [ ] **Step 1: 배포** — Task 3 Step 5의 원격 D1이 끝난 뒤 `cd apps/server && bun run deploy`. Expected: `curl 'https://betro.cmu02-studio.com/v1/ref/bus/routes?q=6411'`이 `seoul-bus:100100290`을 돌려주고, `q=M5107`이 경기 노선을 돌려준다. `/v1/snapshot/subway`는 그대로 200.
-- [ ] **Step 2: 수집기 확인** — 배포 10분 뒤 R2에 `raw/bus-100100290/…` 조각이 계속 쌓이는지 본다(4단계 README "이력과 일일 보고서"). Expected: 80초 간격 그대로.
-- [ ] **Step 3: 문서와 커밋** — README에 라우트와 응답 예를 적는다. `docs(server): document the registration lookup API`
+- [x] **Step 1: 배포** — Task 3 Step 5의 원격 D1이 끝난 뒤 `cd apps/server && bun run deploy`. Expected: `curl 'https://betro.cmu02-studio.com/v1/ref/bus/routes?q=6411'`이 `seoul-bus:100100290`을 돌려주고, `q=M5107`이 경기 노선을 돌려준다. `/v1/snapshot/subway`는 그대로 200.
+- [x] **Step 2: 수집기 확인** — 배포 10분 뒤 R2에 `raw/bus-100100290/…` 조각이 계속 쌓이는지 본다(4단계 README "이력과 일일 보고서"). Expected: 80초 간격 그대로.
+- [x] **Step 3: 문서와 커밋** — README에 라우트와 응답 예를 적는다. `docs(server): document the registration lookup API`
+
+#### Task 6 결과 (2026-11-11)
+
+- **배포**: `feat/mvp2-static-data`(86934e5)에서 `bun run deploy`, `betro-server` version `7a5a7e31`(이전 `5be6ea6c`는 2-C 코드에 secret만 바꾼 판. 되돌릴 때 쓴다). 이 브랜치에는 #16(2-F)이 합쳐져 있지 않지만, #16은 `apps/server`와 `packages`를 바꾸지 않아 운영 서버에서 빠지는 변경은 없다. 배포 전 `bun test` 942 pass / 7 skip / 0 fail, `bun run check-types` 통과.
+- **운영 확인**: `q=6411` → `seoul-bus:100100290`(배치 10), `q=M5107` → `M5107광주`(gyeonggi), `/v1/ref/subway/lines` 19개 노선, 6411 정류장 117개, `ETag: "bus-10"`로 다시 부르면 304, `/v1/snapshot/subway` 200.
+- **수집기**: 배포(13:54 UTC) 10분 뒤 R2 `raw/bus-100100290/2026/11/11/`에 조각이 배포 전과 같은 약 160초 간격으로 계속 쌓였다(13:55, 13:57, 14:00, 14:03). `COLLECTOR_MODE`는 `dev` 그대로다.
+
