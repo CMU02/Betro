@@ -236,7 +236,7 @@ bun transit report:match-rate                # 표본 열차번호를 현재 tim
 
 ## 버스 노선 명령 순서
 
-서울 시내버스 노선마다 정류소 목록(`getStaionByRoute`)과 노선 모양(`getRoutePath`)을 받아, 정류소를 모양 위에 seq 순으로 투영하고 정류소 구간을 만들어 적재한다. 노선 목록은 OA-1095 노선별 정류소 엑셀에서 얻는다.
+서울 시내·마을버스와 서울을 오가는 경기·인천 버스 노선마다 정류소 목록(`getStaionByRoute`)과 노선 모양(`getRoutePath`)을 받아, 정류소를 모양 위에 seq 순으로 투영하고 정류소 구간을 만들어 적재한다. 노선 목록은 OA-1095 노선별 정류소 엑셀의 노선에, `getBusRouteList` 검색으로 얻은 routeType 7·8 노선을 더한 것이다(경기·인천 노선은 엑셀에 없다).
 
 - 출처 표기: `서울특별시 버스노선정보(공공데이터포털)`. 모양은 getRoutePath에서만 가져온다. OSM이 아니므로 ODbL 표기를 붙이지 않는다.
 - 키: `DATA_GO_KR_API_KEY`. [공공데이터포털](https://www.data.go.kr)에서 서울특별시_노선정보조회 서비스(15000193)를 활용신청하고 받은 서비스키(일반 인증키)다. `packages/transit-static/.env`(Bun이 읽는다, 커밋하지 않는다)나 셸 환경 변수로 넣는다. OA-1095 엑셀은 키가 없어도 된다.
@@ -244,6 +244,7 @@ bun transit report:match-rate                # 표본 열차번호를 현재 tim
 
 ```bash
 bun transit fetch:bus-route-xlsx [--seq 58]       # OA-1095 노선별 정류소 엑셀 (키 불필요, 기본 seq 58 = 20260902판)
+bun transit fetch:bus-route-list                  # getBusRouteList 검색어 16개로 노선 목록 (경기·인천 노선 ID 출처). 키 필요
 bun transit fetch:bus-routes [--max-age-days 7]   # 노선마다 getStaionByRoute, 범위 안 노선만 getRoutePath. 키 필요
 bun transit build:bus-routes --dry-run            # 조립·검증하고 보고서만 쓴다 (DB에 쓰지 않는다)
 bun transit build:bus-routes                      # ok이면 DB에 적재한다
@@ -252,13 +253,14 @@ bun transit build:bus-routes                      # ok이면 DB에 적재한다
 - 엑셀 판이 둘 이상 있으면 가장 큰 seq를 쓴다.
 - `fetch:bus-routes`는 `--max-age-days`(기본 7일) 안에 받은 원본을 다시 부르지 않는다. API가 노선 없음(headerCd 4)으로 답한 노선은 고정 본문을 저장해, 다음 실행에서 다시 부르지 않고 조립 단계도 "아직 안 받음"과 구분한다.
 - 출력의 `stoppedBy`가 `none`이 될 때까지 다시 실행한다. `failed`가 남으면 보고서에 원인을 적는다.
-- `build:bus-routes`의 `ok` = 원본 없는 노선 0개 **그리고** 범위 안 노선 중 적재 가능한(error 없는) 노선이 98% 이상. ok가 아니면 exit 1이고 적재하지 않는다. error가 난 노선은 빼고 보고서 "제외 노선"에 남긴다.
-- 적재는 한 트랜잭션으로 `reference_batch(kind="bus_route")`를 만들고 `bus_route`, `bus_route_shape`, `bus_route_stop`, `bus_route_segment`를 넣은 뒤 현재 배치로 바꾼다. manifest는 노선 엑셀 해시, 노선별 원본 해시 묶음, 로직 버전(`busRouteLogicVersion` = `BUS_ROUTE_LOGIC_VERSION`, 현재 3)이다. 모두 같으면 다시 적재하지 않는다. 조립 결과가 달라지는 코드를 고치면 그 상수를 올린다.
+- `fetch:bus-route-list`가 쓴 `data/raw/bus-route-list/<UTC 날짜>/routes.json`이 없으면 `fetch:bus-routes`는 먼저 그 명령을 돌리라고 안내하고 exit 1이다. 7일 안에 받은 검색어는 다시 부르지 않는다.
+- `build:bus-routes`의 `ok` = 원본 없는 노선 0개 **그리고** 서울 면허 노선(마을 포함, `seoul`)의 적재 가능한(error 없는) 비율 98% 이상 **그리고** 경기·인천 노선(`regional`)의 적재 가능 비율 90% 이상(`REPORT_MIN_LOADABLE_RATIO`). 경기·인천 노선이 0개면 서울 기준만 본다. ok가 아니면 exit 1이고 적재하지 않는다. error가 난 노선은 그 노선만 빼고 보고서 "제외 노선"에 남긴다.
+- 적재는 한 트랜잭션으로 `reference_batch(kind="bus_route")`를 만들고 `bus_route`, `bus_route_shape`, `bus_route_stop`, `bus_route_segment`를 넣은 뒤 현재 배치로 바꾼다. `bus_route.region`은 `regionOf(routeType)`(8 → `gyeonggi`, 7 → `incheon`, 그 밖 → `seoul`), `short_name`은 노선 목록의 `busRouteAbrv`(지역을 뗀 이름, 예: `M5107광주` → `M5107`)이고 목록에 없는 서울 노선은 `route_name`과 같다. manifest는 노선 엑셀 해시, 노선별 원본 해시 묶음, 로직 버전(`busRouteLogicVersion` = `BUS_ROUTE_LOGIC_VERSION`, 현재 4)이다. 모두 같으면 다시 적재하지 않는다. 조립 결과가 달라지는 코드를 고치면 그 상수를 올린다.
 - 보고서는 `data/reports/build-bus-routes/`에 쓴다.
 
 ### 한도와 이어받기
 
-- 개발계정 한도는 오퍼레이션별 하루 1,000건이고 KST 00시에 초기화된다. 718개 노선이면 `getStaionByRoute` 718건, `getRoutePath` 범위 안 노선 수(현재 427건)가 든다.
+- 개발계정 한도는 오퍼레이션별 하루 1,000건이고 KST 00시에 초기화된다. 2026-11-11 기준 1,346개 노선이면 `getStaionByRoute` 1,346건, `getRoutePath` 범위 안 노선 수(1,302건, 7일 안에 받은 원본은 건너뛴다)가 들어 이틀에 걸쳐 받는다. `getBusRouteList`는 검색어마다 1건(16건)이다. 수집기의 `getBusPosByRtid`와 한도를 따로 센다.
 - 한 번 실행에 오퍼레이션별 최대 950건(`BUS_CALLS_PER_OPERATION_PER_RUN`)만 부른다. 다 쓰면 `stoppedBy: budget`으로 멈춘다. 다음 날 다시 실행하면 이미 받은 원본은 건너뛰고 남은 노선부터 받는다.
 - 다음 응답을 받으면 남은 노선에 호출을 쓰지 않고 멈춘다. 이미 저장한 원본은 그대로 남는다.
   - `quota-exceeded`(그 오퍼레이션만): HTTP 429, 본문 `returnReasonCode` 22, `LIMITED_NUMBER_OF_SERVICE_REQUESTS`.
@@ -269,7 +271,10 @@ bun transit build:bus-routes                      # ok이면 DB에 적재한다
 ### 범위 규칙
 
 - 유형은 OA-1095가 아니라 `getStaionByRoute` 응답의 `routeType`으로만 정한다(노선 ID 앞자리로는 알 수 없다). 수집과 조립이 같은 규칙(`src/bus/scope.ts`)을 쓴다.
-- routeType `1`(공항), `2`(마을), `7`(인천), `8`(경기), `9`(폐지), `10`(관광·한강버스 셔틀), `14`(한강버스 선박)은 제외한다(`OUT_OF_SCOPE_ROUTE_TYPES`). 그 밖의 값(가이드에 없는 `15` 심야 포함)은 포함한다. 유형별 근거는 `scope.ts` 주석에 있다.
+- routeType `1`(공항), `9`(폐지), `10`(관광·한강버스 셔틀), `14`(한강버스 선박)은 제외한다(`OUT_OF_SCOPE_ROUTE_TYPES`). 그 밖의 값(`2` 마을, `7` 인천, `8` 경기, 가이드에 없는 `15` 심야 포함)은 포함한다. 유형별 근거는 `scope.ts` 주석에 있다.
+- **경기·인천 노선(routeType 7·8, `REGIONAL_ROUTE_TYPES`)은 출퇴근 등록과 세션에만 쓴다.** 수집기의 `prod` 모드 위치 관측 대상(`D1ReferenceSource.currentBusRouteIds()`)에서 빠지고(`isMapObservedRouteType`), 조회 API(`/v1/ref/bus/*`)는 등록 화면 전용이다.
+- 서울에 들어오지 않는 경기·인천 노선(TAGO)과 경기 마을버스(GBIS)는 범위 밖이다. 노선 ID 형식(`seoul-bus:…`)은 나중에 `tago:…`, `gbis:…`를 더할 수 있게 출처를 앞에 붙인다.
+- 실측(2026-11-11 적재, 배치 10, OA-1095 20260902 + `getBusRouteList` 2026-11-10): 노선 1,346개 중 범위 안 1,302개(적재 1,283, 제외 19), 범위 밖 44개(1: 38, 10: 3, 14: 3). routeType별 2: 247, 3: 152, 4: 242, 5: 5, 6: 13, 7: 38, 8: 590, 15: 15. 지역별 적재 seoul 674(674 중 100%), gyeonggi 574, incheon 35(경기·인천 628 중 609, 97.0%). 정류소 84,944, 구간 83,661. 공표 수치 대조: 마을 247(공표 253), 경기·인천 628(공표 645), 둘 다 ±10% 안. 노선 목록(16건 호출)은 1,349개(routeType 7: 38, 8: 590)였다.
 - 자율주행 시범버스 11개(`AUTONOMOUS_PILOT_ROUTES`, 새벽A160·청와대A01 등)는 서울시 시내버스 396노선에 들지 않지만 실제 운행 노선이라 범위에 넣는다(2026-11-02 결정). 유형(3·5·15)으로는 거를 수 없으므로, 다시 빼려면 `OUT_OF_SCOPE_ROUTE_IDS`를 `AUTONOMOUS_PILOT_ROUTES`로 바꾸고 `BUS_ROUTE_LOGIC_VERSION`을 올린 뒤 `build:bus-routes`를 다시 돌린다. 이전 배치는 DB에 남는다. 실시간 위치 API가 이 노선들을 주는지는 4단계에서 확인한다.
 - 기점·종점이 서울 밖인지는 범위 기준이 아니다. 동행버스 서울01~10(기점이 경기)처럼 서울 밖에서 끝나는 서울 면허 노선도 포함한다.
 - 실측(2026-11-02 적재, OA-1095 20260902): 포함 427 ID(3: 152, 4: 242, 5: 5, 6: 13, 15: 15) = 자율주행 시범 11 + 시내버스 416 ID(3: 145, 4: 242, 5: 2, 6: 13, 15: 14). 시내버스 416 ID 중 출근/퇴근으로 나뉜 쌍 14개(동행 서울01~10, 맞춤 8442·8762·8773·8775)를 한 노선으로 세면 402 노선이다. 서울시 공표 396(2026-01, 합계만 확인)과의 차이 +6은 A/B 분기 6쌍(110A/B, 702A/B, 750A/B, 5522A/B, 6640A/B, 7013A/B)을 한 노선으로 세면 맞지만, 이는 추정이고 기준월 차이(1월 대 9~11월)일 수도 있다. 노선 ID는 DB에서 합치지 않는다(ID마다 정류소와 모양이 따로 있다).
@@ -277,7 +282,7 @@ bun transit build:bus-routes                      # ok이면 DB에 적재한다
 
 ### 검증 결과 코드
 
-error(그 노선을 적재에서 뺀다): `missing-stations`·`missing-path`(원본 없음), `route-not-found`(API가 노선 없음으로 답함), `bad-envelope`(응답 봉투가 정상이 아님), `bad-station-row`(정류소 행 하나라도 못 읽음. seq로 잇는 구간이 틀어지므로 뺀다), `no-stops`, `seq-not-contiguous`(seq가 1..N이 아님), `shape-too-short`(모양 2점 미만 또는 100m 미만). 2026-11-01에는 모두 0건이다.
+error(그 노선을 적재에서 뺀다): `missing-stations`·`missing-path`(원본 없음), `route-not-found`(API가 노선 없음으로 답함), `bad-envelope`(응답 봉투가 정상이 아님), `bad-station-row`(정류소 행 하나라도 못 읽음. seq로 잇는 구간이 틀어지므로 뺀다), `no-stops`, `seq-not-contiguous`(seq가 1..N이 아님), `shape-too-short`(모양 2점 미만 또는 100m 미만). 2026-11-01에는 모두 0건이다. 2026-11-11 적재에서는 경기·인천 노선 19개가 빠졌다: `route-not-found` 17(`getRoutePath`가 headerCd 4로 답함. 7007-1용인, 4401용인, 4402안성, 4305안성, 60김포, 5101화성, 39연천, 1330-4가평, 8842광주, 8844남양주, 5100성남, 5500하남, 4300수원, 4300-1수원, 4300-2군포, 8840화성, M6751인천), `shape-too-short` 2(M6463인천, M6464인천, 모양 0m). 서울 면허 노선은 0건이다.
 
 warning(적재하고 `qualityFlags`에 남긴다). `window-miss`와 `zero-length-segment`도 배치 오류가 아니라 원천 데이터 결함에서 나올 수 있다. 2026-11-02 적재(427개 노선, 정류소 32,098, 구간 31,671) 실측:
 
@@ -291,6 +296,8 @@ warning(적재하고 `qualityFlags`에 남긴다). `window-miss`와 `zero-length
 | `zero-length-segment` | 구간 길이 0m(두 정류소가 모양 위 같은 거리) | 1 (1) | 6516 seq 58→59, 원천 결함(아래) |
 | `mixed-route-type` | 한 노선의 정류소 행마다 routeType이 다름. 첫 행 값을 쓴다 | 0 | |
 | `bad-path-point` | 모양 점 일부를 읽지 못해 뺐다 | 0 | |
+
+2026-11-11 적재(1,283개 노선)의 warning 합계: `stop-off-shape` 3,890(487), `zero-length-segment` 2,993(333), `sect-dist-mismatch` 812(364), `window-miss` 78(36), `sect-dist-scale` 54(54), `xlsx-stop-count-mismatch` 10(10). 늘어난 몫은 대부분 마을·경기·인천 노선이다. 원인은 아직 노선별로 보지 않았다(보고서 `data/reports/build-bus-routes/20261111T134624.md`의 상위 20개 표부터 본다).
 
 ### 알려진 원천 데이터 문제(버스)
 
@@ -331,5 +338,6 @@ bun transit publish:d1 --remote            # 원격 D1
 
 - **로컬 id를 그대로 넣는다.** `reference_batch`와 자식 행(`station_crosswalk`, `track_shape`→`track_station`, `timetable_trip`→`timetable_stop_time`, `bus_route`→`bus_route_shape`/`bus_route_stop`/`bus_route_segment`)의 id가 `local.db`와 D1에서 같다. 그래서 `local.db`가 유일한 원본이어야 한다. `local.db`를 지우고 새로 빌드하면 id가 다시 1부터 매겨져 D1의 이전 배치와 부딪치므로, 그때는 D1을 비우고(마이그레이션부터 다시) 올린다.
 - D1에는 이전 배치가 남는다. 문제가 생기면 D1에서 `is_current`만 이전 배치로 되돌린다.
+- 실측(2026-11-11): 로컬 D1에 배치 5·8·9·10을 처음 올린 SQL이 76.9MB, 원격 D1에 새 버스 배치 10만 올린 SQL이 46.5MB였다(5·8·9는 이미 있어 건너뜀). 원격 실행 중에는 D1이 잠시 쿼리를 받지 않는다는 wrangler 경고가 나온다.
 - D1은 쿼리 하나에 바인딩 변수 100개까지만 받으므로 바인딩을 쓰지 않고 SQL 리터럴로 쓴다(문자열 `'` 이스케이프, JSON 컬럼은 JSON 문자열, boolean 0/1, timestamp_ms 정수, null은 `NULL`). 문 하나는 `D1_MAX_STATEMENT_BYTES`(90,000바이트, D1 한도 100KB 안) 이하로 나눈다. 한 행이 이 한도를 넘으면 오류로 멈춘다(2026-11-04 기준 가장 긴 행은 버스 노선 모양 약 74KB).
 - 부모 테이블 문이 자식보다 먼저 온다(D1은 외래 키를 검사한다).

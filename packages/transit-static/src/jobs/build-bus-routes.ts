@@ -6,18 +6,19 @@ import {
 	type BusAssembleResult,
 	type BusRouteRaw,
 } from "../bus/assemble";
+import { type BusRouteEntry, withRegionalRoutes } from "../bus/scope";
 import { isCurrentManifest, loadBusRoutes, withLogicVersion } from "../db/load";
-import { rawPath, resolveDatabaseUrl } from "../paths";
+import { resolveDatabaseUrl } from "../paths";
 import { readRaw, sha256Hex } from "../raw-store";
 import { writeReport } from "../reports";
+import { BUS_ROUTE_XLSX_SOURCE } from "../sources/bus-route-xlsx";
+import { BUS_ROUTE_LIST_SOURCE } from "./fetch-bus-route-list";
 import {
-	BUS_ROUTE_XLSX_SOURCE,
-	type BusRouteListEntry,
-	parseBusRouteRows,
-	readBusRouteXlsx,
-} from "../sources/bus-route-xlsx";
-import { latestBusRouteXlsx } from "./fetch-bus-route-xlsx";
-import { BUS_PATH_SOURCE, BUS_STATIONS_SOURCE } from "./fetch-bus-routes";
+	BUS_PATH_SOURCE,
+	BUS_STATIONS_SOURCE,
+	loadXlsxRoutes,
+	requireRouteList,
+} from "./fetch-bus-routes";
 
 const JOB_NAME = "build-bus-routes";
 
@@ -31,12 +32,13 @@ export interface BusRouteRawHash {
 }
 
 /**
- * bus_route 적재 manifest: 노선 목록 엑셀, 노선별 원본 해시 묶음, 조립 로직 버전.
+ * bus_route 적재 manifest: 노선 목록 엑셀, 노선별 원본 해시 묶음, 조립 로직 버전, 그 밖의 출처(extra, 예: 경기·인천 노선 목록).
  * 노선 원본이 하나라도 바뀌면 routeRaw 해시가 달라진다. 입력 순서는 결과에 영향을 주지 않는다.
  */
 export function busRouteManifest(
 	routeList: { fileName: string; sha256: string },
-	raws: readonly BusRouteRawHash[]
+	raws: readonly BusRouteRawHash[],
+	extra: SourceManifest = {}
 ): SourceManifest {
 	const joined = [...raws]
 		.sort((a, b) =>
@@ -48,6 +50,7 @@ export function busRouteManifest(
 		.join("\n");
 	return withLogicVersion(
 		{
+			...extra,
 			routeList,
 			routeRaw: {
 				fileName: `bus-route-stations+path (${raws.length} routes)`,
@@ -60,36 +63,40 @@ export function busRouteManifest(
 	);
 }
 
-async function readRouteList(dataDir: string): Promise<{
-	routes: BusRouteListEntry[];
+interface RouteSource {
+	/** manifest에 더하는 출처(노선 목록). */
+	extra: SourceManifest;
 	routeList: { fileName: string; sha256: string };
-}> {
-	const latest = await latestBusRouteXlsx(dataDir);
-	const raw = await readRaw(dataDir, BUS_ROUTE_XLSX_SOURCE, latest.fileName);
+	routes: BusRouteEntry[];
+}
+
+/** 노선 ID 출처: 엑셀의 노선 ∪ 최근 노선 목록(getBusRouteList)에서 routeType 7·8인 노선. 목록이 없으면 멈춘다. */
+async function readRouteList(dataDir: string): Promise<RouteSource> {
+	const list = requireRouteList(dataDir);
+	const xlsx = await loadXlsxRoutes(dataDir);
+	const raw = await readRaw(dataDir, BUS_ROUTE_XLSX_SOURCE, xlsx.fileName);
 	if (!raw) {
-		throw new Error(`bus route xlsx ${latest.fileName} disappeared`);
-	}
-	const rows = await readBusRouteXlsx(
-		rawPath(dataDir, BUS_ROUTE_XLSX_SOURCE, latest.fileName)
-	);
-	const { routes, errors } = parseBusRouteRows(rows);
-	if (errors.length > 0) {
-		throw new Error(
-			`bus route xlsx ${latest.fileName} invalid: ${errors.join("; ")}`
-		);
+		throw new Error(`bus route xlsx ${xlsx.fileName} disappeared`);
 	}
 	return {
+		extra: {
+			// 목록의 shortName과 경기·인천 노선 집합이 적재 결과에 들어가므로 목록 내용으로 해시한다.
+			regionalRouteList: {
+				fileName: `${BUS_ROUTE_LIST_SOURCE}/routes.json (${list.length} routes)`,
+				sha256: textHash(JSON.stringify(list)),
+			},
+		},
 		routeList: {
-			fileName: `${BUS_ROUTE_XLSX_SOURCE}/${latest.fileName}`,
+			fileName: `${BUS_ROUTE_XLSX_SOURCE}/${xlsx.fileName}`,
 			sha256: raw.sha256,
 		},
-		routes,
+		routes: withRegionalRoutes(xlsx.routes, list),
 	};
 }
 
 async function readBodies(
 	dataDir: string,
-	entry: BusRouteListEntry
+	entry: BusRouteEntry
 ): Promise<{ hash: BusRouteRawHash; raw: BusRouteRaw }> {
 	const name = `${entry.routeId}.json`;
 	const [stations, path] = await Promise.all([
@@ -125,10 +132,12 @@ function summaryOf(
 		routes: routes.map((route) => ({
 			lengthM: route.lengthM,
 			qualityFlags: route.qualityFlags,
+			region: route.region,
 			routeId: route.routeId,
 			routeName: route.routeName,
 			routeType: route.routeType,
 			segments: route.segments.length,
+			shortName: route.shortName,
 			stops: route.stops.length,
 		})),
 	};
@@ -139,8 +148,8 @@ export interface BuildBusRoutesOptions {
 	/** 없으면 DATABASE_URL로 연다. */
 	db?: Database;
 	dryRun: boolean;
-	/** 있으면 엑셀을 읽지 않고 이 목록을 쓴다(테스트용). */
-	routes?: BusRouteListEntry[];
+	/** 있으면 엑셀과 노선 목록을 읽지 않고 이 목록을 쓴다(테스트용). */
+	routes?: BusRouteEntry[];
 }
 
 export interface BuildBusRoutesResult {
@@ -163,8 +172,9 @@ export async function buildBusRoutes({
 }: BuildBusRoutesOptions): Promise<BuildBusRoutesResult> {
 	const database =
 		db ?? createDb({ DATABASE_URL: resolveDatabaseUrl(process.env) });
-	const source = routesOption
+	const source: RouteSource = routesOption
 		? {
+				extra: {},
 				routeList: {
 					fileName: `routes option (${routesOption.length})`,
 					sha256: textHash(JSON.stringify(routesOption)),
@@ -178,14 +188,15 @@ export async function buildBusRoutes({
 	const result = assembleBusRoutes(loaded.map(({ raw }) => raw));
 	const manifest = busRouteManifest(
 		source.routeList,
-		loaded.map(({ hash }) => hash)
+		loaded.map(({ hash }) => hash),
+		source.extra
 	);
 	const report = await writeReport(dataDir, JOB_NAME, {
 		markdown: result.markdown,
 		summary: summaryOf(result, manifest, dryRun),
 	});
 	console.log(
-		`ok: ${result.ok}\n적재 대상 노선: ${result.routes.length}\n제외 노선: ${result.excluded.length}\n원본 없음: ${result.missingRaw.length}\n범위 밖: ${result.outOfScope}\nreport: ${report.mdPath}`
+		`ok: ${result.ok}\n적재 대상 노선: ${result.routes.length}\n제외 노선: ${result.excluded.length}\n원본 없음: ${result.missingRaw.length}\n범위 밖: ${result.outOfScope}\n적재 가능(서울): ${result.loadable.seoul.loadable}/${result.loadable.seoul.inScope}\n적재 가능(경기·인천): ${result.loadable.regional.loadable}/${result.loadable.regional.inScope}\nreport: ${report.mdPath}`
 	);
 	if (!result.ok) {
 		console.error(

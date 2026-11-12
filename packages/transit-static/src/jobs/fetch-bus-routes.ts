@@ -1,5 +1,9 @@
 import { stat, utimes } from "node:fs/promises";
-import { isInScopeRoute } from "../bus/scope";
+import {
+	type BusRouteEntry,
+	isInScopeRoute,
+	withRegionalRoutes,
+} from "../bus/scope";
 import { rawPath } from "../paths";
 import { readRaw, saveRaw } from "../raw-store";
 import {
@@ -9,14 +13,19 @@ import {
 	readBusRouteXlsx,
 } from "../sources/bus-route-xlsx";
 import {
+	type BusRouteOperation as AnyBusRouteOperation,
 	type BusEnvelope,
-	type BusRouteOperation,
 	fetchBusRouteOperation,
 	maskKey,
 	parseBusEnvelope,
 	parseRouteStations,
 } from "../sources/seoul-bus-api";
+import type { BusRouteListRow } from "../sources/seoul-bus-route-list";
+import { latestRouteList } from "./fetch-bus-route-list";
 import { latestBusRouteXlsx } from "./fetch-bus-route-xlsx";
+
+/** 노선마다 부르는 오퍼레이션. 노선 목록 검색(getBusRouteList)은 따로 돈다. */
+type BusRouteOperation = Exclude<AnyBusRouteOperation, "getBusRouteList">;
 
 export const BUS_STATIONS_SOURCE = "bus-route-stations";
 export const BUS_PATH_SOURCE = "bus-route-path";
@@ -100,8 +109,8 @@ export interface FetchBusRoutesOptions {
 	now?: () => Date;
 	/** 재시도 대기 시간 목록. 테스트에서 기다리지 않으려고 둔다. */
 	retryDelaysMs?: readonly number[];
-	/** 없으면 최신 OA-1095 엑셀에서 노선 목록을 읽는다. */
-	routes?: BusRouteListEntry[];
+	/** 없으면 최신 OA-1095 엑셀과 최신 노선 목록(routeType 7·8)에서 노선을 읽는다(loadBusRouteEntries). */
+	routes?: BusRouteEntry[];
 }
 
 const sleep = (ms: number) =>
@@ -111,7 +120,23 @@ function fileName(routeId: string): string {
 	return `${routeId}.json`;
 }
 
-async function loadRouteList(dataDir: string): Promise<BusRouteListEntry[]> {
+export const MISSING_ROUTE_LIST_MESSAGE =
+	"버스 노선 목록(bus-route-list/<날짜>/routes.json)이 없습니다. 먼저 `bun transit fetch:bus-route-list`를 돌리세요.";
+
+/** 최신 노선 목록(getBusRouteList). 없으면 fetch:bus-route-list를 먼저 돌리라는 오류. */
+export function requireRouteList(dataDir: string): BusRouteListRow[] {
+	const list = latestRouteList(dataDir);
+	if (!list) {
+		throw new Error(MISSING_ROUTE_LIST_MESSAGE);
+	}
+	return list;
+}
+
+/** 최신 OA-1095 엑셀의 노선. */
+export async function loadXlsxRoutes(dataDir: string): Promise<{
+	fileName: string;
+	routes: BusRouteListEntry[];
+}> {
 	const latest = await latestBusRouteXlsx(dataDir);
 	const rows = await readBusRouteXlsx(
 		rawPath(dataDir, BUS_ROUTE_XLSX_SOURCE, latest.fileName)
@@ -122,7 +147,19 @@ async function loadRouteList(dataDir: string): Promise<BusRouteListEntry[]> {
 			`bus route xlsx ${latest.fileName} invalid: ${errors.join("; ")}`
 		);
 	}
-	return routes;
+	return { fileName: latest.fileName, routes };
+}
+
+/**
+ * 수집·조립의 노선 ID 출처: 엑셀의 노선 ∪ 최근 노선 목록에서 routeType 7·8인 노선.
+ * 노선 목록이 없으면 경기·인천 노선이 조용히 빠지므로 먼저 확인하고 멈춘다.
+ */
+export async function loadBusRouteEntries(
+	dataDir: string
+): Promise<BusRouteEntry[]> {
+	const list = requireRouteList(dataDir);
+	const { routes } = await loadXlsxRoutes(dataDir);
+	return withRegionalRoutes(routes, list);
 }
 
 /** 저장된 원본의 수정 시각이 maxAgeDays 이내인지. 파일이 없으면 false. */
@@ -418,7 +455,7 @@ function printSummary(result: FetchBusRoutesResult, key: string) {
 export async function fetchBusRoutes(
 	options: FetchBusRoutesOptions
 ): Promise<FetchBusRoutesResult> {
-	const list = options.routes ?? (await loadRouteList(options.dataDir));
+	const list = options.routes ?? (await loadBusRouteEntries(options.dataDir));
 	const routeIds = [...new Set(list.map((entry) => entry.routeId))].sort(
 		(a, b) => (a < b ? -1 : Number(a > b))
 	);

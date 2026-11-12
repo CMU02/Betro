@@ -1,4 +1,4 @@
-import { referenceBatch } from "@Betro/db/schema/transit";
+import { busRoute, referenceBatch } from "@Betro/db/schema/transit";
 import { createTestDb } from "@Betro/db/test-db";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -7,6 +7,8 @@ import { dirname, join } from "node:path";
 import { rawPath } from "../paths";
 import { buildBusRoutes, busRouteManifest } from "./build-bus-routes";
 import { fetchBusRoutes } from "./fetch-bus-routes";
+
+const RUN_ROUTE_LIST_FIRST = /fetch:bus-route-list/;
 
 const ROUTE = {
 	maxSeq: 117,
@@ -90,6 +92,27 @@ describe("buildBusRoutes", () => {
 		expect(await readFile(second.jsonPath, "utf8")).toContain("ok");
 	});
 
+	it("asks for fetch:bus-route-list when the route list is missing", async () => {
+		const db = await createTestDb();
+		await expect(buildBusRoutes({ dataDir, db, dryRun: true })).rejects.toThrow(
+			RUN_ROUTE_LIST_FIRST
+		);
+	});
+
+	it("loads the short name from the route list entry", async () => {
+		const db = await createTestDb();
+		const result = await buildBusRoutes({
+			dataDir,
+			db,
+			dryRun: false,
+			routes: [{ ...ROUTE, shortName: "6411번" }],
+		});
+		expect(result.ok).toBe(true);
+		const [row] = await db.select().from(busRoute);
+		expect(row?.shortName).toBe("6411번");
+		expect(row?.region).toBe("seoul");
+	});
+
 	it("does not load when ok is false", async () => {
 		await rm(rawPath(dataDir, "bus-route-path", `${ROUTE.routeId}.json`));
 		const db = await createTestDb();
@@ -164,6 +187,7 @@ describe("buildBusRoutes", () => {
 							level: "error",
 						},
 					],
+					region: "seoul",
 					routeId: gone.routeId,
 					routeName: gone.routeName,
 				},

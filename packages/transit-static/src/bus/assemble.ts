@@ -1,4 +1,3 @@
-import type { BusRouteListEntry } from "../sources/bus-route-xlsx";
 import {
 	type BusRouteStationRow,
 	parseBusEnvelope,
@@ -11,8 +10,18 @@ import {
 	type ProjectedStop,
 	projectStopsForward,
 } from "./project-stops";
-import { REPORT_SHAPE_ATTRIBUTION, renderBusRouteReport } from "./report";
-import { isInScopeRouteId, isInScopeRouteType } from "./scope";
+import {
+	REPORT_MIN_LOADABLE_RATIO,
+	REPORT_SHAPE_ATTRIBUTION,
+	renderBusRouteReport,
+} from "./report";
+import {
+	type BusRegion,
+	type BusRouteEntry,
+	isInScopeRouteId,
+	isInScopeRouteType,
+	regionOf,
+} from "./scope";
 
 /**
  * 버스 노선 모양에 붙이는 출처 표기. 모양은 getRoutePath(공공데이터)에서만 가져온다. OSM이 아니므로 ODbL 표기를 붙이지 않는다.
@@ -24,11 +33,19 @@ export const BUS_SHAPE_ATTRIBUTION = REPORT_SHAPE_ATTRIBUTION;
  * 조립 결과가 바뀌는 코드 변경마다 올린다. manifest에 들어간다.
  * 2: Task 8 — 범위(공항·셔틀·한강버스 유형, 자율주행 시범 ID), xlsx 최대 순번 비교, off-shape 옆 구간 불일치 예외, sect-dist-scale.
  * 3: 자율주행 시범버스 11개를 범위에 넣음(OUT_OF_SCOPE_ROUTE_IDS를 비움).
+ * 4: MVP 2-D — 마을(2)·인천(7)·경기(8)를 범위에 넣고, 노선에 지역(region)과 지역을 뗀 이름(shortName)을 붙임.
+ *    적재 가능 비율을 서울 면허 노선과 경기·인천 노선으로 나눠 봄.
  */
-export const BUS_ROUTE_LOGIC_VERSION = 3;
+export const BUS_ROUTE_LOGIC_VERSION = 4;
 
-/** 범위 안 노선 중 적재 가능한 노선이 이 비율 이상이어야 배치를 적재한다. */
-export const MIN_VALID_ROUTE_RATIO = 0.98;
+/** 범위 안 서울 면허 노선(마을 포함) 중 적재 가능한 노선이 이 비율 이상이어야 배치를 적재한다. */
+export const MIN_VALID_ROUTE_RATIO = REPORT_MIN_LOADABLE_RATIO.seoul;
+/**
+ * 범위 안 경기·인천 노선 중 적재 가능한 노선이 이 비율 이상이어야 배치를 적재한다.
+ * 원천 품질이 서울 노선보다 낮을 수 있어 따로 보고, 오류 노선은 그 노선만 뺀다.
+ */
+export const MIN_VALID_REGIONAL_ROUTE_RATIO =
+	REPORT_MIN_LOADABLE_RATIO.regional;
 
 /** 이보다 짧은 모양(미터)은 정류소를 투영할 수 없다고 본다. */
 const MIN_SHAPE_LENGTH_M = 100;
@@ -60,7 +77,7 @@ const SECT_SCALE_LOW = 0.75;
 const SECT_SCALE_HIGH = 1 / SECT_SCALE_LOW;
 
 export interface BusRouteRaw {
-	entry: BusRouteListEntry;
+	entry: BusRouteEntry;
 	pathBody?: string;
 	stationsBody?: string;
 }
@@ -76,11 +93,25 @@ export interface AssembledBusRoute {
 	issues: BusIssue[];
 	lengthM: number;
 	qualityFlags: string[];
+	/** routeType으로 정한 면허 지역. */
+	region: BusRegion;
 	routeId: string;
+	/** 원본 이름. 경기·인천 노선은 지역이 붙어 온다(M5107광주). */
 	routeName: string;
 	routeType: string;
 	segments: BusSegment[];
+	/** 지역을 뗀 이름. 노선 목록에 없으면(서울 노선) routeName과 같다. */
+	shortName: string;
 	stops: (BusRouteStationRow & ProjectedStop)[];
+}
+
+/** 적재 가능 비율을 따로 보는 묶음: 서울 면허 노선(마을 포함)과 경기·인천 노선. */
+export type LoadableGroup = "seoul" | "regional";
+
+export interface LoadableCount {
+	/** 범위 안 노선 수(적재 + 제외). 원본 없는 노선은 넣지 않는다. */
+	inScope: number;
+	loadable: number;
 }
 
 export interface OutOfScopeRouteById {
@@ -90,7 +121,14 @@ export interface OutOfScopeRouteById {
 }
 
 export interface BusAssembleResult {
-	excluded: { routeId: string; routeName: string; issues: BusIssue[] }[];
+	excluded: {
+		routeId: string;
+		routeName: string;
+		region: BusRegion;
+		issues: BusIssue[];
+	}[];
+	/** 묶음별 적재 가능 노선 수. ok 규칙이 이것을 본다. */
+	loadable: Record<LoadableGroup, LoadableCount>;
 	markdown: string;
 	/**
 	 * 정류소 원본이 없거나, 범위 안인데 모양 원본이 없는 노선 ID(수집이 덜 끝남).
@@ -102,6 +140,8 @@ export interface BusAssembleResult {
 	outOfScope: number;
 	/** routeType은 범위 안인데 OUT_OF_SCOPE_ROUTE_IDS로 뺀 노선. routeTypeCounts와 범위 안 수를 맞춰 보게 한다. */
 	outOfScopeById: OutOfScopeRouteById[];
+	/** 범위 안 노선(적재 + 제외)의 지역별 개수. */
+	regionCounts: Record<BusRegion, number>;
 	routes: AssembledBusRoute[];
 	/** 정류소 원본을 읽은 모든 노선(범위 밖 포함)의 routeType별 개수. */
 	routeTypeCounts: Record<string, number>;
@@ -323,7 +363,8 @@ export function assembleBusRoute(
 	}
 	// OA-1095는 (가상)/(미정차) 행을 일부 빼지만 순번은 그대로 둔다(seq58: 471개 중 11개 노선, 918개 중 19행).
 	// 그래서 행 수가 아니라 최대 순번을 API 정류소 수와 비교한다. 엑셀 날짜 이후 노선이 바뀐 경우만 남는다.
-	if (entry.maxSeq !== rows.length) {
+	// 노선 목록에서만 온 경기·인천 노선은 엑셀 순번이 없어 비교하지 않는다.
+	if (entry.maxSeq !== undefined && entry.maxSeq !== rows.length) {
 		issues.push(
 			warning(
 				"xlsx-stop-count-mismatch",
@@ -378,10 +419,12 @@ export function assembleBusRoute(
 			issues,
 			lengthM: projection.lengthM,
 			qualityFlags: [...new Set(issues.map((issue) => issue.code))],
+			region: regionOf(routeType),
 			routeId: entry.routeId,
 			routeName: entry.routeName,
 			routeType,
 			segments,
+			shortName: entry.shortName ?? entry.routeName,
 			stops,
 		},
 		routeType,
@@ -391,9 +434,32 @@ export function assembleBusRoute(
 const isMissingRaw = (issue: BusIssue): boolean =>
 	issue.code === "missing-stations" || issue.code === "missing-path";
 
+const groupOf = (region: BusRegion): LoadableGroup =>
+	region === "seoul" ? "seoul" : "regional";
+
+const meetsRatio = (count: LoadableCount, minRatio: number): boolean =>
+	count.loadable / count.inScope >= minRatio;
+
 /**
- * 노선 원본을 모두 조립하고 적재 여부(ok)를 정한다.
- * ok: 수집이 끝났고(missingRaw 없음) 범위 안 노선 중 적재 가능한 비율이 MIN_VALID_ROUTE_RATIO 이상.
+ * ok: 수집이 끝났고(missingRaw 없음), 서울 면허 노선이 하나 이상이며 그 적재 가능 비율이 MIN_VALID_ROUTE_RATIO 이상,
+ * 경기·인천 노선이 있으면 그 비율이 MIN_VALID_REGIONAL_ROUTE_RATIO 이상. 경기·인천 노선이 없으면 서울 기준만 본다.
+ */
+function isBatchOk(
+	missingRaw: readonly string[],
+	loadable: Record<LoadableGroup, LoadableCount>
+): boolean {
+	const { regional, seoul } = loadable;
+	return (
+		missingRaw.length === 0 &&
+		seoul.inScope > 0 &&
+		meetsRatio(seoul, MIN_VALID_ROUTE_RATIO) &&
+		(regional.inScope === 0 ||
+			meetsRatio(regional, MIN_VALID_REGIONAL_ROUTE_RATIO))
+	);
+}
+
+/**
+ * 노선 원본을 모두 조립하고 적재 여부(ok, isBatchOk)를 정한다.
  * 출처 일부 결함으로 전체를 막지 않되, 수집이 덜 된 배치가 현재 배치를 덮어쓰지 않게 한다.
  */
 export function assembleBusRoutes(
@@ -405,6 +471,15 @@ export function assembleBusRoutes(
 	const missingRaw: string[] = [];
 	const outOfScopeById: OutOfScopeRouteById[] = [];
 	const routeTypeCounts: Record<string, number> = {};
+	const regionCounts: Record<BusRegion, number> = {
+		gyeonggi: 0,
+		incheon: 0,
+		seoul: 0,
+	};
+	const loadable: Record<LoadableGroup, LoadableCount> = {
+		regional: { inScope: 0, loadable: 0 },
+		seoul: { inScope: 0, loadable: 0 },
+	};
 	const seen = new Set<string>();
 	let outOfScope = 0;
 	for (const raw of raws) {
@@ -428,29 +503,37 @@ export function assembleBusRoutes(
 					routeType: assembled.routeType ?? "",
 				});
 			}
-		} else if (assembled.issues.some(isMissingRaw)) {
+			continue;
+		}
+		if (assembled.issues.some(isMissingRaw)) {
 			missingRaw.push(routeId);
-		} else if (assembled.route) {
+			continue;
+		}
+		// 정류소 원본을 못 읽은 노선은 노선 목록의 routeType으로 지역을 정한다(엑셀 노선은 서울).
+		const region = regionOf(assembled.routeType ?? raw.entry.routeType ?? "");
+		const count = loadable[groupOf(region)];
+		regionCounts[region] += 1;
+		count.inScope += 1;
+		if (assembled.route) {
+			count.loadable += 1;
 			routes.push(assembled.route);
 		} else {
 			excluded.push({
 				issues: assembled.issues.filter((issue) => issue.level === "error"),
+				region,
 				routeId,
 				routeName,
 			});
 		}
 	}
-	const inScope = routes.length + excluded.length;
-	const ok =
-		missingRaw.length === 0 &&
-		inScope > 0 &&
-		routes.length / inScope >= MIN_VALID_ROUTE_RATIO;
 	const result = {
 		excluded,
+		loadable,
 		missingRaw,
-		ok,
+		ok: isBatchOk(missingRaw, loadable),
 		outOfScope,
 		outOfScopeById,
+		regionCounts,
 		routes,
 		routeTypeCounts,
 	};

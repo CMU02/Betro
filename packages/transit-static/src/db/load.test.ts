@@ -307,7 +307,11 @@ describe("loadBusRoutes", () => {
 		const first = await loadBusRoutes(db, [route], {
 			a: { fileName: "a", sha256: "1" },
 		});
-		expect(await db.select().from(busRoute)).toHaveLength(1);
+		const rows = await db.select().from(busRoute);
+		expect(rows).toHaveLength(1);
+		const [loaded] = rows;
+		expect(loaded?.shortName).toBe("6411");
+		expect(loaded?.region).toBe("seoul");
 		expect(await db.select().from(busRouteShape)).toHaveLength(1);
 		expect(await db.select().from(busRouteStop)).toHaveLength(117);
 		expect(await db.select().from(busRouteSegment)).toHaveLength(116);

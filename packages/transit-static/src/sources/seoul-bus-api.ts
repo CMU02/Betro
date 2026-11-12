@@ -13,7 +13,10 @@ const REASON_XML_RE = /returnReasonCode>\s*(\d+)\s*</;
 const REASON_JSON_RE = /"returnReasonCode"\s*:\s*"?(\d+)/;
 const QUOTA_TEXT = "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS";
 
-export type BusRouteOperation = "getStaionByRoute" | "getRoutePath";
+export type BusRouteOperation =
+	| "getStaionByRoute"
+	| "getRoutePath"
+	| "getBusRouteList";
 
 export type BusEnvelope =
 	| { kind: "ok"; items: Record<string, unknown>[] }
@@ -44,7 +47,9 @@ export function busRouteInfoUrl(
 	key: string,
 	busRouteId: string
 ): string {
-	return `${BUS_ROUTE_INFO_BASE}/${operation}?serviceKey=${encodeURIComponent(key)}&busRouteId=${encodeURIComponent(busRouteId)}&resultType=json`;
+	// getBusRouteList는 노선 ID 대신 검색어(strSrch)를 받는다. 검색어는 busRouteId 자리로 넘긴다.
+	const param = operation === "getBusRouteList" ? "strSrch" : "busRouteId";
+	return `${BUS_ROUTE_INFO_BASE}/${operation}?serviceKey=${encodeURIComponent(key)}&${param}=${encodeURIComponent(busRouteId)}&resultType=json`;
 }
 
 /** 키 원문과 인코딩된 키를 모두 `<key>`로 가린다. */
@@ -183,6 +188,8 @@ function text(value: unknown): string {
 	return value === null || value === undefined ? "" : String(value).trim();
 }
 
+const FIRST_SEQ = 1;
+
 function parseStation(
 	item: RawItem
 ): { row: BusRouteStationRow } | { error: string } {
@@ -198,7 +205,11 @@ function parseStation(
 	if (lat === undefined) {
 		return { error: `seq ${seq}: invalid gpsY` };
 	}
-	const apiSectDistM = toNumber(item.fullSectDist);
+	// 경기·인천 노선은 첫 정류소의 fullSectDist가 비어 온다(서울 노선은 "0"). 앞 구간이 없으니 0이다.
+	const apiSectDistM =
+		seq === FIRST_SEQ && text(item.fullSectDist) === ""
+			? 0
+			: toNumber(item.fullSectDist);
 	// DB 컬럼이 정수이므로 음수와 소수는 거른다.
 	if (
 		apiSectDistM === undefined ||

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
+import { cp, mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
+import { migrate } from "drizzle-orm/libsql/migrator";
+import { createDb } from "../index";
 import { createTestDb } from "../test-db";
 import {
 	busRoute,
@@ -201,9 +207,11 @@ describe("transit schema", () => {
 			.values({
 				batchId: batch.id,
 				qualityFlags: ["warn"],
-				routeId: "100100290",
-				routeName: "6411",
-				routeType: "4",
+				region: "gyeonggi",
+				routeId: "234001243",
+				routeName: "M5107광주",
+				routeType: "8",
+				shortName: "M5107",
 			})
 			.returning();
 		if (!route) {
@@ -262,5 +270,39 @@ describe("transit schema", () => {
 		expect((await db.select().from(busRouteShape)).length).toBe(0);
 		expect((await db.select().from(busRouteStop)).length).toBe(0);
 		expect((await db.select().from(busRouteSegment)).length).toBe(0);
+	});
+});
+
+describe("bus_route region migration", () => {
+	const MIGRATIONS = fileURLToPath(new URL("../migrations", import.meta.url));
+	const REGION_MIGRATION = "20261110095423_bus_route_region";
+
+	it("fills short_name from route_name and region with seoul for existing rows", async () => {
+		const before = await mkdtemp(join(tmpdir(), "betro-migrations-"));
+		try {
+			const folders = (await readdir(MIGRATIONS, { withFileTypes: true }))
+				.filter((entry) => entry.isDirectory())
+				.map((entry) => entry.name)
+				.filter((name) => name < REGION_MIGRATION);
+			await Promise.all(
+				folders.map((name) =>
+					cp(join(MIGRATIONS, name), join(before, name), { recursive: true })
+				)
+			);
+			const db = createDb({ DATABASE_URL: ":memory:" });
+			await migrate(db, { migrationsFolder: before });
+			await db.$client.execute(
+				"INSERT INTO reference_batch (id, kind, source_manifest) VALUES (1, 'bus_route', '{}')"
+			);
+			await db.$client.execute(
+				"INSERT INTO bus_route (batch_id, quality_flags, route_id, route_name, route_type) VALUES (1, '[]', '100100290', '6411', '3')"
+			);
+			await migrate(db, { migrationsFolder: MIGRATIONS });
+			const [row] = await db.select().from(busRoute);
+			expect(row?.shortName).toBe("6411");
+			expect(row?.region).toBe("seoul");
+		} finally {
+			await rm(before, { force: true, recursive: true });
+		}
 	});
 });
