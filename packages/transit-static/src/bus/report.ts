@@ -1,14 +1,40 @@
 // assemble.ts가 이 모듈의 값을 쓰므로 여기서는 타입만 가져온다(import 순환 방지).
-import type { AssembledBusRoute, BusAssembleResult } from "./assemble";
+import type {
+	AssembledBusRoute,
+	BusAssembleResult,
+	LoadableGroup,
+} from "./assemble";
 import {
 	AUTONOMOUS_PILOT_ROUTES,
 	AUTONOMOUS_ROUTE_NAME,
+	type BusRegion,
 	OUT_OF_SCOPE_ROUTE_ID_REASON,
+	PUBLISHED_REGIONAL_ROUTE_COUNT,
+	PUBLISHED_VILLAGE_ROUTE_COUNT,
+	publishedCountBand,
+	publishedCountVerdict,
 } from "./scope";
 
 /** 보고서 출처 줄. 계획의 인터페이스 이름(BUS_SHAPE_ATTRIBUTION)으로는 assemble.ts가 내보낸다. */
 export const REPORT_SHAPE_ATTRIBUTION =
 	"서울특별시 버스노선정보(공공데이터포털)";
+
+/**
+ * 묶음별 적재 가능 비율 기준. assemble.ts가 MIN_VALID_ROUTE_RATIO, MIN_VALID_REGIONAL_ROUTE_RATIO로 내보낸다.
+ * 값은 여기에 둔다. report.ts가 assemble.ts에서 타입만 가져오게 해 import 순환을 끊는다.
+ */
+export const REPORT_MIN_LOADABLE_RATIO: Readonly<
+	Record<LoadableGroup, number>
+> = {
+	regional: 0.9,
+	seoul: 0.98,
+};
+const LOADABLE_GROUPS: readonly LoadableGroup[] = ["seoul", "regional"];
+const REGIONS: readonly BusRegion[] = ["seoul", "gyeonggi", "incheon"];
+const PERCENT = 100;
+const PERCENT_DIGITS = 1;
+/** 마을버스 routeType. 공표 마을 노선 수와 대조한다. */
+const VILLAGE_ROUTE_TYPE = "2";
 
 /** 오프셋·stop-off-shape 정류소·sect-dist-mismatch 표에 보여 줄 항목 수. */
 const TOP_N = 20;
@@ -62,6 +88,73 @@ function renderRouteTypes(result: ReportInput): string[] {
 		"| routeType | 노선 수 |",
 		"| --- | --- |",
 		...entries.map(([routeType, count]) => `| ${cell(routeType)} | ${count} |`),
+		"",
+	];
+}
+
+function renderRegions(result: ReportInput): string[] {
+	return [
+		"## 지역별 노선 수",
+		"",
+		"범위 안 노선(적재 + 제외). 마을버스는 seoul에 든다.",
+		"",
+		"| region | 노선 수 |",
+		"| --- | --- |",
+		...REGIONS.map(
+			(region) => `| ${region} | ${result.regionCounts[region]} |`
+		),
+		"",
+	];
+}
+
+/**
+ * 공표 수치(마을 253, 경기·인천 645)와 대조한다. 마을은 routeTypeCounts["2"](정류소 원본을 읽은 노선),
+ * 경기·인천은 regionCounts의 gyeonggi + incheon(범위 안 노선)이다. 크게 벗어나면 검색어나 수집이 빠뜨린 노선이 있다.
+ */
+function renderPublishedComparison(result: ReportInput): string[] {
+	const routeTypeCounts = new Map(Object.entries(result.routeTypeCounts));
+	const rows: [label: string, count: number, published: number][] = [
+		[
+			"마을(routeType 2)",
+			routeTypeCounts.get(VILLAGE_ROUTE_TYPE) ?? 0,
+			PUBLISHED_VILLAGE_ROUTE_COUNT,
+		],
+		[
+			"경기·인천(gyeonggi + incheon)",
+			result.regionCounts.gyeonggi + result.regionCounts.incheon,
+			PUBLISHED_REGIONAL_ROUTE_COUNT,
+		],
+	];
+	return [
+		"## 공표 수치 대조",
+		"",
+		"| 항목 | 보고서 | 공표 | ±10% 범위 | 판정 |",
+		"| --- | --- | --- | --- | --- |",
+		...rows.map(([label, count, published]) => {
+			const { max, min } = publishedCountBand(published);
+			return `| ${label} | ${count} | ${published} | ${min}–${max} | ${publishedCountVerdict(count, published)} |`;
+		}),
+		"",
+	];
+}
+
+function renderLoadableRatios(result: ReportInput): string[] {
+	return [
+		"## 적재 가능 비율",
+		"",
+		"seoul은 서울 면허 노선(마을 포함), regional은 경기·인천 노선. regional이 0개면 seoul만 본다.",
+		"",
+		"| 묶음 | 적재 가능 | 범위 안 | 비율 | 기준 |",
+		"| --- | --- | --- | --- | --- |",
+		...LOADABLE_GROUPS.map((group) => {
+			const { inScope, loadable } = result.loadable[group];
+			const ratio =
+				inScope === 0
+					? "-"
+					: `${((loadable / inScope) * PERCENT).toFixed(PERCENT_DIGITS)}%`;
+			const minimum = `${REPORT_MIN_LOADABLE_RATIO[group] * PERCENT}%`;
+			return `| ${group} | ${loadable} | ${inScope} | ${ratio} | ${minimum} |`;
+		}),
 		"",
 	];
 }
@@ -120,12 +213,12 @@ function renderExcluded(result: ReportInput): string[] {
 	return [
 		`## 제외 노선 (${result.excluded.length})`,
 		"",
-		"| 노선명 | ID | error | detail |",
-		"| --- | --- | --- | --- |",
+		"| 노선명 | ID | error | detail | region |",
+		"| --- | --- | --- | --- | --- |",
 		...result.excluded.map((route) => {
 			const codes = [...new Set(route.issues.map((issue) => issue.code))];
 			const detail = route.issues.map((issue) => issue.detail).join("; ");
-			return `| ${cell(route.routeName)} | ${cell(route.routeId)} | ${cell(codes.join(", "))} | ${cell(detail)} |`;
+			return `| ${cell(route.routeName)} | ${cell(route.routeId)} | ${cell(codes.join(", "))} | ${cell(detail)} | ${route.region} |`;
 		}),
 		"",
 	];
@@ -400,6 +493,9 @@ export function renderBusRouteReport(result: ReportInput): string {
 	return [
 		...renderSummary(result),
 		...renderRouteTypes(result),
+		...renderRegions(result),
+		...renderPublishedComparison(result),
+		...renderLoadableRatios(result),
 		...renderOutOfScopeById(result),
 		...renderAutonomousReview(result),
 		...renderExcluded(result),

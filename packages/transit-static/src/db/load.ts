@@ -197,9 +197,11 @@ export async function loadBusRoutes(
 				.values({
 					batchId,
 					qualityFlags: route.qualityFlags,
+					region: route.region,
 					routeId: route.routeId,
 					routeName: route.routeName,
 					routeType: route.routeType,
+					shortName: route.shortName,
 				})
 				.returning({ id: busRoute.id });
 			if (!inserted) {

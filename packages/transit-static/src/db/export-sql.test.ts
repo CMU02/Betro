@@ -202,9 +202,11 @@ async function seedSmallBatches(db: LibsqlDatabase): Promise<number[]> {
 		.values({
 			batchId: bus.id,
 			qualityFlags: [],
+			region: "seoul",
 			routeId: "100100290",
 			routeName: "6411",
 			routeType: "3",
+			shortName: "6411",
 		})
 		.returning({ id: busRoute.id });
 	if (!route) {
@@ -288,6 +290,13 @@ describe("exportBatchSql", () => {
 		});
 
 		const statements = await exportBatchSql(source, batchIds);
+		// bus_route INSERT에 지역을 뗀 이름과 지역 열이 있다.
+		const busInsert = statements.find((sql) =>
+			sql.startsWith('INSERT INTO "bus_route" (')
+		);
+		expect(busInsert).toContain('"short_name"');
+		expect(busInsert).toContain('"region"');
+		expect(busInsert).toContain("'seoul','100100290','6411','3','6411'");
 		const target = await createTestDb();
 		await executeAll(target, statements);
 

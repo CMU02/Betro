@@ -4,7 +4,7 @@ Betro API, 실시간 수집기, 출퇴근 세션 실행기. Cloudflare Worker �
 
 | 주소 | 내용 |
 |---|---|
-| `https://betro.cmu02-studio.com` | API: `/`(헬스 체크), `/api/auth/*`(better-auth), `/rpc/*`(oRPC), `/api-reference/*`, `/v1/snapshot/subway`, `/v1/snapshot/bus`, `/v1/commute/*`와 `/v1/installs`·`/v1/push-tokens`(출퇴근 절) |
+| `https://betro.cmu02-studio.com` | API: `/`(헬스 체크), `/api/auth/*`(better-auth), `/rpc/*`(oRPC), `/api-reference/*`, `/v1/snapshot/subway`, `/v1/snapshot/bus`, `/v1/ref/*`(등록 조회 절), `/v1/commute/*`와 `/v1/installs`·`/v1/push-tokens`(출퇴근 절) |
 | `https://betro-status.cmu02-studio.com` | 상태 페이지 `/`, `/status.json`, `POST /internal/collector/start`. Cloudflare Access 뒤에 있다 |
 
 한 Worker가 요청의 호스트로 둘을 나눈다(`src/app.ts`). 상태 호스트가 아닌 요청은 모두 API로 본다.
@@ -137,6 +137,33 @@ bunx wrangler r2 bucket info betro-data          # 객체 수, 용량
 보고서의 `history`는 원본(`raw`)과 이벤트(`events`)를 지하철·버스로 나눠 버퍼에 넣은 줄 수(`buffered`)와 R2에 쓴 줄 수(`written`)를 담는다. `written`이 `buffered`보다 작으면 그만큼 R2에 남지 않은 것이고 `ok`가 `false`가 된다. 줄 수는 오늘과 어제(KST) 것만 들고 있어서, 그보다 늦게 쓰는 보고서에는 `history: null`로 남고 이력으로는 판정하지 않는다.
 
 R2에서 직접 확인하려면 객체 목록에서 그날 `raw/` 조각 수를 세어 보고서의 `calls`와 비교한다. `dev`에서는 호출 한 번이 조각 하나다.
+
+## 등록 조회 API (`/v1/ref`)
+
+앱의 경로 등록 화면(16b~16d)이 노선과 정류장·역을 고를 때 쓴다. D1의 현재 참조 배치만 읽는 공개 GET 라우트이고 인증이 없다(공개된 교통 데이터다). 코드는 `src/ref/`, 계획 문서는 `docs/superpowers/plans/2026-11-10-mvp-2d-static-data.md`.
+
+- 노선·정류장 ID는 출처를 앞에 붙인다: 버스 노선 `seoul-bus:<busRouteId>`, 정류장 `seoul-bus:<stId>`, 지하철 노선 `seoul-subway:<lineKey>`, 역 `seoul-subway:<statnId>`(`packages/commute/src/refs.ts`와 같은 형식).
+- 응답 헤더 `Cache-Control: public, max-age=3600`, `ETag`(버스 `"bus-<batchId>"`, 지하철 `"subway-<track 배치 id>"`). `If-None-Match`가 같으면 304.
+- 경기·인천 노선(routeType 7·8)도 검색된다. 이 API는 등록 화면 전용이고, 그 노선들은 지도용 수집 대상에 넣지 않는다(`packages/transit-static/README.md` "범위 규칙").
+
+| 라우트 | 내용 |
+|---|---|
+| `GET /v1/ref/bus/routes?q=<검색어>&limit=<1~50, 기본 20>` | `{ batchId, routes: [{ line, name, region, routeType, shortName }] }`. `q`는 공백을 뗀 1~20자이고 `short_name`이나 `route_name`에 들어 있으면 맞는다(대소문자 무시). 순서: `short_name`이 정확히 같은 것 → 검색어로 시작하는 것 → 그 밖. 같은 묶음에서는 서울 → 경기 → 인천, 그다음 이름 순. 범위를 벗어난 `q`·`limit`는 400 |
+| `GET /v1/ref/bus/routes/:busRouteId/stops` | `{ line, name, region, shortName, stops: [{ arsId, directionName, name, seq, stop }] }`. 순번 순. 현재 배치에 없는 노선은 404 |
+| `GET /v1/ref/subway/lines` | `{ lines: [{ line, name }] }`. `@Betro/transit-static/lines`의 `LINES` 순서(19개) |
+| `GET /v1/ref/subway/lines/:lineKey/stations` | `{ batchId, branches: [{ branchKey, stations: [{ name, stop }] }] }`. 가지마다 `down` 선로의 역 순서. 모르는 노선 404 |
+| `GET /v1/ref/subway/direction?line=<lineKey>&from=<statnId>&to=<statnId>` | `{ direction: "up" \| "down", stops }`. 방향 값은 수집기 관측의 `direction`과 같은 뜻이다. 한 선로로 이어지지 않으면 404 `{ "error": "not-direct" }`, 같은 역이면 400 |
+
+예(2026-11-11, 버스 배치 10):
+
+```bash
+curl 'https://betro.cmu02-studio.com/v1/ref/bus/routes?q=6411'
+# {"batchId":10,"routes":[{"line":"seoul-bus:100100290","name":"6411","region":"seoul","routeType":"4","shortName":"6411"}]}
+curl 'https://betro.cmu02-studio.com/v1/ref/bus/routes?q=M5107'
+# {"batchId":10,"routes":[{"line":"seoul-bus:234001243","name":"M5107광주","region":"gyeonggi","routeType":"8","shortName":"M5107"}, …]}
+```
+
+지하철 방향 실측(같은 날, 로컬 D1): 2호선 강남 → 교대 `up` 1, 시청 → 충정로 `down` 1(순환 이음매), 강남 → 까치산 404, 신도림 → 까치산 `up` 4, 7호선 가산디지털단지 → 고속터미널 `up` 12.
 
 ## 출퇴근
 

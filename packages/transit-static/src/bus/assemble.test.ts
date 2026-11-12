@@ -3,9 +3,11 @@ import { readFileSync } from "node:fs";
 import {
 	assembleBusRoute,
 	assembleBusRoutes,
+	BUS_ROUTE_LOGIC_VERSION,
 	BUS_SHAPE_ATTRIBUTION,
 	type BusIssue,
 	type BusRouteRaw,
+	MIN_VALID_REGIONAL_ROUTE_RATIO,
 	MIN_VALID_ROUTE_RATIO,
 } from "./assemble";
 import { AUTONOMOUS_PILOT_ROUTES } from "./scope";
@@ -152,17 +154,17 @@ describe("assembleBusRoute", () => {
 		expect(route?.stops[0]?.distanceM).toBeGreaterThan(0);
 	});
 
-	it("marks route type 2 as out of scope without requiring a path", () => {
-		const raw = straightRaw("200", { routeType: "2" });
+	it("marks route type 10 as out of scope without requiring a path", () => {
+		const raw = straightRaw("200", { routeType: "10" });
 		const result = assembleBusRoute({ ...raw, pathBody: undefined });
 		expect(result.outOfScope).toBe(true);
 		expect(result.route).toBeUndefined();
 		expect(errorsOf(result.issues)).toEqual([]);
-		expect(result.routeType).toBe("2");
+		expect(result.routeType).toBe("10");
 	});
 
 	it("decides scope from parsed rows even when a station row is bad", () => {
-		const raw = straightRaw("201", { routeType: "8" });
+		const raw = straightRaw("201", { routeType: "9" });
 		const items = JSON.parse(raw.stationsBody ?? "").msgBody.itemList;
 		items[1].gpsX = "";
 		const result = assembleBusRoute({
@@ -171,8 +173,72 @@ describe("assembleBusRoute", () => {
 			stationsBody: envelope(items),
 		});
 		expect(result.outOfScope).toBe(true);
+		expect(result.routeType).toBe("9");
+		expect(errorsOf(result.issues)).toEqual([]);
+	});
+
+	it("assembles a Gyeonggi route through the same checks as a Seoul route", () => {
+		// 경기 M5107(234001243): 노선 목록에서 온 항목이라 엑셀 순번이 없다.
+		const stops = evenStops(8, 300);
+		const result = assembleBusRoute({
+			entry: {
+				routeId: "234001243",
+				routeName: "M5107광주",
+				routeType: "8",
+				shortName: "M5107",
+			},
+			pathBody: pathBody([at(0), at(1050), at(2100)]),
+			stationsBody: stationsBody("M5107광주", "8", stops),
+		});
+		expect(result.outOfScope).toBe(false);
 		expect(result.routeType).toBe("8");
 		expect(errorsOf(result.issues)).toEqual([]);
+		// 엑셀에 없는 노선이므로 엑셀 순번 비교 경고가 없다.
+		expect(codesOf(result.issues)).not.toContain("xlsx-stop-count-mismatch");
+		expect(result.route?.region).toBe("gyeonggi");
+		expect(result.route?.shortName).toBe("M5107");
+		expect(result.route?.routeName).toBe("M5107광주");
+		expect(result.route?.stops).toHaveLength(8);
+		expect(result.route?.segments).toHaveLength(7);
+
+		// 같은 검증: seq가 빠지면 서울 노선처럼 뺀다.
+		const gap = assembleBusRoute({
+			entry: {
+				routeId: "234001243",
+				routeName: "M5107광주",
+				routeType: "8",
+				shortName: "M5107",
+			},
+			pathBody: STRAIGHT_PATH,
+			stationsBody: stationsBody("M5107광주", "8", [
+				{ sect: 0, seq: 1, xM: 0 },
+				{ sect: 1000, seq: 3, xM: 1000 },
+			]),
+		});
+		expect(gap.route).toBeUndefined();
+		expect(codesOf(errorsOf(gap.issues))).toEqual(["seq-not-contiguous"]);
+	});
+
+	it("labels Seoul, village and Incheon routes and falls back to the route name", () => {
+		const seoul = assembleBusRoute(straightRaw("300", { routeName: "6411" }));
+		expect(seoul.route?.region).toBe("seoul");
+		expect(seoul.route?.shortName).toBe("6411");
+		const village = assembleBusRoute(
+			straightRaw("301", { routeName: "강남01", routeType: "2" })
+		);
+		expect(village.outOfScope).toBe(false);
+		expect(village.route?.region).toBe("seoul");
+		expect(village.route?.shortName).toBe("강남01");
+		const incheon = straightRaw("302", {
+			routeName: "M6450인천",
+			routeType: "7",
+		});
+		const incheonResult = assembleBusRoute({
+			...incheon,
+			entry: { ...incheon.entry, shortName: "M6450" },
+		});
+		expect(incheonResult.route?.region).toBe("incheon");
+		expect(incheonResult.route?.shortName).toBe("M6450");
 	});
 
 	it("rejects an in-scope route with a bad station row", () => {
@@ -202,14 +268,14 @@ describe("assembleBusRoute", () => {
 		const result = assembleBusRoute(
 			straightRaw("203", {
 				stops: [
-					{ routeType: "2", sect: 1000, seq: 2, xM: 1000 },
+					{ routeType: "1", sect: 1000, seq: 2, xM: 1000 },
 					{ routeType: "4", sect: 0, seq: 1, xM: 0 },
 					{ routeType: "4", sect: 1000, seq: 3, xM: 2000 },
 				],
 			})
 		);
 		expect(result.outOfScope).toBe(true);
-		expect(result.routeType).toBe("2");
+		expect(result.routeType).toBe("1");
 		expect(codesOf(result.issues)).toEqual(["mixed-route-type"]);
 	});
 
@@ -463,7 +529,7 @@ describe("assembleBusRoutes", () => {
 
 	it("assembleBusRoutes ok rule", () => {
 		expect(MIN_VALID_ROUTE_RATIO).toBe(0.98);
-		const outOfScope = straightRaw("9000", { routeType: "2" });
+		const outOfScope = straightRaw("9000", { routeType: "9" });
 		const twoBad = inScope(IN_SCOPE_ROUTES).map((raw, i) =>
 			i < 2 ? broken(raw) : raw
 		);
@@ -474,7 +540,7 @@ describe("assembleBusRoutes", () => {
 		expect(passing.excluded[0]?.issues[0]?.code).toBe("seq-not-contiguous");
 		expect(passing.outOfScope).toBe(1);
 		expect(passing.missingRaw).toEqual([]);
-		expect(passing.routeTypeCounts).toEqual({ "2": 1, "4": 100 });
+		expect(passing.routeTypeCounts).toEqual({ "4": 100, "9": 1 });
 
 		const threeBad = inScope(IN_SCOPE_ROUTES).map((raw, i) =>
 			i < 3 ? broken(raw) : raw
@@ -492,6 +558,75 @@ describe("assembleBusRoutes", () => {
 		expect(missing.missingRaw).toEqual([first.entry.routeId]);
 		expect(missing.excluded).toEqual([]);
 		expect(missing.ok).toBe(false);
+	});
+
+	it("checks Seoul and regional routes against separate ratios", () => {
+		expect(MIN_VALID_REGIONAL_ROUTE_RATIO).toBe(0.9);
+		const seoul = (count: number, bad: number): BusRouteRaw[] =>
+			inScope(count).map((raw, i) => (i < bad ? broken(raw) : raw));
+		const gyeonggi = (count: number, bad: number): BusRouteRaw[] =>
+			Array.from({ length: count }, (_, i) => {
+				const raw = straightRaw(`${2000 + i}`, { routeType: "8" });
+				return i < bad
+					? {
+							...raw,
+							stationsBody: stationsBody(raw.entry.routeName, "8", [
+								{ sect: 0, seq: 1, xM: 0 },
+								{ sect: 1000, seq: 3, xM: 1000 },
+							]),
+						}
+					: raw;
+			});
+
+		const passing = assembleBusRoutes([...seoul(100, 2), ...gyeonggi(10, 1)]);
+		expect(passing.ok).toBe(true);
+		expect(passing.loadable).toEqual({
+			regional: { inScope: 10, loadable: 9 },
+			seoul: { inScope: 100, loadable: 98 },
+		});
+		expect(passing.regionCounts).toEqual({
+			gyeonggi: 10,
+			incheon: 0,
+			seoul: 100,
+		});
+		// 경기 노선의 오류는 그 노선만 뺀다.
+		expect(passing.excluded.map((route) => route.routeId)).toEqual([
+			"1000",
+			"1001",
+			"2000",
+		]);
+		expect(passing.routes).toHaveLength(107);
+
+		expect(assembleBusRoutes([...seoul(100, 3), ...gyeonggi(10, 1)]).ok).toBe(
+			false
+		);
+		expect(assembleBusRoutes([...seoul(100, 2), ...gyeonggi(10, 2)]).ok).toBe(
+			false
+		);
+		// 경기·인천 노선이 0개면 서울 기준만 본다.
+		const seoulOnly = assembleBusRoutes(seoul(100, 2));
+		expect(seoulOnly.ok).toBe(true);
+		expect(seoulOnly.loadable.regional).toEqual({ inScope: 0, loadable: 0 });
+	});
+
+	it("puts a regional route whose stations never came back into the regional ratio by its list type", () => {
+		const notFoundBody = JSON.stringify({
+			msgHeader: { headerCd: "4", headerMsg: "결과가 없습니다." },
+		});
+		const regional = Array.from({ length: 10 }, (_, i) => {
+			const raw = straightRaw(`${3000 + i}`, { routeType: "7" });
+			const entry = { ...raw.entry, routeType: "7" };
+			return i === 0
+				? { entry, stationsBody: notFoundBody }
+				: { ...raw, entry };
+		});
+		const result = assembleBusRoutes([...inScope(10), ...regional]);
+		expect(result.loadable).toEqual({
+			regional: { inScope: 10, loadable: 9 },
+			seoul: { inScope: 10, loadable: 10 },
+		});
+		expect(result.regionCounts.incheon).toBe(10);
+		expect(result.ok).toBe(true);
 	});
 
 	it("counts route-not-found routes as excluded against the ratio", () => {
@@ -542,6 +677,10 @@ describe("assembleBusRoutes", () => {
 		);
 	});
 
+	it("bumps the logic version for the widened scope", () => {
+		expect(BUS_ROUTE_LOGIC_VERSION).toBe(4);
+	});
+
 	it("re-exports the shape attribution", () => {
 		expect(BUS_SHAPE_ATTRIBUTION).toBe(
 			"서울특별시 버스노선정보(공공데이터포털)"
@@ -551,7 +690,7 @@ describe("assembleBusRoutes", () => {
 	it("is not ok without any loadable route", () => {
 		expect(assembleBusRoutes([]).ok).toBe(false);
 		expect(
-			assembleBusRoutes([straightRaw("9001", { routeType: "2" })]).ok
+			assembleBusRoutes([straightRaw("9001", { routeType: "9" })]).ok
 		).toBe(false);
 	});
 
@@ -569,7 +708,7 @@ describe("assembleBusRoutes", () => {
 				...inScope(2),
 				{ ...pilot, pathBody: undefined },
 				lookalike,
-				{ ...straightRaw("9101", { routeType: "2" }), pathBody: undefined },
+				{ ...straightRaw("9101", { routeType: "9" }), pathBody: undefined },
 			],
 			{ excludedRouteIds: AUTONOMOUS_PILOT_ROUTES }
 		);
@@ -579,7 +718,7 @@ describe("assembleBusRoutes", () => {
 		]);
 		expect(result.excluded).toEqual([]);
 		expect(result.routes.map((route) => route.routeId)).toContain("9100");
-		expect(result.routeTypeCounts).toEqual({ "2": 1, "4": 3, "5": 1 });
+		expect(result.routeTypeCounts).toEqual({ "4": 3, "5": 1, "9": 1 });
 		expect(result.markdown).toContain("범위 밖: 2 (유형 1, ID 1)");
 		const byId = result.markdown.split("## ID로 뺀 노선")[1]?.split("## ")[0];
 		expect(byId).toContain("| 청와대A01 | 100000020 | 5 |");

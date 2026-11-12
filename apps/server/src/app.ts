@@ -15,7 +15,12 @@ import type { SnapshotKind } from "./collector/core";
 import { INSTALL_HEADER } from "./commute/auth";
 import type { CommuteRunnerClient } from "./commute/client";
 import { createCommuteRoutes } from "./commute/routes";
+import { ifNoneMatchMatches } from "./ref/if-none-match";
+import { createRefRoutes } from "./ref/routes";
 import { renderStatusPage } from "./status-page";
+
+// biome-ignore lint/performance/noBarrelFile: 기존 테스트와 호출처가 app에서 가져온다.
+export { ifNoneMatchMatches } from "./ref/if-none-match";
 
 const SNAPSHOT_KINDS: readonly SnapshotKind[] = ["subway", "bus"];
 
@@ -37,7 +42,6 @@ const API_SCOPE = "/api-host";
 const STATUS_SCOPE = "/status-host";
 
 const PORT_SUFFIX = /:\d+$/;
-const WEAK_PREFIX = "W/";
 /** 상태 페이지는 스크립트·외부 자원을 쓰지 않는다(인라인 스타일만). */
 const STATUS_PAGE_CSP =
 	"default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
@@ -52,32 +56,6 @@ function requestHostname(request: Request): string {
 
 function isSnapshotKind(value: string): value is SnapshotKind {
 	return (SNAPSHOT_KINDS as readonly string[]).includes(value);
-}
-
-/**
- * `If-None-Match`가 이 ETag와 맞는가. 쉼표로 나눈 목록, 약한 비교(`W/` 무시), `*`를 받는다.
- * `etag`는 따옴표를 포함한 형태(`"abc"`).
- */
-export function ifNoneMatchMatches(
-	header: string | undefined,
-	etag: string
-): boolean {
-	if (!header) {
-		return false;
-	}
-	const opaque = etag.startsWith(WEAK_PREFIX)
-		? etag.slice(WEAK_PREFIX.length)
-		: etag;
-	return header.split(",").some((part) => {
-		const tag = part.trim();
-		if (tag === "*") {
-			return true;
-		}
-		return (
-			(tag.startsWith(WEAK_PREFIX) ? tag.slice(WEAK_PREFIX.length) : tag) ===
-			opaque
-		);
-	});
 }
 
 function logError(error: unknown): void {
@@ -166,6 +144,7 @@ function createApiRoutes(deps: AppDeps): Hono {
 		});
 	});
 
+	routes.route("/v1/ref", createRefRoutes(db));
 	routes.route("/", createCommuteRoutes({ commute: deps.commute, db }));
 
 	return routes;

@@ -316,12 +316,16 @@ export class D1ReferenceSource implements ReferenceSource {
 		return { batchId, routes: assembleBusRoutes(routeRows, segments, shapes) };
 	}
 
-	/** `prod` 설정용: 현재 버스 배치의 전 노선 ID. */
+	/**
+	 * `prod` 설정용: 현재 버스 배치에서 지도용 상시 관측 대상인 노선 ID.
+	 * 인천(7)·경기(8) 노선은 출퇴근 세션에서만 관측하므로 뺀다(스펙 3장 "버스 범위",
+	 * transit-static bus/scope.ts의 REGIONAL_ROUTE_TYPES·isMapObservedRouteType과 같은 규칙).
+	 */
 	async currentBusRouteIds(): Promise<string[]> {
 		const { bus_route: batchId } = await this.currentBatchIds();
 		const { results } = await this.#db
 			.prepare(
-				"SELECT route_id AS routeId FROM bus_route WHERE batch_id = ? ORDER BY route_id"
+				"SELECT route_id AS routeId FROM bus_route WHERE batch_id = ? AND route_type NOT IN ('7', '8') ORDER BY route_id"
 			)
 			.bind(batchId)
 			.all<{ routeId: string }>();
