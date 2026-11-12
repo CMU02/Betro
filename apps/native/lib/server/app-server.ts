@@ -9,6 +9,8 @@ import { Platform } from "react-native";
 import { appCrashSink } from "@/lib/crash/app-crash-reporting";
 import { reportError } from "@/lib/crash/crash-reporting";
 import { ensureInstallIdentity } from "@/lib/device/app-install-identity";
+import { appReachability } from "@/lib/network/app-reachability";
+import { startOfflineProbe } from "@/lib/network/reachability";
 import { ENV } from "@/src/env";
 
 import { createServerClient, type ServerClient } from "./api-client";
@@ -32,9 +34,30 @@ export const serverClient: ServerClient = withRegistrationReset(
 		baseUrl: ENV.EXPO_PUBLIC_SERVER_URL,
 		fetch,
 		identity: ensureInstallIdentity,
+		onReachability: appReachability.report,
 	}),
 	registeredInstallStore.clear
 );
+
+const OFFLINE_PROBE_MS = 10_000;
+
+/**
+ * 서버에 닿지 않는 동안 10초마다 `GET /`("OK" 두 글자)를 보내 연결이 돌아왔는지 본다.
+ * 루트 레이아웃이 한 번 부르고, 돌려주는 함수로 멈춘다.
+ */
+export function startAppOfflineProbe(): () => void {
+	return startOfflineProbe({
+		intervalMs: OFFLINE_PROBE_MS,
+		probe: async () => {
+			await serverClient.request("GET", "/");
+		},
+		reachability: appReachability,
+		timers: {
+			clear: (id) => clearTimeout(id),
+			set: (run, ms) => setTimeout(run, ms) as unknown as number,
+		},
+	});
+}
 
 /**
  * 설치를 서버에 등록하고 결과를 돌려준다. 실패해도 던지지 않고 기록만 하며(`"error"`),

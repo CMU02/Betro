@@ -122,3 +122,43 @@ it("aborts a request that takes longer than 10 seconds", async () => {
 		globalThis.setTimeout = originalSetTimeout;
 	}
 });
+
+it("reports the server as reachable when any response comes back", async () => {
+	const seen: boolean[] = [];
+	const { fetch: fetchFn } = recordingFetch(
+		() => new Response("{}", { status: 503 })
+	);
+	await createServerClient({
+		baseUrl: "https://api.test",
+		fetch: fetchFn,
+		identity: () => Promise.resolve(IDENTITY),
+		onReachability: (reachable) => seen.push(reachable),
+	}).request("GET", "/v1/x");
+
+	expect(seen).toEqual([true]);
+});
+
+it("reports the server as unreachable when fetch fails", async () => {
+	const seen: boolean[] = [];
+	await createServerClient({
+		baseUrl: "https://api.test",
+		fetch: (() =>
+			Promise.reject(new TypeError("Network request failed"))) as typeof fetch,
+		identity: () => Promise.resolve(IDENTITY),
+		onReachability: (reachable) => seen.push(reachable),
+	}).request("GET", "/v1/x");
+
+	expect(seen).toEqual([false]);
+});
+
+it("does not call a locked identity a network problem", async () => {
+	const seen: boolean[] = [];
+	await createServerClient({
+		baseUrl: "https://api.test",
+		fetch: (() => Promise.resolve(new Response("{}"))) as typeof fetch,
+		identity: () => Promise.reject(new Error("locked")),
+		onReachability: (reachable) => seen.push(reachable),
+	}).request("GET", "/v1/x");
+
+	expect(seen).toEqual([]);
+});

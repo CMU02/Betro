@@ -16,6 +16,7 @@ import { AppText } from "@/components/ui/app-text";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InlineNotice } from "@/components/ui/inline-notice";
 import { ListDivider } from "@/components/ui/list-row";
+import { OfflineNotice } from "@/components/ui/offline-notice";
 import { Section } from "@/components/ui/section";
 import { TopBar } from "@/components/ui/top-bar";
 import {
@@ -33,6 +34,7 @@ import { appCrashSink } from "@/lib/crash/app-crash-reporting";
 import { reportError } from "@/lib/crash/crash-reporting";
 import { t } from "@/lib/i18n/t";
 import type { MessageKey } from "@/lib/i18n/translate";
+import { useOffline } from "@/lib/network/app-reachability";
 import { appPlaces } from "@/lib/places/app-places";
 import { usePlaces } from "@/lib/places/use-places";
 
@@ -133,6 +135,7 @@ export default function CommuteGuideScreen() {
 	const { places } = usePlaces(appPlaces);
 	const place = places.find((entry) => entry.id === placeId);
 	const { state } = useActiveSession({ enabled: place !== undefined });
+	const offline = useOffline();
 	const { end, ending, notice } = useEndSession();
 	const now = useEpochSeconds();
 	const goBack = useCallback(() => router.back(), [router]);
@@ -168,7 +171,9 @@ export default function CommuteGuideScreen() {
 				contentContainerClassName="gap-5 px-4 pt-2"
 				contentContainerStyle={{ paddingBottom: insets.bottom + BOTTOM_GAP }}
 			>
-				{state?.checking ? (
+				{/* 닿지 않으면 그 까닭을 보이고, 닿는데 받지 못했으면 "연결을 확인하고 있어요"를 보인다. */}
+				<OfflineNotice />
+				{state?.checking && !offline ? (
 					<InlineNotice body={t("commuteGuide.checking")} />
 				) : null}
 				{guide.kind === "active" ? (

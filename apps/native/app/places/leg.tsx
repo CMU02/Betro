@@ -13,6 +13,7 @@ import {
 	SubwayBoardStep,
 	SubwayLineStep,
 } from "@/components/places/leg-steps";
+import { OfflineNotice } from "@/components/ui/offline-notice";
 import { TopBar } from "@/components/ui/top-bar";
 import { t } from "@/lib/i18n/t";
 import type { MessageKey } from "@/lib/i18n/translate";
@@ -179,6 +180,7 @@ export default function LegPickerScreen() {
 			{/* 첫 단계가 아니면 iOS 밀어서 뒤로 가기가 화면을 통째로 닫지 않게 막는다. */}
 			<Stack.Screen options={{ gestureEnabled: step.kind === "mode" }} />
 			<TopBar onBack={goBack} title={t(TITLE_KEYS[step.kind])} />
+			<OfflineNotice className="px-4 pb-2" />
 			{routeIndex === null ? null : (
 				<StepBody onDone={finish} setStep={setStep} step={step} />
 			)}

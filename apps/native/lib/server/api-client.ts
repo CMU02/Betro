@@ -19,6 +19,8 @@ export interface ServerClientDeps {
 	baseUrl: string;
 	fetch: typeof fetch;
 	identity: () => Promise<InstallIdentity>;
+	/** 응답이 오면 true, 네트워크 오류·타임아웃이면 false. 인증값을 못 읽은 것은 알리지 않는다. */
+	onReachability?: (reachable: boolean) => void;
 }
 
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -47,6 +49,7 @@ export function createServerClient(deps: ServerClientDeps): ServerClient {
 		async request(method, path, body) {
 			const controller = new AbortController();
 			const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+			let sent = false;
 			try {
 				const identity = await deps.identity();
 				const headers: Record<string, string> = {
@@ -56,14 +59,19 @@ export function createServerClient(deps: ServerClientDeps): ServerClient {
 				if (body !== undefined) {
 					headers["Content-Type"] = "application/json";
 				}
+				sent = true;
 				const response = await deps.fetch(joinUrl(deps.baseUrl, path), {
 					body: body === undefined ? undefined : JSON.stringify(body),
 					headers,
 					method,
 					signal: controller.signal,
 				});
+				deps.onReachability?.(true);
 				return { json: await readJson(response), status: response.status };
 			} catch {
+				if (sent) {
+					deps.onReachability?.(false);
+				}
 				return NETWORK_ERROR;
 			} finally {
 				clearTimeout(timer);

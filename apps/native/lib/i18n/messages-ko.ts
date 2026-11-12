@@ -248,6 +248,13 @@ export const ko = {
 		},
 		towards: "{name} 방면",
 	},
+	/** 서버에 닿지 않을 때 화면 위 안내(비행기 모드, Wi-Fi·데이터 꺼짐, 서버 장애) */
+	network: {
+		offline: {
+			body: "비행기 모드이거나 Wi-Fi·데이터가 꺼져 있으면 새 정보를 가져오지 못해요. 연결되면 다시 불러와요.",
+			title: "인터넷에 연결되어 있지 않아요",
+		},
+	},
 	notFound: {
 		backToMap: "지도로 돌아가기",
 		title: "페이지를 찾을 수 없어요",

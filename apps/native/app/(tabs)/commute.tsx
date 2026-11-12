@@ -10,6 +10,7 @@ import { AddPlaceCard, PlaceCard } from "@/components/places/place-card";
 import { AppButton } from "@/components/ui/app-button";
 import { AppText } from "@/components/ui/app-text";
 import { EmptyState } from "@/components/ui/empty-state";
+import { OfflineNotice } from "@/components/ui/offline-notice";
 import { Screen } from "@/components/ui/screen";
 import { sessionStripModel } from "@/lib/commute/guide-model";
 import {
@@ -71,6 +72,7 @@ export default function CommuteTab() {
 	if (places.length === 0) {
 		return (
 			<Screen scroll title={t("places.title")}>
+				<OfflineNotice className="px-4 pt-2" />
 				<View className="flex-1 justify-center px-4 pb-12">
 					<EmptyState
 						action={
@@ -97,6 +99,7 @@ export default function CommuteTab() {
 	return (
 		<Screen scroll title={t("places.title")}>
 			<View className="gap-3 px-4 pt-2 pb-4">
+				<OfflineNotice />
 				{strip === null ? null : (
 					<SessionStrip model={strip} onOpen={openGuideById} />
 				)}

@@ -28,7 +28,10 @@ import { appPlacesSync } from "@/lib/places/app-places";
 import { appPreferences } from "@/lib/preferences/app-preferences";
 import { toUniwindTheme } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
-import { ensureRegistered } from "@/lib/server/app-server";
+import {
+	ensureRegistered,
+	startAppOfflineProbe,
+} from "@/lib/server/app-server";
 import { createRegistrationFlow } from "@/lib/server/registration-flow";
 import { CommuteActivity } from "@/modules/commute-activity";
 import { setAndroidSystemBarsContent } from "@/modules/system-bars";
@@ -101,6 +104,8 @@ AppState.addEventListener("change", (state) => {
 		});
 	}
 });
+// 서버에 닿지 않는 동안 연결이 돌아왔는지 본다(`useOffline` 안내가 사라지게).
+startAppOfflineProbe();
 
 /**
  * iOS는 Info.plist의 UIViewControllerBasedStatusBarAppearance가 켜져 있어 화면(뷰 컨트롤러)이 상태 표시줄 글자색을 정한다.

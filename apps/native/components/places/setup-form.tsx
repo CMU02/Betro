@@ -21,6 +21,7 @@ import { AppText } from "@/components/ui/app-text";
 import { Chip } from "@/components/ui/chip";
 import { InlineNotice } from "@/components/ui/inline-notice";
 import { ListRow } from "@/components/ui/list-row";
+import { OfflineNotice } from "@/components/ui/offline-notice";
 import { TextField } from "@/components/ui/text-field";
 import { TopBar } from "@/components/ui/top-bar";
 import { appCrashSink } from "@/lib/crash/app-crash-reporting";
@@ -242,6 +243,7 @@ function SetupBody({
 	);
 	return (
 		<>
+			<OfflineNotice />
 			<View className="gap-2">
 				<SectionTitle title={t("placeSetup.sections.kind")} />
 				<View className="flex-row flex-wrap gap-2">
