@@ -281,10 +281,14 @@ describe("busBoards.rideMs", () => {
 		);
 	});
 
-	it("returns null for a vehicle not listed at the boarding stop", () => {
-		expect(
-			busBoards(null, stops6411, FETCHED_6411).rideMs("nope", 39, 42)
-		).toBeNull();
+	it("falls back to the route pace for a vehicle not listed at the boarding stop", () => {
+		const stops = [
+			stop(2, [vehicle("X", 1, 60)]),
+			stop(4, [vehicle("Y", 2, 120)]),
+		];
+		expect(busBoards(null, stops, MADE_6411).rideMs("nope", 2, 4)).toBe(
+			2 * 60 * SECOND_MS
+		);
 	});
 
 	it("without a vehicle uses the first vehicles listed at the two stops", () => {
@@ -310,11 +314,51 @@ describe("busBoards.rideMs", () => {
 		);
 	});
 
-	it("returns null when the first-vehicle difference is negative", () => {
+	it("falls back to the route pace when the first-vehicle difference is negative", () => {
+		// 한 정류장에 X 300초/1정류장, Y 100초/1정류장 → 중앙값 200초
 		const stops = [
 			stop(2, [vehicle("X", 1, 300)]),
 			stop(6, [vehicle("Y", 5, 100)]),
 		];
-		expect(busBoards(null, stops, MADE_6411).rideMs(null, 2, 6)).toBeNull();
+		expect(busBoards(null, stops, MADE_6411).rideMs(null, 2, 6)).toBe(
+			4 * 200 * SECOND_MS
+		);
+	});
+
+	it("falls back to the route pace when the boarding stop lists no vehicle (route origin)", () => {
+		// 2026-11-12 6411 기점: 1~3번 정류장은 "출발대기"(vehId 0)뿐이다.
+		const stops = [
+			stop(1, []),
+			stop(2, []),
+			stop(4, [vehicle("A", 3, 50)]),
+			stop(5, [vehicle("A", 3, 180)]),
+			stop(10, [vehicle("B", 7, 210), vehicle("A", 3, 840)]),
+		];
+		// 정류장당 50, 90, 70, 120초 → 중앙값 80초
+		expect(busBoards(null, stops, MADE_6411).rideMs(null, 1, 10)).toBe(
+			9 * 80 * SECOND_MS
+		);
+	});
+
+	it("falls back to the route pace when the alighting stop lists no vehicle", () => {
+		const stops = [stop(7, [vehicle("C", 6, 60)]), stop(9, [])];
+		expect(busBoards(null, stops, MADE_6411).rideMs(null, 7, 9)).toBe(
+			2 * 60 * SECOND_MS
+		);
+	});
+
+	it("returns null when no vehicle runs anywhere on the route", () => {
+		const stops = [stop(1, []), stop(2, []), stop(3, [])];
+		expect(busBoards(null, stops, MADE_6411).rideMs(null, 1, 3)).toBeNull();
+	});
+
+	it("ignores vehicles at or past their stop when measuring the pace", () => {
+		const stops = [
+			stop(2, [vehicle("D", 2, 0, { isArrived: true })]),
+			stop(5, [vehicle("E", 3, 120)]),
+		];
+		expect(busBoards(null, stops, MADE_6411).rideMs(null, 1, 4)).toBe(
+			3 * 60 * SECOND_MS
+		);
 	});
 });
