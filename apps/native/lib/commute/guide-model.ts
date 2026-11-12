@@ -108,12 +108,16 @@ function byRank(routes: Route[]): Route[] {
 
 /** 각 구간의 승차 정류장 + 마지막 하차 정류장. 예: "천호 → 잠실 → 강남" */
 function stopsOf(legs: Leg[], t: Translate): string {
+	const [first, ...rest] = legs;
 	const last = legs.at(-1);
-	if (last === undefined) {
+	if (first === undefined || last === undefined) {
 		return "";
 	}
-	const names = [...legs.map((leg) => leg.board.name), last.alight.name];
-	return names.reduce((from, to) => t("places.legArrow", { from, to }));
+	const names = [...rest.map((leg) => leg.board.name), last.alight.name];
+	return names.reduce(
+		(from, to) => t("places.legArrow", { from, to }),
+		first.board.name
+	);
 }
 
 function lineNameOf(leg: Leg, t: Translate): string {
