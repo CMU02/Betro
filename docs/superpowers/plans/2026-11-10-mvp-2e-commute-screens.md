@@ -157,7 +157,7 @@ apps/server/src/commute/runner-core.ts  진행 중 세션 응답에 경로별 �
   - `18 Live Activity`, `19 Dynamic Island`, `18 Live Update`: 고친 컴포넌트로 바꾸고 탑승 전 프레임에 버튼이 보이게 한다. Compact는 배지 + 남은 분 그대로 둔다(폭이 좁다).
 - [x] **Step 4: 확인** — 고친 프레임마다 `get_screenshot`으로 다크·라이트를 찍어 본다. Expected: 4.4의 8개 항목이 모두 반영됐고, 직접 넣은 색이 없으며(`get_variable_defs`), 글자가 잘리지 않는다. 고친 프레임과 새 프레임의 node ID를 이 문서 "Figma 결과" 표에 적는다.
 - [ ] **Step 5: 사용자 확인** — 스크린샷을 사용자에게 보이고 확인을 받는다. 화면 구성이 바뀌면 이 계획의 해당 Task를 고친다. **확인 전에는 Task 6 이후로 넘어가지 않는다.** Task 2~5는 시안과 무관하므로 먼저 해도 된다.
-- [ ] **Step 6: 커밋** — `docs(plan): record the Figma changes for the commute screens`
+- [x] **Step 6: 커밋** — `docs(plan): record the Figma changes for the commute screens`
 
 ---
 
@@ -509,12 +509,27 @@ apps/server/src/commute/runner-core.ts  진행 중 세션 응답에 경로별 �
 **Files:**
 - Modify: `apps/native/README.md`(화면과 저장 구조), `apps/server/README.md`(Task 2의 응답), 이 계획 문서("2-E 결과")
 
-- [ ] **Step 1: 서버 배포** — Task 2·2A가 병합된 `develop`에서 `apps/server`의 `bun run deploy`. Expected: `/v1/snapshot/subway` 200, 인증 없는 `/v1/commute/sessions/active` 401.
-- [ ] **Step 2: iPhone** — `EXPO_PUBLIC_SERVER_URL=https://betro.cmu02-studio.com`으로 빌드해 설치한다. 스펙 7.2의 뒷부분을 끝까지 간다: 내 장소 등록(버스 1구간, 지하철 1구간, 환승 2구간, 경기 노선 1개) → 15에 카드 → 3분 뒤 시작하는 예약 → 17에서 세션 카드와 비교 → "안내 종료". Expected: 각 단계가 시안과 같고, 서버 D1 `commute_plan`에 장소 이름과 주소가 없다.
-- [ ] **Step 3: 오프라인과 재설치(Review Focus 1, 2)** — 비행기 모드에서 장소를 저장한다 → 표시가 보인다 → 네트워크를 켜고 앱을 다시 연다 → 표시가 사라지고 서버에 예약이 있다. 앱을 지우고 다시 설치한다 → "가져온 경로" 카드가 예약 수만큼 보인다.
+- [x] **Step 1: 서버 배포** (2026-11-12, 아래 "2-E 결과") — Task 2·2A가 병합된 `develop`에서 `apps/server`의 `bun run deploy`. Expected: `/v1/snapshot/subway` 200, 인증 없는 `/v1/commute/sessions/active` 401.
+- [x] **Step 2: iPhone** (2026-11-12, 운영 서버. 경기 노선은 대안으로 넣었다) — `EXPO_PUBLIC_SERVER_URL=https://betro.cmu02-studio.com`으로 빌드해 설치한다. 스펙 7.2의 뒷부분을 끝까지 간다: 내 장소 등록(버스 1구간, 지하철 1구간, 환승 2구간, 경기 노선 1개) → 15에 카드 → 3분 뒤 시작하는 예약 → 17에서 세션 카드와 비교 → "안내 종료". Expected: 각 단계가 시안과 같고, 서버 D1 `commute_plan`에 장소 이름과 주소가 없다.
+- [ ] **Step 3: 오프라인과 재설치(Review Focus 1, 2)** (재설치만 2026-11-12에 확인. 비행기 모드는 미러링이 끊겨 남았다) — 비행기 모드에서 장소를 저장한다 → 표시가 보인다 → 네트워크를 켜고 앱을 다시 연다 → 표시가 사라지고 서버에 예약이 있다. 앱을 지우고 다시 설치한다 → "가져온 경로" 카드가 예약 수만큼 보인다.
 - [ ] **Step 4: Android(S20)** — Step 2와 같은 흐름. 시각 고르기와 뒤로 가기 동작을 본다.
-- [ ] **Step 5: 문서와 결과** — README를 고치고 이 문서에 "2-E 결과"(확인한 흐름, 스크린샷 위치, 남은 일)를 적는다.
-- [ ] **Step 6: 커밋** — `docs: document the commute screens and record the 2-E run`
+- [x] **Step 5: 문서와 결과** — README를 고치고 이 문서에 "2-E 결과"(확인한 흐름, 스크린샷 위치, 남은 일)를 적는다.
+- [x] **Step 6: 커밋** — `docs: document the commute screens and record the 2-E run`
+
+#### 2-E 결과 (2026-11-12)
+
+- **배포**: `develop`(#15 병합 뒤)을 이 브랜치에 합쳐(`e7551fa`) 테스트 1306 pass / 7 skip / 0 fail, `check-types` 통과를 본 뒤 이 브랜치에서 `bun run deploy`. `betro-server` version `3dad5085`(되돌릴 때 `7a5a7e31`). `/v1/snapshot/subway` 200, 인증 없는 `/v1/commute/sessions/active` 401, `/v1/ref/bus/routes?q=6411` 200.
+- **iPhone(운영 서버)**: 새로 빌드하지 않고 Debug dev client에 Metro를 `EXPO_PUBLIC_SERVER_URL=https://betro.cmu02-studio.com`으로 띄웠다(번들에 운영 주소만 있음을 확인). iPhone 미러링으로 진행했다.
+  - 앱을 켜자 로컬 테스트 때 만든 "회사"(6411 1구간, 대안 1호선 1구간)가 운영 서버에 올라갔다.
+  - "학교" 등록: 기본 6411(정랑고개.양천벤처타운 → 구로역) → 2호선(영등포구청 → 사당), 대안 M5107광주(영통역 → 황골벽산아파트, "경기" 표시), 평일 17:38. 노선 검색, 정류장 목록, 하차 자동 스크롤이 운영 조회 API로 동작했다.
+  - D1 `commute_plan`: 두 예약 모두 `enabled`, `planId`, `routes`, `schedule`만 있고 장소 이름·종류·주소가 없다. 2호선 방향 `down`, 시작 분 1048(17:28).
+  - 17:28 정각에 `commute_session` `active`. 15에 "등교 · 학교까지 안내 중" 띠, 17에 "17:38에 나가세요 · 17:49 탑승 · 2호선 영등포구청"과 대안 "M5107번 17:55 도착". 나가는 시각 뒤에는 "위치 확인 중 · 약 17:49 도착". Dynamic Island에 "6411"이 떴고 누르면 앱이 열렸다(이미 17에 있던 상태라 딥링크 경로는 따로 보지 않았다).
+  - "안내 종료" → D1 `ended`/`user`(17:41), 17은 "내일 17:38에 나가요 · 17:28부터 잠금화면에 떠요", Live Activity가 내려갔다.
+- **재설치(Step 3 일부)**: USB로 앱을 지우고 같은 Debug 빌드를 다시 깔았다. 알림만 허용하고 위치는 고르지 않았다. 15에 "가져온 경로" 카드 2개가 예약 수만큼 나왔고 D1 예약은 2개 그대로다(중복 없음). 가져온 장소에는 `busMeta`가 없어 6411 배지가 기본 색이다(설계대로).
+- **찾은 것**
+  - 노선의 기점에서 타는 구간은 끝까지 "시간표 추정"이다. 6411 기점 쪽 세 정류장은 `getArrInfoByRouteAll`이 "출발대기"만 주고 다가오는 차량이 없어 위치가 "확인 중"으로 남는다. 코드는 의도대로지만, 기점에서 타는 사람에게는 실시간 정보가 나오지 않는다.
+  - 대안 M5107의 "17:55 도착"이 몇 분 뒤 사라졌다(시각 없음). 경기 노선은 실시간 도착을 부르지 않으니 시간표 추정만 남아야 하는데, 그 값도 빠졌다. 원인은 보지 않았다.
+- **남은 일**: Step 3 비행기 모드(미러링이 끊겨 기기에서 직접), Step 4 Android(S20), 잠금화면 카드 모양(2-F Task 4), 위의 두 가지.
 
 ---
 
