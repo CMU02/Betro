@@ -34,6 +34,27 @@ public struct CommuteActivityAttributes: ActivityAttributes {
       }
     }
 
+    /// 기본 경로에서 지금 구간 뒤에 남은 구간 하나(`content-state.ts`의 `NextLegContent`).
+    public struct NextLeg: Codable, Hashable {
+      public var lineName: String
+      /// "bus" | "subway"
+      public var mode: String
+      /// 그 구간의 승차 정류장(역)
+      public var stopName: String
+      /// 그 구간의 승차 예상(epoch 초)
+      public var boardEtaEpoch: Double?
+      /// "live" | "estimated"
+      public var etaState: String
+
+      public init(lineName: String, mode: String, stopName: String, boardEtaEpoch: Double?, etaState: String) {
+        self.lineName = lineName
+        self.mode = mode
+        self.stopName = stopName
+        self.boardEtaEpoch = boardEtaEpoch
+        self.etaState = etaState
+      }
+    }
+
     public var v: Int
     public var seq: Int
     public var sentAt: Double
@@ -56,6 +77,8 @@ public struct CommuteActivityAttributes: ActivityAttributes {
     public var delayMinutes: Int
     public var destinationEtaEpoch: Double?
     public var suggestion: Suggestion?
+    /// 남은 구간(최대 3개). 옛 서버의 값에는 키가 없어 nil로 디코딩된다.
+    public var nextLegs: [NextLeg]?
 
     public init(
       v: Int,
@@ -75,7 +98,8 @@ public struct CommuteActivityAttributes: ActivityAttributes {
       etaState: String,
       delayMinutes: Int,
       destinationEtaEpoch: Double?,
-      suggestion: Suggestion?
+      suggestion: Suggestion?,
+      nextLegs: [NextLeg]? = nil
     ) {
       self.v = v
       self.seq = seq
@@ -95,6 +119,7 @@ public struct CommuteActivityAttributes: ActivityAttributes {
       self.delayMinutes = delayMinutes
       self.destinationEtaEpoch = destinationEtaEpoch
       self.suggestion = suggestion
+      self.nextLegs = nextLegs
     }
   }
 

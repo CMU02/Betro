@@ -184,10 +184,42 @@ interface EndedMark {
 	installId: string;
 }
 
+/** 진행 중 세션 응답에 실리는, 등록한 경로 하나의 예상. 시각은 ContentState처럼 초 단위. */
+export interface SessionRouteView {
+	/** 기본 경로는 지금 구간, 대안은 첫 구간의 탑승 예상(초). */
+	boardEtaEpoch: number | null;
+	destinationEtaEpoch: number | null;
+	etaState: "live" | "estimated";
+	positionState: "live" | "stale" | "none";
+	rank: number;
+	stopsAway: number | null;
+}
+
 export interface ActiveSession {
 	content: ContentState;
 	planId: string;
+	/** rank 오름차순, 등록한 경로 수만큼. */
+	routes: SessionRouteView[];
 	sessionId: string;
+}
+
+const toEpochSeconds = (at: number | null | undefined): number | null =>
+	at === null || at === undefined ? null : Math.floor(at / 1000);
+
+function routeView(
+	rank: number,
+	state: SessionEntry["state"]
+): SessionRouteView {
+	const estimate = state.estimates.find((entry) => entry.rank === rank);
+	const leg = estimate?.legs[rank === 0 ? state.legIndex : 0];
+	return {
+		boardEtaEpoch: toEpochSeconds(leg?.boardEtaAt),
+		destinationEtaEpoch: toEpochSeconds(estimate?.destinationEtaAt),
+		etaState: leg?.etaState ?? "estimated",
+		positionState: leg?.positionState ?? "none",
+		rank,
+		stopsAway: leg?.stopsAway ?? null,
+	};
 }
 
 export type InputResult = "ok" | "not-found" | "ended";
@@ -333,6 +365,7 @@ function endedContentFrom(
 ): ContentState {
 	return {
 		...last,
+		nextLegs: [],
 		passed: null,
 		sentAt: Math.floor(now / 1000),
 		seq: state.seq + 1,
@@ -443,15 +476,23 @@ export class RunnerCore {
 			return null;
 		}
 		const { entry, id } = best;
+		const record = await plans.getPlan(entry.state.planId);
+		const owned = record && record.installId === installId ? record : null;
 		let content = entry.lastContent;
 		if (content === null) {
-			const record = await plans.getPlan(entry.state.planId);
-			if (!record || record.installId !== installId) {
+			if (owned === null) {
 				return null;
 			}
-			content = buildContent(entry.state, record.plan, clock(), config);
+			content = buildContent(entry.state, owned.plan, clock(), config);
 		}
-		return { content, planId: entry.state.planId, sessionId: id };
+		const ranks =
+			owned === null
+				? entry.state.estimates.map((estimate) => estimate.rank)
+				: owned.plan.routes.map((route) => route.rank);
+		const routes = ranks
+			.toSorted((a, b) => a - b)
+			.map((rank) => routeView(rank, entry.state));
+		return { content, planId: entry.state.planId, routes, sessionId: id };
 	}
 
 	/**

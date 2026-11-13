@@ -312,7 +312,18 @@ export function busBoards(
 		return nonNegative(alightAt - etaAtOf(boardStop, listed));
 	};
 
-	const rideMs = (
+	const pacePerStopMs = routePacePerStopMs(now);
+
+	/**
+	 * 같은 응답의 차량들로 잰 정류장당 시간 × 정류장 수. 승차·하차 정류장에 차량이 없을 때(기점 근처의
+	 * "출발대기", 막 지나간 차량) 주행 시간을 아예 모르게 두지 않으려고 쓴다. 차량이 하나도 없으면 null.
+	 */
+	const pacedRideMs = (boardSeq: number, alightSeq: number): number | null =>
+		pacePerStopMs === null || alightSeq <= boardSeq
+			? null
+			: Math.round((alightSeq - boardSeq) * pacePerStopMs);
+
+	const observedRideMs = (
 		vehicleId: string | null,
 		boardSeq: number,
 		alightSeq: number
@@ -339,5 +350,37 @@ export function busBoards(
 		);
 	};
 
+	const rideMs = (
+		vehicleId: string | null,
+		boardSeq: number,
+		alightSeq: number
+	): number | null =>
+		observedRideMs(vehicleId, boardSeq, alightSeq) ??
+		pacedRideMs(boardSeq, alightSeq);
+
 	return { board, progress, rideMs };
+}
+
+/**
+ * 응답에 나온 모든 (정류장, 차량)에서 `etaSec ÷ 남은 정류장 수`의 중앙값(ms).
+ * 정류장에 있거나 지난 차량(남은 정류장 0 이하)은 빼고, 하나도 없으면 null.
+ */
+function routePacePerStopMs(stops: RouteStopArrival[]): number | null {
+	const paces: number[] = [];
+	for (const stop of stops) {
+		for (const vehicle of stop.vehicles) {
+			const remaining = stop.seq - vehicle.seqNow;
+			if (!vehicle.isArrived && remaining > 0) {
+				paces.push((vehicle.etaSec * SECOND_MS) / remaining);
+			}
+		}
+	}
+	if (paces.length === 0) {
+		return null;
+	}
+	paces.sort((a, b) => a - b);
+	const middle = Math.floor(paces.length / 2);
+	return paces.length % 2 === 1
+		? (paces[middle] as number)
+		: ((paces[middle - 1] as number) + (paces[middle] as number)) / 2;
 }

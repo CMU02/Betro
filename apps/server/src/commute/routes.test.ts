@@ -47,6 +47,7 @@ const fakeRunner: CommuteRunnerClient = {
 		return Promise.resolve({
 			content: { seq: 3, stage: "walk" } as never,
 			planId: PLAN_ID,
+			routes: [],
 			sessionId: SESSION_ID,
 		});
 	},
@@ -525,6 +526,7 @@ describe("commute sessions", () => {
 			session: {
 				content: { seq: 3, stage: "walk" },
 				planId: PLAN_ID,
+				routes: [],
 				sessionId: SESSION_ID,
 			},
 		});

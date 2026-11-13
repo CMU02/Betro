@@ -1,17 +1,27 @@
 import type { MessageKey, MessageParams } from "../i18n/translate";
-import type { ContentState } from "./content-state";
+import type { ContentState, NextLegContent } from "./content-state";
 
-export type LockScreenAction = "boarded" | "next" | "end";
+export type LockScreenAction = "end";
 export type LockScreenTag = "live" | "estimated" | "delayed";
 
+export interface LockScreenNextLeg {
+	lineName: string;
+	mode: "bus" | "subway";
+	text: string;
+}
+
 export interface LockScreenModel {
+	/** iOS는 버튼이 없고, Android는 "종료" 하나다. */
 	actions: LockScreenAction[];
 	detail: string;
 	header: string;
 	lineName: string;
 	minutes: string | null;
 	mode: "bus" | "subway";
-	progress: { current: number; nodes: number };
+	/** 남은 구간이 3개 이상이면 "외 {n}구간"(n = 남은 수 - 2). */
+	moreLegs: string | null;
+	/** 지금 구간 뒤에 남은 구간 줄. 최대 2줄. */
+	nextLegs: LockScreenNextLeg[];
 	status: string;
 	suggestion: string | null;
 	tag: LockScreenTag;
@@ -32,11 +42,10 @@ type Translate = LockScreenDeps["t"];
 const SECONDS_PER_MINUTE = 60;
 const DELAYED_MINUTES = 5;
 const MS_PER_SECOND = 1000;
-const NODES_BASE = 2;
-const NODES_PER_LEG = 2;
-const RIDE_OFFSET = 1.5;
+const MAX_NEXT_LEG_LINES = 2;
 
-function formatClock(epochSeconds: number, timezone: string): string {
+/** 24시간 `HH:MM`. 17 화면도 같은 규칙으로 쓴다. */
+export function formatClock(epochSeconds: number, timezone: string): string {
 	return new Intl.DateTimeFormat("en-GB", {
 		hour: "2-digit",
 		hourCycle: "h23",
@@ -47,6 +56,30 @@ function formatClock(epochSeconds: number, timezone: string): string {
 
 function knownStops(stopsAway: number | null): number | null {
 	return stopsAway !== null && stopsAway >= 0 ? Math.floor(stopsAway) : null;
+}
+
+/** "지나갔어요"를 쓰는 경우. 나가기 전 문구보다 앞선다. */
+function showsPassed(state: ContentState): boolean {
+	return state.passed !== null && state.etaEpoch !== null;
+}
+
+/** 첫 구간 walk 단계에서 나가는 시각이 아직 오지 않았으면 그 시각과 탑승 시각을 보인다. */
+function beforeLeaveOf(
+	state: ContentState,
+	now: number
+): { etaEpoch: number; leaveEpoch: number } | null {
+	const { etaEpoch, leaveEpoch } = state;
+	if (
+		showsPassed(state) ||
+		state.stage !== "walk" ||
+		state.legIndex !== 0 ||
+		leaveEpoch === null ||
+		etaEpoch === null ||
+		now >= leaveEpoch
+	) {
+		return null;
+	}
+	return { etaEpoch, leaveEpoch };
 }
 
 function statusLine(
@@ -66,17 +99,10 @@ function statusLine(
 			passedLine: state.passed.lineName,
 		});
 	}
-	const isBeforeLeave =
-		stage === "walk" &&
-		state.legIndex === 0 &&
-		state.leaveEpoch !== null &&
-		etaEpoch !== null &&
-		now < state.leaveEpoch;
-	if (isBeforeLeave && state.leaveEpoch !== null && etaEpoch !== null) {
+	const beforeLeave = beforeLeaveOf(state, now);
+	if (beforeLeave) {
 		return t("commute.lock.status.beforeLeave", {
-			eta: clock(etaEpoch),
-			leave: clock(state.leaveEpoch),
-			line: state.lineName,
+			leave: clock(beforeLeave.leaveEpoch),
 		});
 	}
 	const stops = knownStops(state.stopsAway);
@@ -101,9 +127,17 @@ function statusLine(
 
 function detailLine(
 	state: ContentState,
-	t: Translate,
+	deps: LockScreenDeps,
 	clock: (epoch: number) => string
 ): string {
+	const { t } = deps;
+	const beforeLeave = beforeLeaveOf(state, deps.now);
+	if (beforeLeave) {
+		return t("commute.lock.detail.beforeLeave", {
+			eta: clock(beforeLeave.etaEpoch),
+			stop: state.stopName,
+		});
+	}
 	if (state.etaEpoch === null) {
 		return t("commute.lock.detail.noEta", { stop: state.stopName });
 	}
@@ -163,35 +197,40 @@ function suggestionLine(
 	});
 }
 
-function actionsOf(
-	state: ContentState,
-	platform: LockScreenDeps["platform"]
-): LockScreenAction[] {
-	const beforeBoarding = state.stage === "walk" || state.stage === "wait";
-	if (platform === "ios") {
-		return beforeBoarding ? ["boarded", "next"] : [];
-	}
-	return beforeBoarding ? ["boarded", "next", "end"] : ["end"];
+function actionsOf(platform: LockScreenDeps["platform"]): LockScreenAction[] {
+	return platform === "android" ? ["end"] : [];
 }
 
-function progressOf(state: ContentState): LockScreenModel["progress"] {
-	const nodes = NODES_BASE + state.legCount * NODES_PER_LEG;
-	const base = state.legIndex * NODES_PER_LEG;
-	let current: number;
-	switch (state.stage) {
-		case "walk":
-			current = base;
-			break;
-		case "wait":
-			current = base + 1;
-			break;
-		case "ride":
-			current = base + RIDE_OFFSET;
-			break;
-		default:
-			current = nodes - 1;
+function nextLegText(
+	leg: NextLegContent,
+	t: Translate,
+	clock: (epoch: number) => string
+): string {
+	if (leg.boardEtaEpoch === null) {
+		return t("commute.lock.nextLeg.noEta", { stop: leg.stopName });
 	}
-	return { current: Math.min(Math.max(current, 0), nodes - 1), nodes };
+	const key =
+		leg.etaState === "live"
+			? "commute.lock.nextLeg.eta"
+			: "commute.lock.nextLeg.etaEstimated";
+	return t(key, { eta: clock(leg.boardEtaEpoch), stop: leg.stopName });
+}
+
+function nextLegLines(
+	state: ContentState,
+	t: Translate,
+	clock: (epoch: number) => string
+): LockScreenNextLeg[] {
+	return state.nextLegs.slice(0, MAX_NEXT_LEG_LINES).map((leg) => ({
+		lineName: leg.lineName,
+		mode: leg.mode,
+		text: nextLegText(leg, t, clock),
+	}));
+}
+
+function moreLegsLine(state: ContentState, t: Translate): string | null {
+	const rest = state.nextLegs.length - MAX_NEXT_LEG_LINES;
+	return rest >= 1 ? t("commute.lock.nextLeg.more", { n: rest }) : null;
 }
 
 /**
@@ -205,13 +244,14 @@ export function lockScreenModel(
 	const clock = (epoch: number) => formatClock(epoch, deps.timezone);
 	const tag = tagOf(state);
 	return {
-		actions: actionsOf(state, deps.platform),
-		detail: detailLine(state, deps.t, clock),
+		actions: actionsOf(deps.platform),
+		detail: detailLine(state, deps, clock),
 		header: deps.header ?? deps.t("commute.lock.header.fallback"),
 		lineName: state.lineName,
 		minutes: minutesLabel(state, deps),
 		mode: state.mode,
-		progress: progressOf(state),
+		moreLegs: moreLegsLine(state, deps.t),
+		nextLegs: nextLegLines(state, deps.t, clock),
 		status: statusLine(state, deps, clock),
 		suggestion: suggestionLine(state, deps),
 		tag,

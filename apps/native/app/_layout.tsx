@@ -24,10 +24,14 @@ import {
 import { ensureInstallIdentity } from "@/lib/device/app-install-identity";
 import { t } from "@/lib/i18n/t";
 import { shouldShowOnboarding } from "@/lib/onboarding/onboarding";
+import { appPlacesSync } from "@/lib/places/app-places";
 import { appPreferences } from "@/lib/preferences/app-preferences";
 import { toUniwindTheme } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
-import { ensureRegistered } from "@/lib/server/app-server";
+import {
+	ensureRegistered,
+	startAppOfflineProbe,
+} from "@/lib/server/app-server";
 import { createRegistrationFlow } from "@/lib/server/registration-flow";
 import { CommuteActivity } from "@/modules/commute-activity";
 import { setAndroidSystemBarsContent } from "@/modules/system-bars";
@@ -77,7 +81,17 @@ async function startInstallIdentity(): Promise<void> {
 		reportError(appCrashSink, error, "install-identity");
 		return;
 	}
-	await registration.run();
+	await registerThenSync();
+}
+
+/**
+ * 서버가 설치를 안 뒤에만 장소 예약을 서버와 맞춘다(밀린 저장·삭제, 재설치 뒤 가져오기).
+ * 맞추기는 겹쳐 돌지 않고 던지지 않는다. 실패는 `places-sync`로 기록된다.
+ */
+async function registerThenSync(): Promise<void> {
+	if (await registration.run()) {
+		await appPlacesSync.run();
+	}
 }
 
 startInstallIdentity().catch((error: unknown) => {
@@ -85,11 +99,13 @@ startInstallIdentity().catch((error: unknown) => {
 });
 AppState.addEventListener("change", (state) => {
 	if (state === "active") {
-		registration.run().catch((error: unknown) => {
+		registerThenSync().catch((error: unknown) => {
 			reportError(appCrashSink, error, "install-registration");
 		});
 	}
 });
+// 서버에 닿지 않는 동안 연결이 돌아왔는지 본다(`useOffline` 안내가 사라지게).
+startAppOfflineProbe();
 
 /**
  * iOS는 Info.plist의 UIViewControllerBasedStatusBarAppearance가 켜져 있어 화면(뷰 컨트롤러)이 상태 표시줄 글자색을 정한다.
@@ -145,6 +161,10 @@ function StackLayout() {
 				<Stack.Protected guard={!showOnboarding}>
 					<Stack.Screen name="(tabs)" />
 					<Stack.Screen name="settings/data-sources" />
+					<Stack.Screen name="places/new" />
+					<Stack.Screen name="places/[placeId]" />
+					<Stack.Screen name="places/leg" />
+					<Stack.Screen name="commute/[placeId]" />
 				</Stack.Protected>
 				<Stack.Protected guard={showOnboarding}>
 					<Stack.Screen name="onboarding" />

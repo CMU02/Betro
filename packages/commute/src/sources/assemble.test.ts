@@ -1,9 +1,14 @@
 import { describe, expect, it } from "bun:test";
 import arrivals6411 from "../__fixtures__/arr-all-6411.json";
 import { commuteConfig } from "../config";
-import type { BusLeg, SubwayLeg } from "../plan";
+import type { BusLeg, Route, SubwayLeg } from "../plan";
+import { estimateRoute } from "../session/estimate";
 import { assembleBoards, legKey, type RawBoards } from "./assemble";
-import { busBoards, parseRouteArrivals } from "./seoul-bus";
+import {
+	busBoards,
+	parseRouteArrivals,
+	type RouteStopArrival,
+} from "./seoul-bus";
 import {
 	fillFromTimetable,
 	type StationRow,
@@ -169,5 +174,77 @@ describe("assembleBoards", () => {
 		expect(boards.progress(subwayLeg, "2001")).toBeNull();
 		expect(boards.rideMs(busLeg, null)).toBeNull();
 		expect(boards.rideMs(subwayLeg, null)).toBeNull();
+	});
+});
+
+describe("estimate at a route's origin stop", () => {
+	// 2026-11-12 운영: 6411 기점(정랑고개.양천벤처타운, 1번)은 "출발대기"(vehId 0)뿐이라
+	// 승차 정류장에 차량이 없어 주행 시간을 몰랐고, 하차·목적지 시각이 모두 null이었다.
+	const originLeg: BusLeg = {
+		alight: { name: "구로역", seq: 10, stop: "seoul-bus:116000068" },
+		board: {
+			name: "정랑고개.양천벤처타운",
+			seq: 1,
+			stop: "seoul-bus:114000001",
+		},
+		line: "seoul-bus:100100290",
+		lineName: "6411",
+		mode: "bus",
+	};
+	const route: Route = { legs: [originLeg], rank: 0, walkMinutes: [5, 5] };
+	const vehicleAt = (
+		vehicleId: string,
+		seqNow: number,
+		etaSec: number
+	): RouteStopArrival["vehicles"][number] => ({
+		etaSec,
+		isArrived: false,
+		lastOfDay: false,
+		plate: "",
+		seqNow,
+		vehicleId,
+	});
+	const stopAt = (
+		seq: number,
+		vehicles: RouteStopArrival["vehicles"]
+	): RouteStopArrival => ({
+		headwayMin: 12,
+		madeAt: T,
+		seq,
+		stopId: `stop-${seq}`,
+		vehicles,
+	});
+	const stops = [
+		stopAt(1, []),
+		stopAt(2, []),
+		stopAt(4, [vehicleAt("A", 3, 60)]),
+		stopAt(10, [vehicleAt("A", 3, 420)]),
+	];
+
+	it("still gives the alighting and destination times from the route pace", () => {
+		const boards = assembleBoards(
+			{
+				bus: { "100100290": { fetchedAt: T, now: stops, prev: null } },
+				subway: {},
+				timetable: { arrivals: {}, rideMs: {} },
+			},
+			config
+		);
+		const readyAt = T + 5 * MINUTE_MS;
+		const estimate = estimateRoute(
+			route,
+			boards,
+			{ fixed: [], now: T, readyAt, skip: new Set() },
+			config
+		);
+		const [leg] = estimate.legs;
+		// 차량이 없으니 배차간격(12분)의 반을 기다린다.
+		expect(leg?.boardEtaAt).toBe(readyAt + 6 * MINUTE_MS);
+		// 정류장당 60초 × 9정류장
+		expect(leg?.alightEtaAt).toBe(readyAt + 6 * MINUTE_MS + 9 * MINUTE_MS);
+		expect(leg?.etaState).toBe("estimated");
+		expect(estimate.destinationEtaAt).toBe(
+			readyAt + 6 * MINUTE_MS + 9 * MINUTE_MS + 5 * MINUTE_MS
+		);
 	});
 });

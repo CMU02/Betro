@@ -31,8 +31,57 @@ function parsed() {
 	return state;
 }
 
+const NEXT_LEGS = [
+	{
+		boardEtaEpoch: 1_700_002_160,
+		etaState: "estimated",
+		lineName: "2호선",
+		mode: "subway",
+		stopName: "잠실역",
+	},
+	{
+		boardEtaEpoch: null,
+		etaState: "live",
+		lineName: "341",
+		mode: "bus",
+		stopName: "잠실역.롯데월드",
+	},
+];
+
 it("parses the sample payload", () => {
-	expect(parsed()).toEqual(SAMPLE as ReturnType<typeof parsed>);
+	expect(parsed()).toEqual({
+		...SAMPLE,
+		nextLegs: [],
+	} as ReturnType<typeof parsed>);
+});
+
+it("reads a v1 payload without nextLegs as no remaining legs", () => {
+	expect(SAMPLE).not.toHaveProperty("nextLegs");
+	expect(parseContentState(SAMPLE)?.nextLegs).toEqual([]);
+});
+
+it("keeps two valid remaining legs as they are", () => {
+	expect(
+		parseContentState({ ...SAMPLE, nextLegs: NEXT_LEGS })?.nextLegs
+	).toEqual(NEXT_LEGS as ReturnType<typeof parsed>["nextLegs"]);
+});
+
+it("rejects the whole value when a remaining leg is malformed", () => {
+	const [first, second] = NEXT_LEGS;
+	const { stopName: _dropped, ...withoutStop } = second;
+	expect(
+		parseContentState({ ...SAMPLE, nextLegs: [first, withoutStop] })
+	).toBeNull();
+	expect(
+		parseContentState({ ...SAMPLE, nextLegs: [{ ...first, mode: "tram" }] })
+	).toBeNull();
+	expect(
+		parseContentState({
+			...SAMPLE,
+			nextLegs: [{ ...first, boardEtaEpoch: "08:36" }],
+		})
+	).toBeNull();
+	expect(parseContentState({ ...SAMPLE, nextLegs: "x" })).toBeNull();
 });
 
 it("keeps passed and suggestion objects", () => {
