@@ -1,0 +1,231 @@
+import Foundation
+
+/// 지금 구간 뒤에 남은 구간 한 줄(TS `LockScreenNextLeg`).
+public struct CommuteLockNextLeg: Hashable {
+  public var lineName: String
+  /// "bus" | "subway"
+  public var mode: String
+  public var text: String
+}
+
+/// 잠금화면 카드와 다이내믹 아일랜드가 그리는 값(TS `LockScreenModel`에서 iOS에 없는 `actions`를 뺀 것).
+public struct CommuteLockModel: Hashable {
+  public var detail: String
+  public var header: String
+  public var lineName: String
+  /// "bus" | "subway"
+  public var mode: String
+  public var status: String
+  /// "live" | "estimated" | "delayed"
+  public var tag: String
+  public var tagLabel: String
+  public var minutes: String?
+  public var suggestion: String?
+  /// 남은 구간이 3개 이상이면 "외 {n}구간"(n = 남은 수 - 2).
+  public var moreLegs: String?
+  /// 최대 2줄.
+  public var nextLegs: [CommuteLockNextLeg]
+}
+
+/// 푸시 값을 잠금화면 문구로 바꾸는 규칙. `apps/native/lib/commute/lock-screen-model.ts`와 같은 규칙이고,
+/// `scripts/check-lock-copy-swift.sh`가 `lock-screen-cases.json`의 기대값과 글자 그대로 맞는지 본다.
+/// 위젯 확장은 JS를 돌릴 수 없어서 같은 규칙을 한 번 더 구현한다. Foundation만 쓴다(맥에서 대조하려고).
+public enum CommuteCopy {
+  /// 키(`commute.lock.*`)와 `{이름}` 자리표시자 값을 받아 문구를 돌려준다.
+  public typealias Translate = (String, [String: String]) -> String
+
+  static let secondsPerMinute = 60.0
+  static let delayedMinutes = 5
+  static let maxNextLegLines = 2
+
+  public static func model(
+    state: CommuteActivityAttributes.ContentState,
+    now: Date,
+    header: String?,
+    timeZone: TimeZone,
+    t: Translate
+  ) -> CommuteLockModel {
+    let nowEpoch = now.timeIntervalSince1970
+    let clock = clockFormatter(timeZone: timeZone)
+    let tag = tagOf(state)
+    return CommuteLockModel(
+      detail: detailLine(state, now: nowEpoch, clock: clock, t: t),
+      header: header ?? t("commute.lock.header.fallback", [:]),
+      lineName: state.lineName,
+      mode: state.mode,
+      status: statusLine(state, now: nowEpoch, clock: clock, t: t),
+      tag: tag,
+      tagLabel: t("commute.lock.tag.\(tag)", [:]),
+      minutes: minutesLabel(state, now: nowEpoch, t: t),
+      suggestion: suggestionLine(state, now: nowEpoch, t: t),
+      moreLegs: moreLegsLine(state, t: t),
+      nextLegs: nextLegLines(state, clock: clock, t: t)
+    )
+  }
+
+  /// `context.isStale`(갱신이 끊긴 Activity)이면 태그를 "시간표 추정"으로 바꾼다.
+  public static func markedStale(_ model: CommuteLockModel, t: Translate) -> CommuteLockModel {
+    var stale = model
+    stale.tag = "estimated"
+    stale.tagLabel = t("commute.lock.tag.estimated", [:])
+    return stale
+  }
+
+  // MARK: - 시각
+
+  /// 24시간 `HH:mm`(TS `formatClock`과 같다).
+  static func clockFormatter(timeZone: TimeZone) -> (Double) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.calendar = Calendar(identifier: .gregorian)
+    formatter.timeZone = timeZone
+    formatter.dateFormat = "HH:mm"
+    return { epoch in formatter.string(from: Date(timeIntervalSince1970: epoch)) }
+  }
+
+  static func knownStops(_ stopsAway: Int?) -> Int? {
+    guard let stopsAway, stopsAway >= 0 else { return nil }
+    return stopsAway
+  }
+
+  /// "지나갔어요"를 쓰는 경우. 나가기 전 문구보다 앞선다.
+  static func showsPassed(_ state: CommuteActivityAttributes.ContentState) -> Bool {
+    state.passed != nil && state.etaEpoch != nil
+  }
+
+  /// 첫 구간 walk 단계에서 나가는 시각이 아직 오지 않았으면 그 시각과 탑승 시각.
+  static func beforeLeave(
+    _ state: CommuteActivityAttributes.ContentState,
+    now: Double
+  ) -> (etaEpoch: Double, leaveEpoch: Double)? {
+    guard
+      !showsPassed(state),
+      state.stage == "walk",
+      state.legIndex == 0,
+      let leaveEpoch = state.leaveEpoch,
+      let etaEpoch = state.etaEpoch,
+      now < leaveEpoch
+    else { return nil }
+    return (etaEpoch, leaveEpoch)
+  }
+
+  // MARK: - 줄
+
+  static func statusLine(
+    _ state: CommuteActivityAttributes.ContentState,
+    now: Double,
+    clock: (Double) -> String,
+    t: Translate
+  ) -> String {
+    if let passed = state.passed, let etaEpoch = state.etaEpoch {
+      let key = state.mode == "subway"
+        ? "commute.lock.status.passedSubway"
+        : "commute.lock.status.passedBus"
+      return t(key, ["eta": clock(etaEpoch), "passedLine": passed.lineName])
+    }
+    if let leave = beforeLeave(state, now: now) {
+      return t("commute.lock.status.beforeLeave", ["leave": clock(leave.leaveEpoch)])
+    }
+    let stops = knownStops(state.stopsAway)
+    if state.stage == "walk" || state.stage == "wait" {
+      guard let stops else { return t("commute.lock.status.unknown", [:]) }
+      return stops >= 1
+        ? t("commute.lock.status.stopsAway", ["n": String(stops)])
+        : t("commute.lock.status.arriving", [:])
+    }
+    if state.stage == "ride" {
+      guard let stops else { return t("commute.lock.status.rideUnknown", [:]) }
+      return stops >= 1
+        ? t("commute.lock.status.ride", ["n": String(stops)])
+        : t("commute.lock.status.rideLast", [:])
+    }
+    return t("commute.lock.status.arrived", ["stop": state.stopName])
+  }
+
+  static func detailLine(
+    _ state: CommuteActivityAttributes.ContentState,
+    now: Double,
+    clock: (Double) -> String,
+    t: Translate
+  ) -> String {
+    if let leave = beforeLeave(state, now: now) {
+      return t("commute.lock.detail.beforeLeave", ["eta": clock(leave.etaEpoch), "stop": state.stopName])
+    }
+    guard let etaEpoch = state.etaEpoch else {
+      return t("commute.lock.detail.noEta", ["stop": state.stopName])
+    }
+    let key = state.etaState == "live"
+      ? "commute.lock.detail.eta"
+      : "commute.lock.detail.etaEstimated"
+    return t(key, ["eta": clock(etaEpoch), "stop": state.stopName])
+  }
+
+  static func minutesLabel(
+    _ state: CommuteActivityAttributes.ContentState,
+    now: Double,
+    t: Translate
+  ) -> String? {
+    guard let etaEpoch = state.etaEpoch, state.stage != "arrived", state.stage != "ended" else {
+      return nil
+    }
+    let remaining = etaEpoch - now
+    if remaining < secondsPerMinute {
+      return t("commute.lock.minutes.soon", [:])
+    }
+    return t("commute.lock.minutes.value", ["m": String(Int((remaining / secondsPerMinute).rounded(.down)))])
+  }
+
+  static func tagOf(_ state: CommuteActivityAttributes.ContentState) -> String {
+    if state.etaState == "estimated" || state.positionState != "live" {
+      return "estimated"
+    }
+    return state.delayMinutes >= delayedMinutes ? "delayed" : "live"
+  }
+
+  static func suggestionLine(
+    _ state: CommuteActivityAttributes.ContentState,
+    now: Double,
+    t: Translate
+  ) -> String? {
+    guard let suggestion = state.suggestion else { return nil }
+    let minutes = max(1, Int(((suggestion.boardEtaEpoch - now) / secondsPerMinute).rounded(.down)))
+    let key = suggestion.mode == "subway"
+      ? "commute.lock.suggestion.subway"
+      : "commute.lock.suggestion.bus"
+    return t(key, [
+      "line": suggestion.lineName,
+      "m": String(minutes),
+      "saves": String(suggestion.savesMinutes),
+    ])
+  }
+
+  static func nextLegText(
+    _ leg: CommuteActivityAttributes.ContentState.NextLeg,
+    clock: (Double) -> String,
+    t: Translate
+  ) -> String {
+    guard let boardEtaEpoch = leg.boardEtaEpoch else {
+      return t("commute.lock.nextLeg.noEta", ["stop": leg.stopName])
+    }
+    let key = leg.etaState == "live"
+      ? "commute.lock.nextLeg.eta"
+      : "commute.lock.nextLeg.etaEstimated"
+    return t(key, ["eta": clock(boardEtaEpoch), "stop": leg.stopName])
+  }
+
+  /// 옛 서버의 값에는 `nextLegs`가 없어 nil이고, TS처럼 []로 읽는다.
+  static func nextLegLines(
+    _ state: CommuteActivityAttributes.ContentState,
+    clock: (Double) -> String,
+    t: Translate
+  ) -> [CommuteLockNextLeg] {
+    (state.nextLegs ?? []).prefix(maxNextLegLines).map { leg in
+      CommuteLockNextLeg(lineName: leg.lineName, mode: leg.mode, text: nextLegText(leg, clock: clock, t: t))
+    }
+  }
+
+  static func moreLegsLine(_ state: CommuteActivityAttributes.ContentState, t: Translate) -> String? {
+    let rest = (state.nextLegs ?? []).count - maxNextLegLines
+    return rest >= 1 ? t("commute.lock.nextLeg.more", ["n": String(rest)]) : nil
+  }
+}
