@@ -20,9 +20,9 @@
 
 ## Global Constraints
 
-- 작업 위치: 워크트리 `.claude/worktrees/mvp2-lock-screen`, 브랜치 `feat/mvp2-lock-screen`(PR #13이 병합된 develop에서 만듦). PR은 develop으로.
+- 작업 위치: 워크트리 `.claude/worktrees/mvp2-lock-screen`. Task 1~3은 브랜치 `feat/mvp2-lock-screen`(PR #16, 병합됨). Task 4~8은 브랜치 `feat/mvp2-lock-screen-views`(2026-11-14, `develop` `036bccd`에서 만듦. 2-E와 Task 2A가 들어 있다). PR은 develop으로.
 - 커밋 메시지와 PR 본문에 AI 서명이나 출처 표기를 넣지 않는다.
-- 커밋 전 `bunx ultracite fix`. 각 Task 끝에 `bun test apps/native`와 `cd apps/native && bun run check-types`가 통과해야 한다. Swift·Kotlin을 고친 Task는 `bun run ios -- --device`와 `bun run android`로 실기기 빌드가 되어야 한다.
+- 커밋 전 lint는 `bunx biome ci --changed --since=origin/develop --no-errors-on-unmatched`와 새 파일의 `bunx biome ci <파일>`로 본다(루트 `ultracite fix/check`는 쓰지 않는다). 각 Task 끝에 `bun test apps/native`와 `cd apps/native && bun run check-types`가 통과해야 한다. Swift·Kotlin을 고친 Task는 `bun run ios -- --device`와 `bun run android`로 실기기 빌드가 되어야 한다.
 - **잠금화면과 그 버튼은 앱을 열지 않는다.** 로그인 요구, 팝업, 광고가 끼어들지 않는다(스펙 실패 기준).
 - **위계**: 차량 위치("2정거장 전")가 가장 먼저 읽히고, 도착 시각과 남은 분은 그다음이다. 도착 시각의 확신이 낮아도 위치는 계속 보여 준다(4.3).
 - **단정하지 않는다.** 사용자 입력이 없는 동안에는 차량에 대한 사실("지나갔어요")과 조건문("08:10에 나가면")만 쓴다. "놓쳤어요", "늦었어요"는 쓰지 않는다.
@@ -49,6 +49,8 @@
 - **Review Focus 3**(잠긴 기기에서 버튼)은 Android "종료"에만 해당한다. **Review Focus 5**는 "남은 구간이 3개일 때 두 줄과 '외 1구간'이 잘리지 않는다"로 바꾼다.
 
 ## 잠금화면 문구 표 **[설계 판단]**
+
+> **2026-11-14:** 아래 표는 처음 설계다. 버튼 줄, `status.beforeLeave`, 진행 표시는 2-E Task 2A가 바꿨다. 문구의 원본은 `apps/native/lib/i18n/messages-ko.ts`의 `commute.lock.*`, 규칙의 원본은 `lib/commute/lock-screen-model.ts`, 사례는 `lib/commute/__fixtures__/lock-screen-cases.json`이다. Swift와 Android는 이 셋에 맞춘다.
 
 `lock-screen-model.ts`와 Swift 구현이 함께 따르는 규칙이다. 키는 `commute.lock.*`이고 값은 한국어다. `{eta}`와 `{leave}`는 기기 시간대의 `HH:mm`, `{n}`은 정거장 수, `{m}`은 분이다.
 
@@ -86,9 +88,9 @@
 
 1. **값이 비거나 추정인 경우.** `stopsAway`, `etaEpoch`, `leaveEpoch`, `suggestion`, `destinationEtaEpoch`는 null일 수 있다. 기대: 빈 칸이나 "null", "0분", 1970년 시각이 화면에 나오지 않고, 위치가 없으면 "위치 확인 중", 시각이 없으면 정류장 이름만 나온다. Task 2 테스트와 Task 4·6의 표본 화면으로 고정.
 2. **늦게 도착한 옛 메시지.** Android에서 강제 종료 뒤 쌓였던 메시지가 순서 없이 오거나, 끝난 세션의 `update`가 `end` 뒤에 온다. 기대: `seq`가 더 작은 값과 끝난 세션의 값은 알림을 다시 만들지 않는다. Task 2·7 테스트로 고정.
-3. **잠긴 기기에서 버튼.** 기기를 켠 뒤 한 번 잠금을 푼 상태에서 잠금화면 버튼을 누른다. 기대: 인증값을 읽어 서버에 보내고, 실패하면 화면을 바꾸지 않는다(서버 응답 전에 "탑승"으로 바꿔 두지 않는다). Task 5·7의 기기 확인으로 고정.
+3. **잠긴 기기에서 Android "종료".** 기기를 켠 뒤 한 번 잠금을 푼 상태에서 알림의 "종료"를 누른다. 기대: 앱을 열지 않고 인증값을 읽어 서버에 보내고, 실패하면 알림을 그대로 둔다. Task 7 테스트와 Task 8 기기 확인으로 고정.
 4. **토큰 보고가 빠지는 경우.** 앱이 백그라운드로 깨어난 몇 초 안에 업데이트 토큰을 보내지 못하면 서버가 갱신할 수 없다. 기대: 네이티브 코드가 JS 없이 보내고, 실패하면 1초·3초 뒤 두 번 더 보낸다. 인증값이 아직 없으면(첫 실행 전) 보내지 않는다. Task 3의 기기 확인으로 고정.
-5. **구간이 여러 개인 경로.** 진행 표시의 노드 수가 `legCount`에 따라 늘어난다(구간 1개면 4노드, 구간마다 2개씩 늘어난다). 기대: 구간 3개까지 잘리지 않고, `legIndex`에 맞는 노드가 현재 위치로 표시된다. Task 2 테스트와 Task 4·6의 표본 화면으로 고정.
+5. **구간이 여러 개인 경로.** 남은 구간이 3개 이상이면 두 줄과 "외 N구간"을 보인다. 기대: iOS 카드가 160pt를 넘지 않고 줄이 잘리지 않으며, 긴 정류장 이름만 말줄임된다. Task 2A 테스트, Task 4의 Swift 대조, Task 8 화면으로 고정.
 
 ---
 
@@ -200,70 +202,67 @@
 
 ---
 
-### Task 4: iOS 잠금화면과 다이내믹 아일랜드 화면
+### Task 4: iOS 잠금화면과 다이내믹 아일랜드 화면 (2026-11-14 다시 씀)
 
 **Files:**
-- Create: `apps/native/targets/commute-activity/CommuteCopy.swift`, `CommuteViews.swift`, `ko.lproj/Localizable.strings`
+- Create: `apps/native/targets/commute-activity/CommuteCopy.swift`(Foundation만 import), `CommuteViews.swift`, `ko.lproj/Localizable.strings`
+- Create: `apps/native/scripts/check-lock-copy-swift.sh`와 `apps/native/scripts/swift-copy-check/main.swift`(맥에서 `swiftc`로 돌리는 대조)
+- Create: `apps/native/lib/commute/localizable-strings.test.ts`
 - Modify: `targets/commute-activity/CommuteLiveActivity.swift`, `apps/native/app/settings/`(개발 빌드 전용 "잠금화면 표본" 줄)
 
 **Interfaces:**
-- Consumes: Swift `ContentState`(Task 3), `lock-screen-cases.json`(Task 2), Figma `iOS / 18 Live Activity`, `iOS / 19 Dynamic Island`, `Components`의 `LiveActivity`·`CommuteProgress`
+- Consumes: Swift `CommuteActivityAttributes.ContentState`(`nextLegs` 포함), `lock-screen-model.ts`의 규칙, `lock-screen-cases.json`, 앱 그룹 `UserDefaults`의 `planId` → 머리줄(`setPlanHeaders`, 2-E가 이미 부른다), Figma `LiveActivity`(87:2420, 2026-11-11 모양), `NextLegRow`, `LegBadge · S`, `iOS / 19 Dynamic Island`.
 - Produces:
-  - `CommuteCopy.model(state: ContentState, now: Date, header: String?) -> CommuteLockModel`. 문구 표의 규칙을 그대로 구현하고 문자열은 `Localizable.strings`의 `commute.lock.*`에서 가져온다. `CommuteLockModel`의 필드는 Task 2의 `LockScreenModel`과 같다.
-  - 잠금화면 카드, 다이내믹 아일랜드 Expanded·Compact(배지 + 남은 분)·Minimal(수단 아이콘).
-  - `context.isStale`이면 태그를 "시간표 추정"으로 바꾼다(서버가 `stale-date`를 보낸다).
+  - `struct CommuteLockModel { detail, header, lineName, mode, status, tag, tagLabel: String; minutes, suggestion, moreLegs: String?; nextLegs: [CommuteLockNextLeg] }`. 필드와 값은 TS `LockScreenModel`과 같다(iOS라 `actions`는 없다).
+  - `enum CommuteCopy { static func model(state: ContentState, now: Date, header: String?, timeZone: TimeZone, t: (String, [String: String]) -> String) -> CommuteLockModel }`. `t`는 키(`commute.lock.*`)와 매개변수를 받아 문구를 돌려준다. 확장에서는 `Localizable.strings`를 읽는 함수를, 대조 스크립트에서는 `messages-ko.ts`에서 뽑은 사전을 넘긴다.
+  - 카드 레이아웃(Figma 2026-11-11): 머리줄, 지금 구간(배지 + 상태 + 남은 분, 그 아래 상세), 남은 구간 줄 최대 2줄(둘째 줄 끝에 "외 N구간"), 제안이 있으면 남은 구간 줄 자리에 제안 줄. 160pt 이하. 상태 문장은 줄바꿈하지 않고 정류장 이름만 말줄임한다.
+  - 다이내믹 아일랜드: Expanded(배지·상태·남은 분·상세), Compact(배지 + 남은 분), Minimal(수단 아이콘).
+  - `context.isStale`이면 태그를 "시간표 추정"으로 바꾼다.
 
-- [ ] **Step 1: Figma 읽기** — Figma MCP로 위 프레임의 레이아웃, 색 변수, 글자 크기를 읽는다. 색과 간격은 Figma 변수 값을 Swift 상수로 옮기고(다크·라이트), 임의 값을 쓰지 않는다.
-- [ ] **Step 2: 구현** — 위계: 상태 줄이 가장 크고, 상세와 남은 분이 그다음이다. 진행 표시는 `progress.nodes`만큼 노드를 그리고 `current` 위치를 강조한다.
-- [ ] **Step 3: 표본으로 대조** — 개발 빌드의 "잠금화면 표본" 줄이 `lock-screen-cases.json`의 사례를 하나씩 `startLocal`로 띄운다. 사례마다 `xcrun devicectl device capture screenshot`으로 잠금화면을 찍는다. Expected: 모든 사례에서 화면의 상태·상세·남은 분·태그·제안 문구가 그 사례의 `expected`와 글자 그대로 같다. 빈 값 사례에서 빈 칸이나 "nil"이 없다. 구간 3개 사례의 진행 표시가 잘리지 않는다. 다이내믹 아일랜드 세 형태가 Figma와 같다.
-- [ ] **Step 4: 커밋** — `feat(native): render the commute Live Activity and Dynamic Island`
+- [ ] **Step 1: Figma 읽기** — 위 노드의 레이아웃, 색 변수, 글자 크기를 읽는다. 색과 간격은 Figma 변수 값을 Swift 상수로 옮기고(다크·라이트) 임의 값을 쓰지 않는다.
+- [ ] **Step 2: 실패하는 대조** — `localizable-strings.test.ts`: `ko.lproj/Localizable.strings`의 키와 값이 `messages-ko.ts`의 `commute.lock.*`와 같다(`{name}` 자리표시는 Swift 쪽도 같은 이름으로 둔다). `check-lock-copy-swift.sh`: `CommuteActivityAttributes.swift`(ActivityKit import를 빼고 작은 대역 프로토콜로)와 `CommuteCopy.swift`, `main.swift`를 `swiftc`로 묶어 `lock-screen-cases.json`의 모든 사례를 돌리고, `expected`의 `status`·`detail`·`minutes`·`tag`·`suggestion`·`nextLegs`·`moreLegs`와 글자 그대로 같은지 본다. Run: 둘 다 / Expected: FAIL(파일이 없다)
+- [ ] **Step 3: 구현** — `CommuteCopy.swift`, `Localizable.strings`, `CommuteViews.swift`, `CommuteLiveActivity.swift`. 위계: 상태 줄이 가장 크고, 상세와 남은 분이 그다음이다.
+- [ ] **Step 4: 통과 확인** — Run: `bun test apps/native && bash apps/native/scripts/check-lock-copy-swift.sh && cd apps/native && bun run check-types` / Expected: 모든 사례 일치, PASS. 그리고 `xcodebuild … -configuration Debug build`(Task 3 기록의 명령)로 앱과 확장이 빌드된다.
+- [ ] **Step 5: 커밋** — `feat(native): render the commute Live Activity and Dynamic Island`
+- 화면 대조(사례마다 `startLocal` → 잠금화면 캡처, 다이내믹 아일랜드 세 형태, 160pt)는 Task 8의 기기 확인에서 한 번에 한다.
 
 ---
 
 ### Task 5: iOS 잠금화면 버튼 — 하지 않음 (2026-11-11 변경)
 
-**Files:**
-- Create: `apps/native/targets/commute-activity/CommuteIntents.swift`(앱 타깃에도 포함되게 모듈 `ios/`에 심볼릭 링크), `apps/native/modules/commute-activity/ios/CommuteInputSender.swift`
-- Modify: `CommuteViews.swift`(버튼), `ko.lproj/Localizable.strings`
-
-**Interfaces:**
-- Consumes: `CommuteCredentials`(Task 3)
-- Produces:
-  - `struct CommuteBoardedIntent: LiveActivityIntent`, `struct CommuteNextIntent: LiveActivityIntent`. 매개변수는 `sessionId`. `perform()`은 앱 프로세스에서 돌고 `CommuteInputSender.send(sessionId:kind:)`를 부른다.
-  - `CommuteInputSender.send(sessionId: String, kind: String) async -> Bool`. `POST <serverUrl>/v1/commute/sessions/<sessionId>/input` `{ kind }`, 타임아웃 10초. 204면 true.
-  - 버튼은 `walk`·`wait` 단계에만 보인다. 화면은 서버의 다음 갱신 푸시로 바뀐다. 누른 직후 미리 바꿔 두지 않는다.
-
-- [ ] **Step 1: 구현**
-- [ ] **Step 2: 기기 확인** — 로컬 서버에 시험 세션을 하나 만들고(`curl`로 경로 등록, 2분 뒤 시작) `startLocal`로 그 `sessionId`의 Activity를 띄운다. 기기를 잠근다. Expected: "탔어요"를 누르면 앱이 화면에 뜨지 않고 서버 로그에 `input boarded`가 찍힌다. "다음 차 탈게요"도 같다. 서버를 끄고 누르면 화면이 그대로다. 재부팅 뒤 한 번 잠금을 풀었다 잠근 상태에서도 동작한다.
-- [ ] **Step 3: 커밋** — `feat(native): send boarded and next-vehicle input from the lock screen`
+2026-11-11 사용자 결정으로 버튼이 없다. App Intents와 `CommuteInputSender`를 만들지 않는다.
 
 ---
 
-### Task 6: Android 진행 중 알림 모듈
+### Task 6: Android 진행 중 알림 모듈 (2026-11-14 다시 씀)
 
 **Files:**
-- Create(실험 브랜치에서 옮겨 와 고침): `apps/native/modules/commute-notification/{expo-module.config.json,index.ts,android/build.gradle,android/src/main/AndroidManifest.xml,android/src/main/java/expo/modules/commutenotification/CommuteNotificationModule.kt,CommuteNotifier.kt,CommuteActionReceiver.kt,CommuteActionTaskService.kt}`
+- Create(실험 브랜치 `spike/mvp2-android-update`에서 `git show`로 꺼내 고침. 실험 브랜치는 병합하지도 push하지도 않는다): `apps/native/modules/commute-notification/{expo-module.config.json,index.ts,android/build.gradle,android/src/main/AndroidManifest.xml,android/src/main/java/expo/modules/commutenotification/CommuteNotificationModule.kt,CommuteNotifier.kt,CommuteActionReceiver.kt,CommuteActionTaskService.kt}`
+- Create: `apps/native/lib/commute/notification-content.ts`, `notification-content.test.ts`
 - Modify: `apps/native/app.config.ts`(`android.permissions`에 `android.permission.POST_PROMOTED_NOTIFICATIONS`)
 
 **Interfaces:**
-- Consumes: `LockScreenModel`(Task 2), Figma `Android / 18 Live Update`
+- Consumes: `LockScreenModel`(Task 2/2A), Figma `LiveUpdate`(87:19468, "종료"만)
 - Produces:
+  - `notificationContent(model: LockScreenModel): { title: string; body: string; lines: string[]; chipText: string }`(순수 함수). 제목은 `{lineName} · {status}`, 본문은 상세(남은 분이 있으면 `· {minutes}`), `lines`는 남은 구간 줄(`{lineName} {text}`, 최대 2줄, 둘째 줄 끝에 `moreLegs`)이나 제안 줄, `chipText`는 `{lineName} · {minutes}`(남은 분이 없으면 노선만).
   - JS 모듈 `CommuteNotification`
-    - `interface ShowInput { actionLabels: Record<"boarded" | "next" | "end", string>; channelName: string; chipText: string; model: LockScreenModel; seq: number; sessionId: string }`
-    - `show(input: ShowInput): boolean`. 그 세션에서 이미 그린 `seq`보다 크면 알림 ID 4101로 만들거나 덮어쓰고 true, 아니면 아무것도 하지 않고 false. 마지막 `seq`와 끝난 세션 ID는 앱 전용 `SharedPreferences`에 둔다(프로세스가 죽어도 남게).
-    - `end(sessionId: string): void`. 알림을 지우고 그 세션을 끝난 것으로 적는다. 그 뒤 같은 세션의 `show`는 false다.
-  - 채널 `commute-live`(`IMPORTANCE_HIGH`), `setOngoing(true)`, `setOnlyAlertOnce(true)`. 본문을 누르면 `betro://commute`로 앱을 연다.
-  - API 36 이상: `Notification.ProgressStyle`(점은 `progress.nodes`개, 진행은 `current`), extras `android.requestPromotedOngoing = true`, `android.shortCriticalText = chipText`(예: `341 · 3분`). 리플렉션은 쓰지 않는다. 그 아래: `NotificationCompat`의 일반 진행 중 알림.
-  - 버튼: `model.actions`마다 `PendingIntent`(브로드캐스트) → `CommuteActionReceiver` → `CommuteActionTaskService`(`HeadlessJsTaskService`, 태스크 이름 `CommuteAction`, 데이터 `{ sessionId, kind }`, 타임아웃 15초). 앱 화면은 열리지 않는다.
+    - `interface ShowInput { channelName: string; content: { title; body; lines; chipText }; endLabel: string; legCount: number; legIndex: number; seq: number; sessionId: string }`
+    - `show(input: ShowInput): boolean`. 그 세션에서 이미 그린 `seq`보다 크면 알림 ID 4101로 만들거나 덮어쓰고 true, 아니면 false. 마지막 `seq`와 끝난 세션 ID는 앱 전용 `SharedPreferences`.
+    - `end(sessionId: string): void`. 알림을 지우고 끝난 세션으로 적는다. 그 뒤 같은 세션의 `show`는 false.
+  - 채널 `commute-live`(`IMPORTANCE_HIGH`), `setOngoing(true)`, `setOnlyAlertOnce(true)`. 본문을 누르면 `betro://commute`.
+  - API 36 이상: 승격(promoted ongoing)이 유지되는 스타일로 그린다. extras `android.requestPromotedOngoing = true`, `android.shortCriticalText = chipText`(리플렉션 없음). `lines`를 넣을 수 있는지는 Step 1에서 정한다. 그 아래: `NotificationCompat` 진행 중 알림 + `BigTextStyle`(제목·본문·`lines`).
+  - 버튼은 "종료" 하나: `PendingIntent`(브로드캐스트) → `CommuteActionReceiver` → `CommuteActionTaskService`(`HeadlessJsTaskService`, 태스크 이름 `CommuteAction`, 데이터 `{ sessionId, kind: "end" }`, 타임아웃 15초). 앱 화면은 열리지 않는다.
 
-- [ ] **Step 1: 옮기기와 구현** — 실험 브랜치의 모듈을 꺼내 위 Interfaces대로 고친다. `CommuteSpike` 로그와 `log` 함수는 지운다.
-- [ ] **Step 2: 빌드** — Run: `cd apps/native && bunx expo prebuild --clean -p android && bun run android -- --variant release` / Expected: S20에 설치된다. R8이 켜진 Release에서 알림이 뜬다.
-- [ ] **Step 3: 표본으로 대조** — 개발 빌드의 "잠금화면 표본" 줄이 `lock-screen-cases.json`의 사례를 `lockScreenModel(…, platform: "android")`로 바꿔 `show`에 넘긴다. Expected: S20(Android 13)에서 사례마다 제목·본문·버튼이 기대 문구와 같고, 알림은 하나(ID 4101)이며 갱신 때 소리가 다시 울리지 않는다. 에뮬레이터 API 36.1에서 상태바 칩과 잠금화면 카드가 보이고, API 36.0에서는 오류 없이 진행 표시만 보인다. `seq`를 거꾸로 넣으면 화면이 바뀌지 않는다.
-- [ ] **Step 4: 커밋** — `feat(native): add the commute ongoing notification module for Android`
+- [ ] **Step 1: 승격 조건 확인** — Android 공식 문서(Live Updates, `ProgressStyle`, promoted ongoing 조건)에서 `BigTextStyle`/`ProgressStyle` 중 승격이 유지되고 여러 줄을 보일 수 있는 것을 고른다. 결과와 근거를 이 문서에 적는다. `ProgressStyle`이면 점(segment) 수는 `legCount`, 진행은 `legIndex`. 남은 구간 줄을 못 넣으면 Android는 지금 구간만 보이고 그 사실을 적는다.
+- [ ] **Step 2: 실패하는 테스트** — `notification-content.test.ts`: 사례 파일의 `android` 모델로 제목·본문·`lines`·`chipText`. 남은 분 없음 → 본문에 "·"가 남지 않음, `chipText`가 노선만. 남은 구간 3개 → `lines` 2줄이고 둘째 줄 끝에 "외 1구간". 제안 있음 → `lines`가 제안 줄. Run: `bun test apps/native/lib/commute` / Expected: FAIL
+- [ ] **Step 3: 구현** — 위 Interfaces대로. `CommuteSpike` 로그와 `log` 함수는 지운다.
+- [ ] **Step 4: 통과와 빌드** — Run: `bun test apps/native && cd apps/native && bun run check-types`, 그리고 `bunx expo prebuild -p android` 뒤 `cd android && ./gradlew :app:assembleRelease`(2-E S20 기록과 같은 방식). Expected: PASS, APK가 만들어진다.
+- [ ] **Step 5: 커밋** — `feat(native): add the commute ongoing notification module for Android`
+- 화면 대조(S20, 에뮬레이터 API 36.1·36.0, `seq` 거꾸로)는 Task 8에서 한 번에 한다. Release APK에서도 표본을 띄울 수 있게, "잠금화면 표본" 줄은 `__DEV__`가 아니라 빌드 시 환경값 `EXPO_PUBLIC_LOCK_SAMPLES=1`일 때만 보인다(운영 빌드에서는 없다).
 
 ---
 
-### Task 7: Android 메시지 처리, 버튼 입력, 토큰 등록
+### Task 7: Android 메시지 처리, "종료" 입력, 토큰 등록 (2026-11-14 다시 씀)
 
 **Files:**
 - Create: `apps/native/lib/commute/handle-commute-message.ts`, `lib/commute/handle-commute-action.ts`, `lib/commute/app-commute.ts`(expo·모듈 의존 부분)
@@ -271,52 +270,55 @@
 - Test: `apps/native/lib/commute/handle-commute-message.test.ts`, `handle-commute-action.test.ts`
 
 **Interfaces:**
-- Consumes: `parseContentState`, `lockScreenModel`(Task 2), `ServerClient`(Task 1), `CommuteNotification`(Task 6)
+- Consumes: `parseContentState`, `shouldApply`, `lockScreenModel`(Task 2/2A), `notificationContent`·`CommuteNotification`(Task 6), `ServerClient`
 - Produces:
   - `handleCommuteMessage(data: Record<string, string>, deps: { client: ServerClient; header: (planId: string) => Promise<string | null>; notifier: { end(sessionId: string): void; show(input: ShowInput): boolean }; now: number; t; timezone: string }): Promise<"shown" | "ended" | "stale" | "ignored">`
     - `data.type`이 `"commute"`가 아니거나 `state`가 파싱되지 않으면 `"ignored"`.
     - `event: "end"`거나 `stage: "ended"`면 `notifier.end` → `"ended"`.
-    - `state.sentAt`이 10분보다 오래됐으면 그리지 않고 `"stale"`(강제 종료 뒤 늦게 온 메시지).
-    - 그 밖에는 모델을 만들어 `notifier.show`. false면 `"stale"`.
-    - `event: "start"`로 처음 그렸으면 `POST /v1/commute/sessions/<id>/ack` `{ shownAt: now }`를 보낸다(실패해도 던지지 않는다).
-  - `handleCommuteAction(input: { kind: "boarded" | "next" | "end"; sessionId: string }, deps: { client: ServerClient; notifier }): Promise<boolean>`. `POST …/input`. `kind: "end"`가 204면 `notifier.end`도 부른다. 실패하면 화면을 바꾸지 않는다.
-  - `registerFcmToken(client: ServerClient, token: string): Promise<boolean>`(`PUT /v1/push-tokens` `{ kind: "fcm", token, env: "production" }`). 앱 시작과 토큰 갱신 이벤트에서 부른다(Android에서만).
+    - `state.sentAt`이 10분보다 오래됐으면 그리지 않고 `"stale"`.
+    - 그 밖에는 모델(`platform: "android"`)과 `notificationContent`를 만들어 `notifier.show`. false면 `"stale"`.
+    - `event: "start"`로 처음 그렸으면 `POST /v1/commute/sessions/<id>/ack` `{ shownAt }`을 보낸다. `shownAt`은 **ms**(서버 `routes.ts`의 `z.number().int()`, 2-C 기록). 실패해도 던지지 않는다.
+    - 머리줄은 2-E가 저장한 `planId`별 머리줄(`app-places.ts`)을 읽는다.
+  - `handleCommuteAction(input: { kind: "end"; sessionId: string }, deps: { client: ServerClient; notifier }): Promise<boolean>`. `POST …/input` `{ kind: "end" }`. 204면 `notifier.end`. 실패하면 알림을 그대로 둔다.
+  - `registerFcmToken(client: ServerClient, token: string): Promise<boolean>`(`PUT /v1/push-tokens` `{ kind: "fcm", token, env: "production" }`). 앱 시작과 토큰 갱신 이벤트에서 부른다(Android에서만). 이미 있으면 그것을 쓴다.
 
 - [ ] **Step 1: 실패하는 테스트**
-  - 메시지: `start` → `"shown"`이고 `ack`가 한 번 나간다. `update` → `"shown"`이고 `ack`가 없다. `end` → `"ended"`.
-  - **옛 메시지**: `notifier.show`가 false → `"stale"`. `sentAt`이 11분 전 → `notifier.show`를 부르지 않고 `"stale"`. `end` 뒤에 온 같은 세션의 `update`는 `notifier.show`가 false를 주므로 `"stale"`.
+  - 메시지: `start` → `"shown"`이고 `ack`가 한 번(본문 `shownAt`이 ms). `update` → `"shown"`이고 `ack`가 없다. `end` → `"ended"`.
+  - **옛 메시지**: `notifier.show`가 false → `"stale"`. `sentAt`이 11분 전 → `notifier.show`를 부르지 않고 `"stale"`.
   - `type: "other"`나 깨진 `state` → `"ignored"`이고 `notifier`를 부르지 않는다.
   - `ack`가 실패해도 `"shown"`.
-  - 버튼: 204 → true. `end`·204 → `notifier.end` 호출. 서버 오류나 네트워크 오류 → false이고 `notifier`를 부르지 않는다.
+  - "종료": 204 → true이고 `notifier.end`. 서버 오류나 네트워크 오류 → false이고 `notifier`를 부르지 않는다.
   - 토큰 등록: 본문의 `kind`가 `"fcm"`.
 - [ ] **Step 2: 실패 확인** — Run: `bun test apps/native/lib/commute` / Expected: FAIL
-- [ ] **Step 3: 구현** — 순수 파일은 `react-native`, `expo-*`, 모듈을 import하지 않는다. 헤드리스 태스크는 `AppRegistry.registerHeadlessTask("CommuteAction", …)`으로 앱 진입 파일에서 등록한다.
+- [ ] **Step 3: 구현** — 순수 파일은 `react-native`, `expo-*`, 모듈을 import하지 않는다. 헤드리스 태스크는 앱 진입 파일에서 `AppRegistry.registerHeadlessTask("CommuteAction", …)`.
 - [ ] **Step 4: 통과 확인** — Run: `bun test apps/native && cd apps/native && bun run check-types` / Expected: PASS
-- [ ] **Step 5: 기기 확인** — 로컬 서버에 시험 세션을 만들고, 실험 5의 `spikes/fcm-sender/send.ts`를 고쳐 `type: "commute"` 메시지를 보낸다. Expected: 앱 프로세스가 없는 S20에서 알림이 뜨고 갱신된다. "탔어요"를 누르면 앱이 열리지 않고 서버 로그에 입력이 찍힌다. "종료"를 누르면 알림이 사라진다. 강제 종료 중에 보낸 메시지는 앱을 다시 열어도 알림을 되살리지 않는다(10분 넘은 것) 또는 최신 값을 덮지 않는다(`seq`).
-- [ ] **Step 6: 커밋** — `feat(native): handle commute pushes and notification actions on Android`
+- [ ] **Step 5: 커밋** — `feat(native): handle commute pushes and the end action on Android`
+- 기기 확인(앱 프로세스 없는 S20에서 뜨고 갱신, "종료", 강제 종료 뒤 늦은 메시지)은 Task 8에서 한다.
 
 ---
 
-### Task 8: 서버와 이어서 실기기 확인
+### Task 8: 실기기 확인 한 번에 (2026-11-14 다시 씀)
 
-**Files:**
-- Modify: 이 계획 문서("2-F 결과" 절), `apps/native/app/settings/`(임시 "인증값 복사" 줄을 넣었다가 지운다)
+선행: 2-C가 `PUSH_MODE=send`로 배포돼 있다(되어 있음). 경로 등록은 2-E 화면으로 한다. 두 기기에 이 브랜치의 빌드를 설치하고 `EXPO_PUBLIC_SERVER_URL=https://betro.cmu02-studio.com`으로 연다. 기기 확인은 이 Task 하나로 모은다(2026-11-14 사용자 피드백: 기기 확인 때문에 개발이 늦어진다).
 
-선행: 2-C가 `PUSH_MODE=send`로 배포돼 있다. 두 기기에 Release 빌드를 설치하고 `EXPO_PUBLIC_SERVER_URL=https://betro.cmu02-studio.com`으로 한 번 연다.
-
-- [ ] **Step 1: 경로 등록** — 2-E가 아직이면 `curl`로 기기의 설치 인증값(개발 빌드 설정 화면에 "인증값 복사" 줄을 임시로 둔다)을 써서 5분 뒤 시작하는 경로를 등록한다(6411 노량진역 → 고속터미널, 대안 150 한 개).
-- [ ] **Step 2: 시나리오**(기기마다)
+- [ ] **Step 1: 표본 대조**
+  - iOS: "잠금화면 표본"으로 사례를 하나씩 `startLocal` → `xcrun devicectl device capture screenshot`. 문구가 사례의 `expected`와 같고, 빈 값 사례에 빈 칸이나 "nil"이 없으며, 남은 구간 3개 사례가 160pt 안에서 잘리지 않는다. 다이내믹 아일랜드 세 형태가 Figma와 같다.
+  - Android: S20(Android 13)에서 사례마다 제목·본문·"종료"가 같고 알림은 하나(ID 4101), 갱신 때 소리가 다시 울리지 않는다. 에뮬레이터 API 36.1에서 상태바 칩과 잠금화면 카드, 36.0에서는 오류 없이 일반 알림. `seq`를 거꾸로 넣으면 바뀌지 않는다.
+- [ ] **Step 2: 시나리오**(기기마다, 2-E 화면으로 몇 분 뒤 시작하는 경로를 등록)
 
   | # | 상태 | 기대 |
   |---|---|---|
-  | 1 | 앱을 스와이프로 끄고 기기 잠금 | 예약 시각 10분 전 ±1분에 잠금화면에 뜬다 |
+  | 1 | 앱을 스와이프로 끄고 기기 잠금 | 예약 시각 10분 전 ±1분에 잠금화면에 뜬다. iOS 시작 알림 문구가 키가 아니라 `locales/ko.json` 문구다 |
   | 2 | 뜬 뒤 그대로 둠 | 정거장 수나 분이 바뀔 때마다 갱신되고, 2분 넘게 멈추지 않는다 |
-  | 3 | "다음 차 탈게요" | 30초 안에 다음 차량으로 바뀐다 |
-  | 4 | "탔어요" | 30초 안에 "하차까지 N정거장"으로 바뀌고 버튼이 사라진다(Android는 "종료"만 남는다) |
-  | 5 | 하차 정류장 도착 뒤 | 도착 예정 + 마지막 도보 + 10분 안에 잠금화면에서 사라진다 |
+  | 3 | 버스를 그대로 탐 | 그 차량이 승차 정류장을 지난 다음 갱신에서 "하차까지 N정거장" |
+  | 4 | 환승 경로 | 둘째 구간 줄의 시각이 첫 구간 하차 예상에 맞춰 바뀌고, 첫 구간을 내린 뒤 둘째 구간이 지금 구간이 된다 |
+  | 5 | 하차 정류장 도착 뒤 | 도착 예정 + 마지막 도보 + 10분 안에 사라진다 |
   | 6 | 재부팅 뒤 한 번 잠금 해제, 다시 잠금 | 1번과 같다 |
   | 7 | iOS 저전력 모드, Android 절전 모드 | 1, 2번과 같다 |
-  | 8 | 세션 도중 비행기 모드 3분 뒤 해제 | 해제 뒤 다음 갱신에서 최신 값이 보이고 옛 값으로 돌아가지 않는다. 끊긴 동안 iOS는 "시간표 추정" 태그(`stale-date`)가 보인다 |
+  | 8 | 세션 도중 비행기 모드 3분 뒤 해제 | 해제 뒤 최신 값, 옛 값으로 돌아가지 않는다. iOS는 끊긴 동안 "시간표 추정" |
+  | 9 | Android "종료"(잠긴 기기) | 앱이 열리지 않고 알림이 사라지며 D1 세션이 `ended/user` |
+  | 10 | Android 강제 종료 중 보낸 메시지 | 다시 열어도 10분 넘은 것은 되살리지 않고, 최신 값을 덮지 않는다 |
 
-- [ ] **Step 3: 서버 기록 대조** — R2 `commute/summaries/…`의 그 세션 요약에서 `startDelayMs`가 ±60초 안, `maxSendGapMs`가 120초 이하인지 본다. iOS는 `shownAt` 대신 토큰 도착 시각이 기록된다.
-- [ ] **Step 4: 결과와 커밋** — 시나리오별 통과 여부와 캡처, 어긋난 점을 이 문서에 적는다. 임시 "인증값 복사" 줄을 지운다. `docs(plan): record the 2-F device run`
+- [ ] **Step 3: 함께 볼 남은 것** — PR #18(앱을 앞에 둔 채 연결이 돌아오면 밀린 저장이 올라간다), iPhone 재설치 뒤 `ALERT_FCM_TOKEN`이 지금 토큰과 같은지(바꾸려면 사용자에게 먼저 묻는다), Android 승차역 검색칸 안내 글자 정렬.
+- [ ] **Step 4: 서버 기록 대조** — R2 `commute/summaries/…`의 그 세션 요약에서 `startDelayMs`가 ±60초 안, `maxSendGapMs`가 120초 이하. iOS는 `shownAt` 대신 토큰 도착 시각.
+- [ ] **Step 5: 결과와 커밋** — 시나리오별 통과 여부와 캡처, 어긋난 점을 이 문서에 적는다. `docs(plan): record the 2-F device run`
