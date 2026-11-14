@@ -219,14 +219,27 @@
   - 다이내믹 아일랜드: Expanded(배지·상태·남은 분·상세), Compact(배지 + 남은 분), Minimal(수단 아이콘).
   - `context.isStale`이면 태그를 "시간표 추정"으로 바꾼다.
 
-- [ ] **Step 1: Figma 읽기** — 위 노드의 레이아웃, 색 변수, 글자 크기를 읽는다. 색과 간격은 Figma 변수 값을 Swift 상수로 옮기고(다크·라이트) 임의 값을 쓰지 않는다.
-- [ ] **Step 2: 실패하는 대조** — `localizable-strings.test.ts`: `ko.lproj/Localizable.strings`의 키와 값이 `messages-ko.ts`의 `commute.lock.*`와 같다(`{name}` 자리표시는 Swift 쪽도 같은 이름으로 둔다). `check-lock-copy-swift.sh`: `CommuteActivityAttributes.swift`(ActivityKit import를 빼고 작은 대역 프로토콜로)와 `CommuteCopy.swift`, `main.swift`를 `swiftc`로 묶어 `lock-screen-cases.json`의 모든 사례를 돌리고, `expected`의 `status`·`detail`·`minutes`·`tag`·`suggestion`·`nextLegs`·`moreLegs`와 글자 그대로 같은지 본다. Run: 둘 다 / Expected: FAIL(파일이 없다)
-- [ ] **Step 3: 구현** — `CommuteCopy.swift`, `Localizable.strings`, `CommuteViews.swift`, `CommuteLiveActivity.swift`. 위계: 상태 줄이 가장 크고, 상세와 남은 분이 그다음이다.
-- [ ] **Step 4: 통과 확인** — Run: `bun test apps/native && bash apps/native/scripts/check-lock-copy-swift.sh && cd apps/native && bun run check-types` / Expected: 모든 사례 일치, PASS. 그리고 `xcodebuild … -configuration Debug build`(Task 3 기록의 명령)로 앱과 확장이 빌드된다.
-- [ ] **Step 5: 커밋** — `feat(native): render the commute Live Activity and Dynamic Island`
+- [x] **Step 1: Figma 읽기** — 위 노드의 레이아웃, 색 변수, 글자 크기를 읽는다. 색과 간격은 Figma 변수 값을 Swift 상수로 옮기고(다크·라이트) 임의 값을 쓰지 않는다.
+- [x] **Step 2: 실패하는 대조** — `localizable-strings.test.ts`: `ko.lproj/Localizable.strings`의 키와 값이 `messages-ko.ts`의 `commute.lock.*`와 같다(`{name}` 자리표시는 Swift 쪽도 같은 이름으로 둔다). `check-lock-copy-swift.sh`: `CommuteActivityAttributes.swift`(ActivityKit import를 빼고 작은 대역 프로토콜로)와 `CommuteCopy.swift`, `main.swift`를 `swiftc`로 묶어 `lock-screen-cases.json`의 모든 사례를 돌리고, `expected`의 `status`·`detail`·`minutes`·`tag`·`suggestion`·`nextLegs`·`moreLegs`와 글자 그대로 같은지 본다. Run: 둘 다 / Expected: FAIL(파일이 없다)
+- [x] **Step 3: 구현** — `CommuteCopy.swift`, `Localizable.strings`, `CommuteViews.swift`, `CommuteLiveActivity.swift`. 위계: 상태 줄이 가장 크고, 상세와 남은 분이 그다음이다.
+- [x] **Step 4: 통과 확인** — Run: `bun test apps/native && bash apps/native/scripts/check-lock-copy-swift.sh && cd apps/native && bun run check-types` / Expected: 모든 사례 일치, PASS. 그리고 `xcodebuild … -configuration Debug build`(Task 3 기록의 명령)로 앱과 확장이 빌드된다.
+- [x] **Step 5: 커밋** — `feat(native): render the commute Live Activity and Dynamic Island`
 - 화면 대조(사례마다 `startLocal` → 잠금화면 캡처, 다이내믹 아일랜드 세 형태, 160pt)는 Task 8의 기기 확인에서 한 번에 한다.
 
 ---
+
+#### Task 4 결과 (2026-11-14)
+
+- 서브에이전트가 별도 워크트리에서 만들고 이 브랜치로 가져왔다(`d2f85a3`부터 4개 커밋, 가져온 뒤 해시는 바뀜). 화면은 아직 기기에서 보지 않았다(Task 8).
+- **대조**: `scripts/check-lock-copy-swift.sh`가 `lock-screen-cases.json` **33/33** 사례에서 Swift 문구가 TS 기대값과 글자 그대로 같다. `localizable-strings.test.ts`가 `Localizable.strings`와 `messages-ko.ts`의 `commute.lock.*`를 맞춘다. 시뮬레이터용 `xcodebuild`(서명 없음) BUILD SUCCEEDED.
+- **Figma에서 읽은 값**: `LiveActivity` 87:2420(변형 123:2419~123:3085, 제안 123:2861), `NextLegRow` 114:1599, `LegBadge · S` 114:1598, `iOS / 19 Dynamic Island` 49:18907. 색은 Figma 변수(다크·라이트)를 Swift 상수로, 글자 크기는 고정(큰 글자 설정이 160pt를 넘기지 않게).
+- **표본 화면**: 설정의 "잠금화면 표본"은 빌드 환경값 `EXPO_PUBLIC_LOCK_SAMPLES=1`일 때만 보이고 열린다(`.env.schema`). iOS는 `startLocal`, Android는 진행 중 알림으로 띄운다. 표본은 머리줄 없이 "출퇴근"으로 보인다.
+- **TS와 다른 점**: `stopsAway`가 소수면 Swift는 디코딩에 실패하고(TS는 내림), 모르는 `stage`는 Swift에서 "도착"으로 보인다(TS는 값 전체를 버림). 서버는 둘 다 보내지 않는다.
+- **결정이 필요한 것**
+  - "146번이 지나갔어요 · 다음 차 08:12"는 24pt 한 줄에 다 들어가지 않아 끝이 잘린다. Figma 변형은 제목에 "341번이 지나갔어요"만 두고 다음 차 시각을 상세 줄에 둔다. 문구를 Figma처럼 나눌지 정해야 한다(Review Focus 5와 충돌).
+  - 버스 배지는 푸시 값에 노선 유형이 없어 늘 간선 색이다. 지하철 배지는 Swift 표(공식 노선 이름 → Figma 짧은 이름·색)로 그린다. 17 화면은 "2호선" 전체 이름을 쓰므로 잠금화면과 모양이 다르다.
+  - 다이내믹 아일랜드 Expanded는 시스템 영역(위: 배지·상태, 가운데: 남은 분·상세, 아래: 첫 남은 구간)에 맞췄고 제안과 "외 N구간"은 없다.
+- 루트 `biome.json`에 `**/*.xcassets/**/*.svg` 제외를 더했다(Figma 아이콘 SVG를 HTML로 검사해서).
 
 ### Task 5: iOS 잠금화면 버튼 — 하지 않음 (2026-11-11 변경)
 
