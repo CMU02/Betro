@@ -446,6 +446,15 @@ export const ko = {
 		dataSources: {
 			title: "데이터 출처",
 		},
+		/** `EXPO_PUBLIC_LOCK_SAMPLES=1`일 때만 보이는 행과 화면. 표본 값으로 잠금화면을 띄운다. */
+		lockSamples: {
+			endAll: "표본 모두 끝내기",
+			failed: "표본을 띄우지 못했어요",
+			intro:
+				"사례를 누르면 그 값으로 잠금화면 안내를 띄워요. 시각은 지금 기준으로 옮겨요.",
+			subtitle: "표본 값으로 잠금화면 안내를 띄워요",
+			title: "잠금화면 표본",
+		},
 		mapQuality: {
 			high3d: "고화질 3D",
 			standard: "표준",

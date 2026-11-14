@@ -6,6 +6,7 @@ import {
 	BoxIcon,
 	BugIcon,
 	InfoIcon,
+	LockIcon,
 	MapIcon,
 	MoonIcon,
 	RouteIcon,
@@ -21,6 +22,7 @@ import { ListDivider, ListRow } from "@/components/ui/list-row";
 import { Screen } from "@/components/ui/screen";
 import { Section } from "@/components/ui/section";
 import { useAppTheme } from "@/contexts/app-theme-context";
+import { showLockSamples } from "@/lib/commute/lock-sample-presenter";
 import {
 	isCrashReportingActive,
 	sendTestException,
@@ -41,6 +43,7 @@ const BellTileIcon = withUniwind(BellIcon);
 const ShieldTileIcon = withUniwind(ShieldCheckIcon);
 const InfoTileIcon = withUniwind(InfoIcon);
 const BugTileIcon = withUniwind(BugIcon);
+const LockTileIcon = withUniwind(LockIcon);
 
 const THEME_OPTIONS: { labelKey: MessageKey; mode: ThemePreference }[] = [
 	{ labelKey: "settings.theme.dark", mode: "dark" },
@@ -162,6 +165,9 @@ export default function SettingsTab() {
 	const openDataSources = useCallback(() => {
 		router.push("/settings/data-sources");
 	}, [router]);
+	const openLockSamples = useCallback(() => {
+		router.push("/settings/lock-samples");
+	}, [router]);
 
 	return (
 		<Screen scroll title={t("tabs.settings")}>
@@ -239,15 +245,27 @@ export default function SettingsTab() {
 						}}
 					/>
 				</Section>
-				{__DEV__ ? (
+				{__DEV__ || showLockSamples ? (
 					<Section title={t("settings.sections.developer")}>
-						<ListRow
-							icon={BugTileIcon}
-							onPress={openCrashTest}
-							subtitle={t("settings.crashTest.subtitle")}
-							title={t("settings.crashTest.title")}
-							trailing={{ type: "none" }}
-						/>
+						{__DEV__ ? (
+							<ListRow
+								icon={BugTileIcon}
+								onPress={openCrashTest}
+								subtitle={t("settings.crashTest.subtitle")}
+								title={t("settings.crashTest.title")}
+								trailing={{ type: "none" }}
+							/>
+						) : null}
+						{__DEV__ && showLockSamples ? <ListDivider /> : null}
+						{showLockSamples ? (
+							<ListRow
+								icon={LockTileIcon}
+								onPress={openLockSamples}
+								subtitle={t("settings.lockSamples.subtitle")}
+								title={t("settings.lockSamples.title")}
+								trailing={{ type: "chevron" }}
+							/>
+						) : null}
 					</Section>
 				) : null}
 			</View>
