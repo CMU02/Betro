@@ -23,6 +23,8 @@ import {
 } from "@/lib/crash/crash-reporting";
 import { ensureInstallIdentity } from "@/lib/device/app-install-identity";
 import { t } from "@/lib/i18n/t";
+import { appReachability } from "@/lib/network/app-reachability";
+import { onReconnect } from "@/lib/network/reachability";
 import { shouldShowOnboarding } from "@/lib/onboarding/onboarding";
 import { appPlacesSync } from "@/lib/places/app-places";
 import { appPreferences } from "@/lib/preferences/app-preferences";
@@ -106,6 +108,12 @@ AppState.addEventListener("change", (state) => {
 });
 // 서버에 닿지 않는 동안 연결이 돌아왔는지 본다(`useOffline` 안내가 사라지게).
 startAppOfflineProbe();
+// 앱이 앞에 있는 채로 연결이 돌아오면 앞으로 올 때를 기다리지 않고 밀린 저장을 올린다.
+onReconnect(appReachability, () => {
+	registerThenSync().catch((error: unknown) => {
+		reportError(appCrashSink, error, "install-registration");
+	});
+});
 
 /**
  * iOS는 Info.plist의 UIViewControllerBasedStatusBarAppearance가 켜져 있어 화면(뷰 컨트롤러)이 상태 표시줄 글자색을 정한다.

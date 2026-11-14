@@ -33,6 +33,24 @@ export function createReachability(): Reachability {
 	};
 }
 
+/**
+ * 닿지 않던 서버에 다시 닿을 때마다 `run`을 부른다. 앱이 앞에 있는 채로 연결만 돌아와도
+ * 밀린 저장을 올리기 위해서다. 돌려주는 함수로 멈춘다.
+ */
+export function onReconnect(
+	reachability: Reachability,
+	run: () => void
+): () => void {
+	let wasOffline = reachability.isOffline();
+	return reachability.subscribe(() => {
+		const offline = reachability.isOffline();
+		if (wasOffline && !offline) {
+			run();
+		}
+		wasOffline = offline;
+	});
+}
+
 export interface ProbeTimers {
 	clear: (id: number) => void;
 	set: (run: () => void, ms: number) => number;

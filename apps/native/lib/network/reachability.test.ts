@@ -1,6 +1,10 @@
 import { expect, it } from "bun:test";
 
-import { createReachability, startOfflineProbe } from "./reachability";
+import {
+	createReachability,
+	onReconnect,
+	startOfflineProbe,
+} from "./reachability";
 
 it("starts online and tells listeners only when the state changes", () => {
 	const reachability = createReachability();
@@ -108,4 +112,36 @@ it("clears the waiting probe when stopped", () => {
 	stop();
 
 	expect(timers.pending()).toBe(0);
+});
+
+it("runs the reconnect callback only when an offline spell ends", () => {
+	const reachability = createReachability();
+	let runs = 0;
+	onReconnect(reachability, () => {
+		runs += 1;
+	});
+
+	reachability.report(true);
+	expect(runs).toBe(0);
+	reachability.report(false);
+	expect(runs).toBe(0);
+	reachability.report(true);
+	reachability.report(true);
+	expect(runs).toBe(1);
+	reachability.report(false);
+	reachability.report(true);
+	expect(runs).toBe(2);
+});
+
+it("stops running the reconnect callback after it is removed", () => {
+	const reachability = createReachability();
+	let runs = 0;
+	const stop = onReconnect(reachability, () => {
+		runs += 1;
+	});
+	stop();
+	reachability.report(false);
+	reachability.report(true);
+
+	expect(runs).toBe(0);
 });
