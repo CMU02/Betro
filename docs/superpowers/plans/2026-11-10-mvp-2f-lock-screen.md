@@ -253,12 +253,21 @@
   - API 36 이상: 승격(promoted ongoing)이 유지되는 스타일로 그린다. extras `android.requestPromotedOngoing = true`, `android.shortCriticalText = chipText`(리플렉션 없음). `lines`를 넣을 수 있는지는 Step 1에서 정한다. 그 아래: `NotificationCompat` 진행 중 알림 + `BigTextStyle`(제목·본문·`lines`).
   - 버튼은 "종료" 하나: `PendingIntent`(브로드캐스트) → `CommuteActionReceiver` → `CommuteActionTaskService`(`HeadlessJsTaskService`, 태스크 이름 `CommuteAction`, 데이터 `{ sessionId, kind: "end" }`, 타임아웃 15초). 앱 화면은 열리지 않는다.
 
-- [ ] **Step 1: 승격 조건 확인** — Android 공식 문서(Live Updates, `ProgressStyle`, promoted ongoing 조건)에서 `BigTextStyle`/`ProgressStyle` 중 승격이 유지되고 여러 줄을 보일 수 있는 것을 고른다. 결과와 근거를 이 문서에 적는다. `ProgressStyle`이면 점(segment) 수는 `legCount`, 진행은 `legIndex`. 남은 구간 줄을 못 넣으면 Android는 지금 구간만 보이고 그 사실을 적는다.
-- [ ] **Step 2: 실패하는 테스트** — `notification-content.test.ts`: 사례 파일의 `android` 모델로 제목·본문·`lines`·`chipText`. 남은 분 없음 → 본문에 "·"가 남지 않음, `chipText`가 노선만. 남은 구간 3개 → `lines` 2줄이고 둘째 줄 끝에 "외 1구간". 제안 있음 → `lines`가 제안 줄. Run: `bun test apps/native/lib/commute` / Expected: FAIL
-- [ ] **Step 3: 구현** — 위 Interfaces대로. `CommuteSpike` 로그와 `log` 함수는 지운다.
-- [ ] **Step 4: 통과와 빌드** — Run: `bun test apps/native && cd apps/native && bun run check-types`, 그리고 `bunx expo prebuild -p android` 뒤 `cd android && ./gradlew :app:assembleRelease`(2-E S20 기록과 같은 방식). Expected: PASS, APK가 만들어진다.
-- [ ] **Step 5: 커밋** — `feat(native): add the commute ongoing notification module for Android`
+- [x] **Step 1: 승격 조건 확인** — Android 공식 문서(Live Updates, `ProgressStyle`, promoted ongoing 조건)에서 `BigTextStyle`/`ProgressStyle` 중 승격이 유지되고 여러 줄을 보일 수 있는 것을 고른다. 결과와 근거를 이 문서에 적는다. `ProgressStyle`이면 점(segment) 수는 `legCount`, 진행은 `legIndex`. 남은 구간 줄을 못 넣으면 Android는 지금 구간만 보이고 그 사실을 적는다.
+- [x] **Step 2: 실패하는 테스트** — `notification-content.test.ts`: 사례 파일의 `android` 모델로 제목·본문·`lines`·`chipText`. 남은 분 없음 → 본문에 "·"가 남지 않음, `chipText`가 노선만. 남은 구간 3개 → `lines` 2줄이고 둘째 줄 끝에 "외 1구간". 제안 있음 → `lines`가 제안 줄. Run: `bun test apps/native/lib/commute` / Expected: FAIL
+- [x] **Step 3: 구현** — 위 Interfaces대로. `CommuteSpike` 로그와 `log` 함수는 지운다.
+- [x] **Step 4: 통과와 빌드** — Run: `bun test apps/native && cd apps/native && bun run check-types`, 그리고 `bunx expo prebuild -p android` 뒤 `cd android && ./gradlew :app:assembleRelease`(2-E S20 기록과 같은 방식). Expected: PASS, APK가 만들어진다.
+- [x] **Step 5: 커밋** — `feat(native): add the commute ongoing notification module for Android`
 - 화면 대조(S20, 에뮬레이터 API 36.1·36.0, `seq` 거꾸로)는 Task 8에서 한 번에 한다. Release APK에서도 표본을 띄울 수 있게, "잠금화면 표본" 줄은 `__DEV__`가 아니라 빌드 시 환경값 `EXPO_PUBLIC_LOCK_SAMPLES=1`일 때만 보인다(운영 빌드에서는 없다).
+
+#### Task 6 결과 (2026-11-14)
+
+- **승격 조건**(developer.android.com "Live Updates"): Standard, `BigTextStyle`, `CallStyle`, `ProgressStyle`, `MetricStyle` 중 하나, `POST_PROMOTED_NOTIFICATIONS` 선언, 승격 요청, ongoing, `contentTitle` 있음, `RemoteViews` 없음, 그룹 요약 아님, `setColorized(true)` 아님, 채널이 `IMPORTANCE_MIN` 아님. 그래서 **`BigTextStyle`로 남은 구간 줄을 넣어도 승격이 유지된다.** 진행 점(`ProgressStyle`)은 쓰지 않는다(2026-11-11 결정으로 진행 표시가 없다).
+- **Ruling: 상태바 칩은 남은 분만**(`3분`, `곧`), 남은 분이 없으면 노선 이름. 칩은 최대 96dp이고 7글자 미만일 때만 다 보인다. 계획의 `{노선} · {분}`(예: `2호선 · 12분`, 9글자)은 잘린다. 노선은 알림 제목에 있다. 틀렸을 때 비용: `notification-content.ts` 한 줄.
+- **Ruling: 권한은 `app.config.ts`가 아니라 모듈의 `AndroidManifest.xml`에 둔다.** Expo의 `android.permissions`를 처음 적으면 기본 권한 목록이 바뀔 수 있어서다. 모듈 매니페스트는 앱 매니페스트에 합쳐진다. 틀렸을 때 비용: 권한 한 줄 옮기기.
+- 머리줄은 `setSubText`, 본문을 누르면 `Betro://commute`(앱 스킴이 대문자다. Android 인텐트 필터의 스킴 비교는 대소문자를 가린다).
+- 채널 이름은 `commute.notification.channel` "출퇴근 안내".
+- 빌드(2026-11-14): `bun test` 1335 pass / 7 skip / 0 fail, `check-types` 통과, `assembleRelease` 성공(7분, R8 켜짐). 합쳐진 매니페스트에 `POST_PROMOTED_NOTIFICATIONS`, `CommuteActionReceiver`, `CommuteActionTaskService`가 들어 있다. R8 뒤 모듈의 `Record` 필드가 살아 있는지는 Task 8에서 본다.
 
 ---
 
@@ -282,17 +291,17 @@
   - `handleCommuteAction(input: { kind: "end"; sessionId: string }, deps: { client: ServerClient; notifier }): Promise<boolean>`. `POST …/input` `{ kind: "end" }`. 204면 `notifier.end`. 실패하면 알림을 그대로 둔다.
   - `registerFcmToken(client: ServerClient, token: string): Promise<boolean>`(`PUT /v1/push-tokens` `{ kind: "fcm", token, env: "production" }`). 앱 시작과 토큰 갱신 이벤트에서 부른다(Android에서만). 이미 있으면 그것을 쓴다.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
   - 메시지: `start` → `"shown"`이고 `ack`가 한 번(본문 `shownAt`이 ms). `update` → `"shown"`이고 `ack`가 없다. `end` → `"ended"`.
   - **옛 메시지**: `notifier.show`가 false → `"stale"`. `sentAt`이 11분 전 → `notifier.show`를 부르지 않고 `"stale"`.
   - `type: "other"`나 깨진 `state` → `"ignored"`이고 `notifier`를 부르지 않는다.
   - `ack`가 실패해도 `"shown"`.
   - "종료": 204 → true이고 `notifier.end`. 서버 오류나 네트워크 오류 → false이고 `notifier`를 부르지 않는다.
   - 토큰 등록: 본문의 `kind`가 `"fcm"`.
-- [ ] **Step 2: 실패 확인** — Run: `bun test apps/native/lib/commute` / Expected: FAIL
-- [ ] **Step 3: 구현** — 순수 파일은 `react-native`, `expo-*`, 모듈을 import하지 않는다. 헤드리스 태스크는 앱 진입 파일에서 `AppRegistry.registerHeadlessTask("CommuteAction", …)`.
-- [ ] **Step 4: 통과 확인** — Run: `bun test apps/native && cd apps/native && bun run check-types` / Expected: PASS
-- [ ] **Step 5: 커밋** — `feat(native): handle commute pushes and the end action on Android`
+- [x] **Step 2: 실패 확인** — Run: `bun test apps/native/lib/commute` / Expected: FAIL
+- [x] **Step 3: 구현** — 순수 파일은 `react-native`, `expo-*`, 모듈을 import하지 않는다. 헤드리스 태스크는 앱 진입 파일에서 `AppRegistry.registerHeadlessTask("CommuteAction", …)`.
+- [x] **Step 4: 통과 확인** — Run: `bun test apps/native && cd apps/native && bun run check-types` / Expected: PASS
+- [x] **Step 5: 커밋** — `feat(native): handle commute pushes and the end action on Android`
 - 기기 확인(앱 프로세스 없는 S20에서 뜨고 갱신, "종료", 강제 종료 뒤 늦은 메시지)은 Task 8에서 한다.
 
 ---
