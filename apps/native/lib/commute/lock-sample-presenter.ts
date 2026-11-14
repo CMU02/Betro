@@ -1,9 +1,12 @@
 import { Platform } from "react-native";
 
+import { t } from "@/lib/i18n/t";
 import { CommuteActivity } from "@/modules/commute-activity";
+import { CommuteNotification } from "@/modules/commute-notification";
 import { ENV } from "@/src/env";
-
 import { type LockSample, lockSampleState } from "./lock-samples";
+import { lockScreenModel } from "./lock-screen-model";
+import { notificationContent } from "./notification-content";
 
 /** 표본을 띄우고 지우는 플랫폼 구현. */
 export interface LockSamplePresenter {
@@ -24,11 +27,53 @@ const iosPresenter: LockSamplePresenter = {
 	},
 };
 
+/**
+ * Android는 표본마다 새 세션 ID로 알림 하나(ID 4101)를 덮어쓴다. 모듈은 끝난 세션을 다시 그리지 않으므로
+ * 같은 ID를 다시 쓰지 않는다. 지우기는 마지막으로 띄운 세션을 끝낸다.
+ */
+function androidPresenter(): LockSamplePresenter | null {
+	const notifier = CommuteNotification;
+	if (notifier === null) {
+		return null;
+	}
+	let lastSessionId: string | null = null;
+	return {
+		endAll: () => {
+			if (lastSessionId !== null) {
+				notifier.end(lastSessionId);
+				lastSessionId = null;
+			}
+			return Promise.resolve();
+		},
+		show: (sample, index) => {
+			const now = Date.now() / 1000;
+			const sessionId = `sample-${index}-${Math.round(now)}`;
+			const model = lockScreenModel(lockSampleState(sample, now), {
+				header: null,
+				now,
+				platform: "android",
+				t,
+				timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+			});
+			notifier.show({
+				channelName: t("commute.notification.channel"),
+				content: notificationContent(model),
+				endLabel: t("commute.lock.action.end"),
+				seq: 1,
+				sessionId,
+			});
+			lastSessionId = sessionId;
+			return Promise.resolve();
+		},
+	};
+}
+
 function presenterFor(os: typeof Platform.OS): LockSamplePresenter | null {
 	switch (os) {
 		case "ios":
 			return iosPresenter;
-		// Android 진행 중 알림 모듈이 생기면 여기에 같은 모양의 구현을 더한다.
+		case "android":
+			return androidPresenter();
 		default:
 			return null;
 	}
