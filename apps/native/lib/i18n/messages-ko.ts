@@ -56,6 +56,10 @@ export const ko = {
 				live: "실시간",
 			},
 		},
+		/** Android 진행 중 알림 */
+		notification: {
+			channel: "출퇴근 안내",
+		},
 	},
 	/** 17 출퇴근 안내 */
 	commuteGuide: {

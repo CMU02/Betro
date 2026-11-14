@@ -1,0 +1,114 @@
+import type { MessageKey, MessageParams } from "../i18n/translate";
+import type { ServerClient } from "../server/api-client";
+import { parseContentState } from "./content-state";
+import { lockScreenModel } from "./lock-screen-model";
+import {
+	type NotificationContent,
+	notificationContent,
+} from "./notification-content";
+
+/** `CommuteNotification.show`에 넘기는 값(모듈의 `ShowInput`과 같은 모양). */
+export interface ShowRequest {
+	channelName: string;
+	content: NotificationContent;
+	endLabel: string;
+	seq: number;
+	sessionId: string;
+}
+
+export interface CommuteNotifierPort {
+	end: (sessionId: string) => void;
+	show: (input: ShowRequest) => boolean;
+}
+
+export interface CommuteMessageDeps {
+	client: ServerClient;
+	/** 기기가 저장한 planId별 머리줄. 모르면 null. */
+	header: (planId: string) => Promise<string | null>;
+	notifier: CommuteNotifierPort;
+	/** epoch ms */
+	now: () => number;
+	t: (key: MessageKey, params?: MessageParams) => string;
+	timezone: string;
+}
+
+export type CommuteMessageResult = "shown" | "ended" | "stale" | "ignored";
+
+/** 강제 종료 동안 쌓였다가 늦게 온 메시지는 그리지 않는다. */
+const MAX_AGE_SECONDS = 10 * 60;
+const MS_PER_SECOND = 1000;
+
+function parseJson(text: string | undefined): unknown {
+	if (text === undefined) {
+		return null;
+	}
+	try {
+		return JSON.parse(text);
+	} catch {
+		return null;
+	}
+}
+
+async function acknowledge(
+	client: ServerClient,
+	sessionId: string,
+	shownAt: number
+): Promise<void> {
+	try {
+		await client.request(
+			"POST",
+			`/v1/commute/sessions/${encodeURIComponent(sessionId)}/ack`,
+			{ shownAt }
+		);
+	} catch {
+		// 알림은 이미 그렸다. 서버 기록이 빠질 뿐이다.
+	}
+}
+
+/**
+ * Android에서 출퇴근 FCM 데이터 메시지(`type: "commute"`)를 받아 진행 중 알림을 그리거나 지운다.
+ * 헤드리스(앱 꺼짐)와 포그라운드 수신이 같은 처리기를 쓴다.
+ */
+export async function handleCommuteMessage(
+	data: Record<string, string>,
+	deps: CommuteMessageDeps
+): Promise<CommuteMessageResult> {
+	const { sessionId, planId, event } = data;
+	if (data.type !== "commute" || !sessionId || !planId) {
+		return "ignored";
+	}
+	const state = parseContentState(parseJson(data.state));
+	if (state === null) {
+		return "ignored";
+	}
+	if (event === "end" || state.stage === "ended") {
+		deps.notifier.end(sessionId);
+		return "ended";
+	}
+	const nowMs = deps.now();
+	const now = nowMs / MS_PER_SECOND;
+	if (now - state.sentAt > MAX_AGE_SECONDS) {
+		return "stale";
+	}
+	const model = lockScreenModel(state, {
+		header: await deps.header(planId),
+		now,
+		platform: "android",
+		t: deps.t,
+		timezone: deps.timezone,
+	});
+	const shown = deps.notifier.show({
+		channelName: deps.t("commute.notification.channel"),
+		content: notificationContent(model),
+		endLabel: deps.t("commute.lock.action.end"),
+		seq: state.seq,
+		sessionId,
+	});
+	if (!shown) {
+		return "stale";
+	}
+	if (event === "start") {
+		await acknowledge(deps.client, sessionId, nowMs);
+	}
+	return "shown";
+}

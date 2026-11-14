@@ -1,5 +1,9 @@
 import { useCallback, useEffect } from "react";
 import { Alert } from "react-native";
+import {
+	handleAppCommuteMessage,
+	registerAppFcmToken,
+} from "@/lib/commute/app-commute";
 import { t } from "@/lib/i18n/t";
 import { subscribeOptionsForLaunch } from "@/lib/push/push-launch";
 import type { PushMessage } from "@/lib/push/push-message";
@@ -16,6 +20,11 @@ const LAUNCH_OPTIONS = subscribeOptionsForLaunch();
  */
 export function PushNotifications() {
 	const onForegroundMessage = useCallback((message: PushMessage) => {
+		if (message.data.type === "commute") {
+			// 앱이 앞에 있어도 출퇴근 메시지는 알림창에 그린다(Android). 알림 대화상자는 띄우지 않는다.
+			handleAppCommuteMessage(message.data).catch(() => undefined);
+			return;
+		}
 		if (message.title || message.body) {
 			Alert.alert(
 				message.title ?? t("push.defaultTitle"),
@@ -28,6 +37,13 @@ export function PushNotifications() {
 		{ onForegroundMessage },
 		LAUNCH_OPTIONS
 	);
+
+	useEffect(() => {
+		if (permission === "granted" && token) {
+			// Android만 보낸다(iOS는 네이티브 토큰 보고가 맡는다). 갱신된 토큰도 이 효과로 다시 보낸다.
+			registerAppFcmToken(token).catch(() => undefined);
+		}
+	}, [permission, token]);
 
 	useEffect(() => {
 		if (__DEV__ && permission === "granted" && token) {
