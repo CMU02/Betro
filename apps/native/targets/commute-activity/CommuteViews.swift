@@ -124,7 +124,7 @@ enum CommuteBadges {
   private struct SubwayLine {
     let label: String
     let color: UInt32
-    /// 밝은 노선색이라 어두운 글자(`text/on-accent`)를 쓴다.
+    /// 밝은 노선색이라 어두운 글자(Figma `LineBadge` 4:34의 9·수인분당·우이신설, `primitive/neutral-950` #0e0f10)를 쓴다.
     let darkText: Bool
   }
 
@@ -140,7 +140,7 @@ enum CommuteBadges {
     "7호선": SubwayLine(label: "7", color: 0x747F00, darkText: false),
     "8호선": SubwayLine(label: "8", color: 0xE6186C, darkText: false),
     "9호선": SubwayLine(label: "9", color: 0xBDB092, darkText: true),
-    "경의중앙선": SubwayLine(label: "경의중앙", color: 0x77C4A3, darkText: true),
+    "경의중앙선": SubwayLine(label: "경의중앙", color: 0x77C4A3, darkText: false),
     "공항철도": SubwayLine(label: "공항", color: 0x0090D2, darkText: false),
     "경춘선": SubwayLine(label: "경춘", color: 0x178C72, darkText: false),
     "수인분당선": SubwayLine(label: "수인분당", color: 0xF5A200, darkText: true),
