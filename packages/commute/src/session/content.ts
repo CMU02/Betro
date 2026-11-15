@@ -205,8 +205,7 @@ export function buildContent(
 		? null
 		: (legEstimate?.stopsAway ?? null);
 	const showsLeave = state.stage === "walk" && legIndex === 0;
-	const awaitingDeparture =
-		boarding && legEstimate?.awaitingDeparture === true;
+	const awaitingDeparture = boarding && legEstimate?.awaitingDeparture === true;
 
 	return {
 		...(awaitingDeparture ? { awaitingDeparture } : {}),

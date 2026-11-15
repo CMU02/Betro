@@ -276,9 +276,7 @@ describe("buildContent", () => {
 		const ride = buildContent(
 			stateOf({
 				boardedBy: ["user"],
-				estimates: [
-					routeEstimate(0, at(40), { ...waiting, boardEtaAt: null }),
-				],
+				estimates: [routeEstimate(0, at(40), { ...waiting, boardEtaAt: null })],
 				stage: "ride",
 			}),
 			plan,
