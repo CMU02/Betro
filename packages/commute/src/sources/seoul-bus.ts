@@ -5,6 +5,8 @@ import type { Approaching, Progress, StopBoard } from "./types";
 
 /** 노선 전 정류장 도착(`getArrInfoByRouteAll`)의 정류장 하나. */
 export interface RouteStopArrival {
+	/** 차량 칸 하나가 "출발대기"다: 목록 다음 차량이 아직 기점에서 떠나지 않았다. 아니면 없다. */
+	awaitingDeparture?: true;
 	headwayMin: number | null;
 	/** 출처가 이 값을 만든 시각(`mkTm`). `etaSec`의 기준이다. */
 	madeAt: number;
@@ -45,6 +47,8 @@ const HOUR_MINUTES = 60;
 const EMPTY_VEHICLE_ID = "0";
 const HEADER_OK = "0";
 const HEADER_NO_DATA = "4";
+/** 차량 칸의 `arrmsg`: 그 차량이 아직 노선 기점에서 떠나지 않았다. */
+const AWAITING_DEPARTURE_MESSAGE = "출발대기";
 /** 출처 시각은 서울 버스의 현지 시각이다. 시간대는 설정값 한 곳에서 가져온다. */
 const SOURCE_TIMEZONE = DEFAULT_TIMEZONE;
 const MADE_AT = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/;
@@ -57,6 +61,8 @@ const envelopeSchema = z.object({
 const field = z.string().nullish();
 
 const itemSchema = z.object({
+	arrmsg1: field,
+	arrmsg2: field,
 	isArrive1: field,
 	isArrive2: field,
 	isLast1: field,
@@ -133,7 +139,11 @@ function stopOf(raw: unknown): RouteStopArrival | null {
 	const vehicles = [vehicleOf(item, 1), vehicleOf(item, 2)].filter(
 		(vehicle): vehicle is Vehicle => vehicle !== null
 	);
+	const awaitingDeparture = [item.arrmsg1, item.arrmsg2].some(
+		(message) => message?.trim() === AWAITING_DEPARTURE_MESSAGE
+	);
 	return {
+		...(awaitingDeparture ? { awaitingDeparture } : {}),
 		headwayMin: headway !== null && headway > 0 ? headway : null,
 		madeAt,
 		seq,
@@ -236,6 +246,7 @@ export function busBoards(
 		const prevSourceAt = prevBySeq.get(seq)?.madeAt ?? prevLatestMadeAt;
 		return {
 			...(prevSourceAt === null ? {} : { prevSourceAt }),
+			...(stop?.awaitingDeparture ? { awaitingDeparture: true } : {}),
 			approaching,
 			fetchedAt,
 			headwayMs:

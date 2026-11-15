@@ -29,6 +29,11 @@ export interface Approaching {
 export interface StopBoard {
 	/** 가까운 순서. */
 	approaching: Approaching[];
+	/**
+	 * `approaching` 다음 차량이 아직 노선 기점에서 출발을 기다린다(서울 버스 "출발대기").
+	 * 그런 칸이 없거나 출처가 알려 주지 않으면 없다.
+	 */
+	awaitingDeparture?: true;
 	/** 출처에서 받은 시각. */
 	fetchedAt: number;
 	headwayMs: number | null;
