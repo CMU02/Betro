@@ -41,6 +41,8 @@ export const ko = {
 			status: {
 				arrived: "{stop} 도착",
 				arriving: "곧 도착",
+				/** 탈 차량이 아직 노선 기점에서 떠나지 않았다(서울 버스 "출발대기"). */
+				awaitingDeparture: "출발 대기 중",
 				beforeLeave: "{leave}에 나가세요",
 				passedBus: "{passedLine}번이 지나갔어요",
 				passedSubway: "{passedLine} 열차가 지나갔어요",

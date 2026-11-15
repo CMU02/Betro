@@ -93,6 +93,11 @@ public enum CommuteCopy {
     state.passed != nil && state.etaEpoch != nil
   }
 
+  /// 새 도착판에서 탈 차량이 아직 기점에서 떠나지 않았다. 묵은 위치에서는 "위치 확인 중"을 둔다.
+  static func awaitsDeparture(_ state: CommuteActivityAttributes.ContentState) -> Bool {
+    state.awaitingDeparture == true && state.positionState == "live"
+  }
+
   /// 첫 구간 walk 단계에서 나가는 시각이 아직 오지 않았으면 그 시각과 탑승 시각.
   static func beforeLeave(
     _ state: CommuteActivityAttributes.ContentState,
@@ -128,7 +133,11 @@ public enum CommuteCopy {
     }
     let stops = knownStops(state.stopsAway)
     if state.stage == "walk" || state.stage == "wait" {
-      guard let stops else { return t("commute.lock.status.unknown", [:]) }
+      guard let stops else {
+        return awaitsDeparture(state)
+          ? t("commute.lock.status.awaitingDeparture", [:])
+          : t("commute.lock.status.unknown", [:])
+      }
       return stops >= 1
         ? t("commute.lock.status.stopsAway", ["n": String(stops)])
         : t("commute.lock.status.arriving", [:])

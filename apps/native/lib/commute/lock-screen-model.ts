@@ -82,6 +82,11 @@ function beforeLeaveOf(
 	return { etaEpoch, leaveEpoch };
 }
 
+/** 새 도착판에서 탈 차량이 아직 기점에서 떠나지 않았다. 묵은 위치에서는 "위치 확인 중"을 둔다. */
+function awaitsDeparture(state: ContentState): boolean {
+	return state.awaitingDeparture === true && state.positionState === "live";
+}
+
 function statusLine(state: ContentState, deps: LockScreenDeps): string {
 	const { t, now } = deps;
 	const { etaEpoch, stage } = state;
@@ -101,7 +106,9 @@ function statusLine(state: ContentState, deps: LockScreenDeps): string {
 	const stops = knownStops(state.stopsAway);
 	if (stage === "walk" || stage === "wait") {
 		if (stops === null) {
-			return t("commute.lock.status.unknown");
+			return awaitsDeparture(state)
+				? t("commute.lock.status.awaitingDeparture")
+				: t("commute.lock.status.unknown");
 		}
 		return stops >= 1
 			? t("commute.lock.status.stopsAway", { n: stops })

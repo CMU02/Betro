@@ -27,6 +27,8 @@ export interface NextLegContent {
 }
 
 export interface ContentState {
+	/** 탈 차량이 아직 노선 기점에서 출발을 기다린다(서버가 walk·wait에서만 보냄). 아니면 없다. */
+	awaitingDeparture?: true;
 	delayMinutes: number;
 	destinationEtaEpoch: number | null;
 	etaEpoch: number | null;
@@ -81,6 +83,14 @@ function nullableNumber(value: unknown): number | null | undefined {
 		return null;
 	}
 	return isNumber(value) ? value : undefined;
+}
+
+/** 없거나 null·false면 null(표시 없음), true면 true, 그 밖의 타입이면 undefined(잘못된 값). */
+function parseAwaitingDeparture(value: unknown): true | null | undefined {
+	if (value === undefined || value === null || value === false) {
+		return null;
+	}
+	return value === true ? true : undefined;
 }
 
 function parsePassed(value: unknown): { lineName: string } | null | undefined {
@@ -184,6 +194,7 @@ export function parseContentState(input: unknown): ContentState | null {
 	const passed = parsePassed(input.passed);
 	const suggestion = parseSuggestion(input.suggestion);
 	const nextLegs = parseNextLegs(input.nextLegs);
+	const awaitingDeparture = parseAwaitingDeparture(input.awaitingDeparture);
 	if (
 		!(
 			oneOf<CommuteStage>(stage, STAGES) &&
@@ -204,11 +215,13 @@ export function parseContentState(input: unknown): ContentState | null {
 		destinationEtaEpoch === undefined ||
 		passed === undefined ||
 		suggestion === undefined ||
-		nextLegs === undefined
+		nextLegs === undefined ||
+		awaitingDeparture === undefined
 	) {
 		return null;
 	}
 	return {
+		...(awaitingDeparture ? { awaitingDeparture } : {}),
 		delayMinutes,
 		destinationEtaEpoch,
 		etaEpoch,

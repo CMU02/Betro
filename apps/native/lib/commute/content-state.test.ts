@@ -66,6 +66,21 @@ it("keeps two valid remaining legs as they are", () => {
 	).toEqual(NEXT_LEGS as ReturnType<typeof parsed>["nextLegs"]);
 });
 
+it("reads awaitingDeparture and leaves it out when the key is missing", () => {
+	expect(parsed().awaitingDeparture).toBeUndefined();
+	expect(
+		parseContentState({ ...SAMPLE, awaitingDeparture: true })?.awaitingDeparture
+	).toBe(true);
+});
+
+it("rejects a non-boolean awaitingDeparture", () => {
+	expect(parseContentState({ ...SAMPLE, awaitingDeparture: "yes" })).toBeNull();
+	expect(
+		parseContentState({ ...SAMPLE, awaitingDeparture: false })
+			?.awaitingDeparture
+	).toBeUndefined();
+});
+
 it("rejects the whole value when a remaining leg is malformed", () => {
 	const [first, second] = NEXT_LEGS;
 	const { stopName: _dropped, ...withoutStop } = second;
