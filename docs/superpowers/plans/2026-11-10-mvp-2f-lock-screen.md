@@ -56,16 +56,19 @@
 
 | 줄 | 조건 | 키 | 문구 |
 |---|---|---|---|
-| 상태 | `passed`가 있음, `mode: bus` | `status.passedBus` | `{passedLine}번이 지나갔어요 · 다음 차 {eta}` |
-| 상태 | `passed`가 있음, `mode: subway` | `status.passedSubway` | `{passedLine} 열차가 지나갔어요 · 다음 열차 {eta}` |
+| 상태 | `passed`가 있음, `mode: bus` | `status.passedBus` | `{passedLine}번이 지나갔어요` (2026-11-15: 다음 차 시각은 상세 줄로) |
+| 상태 | `passed`가 있음, `mode: subway` | `status.passedSubway` | `{passedLine} 열차가 지나갔어요` |
 | 상태 | `walk`, 첫 구간, 지금이 `leaveEpoch` 전 | `status.beforeLeave` | `{leave}에 나가면 {line} {eta} 탑승` |
 | 상태 | `walk`·`wait`, `stopsAway` ≥ 1 | `status.stopsAway` | `{n}정거장 전` |
 | 상태 | `walk`·`wait`, `stopsAway` 0 | `status.arriving` | `곧 도착` |
+| 상태 | `walk`·`wait`, `stopsAway` 없음, `awaitingDeparture`이고 `positionState: live` (2026-11-15) | `status.awaitingDeparture` | `출발 대기 중` |
 | 상태 | `walk`·`wait`, `stopsAway` 없음 | `status.unknown` | `위치 확인 중` |
 | 상태 | `ride`, `stopsAway` ≥ 1 | `status.ride` | `하차까지 {n}정거장` |
 | 상태 | `ride`, `stopsAway` 0 | `status.rideLast` | `이번에 내려요` |
 | 상태 | `ride`, `stopsAway` 없음 | `status.rideUnknown` | `이동 중` |
 | 상태 | `arrived` | `status.arrived` | `{stop} 도착` |
+| 상세 | `passed`가 있음, `mode: bus` (2026-11-15) | `detail.passedBus`, 추정이면 `detail.passedBusEstimated` | `다음 차 {eta} · {stop}`, `다음 차 약 {eta} · {stop}` |
+| 상세 | `passed`가 있음, `mode: subway` (2026-11-15) | `detail.passedSubway`, 추정이면 `detail.passedSubwayEstimated` | `다음 열차 {eta} · {stop}`, `다음 열차 약 {eta} · {stop}` |
 | 상세 | `etaEpoch` 있음, `etaState: live` | `detail.eta` | `{stop} · {eta} 도착` |
 | 상세 | `etaEpoch` 있음, `etaState: estimated` | `detail.etaEstimated` | `{stop} · 약 {eta} 도착` |
 | 상세 | `etaEpoch` 없음 | `detail.noEta` | `{stop}` |
@@ -236,10 +239,21 @@
 - **표본 화면**: 설정의 "잠금화면 표본"은 빌드 환경값 `EXPO_PUBLIC_LOCK_SAMPLES=1`일 때만 보이고 열린다(`.env.schema`). iOS는 `startLocal`, Android는 진행 중 알림으로 띄운다. 표본은 머리줄 없이 "출퇴근"으로 보인다.
 - **TS와 다른 점**: `stopsAway`가 소수면 Swift는 디코딩에 실패하고(TS는 내림), 모르는 `stage`는 Swift에서 "도착"으로 보인다(TS는 값 전체를 버림). 서버는 둘 다 보내지 않는다.
 - **결정이 필요한 것**
-  - "146번이 지나갔어요 · 다음 차 08:12"는 24pt 한 줄에 다 들어가지 않아 끝이 잘린다. Figma 변형은 제목에 "341번이 지나갔어요"만 두고 다음 차 시각을 상세 줄에 둔다. 문구를 Figma처럼 나눌지 정해야 한다(Review Focus 5와 충돌).
+  - "146번이 지나갔어요 · 다음 차 08:12"는 24pt 한 줄에 다 들어가지 않아 끝이 잘린다. Figma 변형은 제목에 "341번이 지나갔어요"만 두고 다음 차 시각을 상세 줄에 둔다. → **2026-11-15 사용자 결정: Figma처럼 나눈다.** 아래 "문구 결정 (2026-11-15)".
   - 버스 배지는 푸시 값에 노선 유형이 없어 늘 간선 색이다. 지하철 배지는 Swift 표(공식 노선 이름 → Figma 짧은 이름·색)로 그린다. 17 화면은 "2호선" 전체 이름을 쓰므로 잠금화면과 모양이 다르다.
   - 다이내믹 아일랜드 Expanded는 시스템 영역(위: 배지·상태, 가운데: 남은 분·상세, 아래: 첫 남은 구간)에 맞췄고 제안과 "외 N구간"은 없다.
 - 루트 `biome.json`에 `**/*.xcassets/**/*.svg` 제외를 더했다(Figma 아이콘 SVG를 HTML로 검사해서).
+
+#### 문구 결정 (2026-11-15) **[사용자 결정]**
+
+- **지나간 차**: 상태 줄은 "146번이 지나갔어요"(지하철 "2호선 열차가 지나갔어요")만, 상세 줄은 Figma `1구간 지나감`(123:3023)처럼 "다음 차 08:12 · 강남역"(지하철 "다음 열차", 추정이면 "다음 차 약 08:12"). 정류장 이름만 말줄임된다. 17 화면도 같은 모델이라 함께 바뀐다.
+- **기점 문구**: 2-E에서 본 노선 기점의 "위치 확인 중"을 "출발 대기 중"으로 바꾼다. "위치 확인 중"은 묵은 도착판, 도착판 없음, 지하철에서도 쓰이므로 이름만 바꾸지 않고 신호를 따로 둔다.
+  - 서울 버스 `getArrInfoByRouteAll`의 차량 칸 `arrmsg`가 "출발대기"면(그 칸의 `vehId`는 0) 목록 다음 차량이 아직 기점에서 떠나지 않은 것이다. `RouteStopArrival`·`StopBoard`에 `awaitingDeparture?: true`를 둔다.
+  - 새 도착판에서 탈 차량을 고르지 못했을 때(도착판 범위 밖, 배차간격 추정)만 `LegEstimate.awaitingDeparture`가 된다. 묵은 도착판, 차량을 고른 경우, 다른 출처는 해당하지 않는다.
+  - `ContentState.awaitingDeparture?: true`는 walk·wait에서만 실린다(키가 없으면 false, `v`는 1 그대로, 배포된 옛 앱과 확장은 모르는 키를 무시한다). 값이 바뀌면 우선순위 5로 보낸다.
+  - 기기는 walk·wait에서 `stopsAway`가 없고 `awaitingDeparture`이며 `positionState: live`일 때 "출발 대기 중"을 쓴다. 우선순위: 지나갔어요 > 나가기 전 > 정거장 수 > 출발 대기 중 > 위치 확인 중.
+  - **서버를 배포해야 보인다.** 배포는 사용자 확인 뒤에 한다. 기기 확인은 Task 8에서 기점 경로로 본다.
+- 대조 사례는 38개(Swift 38/38 일치).
 
 ### Task 5: iOS 잠금화면 버튼 — 하지 않음 (2026-11-11 변경)
 
@@ -341,6 +355,6 @@
   | 9 | Android "종료"(잠긴 기기) | 앱이 열리지 않고 알림이 사라지며 D1 세션이 `ended/user` |
   | 10 | Android 강제 종료 중 보낸 메시지 | 다시 열어도 10분 넘은 것은 되살리지 않고, 최신 값을 덮지 않는다 |
 
-- [ ] **Step 3: 함께 볼 남은 것** — PR #18(앱을 앞에 둔 채 연결이 돌아오면 밀린 저장이 올라간다), iPhone 재설치 뒤 `ALERT_FCM_TOKEN`이 지금 토큰과 같은지(바꾸려면 사용자에게 먼저 묻는다), Android 승차역 검색칸 안내 글자 정렬.
+- [ ] **Step 3: 함께 볼 남은 것** — 노선 기점에서 시작하는 경로(예: 6411 정랑고개)가 "출발 대기 중"으로 보이는지(서버 배포 뒤), PR #18(앱을 앞에 둔 채 연결이 돌아오면 밀린 저장이 올라간다), iPhone 재설치 뒤 `ALERT_FCM_TOKEN`이 지금 토큰과 같은지(바꾸려면 사용자에게 먼저 묻는다), Android 승차역 검색칸 안내 글자 정렬.
 - [ ] **Step 4: 서버 기록 대조** — R2 `commute/summaries/…`의 그 세션 요약에서 `startDelayMs`가 ±60초 안, `maxSendGapMs`가 120초 이하. iOS는 `shownAt` 대신 토큰 도착 시각.
 - [ ] **Step 5: 결과와 커밋** — 시나리오별 통과 여부와 캡처, 어긋난 점을 이 문서에 적는다. `docs(plan): record the 2-F device run`
