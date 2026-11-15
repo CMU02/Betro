@@ -37,6 +37,8 @@ function androidPresenter(): LockSamplePresenter | null {
 		return null;
 	}
 	let lastSessionId: string | null = null;
+	/** 같은 초에 두 번 눌러도 세션 ID가 겹치지 않게 붙인다(겹치면 모듈이 seq 1을 버린다). */
+	let shown = 0;
 	return {
 		endAll: () => {
 			if (lastSessionId !== null) {
@@ -47,7 +49,8 @@ function androidPresenter(): LockSamplePresenter | null {
 		},
 		show: (sample, index) => {
 			const now = Date.now() / 1000;
-			const sessionId = `sample-${index}-${Math.round(now)}`;
+			shown += 1;
+			const sessionId = `sample-${index}-${Math.round(now)}-${shown}`;
 			const model = lockScreenModel(lockSampleState(sample, now), {
 				header: null,
 				now,

@@ -12,9 +12,8 @@ struct CommuteActivityBundle: WidgetBundle {
 /// 확장 번들의 `ko.lproj/Localizable.strings`에서 문구를 찾는다(원본은 `messages-ko.ts`의 `commute.lock.*`).
 /// MVP의 언어는 한국어 하나라 기기 언어와 상관없이 `ko.lproj`를 읽어 키가 그대로 보이지 않게 한다.
 enum CommuteStrings {
-  static var bundle: Bundle {
+  static let bundle: Bundle =
     Bundle.main.path(forResource: "ko", ofType: "lproj").flatMap(Bundle.init(path:)) ?? .main
-  }
 
   static func translate(_ key: String, _ params: [String: String]) -> String {
     var text = bundle.localizedString(forKey: key, value: nil, table: nil)
