@@ -340,6 +340,26 @@ describe("guideModel active", () => {
 		return model;
 	}
 
+	it("puts the next bus time on the detail line after a passed bus", () => {
+		const model = active([view(0, MAIN_ETA)], {
+			...CONTENT,
+			passed: { lineName: "341" },
+		});
+		expect(model.card.status).toBe("341번이 지나갔어요");
+		expect(model.card.detail).toBe("다음 차 08:03 · 천호역.현대백화점");
+		expect(model.card.minutes).toBe("3분");
+	});
+
+	it("says the bus waits to depart at the route origin", () => {
+		const model = active([view(0, MAIN_ETA)], {
+			...CONTENT,
+			awaitingDeparture: true,
+			etaState: "estimated",
+			stopsAway: null,
+		});
+		expect(model.card.status).toBe("출발 대기 중");
+	});
+
 	it("draws the same card as the lock screen", () => {
 		const model = active([view(0, MAIN_ETA)]);
 		expect(model.card).toEqual(
@@ -478,6 +498,19 @@ describe("guideTitle", () => {
 
 describe("sessionStripModel", () => {
 	const place = placeOf();
+
+	it("keeps the minutes next to a passed bus", () => {
+		const strip = sessionStripModel({
+			now: NOW,
+			places: [place],
+			session: sessionOf([view(0, MAIN_ETA)], {
+				content: { ...CONTENT, passed: { lineName: "341" } },
+			}),
+			t,
+			timezone: TIMEZONE,
+		});
+		expect(strip?.status).toBe("341번이 지나갔어요 · 3분");
+	});
 
 	it("points at the place of the running session", () => {
 		expect(

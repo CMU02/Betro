@@ -1209,6 +1209,30 @@ describe("RunnerCore 도착판", () => {
 		}
 	});
 
+	test("다음 차가 기점에서 출발 대기 중이면 푸시와 진행 중 세션에 awaitingDeparture가 실리고, 그대로면 다시 보내지 않는다", async () => {
+		const h = harness();
+		addAndroid(h);
+		// 노선에 달리는 차량이 없고 모든 정류장의 칸이 "출발대기"다(2026-11-12 6411 기점).
+		h.boards.handler = () =>
+			routeStops([], h.clock.now, h.clock.now).map((stop) => ({
+				...stop,
+				awaitingDeparture: true,
+			}));
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const first = contentOf(h.push.sent.at(-1) as SentRequest);
+		expect(first.awaitingDeparture).toBe(true);
+		expect(first.stopsAway).toBeNull();
+		expect(first.positionState).toBe("live");
+		expect(
+			(await core.activeSession(ANDROID_INSTALL))?.content.awaitingDeparture
+		).toBe(true);
+
+		const before = h.push.sent.length;
+		await tickAt(h, core, T0 + 20 * SECOND);
+		expect(h.push.sent.length).toBe(before);
+	});
+
 	test("버스는 탈 차량이 10분 뒤면 60초, 5분 뒤면 30초마다 부른다", async () => {
 		const h = harness();
 		addAndroid(h);
