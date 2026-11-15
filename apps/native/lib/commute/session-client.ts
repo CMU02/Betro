@@ -195,6 +195,21 @@ export function settleActiveSession(
 }
 
 /**
+ * 서버가 지난 세션 없이 답했으면 그 세션 ID. 그 세션의 잠금화면 알림을 지우는 데 쓴다(끝 푸시를
+ * 놓쳤을 때). 연결을 확인하는 중이거나 지난 세션이 없거나 같은 세션이면 null.
+ */
+export function endedSessionId(
+	previous: ActiveSessionState | undefined,
+	next: ActiveSessionState
+): string | null {
+	const last = previous?.session?.sessionId;
+	if (next.checking || last === undefined || next.session?.sessionId === last) {
+		return null;
+	}
+	return last;
+}
+
+/**
  * "안내 종료" 뒤에 할 일. 화면을 미리 바꾸지 않고 서버 값을 다시 받는다.
  * 이미 끝난 세션이면 세션 없음으로 바꾸고, 보내지 못했으면 다시 누르라고 한다.
  */

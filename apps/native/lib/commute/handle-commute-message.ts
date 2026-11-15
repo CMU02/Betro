@@ -77,11 +77,16 @@ export async function handleCommuteMessage(
 	if (data.type !== "commute" || !sessionId || !planId) {
 		return "ignored";
 	}
+	// 끝내는 데는 sessionId만 있으면 된다. 값을 읽지 못해도 알림이 남지 않게 먼저 본다.
+	if (event === "end") {
+		deps.notifier.end(sessionId);
+		return "ended";
+	}
 	const state = parseContentState(parseJson(data.state));
 	if (state === null) {
 		return "ignored";
 	}
-	if (event === "end" || state.stage === "ended") {
+	if (state.stage === "ended") {
 		deps.notifier.end(sessionId);
 		return "ended";
 	}

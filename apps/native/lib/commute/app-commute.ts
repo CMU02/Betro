@@ -7,7 +7,11 @@ import { appPlaces } from "@/lib/places/app-places";
 import { planHeaderOf } from "@/lib/places/plan-headers";
 import { ensureRegistered, serverClient } from "@/lib/server/app-server";
 import { CommuteNotification } from "@/modules/commute-notification";
-import { handleCommuteAction, registerFcmToken } from "./handle-commute-action";
+import {
+	createFcmTokenSender,
+	handleCommuteAction,
+	registerFcmToken,
+} from "./handle-commute-action";
 import {
 	type CommuteMessageResult,
 	handleCommuteMessage,
@@ -44,6 +48,18 @@ export async function handleAppCommuteMessage(
 	}
 }
 
+/** 앱이 세션이 끝난 것을 알았을 때 Android 진행 중 알림을 지운다. 다른 플랫폼에서는 아무것도 하지 않는다. */
+export function clearAppCommuteNotification(sessionId: string): void {
+	if (Platform.OS !== "android" || CommuteNotification === null) {
+		return;
+	}
+	try {
+		CommuteNotification.end(sessionId);
+	} catch (error) {
+		reportError(appCrashSink, error, "commute-notification");
+	}
+}
+
 /** 알림의 "종료"(헤드리스 태스크). 던지지 않는다. */
 export async function runCommuteAction(data: {
 	kind?: unknown;
@@ -67,17 +83,26 @@ export async function runCommuteAction(data: {
 	}
 }
 
-/** 설치 등록이 끝난 뒤 Android FCM 토큰을 서버에 보낸다. 실패해도 던지지 않고 다음 실행에서 다시 보낸다. */
-export async function registerAppFcmToken(token: string): Promise<void> {
-	if (Platform.OS !== "android") {
-		return;
-	}
+const sendAppFcmToken = createFcmTokenSender(async (token) => {
 	try {
 		const registered = await ensureRegistered();
-		if (registered === "registered" || registered === "already") {
-			await registerFcmToken(serverClient, token);
+		if (registered !== "registered" && registered !== "already") {
+			return false;
 		}
+		return await registerFcmToken(serverClient, token);
 	} catch (error) {
 		reportError(appCrashSink, error, "fcm-token");
+		return false;
 	}
+});
+
+/**
+ * 설치 등록이 끝난 뒤 Android FCM 토큰을 서버에 보낸다. 던지지 않는다. 서버가 받을 때까지
+ * 부를 때마다 다시 보내므로 토큰이 바뀔 때, 앱이 앞으로 올 때, 연결이 돌아올 때 부른다.
+ */
+export function registerAppFcmToken(token: string): Promise<void> {
+	if (Platform.OS !== "android") {
+		return Promise.resolve();
+	}
+	return sendAppFcmToken(token);
 }

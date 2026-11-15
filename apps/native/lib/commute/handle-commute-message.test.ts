@@ -134,6 +134,19 @@ it("ends the notification on an end event or an ended stage", async () => {
 	expect(second.shown).toEqual([]);
 });
 
+it("ends the notification on an end event even when the state cannot be read", async () => {
+	const { deps, ended, shown } = setup();
+
+	const results = await Promise.all(
+		["not json", JSON.stringify({ v: 2 }), ""].map((broken) =>
+			handleCommuteMessage({ ...data("end"), state: broken }, deps)
+		)
+	);
+	expect(results).toEqual(["ended", "ended", "ended"]);
+	expect(ended).toEqual(["session-1", "session-1", "session-1"]);
+	expect(shown).toEqual([]);
+});
+
 it("reports stale when the notifier refuses an older seq or an ended session", async () => {
 	const { calls, deps } = setup({ shows: false });
 
