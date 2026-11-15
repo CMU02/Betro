@@ -5,6 +5,10 @@
 "commute.lock.detail.eta" = "{stop} · {eta} 도착";
 "commute.lock.detail.etaEstimated" = "{stop} · 약 {eta} 도착";
 "commute.lock.detail.noEta" = "{stop}";
+"commute.lock.detail.passedBus" = "다음 차 {eta} · {stop}";
+"commute.lock.detail.passedBusEstimated" = "다음 차 약 {eta} · {stop}";
+"commute.lock.detail.passedSubway" = "다음 열차 {eta} · {stop}";
+"commute.lock.detail.passedSubwayEstimated" = "다음 열차 약 {eta} · {stop}";
 "commute.lock.header.fallback" = "출퇴근";
 "commute.lock.minutes.soon" = "곧";
 "commute.lock.minutes.value" = "{m}분";
@@ -15,8 +19,8 @@
 "commute.lock.status.arrived" = "{stop} 도착";
 "commute.lock.status.arriving" = "곧 도착";
 "commute.lock.status.beforeLeave" = "{leave}에 나가세요";
-"commute.lock.status.passedBus" = "{passedLine}번이 지나갔어요 · 다음 차 {eta}";
-"commute.lock.status.passedSubway" = "{passedLine} 열차가 지나갔어요 · 다음 열차 {eta}";
+"commute.lock.status.passedBus" = "{passedLine}번이 지나갔어요";
+"commute.lock.status.passedSubway" = "{passedLine} 열차가 지나갔어요";
 "commute.lock.status.ride" = "하차까지 {n}정거장";
 "commute.lock.status.rideLast" = "이번에 내려요";
 "commute.lock.status.rideUnknown" = "이동 중";

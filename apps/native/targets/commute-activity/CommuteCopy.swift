@@ -117,11 +117,11 @@ public enum CommuteCopy {
     clock: (Double) -> String,
     t: Translate
   ) -> String {
-    if let passed = state.passed, let etaEpoch = state.etaEpoch {
+    if let passed = state.passed, state.etaEpoch != nil {
       let key = state.mode == "subway"
         ? "commute.lock.status.passedSubway"
         : "commute.lock.status.passedBus"
-      return t(key, ["eta": clock(etaEpoch), "passedLine": passed.lineName])
+      return t(key, ["passedLine": passed.lineName])
     }
     if let leave = beforeLeave(state, now: now) {
       return t("commute.lock.status.beforeLeave", ["leave": clock(leave.leaveEpoch)])
@@ -142,12 +142,28 @@ public enum CommuteCopy {
     return t("commute.lock.status.arrived", ["stop": state.stopName])
   }
 
+  /// 지나간 차 다음 차의 시각은 상태 줄이 아니라 상세 줄에 둔다(Figma `1구간 지나감`).
+  static func passedDetailKey(_ state: CommuteActivityAttributes.ContentState) -> String {
+    let estimated = state.etaState != "live"
+    if state.mode == "subway" {
+      return estimated
+        ? "commute.lock.detail.passedSubwayEstimated"
+        : "commute.lock.detail.passedSubway"
+    }
+    return estimated
+      ? "commute.lock.detail.passedBusEstimated"
+      : "commute.lock.detail.passedBus"
+  }
+
   static func detailLine(
     _ state: CommuteActivityAttributes.ContentState,
     now: Double,
     clock: (Double) -> String,
     t: Translate
   ) -> String {
+    if showsPassed(state), let etaEpoch = state.etaEpoch {
+      return t(passedDetailKey(state), ["eta": clock(etaEpoch), "stop": state.stopName])
+    }
     if let leave = beforeLeave(state, now: now) {
       return t("commute.lock.detail.beforeLeave", ["eta": clock(leave.etaEpoch), "stop": state.stopName])
     }

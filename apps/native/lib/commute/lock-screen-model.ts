@@ -82,11 +82,7 @@ function beforeLeaveOf(
 	return { etaEpoch, leaveEpoch };
 }
 
-function statusLine(
-	state: ContentState,
-	deps: LockScreenDeps,
-	clock: (epoch: number) => string
-): string {
+function statusLine(state: ContentState, deps: LockScreenDeps): string {
 	const { t, now } = deps;
 	const { etaEpoch, stage } = state;
 	if (state.passed && etaEpoch !== null) {
@@ -94,15 +90,12 @@ function statusLine(
 			state.mode === "subway"
 				? "commute.lock.status.passedSubway"
 				: "commute.lock.status.passedBus";
-		return t(passedKey, {
-			eta: clock(etaEpoch),
-			passedLine: state.passed.lineName,
-		});
+		return t(passedKey, { passedLine: state.passed.lineName });
 	}
 	const beforeLeave = beforeLeaveOf(state, now);
 	if (beforeLeave) {
 		return t("commute.lock.status.beforeLeave", {
-			leave: clock(beforeLeave.leaveEpoch),
+			leave: formatClock(beforeLeave.leaveEpoch, deps.timezone),
 		});
 	}
 	const stops = knownStops(state.stopsAway);
@@ -125,12 +118,31 @@ function statusLine(
 	return t("commute.lock.status.arrived", { stop: state.stopName });
 }
 
+/** 지나간 차 다음 차의 시각은 상태 줄이 아니라 상세 줄에 둔다(Figma `1구간 지나감`). */
+function passedDetailKey(state: ContentState): MessageKey {
+	const estimated = state.etaState !== "live";
+	if (state.mode === "subway") {
+		return estimated
+			? "commute.lock.detail.passedSubwayEstimated"
+			: "commute.lock.detail.passedSubway";
+	}
+	return estimated
+		? "commute.lock.detail.passedBusEstimated"
+		: "commute.lock.detail.passedBus";
+}
+
 function detailLine(
 	state: ContentState,
 	deps: LockScreenDeps,
 	clock: (epoch: number) => string
 ): string {
 	const { t } = deps;
+	if (showsPassed(state) && state.etaEpoch !== null) {
+		return t(passedDetailKey(state), {
+			eta: clock(state.etaEpoch),
+			stop: state.stopName,
+		});
+	}
 	const beforeLeave = beforeLeaveOf(state, deps.now);
 	if (beforeLeave) {
 		return t("commute.lock.detail.beforeLeave", {
@@ -252,7 +264,7 @@ export function lockScreenModel(
 		mode: state.mode,
 		moreLegs: moreLegsLine(state, deps.t),
 		nextLegs: nextLegLines(state, deps.t, clock),
-		status: statusLine(state, deps, clock),
+		status: statusLine(state, deps),
 		suggestion: suggestionLine(state, deps),
 		tag,
 		tagLabel: deps.t(`commute.lock.tag.${tag}`),
