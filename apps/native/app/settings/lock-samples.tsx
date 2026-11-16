@@ -32,38 +32,26 @@ function SampleRow({ index, sample }: { index: number; sample: LockSample }) {
 	);
 }
 
-/** `?show=17` 또는 `?show=17,31`의 사례 번호. 범위 밖이거나 숫자가 아니면 뺀다. */
-function shownIndexes(show: string | undefined): number[] {
-	if (show === undefined) {
-		return [];
-	}
-	return show
-		.split(",")
-		.map((part) => Number(part))
-		.filter(
-			(index) => Number.isInteger(index) && index >= 0 && index < SAMPLES.length
-		);
+/** `?show=17`의 사례 번호. 범위 밖이거나 숫자가 아니면 null. */
+function shownIndex(show: string | undefined): number | null {
+	const index = Number(show);
+	return show !== undefined &&
+		Number.isInteger(index) &&
+		index >= 0 &&
+		index < SAMPLES.length
+		? index
+		: null;
 }
 
-/**
- * 기기를 손대지 않고 표본을 띄우는 링크(`Betro://settings/lock-samples?show=17`). 여러 번호를 주면
- * 모두 띄운다(iOS 다이내믹 아일랜드 Minimal은 Activity가 둘일 때만 보인다).
- */
+/** 기기를 손대지 않고 표본을 띄우는 링크(`Betro://settings/lock-samples?show=17`). 맥에서 `devicectl`로 연다. */
 function useShowFromLink(): void {
 	const { show } = useLocalSearchParams<{ show?: string }>();
 	useEffect(() => {
-		// 차례대로 띄워야 첫 표본이 앞의 것을 끝내는 규칙과 겹치지 않는다.
-		const run = shownIndexes(show).reduce<Promise<void>>(
-			(previous, index, order) =>
-				previous.then(() => {
-					const sample = SAMPLES[index];
-					return sample === undefined
-						? undefined
-						: lockSamplePresenter?.show(sample, index, order > 0);
-				}),
-			Promise.resolve()
-		);
-		run.catch(reportFailure);
+		const index = shownIndex(show);
+		const sample = index === null ? undefined : SAMPLES[index];
+		if (index !== null && sample !== undefined) {
+			lockSamplePresenter?.show(sample, index).catch(reportFailure);
+		}
 	}, [show]);
 }
 
