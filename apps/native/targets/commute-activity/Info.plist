@@ -7,5 +7,12 @@
       <key>NSExtensionPointIdentifier</key>
       <string>com.apple.widgetkit-extension</string>
     </dict>
+    <!-- 앱과 같은 Noto Sans KR(assets/fonts의 심볼릭 링크). 확장은 앱 번들의 글꼴을 쓰지 못한다. -->
+    <key>UIAppFonts</key>
+    <array>
+      <string>NotoSansKR-Regular.ttf</string>
+      <string>NotoSansKR-Medium.ttf</string>
+      <string>NotoSansKR-Bold.ttf</string>
+    </array>
   </dict>
 </plist>

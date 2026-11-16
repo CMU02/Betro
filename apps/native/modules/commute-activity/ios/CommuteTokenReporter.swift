@@ -69,10 +69,24 @@ final class CommuteTokenReporter {
       for activity in Activity<CommuteActivityAttributes>.activities {
         self?.watch(activity)
       }
+      await Self.endAllButNewest()
       for await activity in Activity<CommuteActivityAttributes>.activityUpdates {
         self?.watch(activity)
+        await Self.endAllButNewest()
       }
     })
+  }
+
+  /// 잠금화면과 다이내믹 아일랜드의 Betro 안내는 하나다. 가장 최근에 보낸 값(`sentAt`)의 Activity만 남기고
+  /// 나머지는 바로 끝낸다. 끝 푸시를 놓친 지난 세션이나 겹친 시작 푸시로 둘 이상 뜨지 않게 한다
+  /// (Android는 알림 하나(ID 4101)를 덮어써서 늘 하나다). 시작 푸시가 앱을 깨울 때와 앱 시작 때 돈다.
+  static func endAllButNewest() async {
+    let shown = Activity<CommuteActivityAttributes>.activities
+      .filter { $0.activityState == .active || $0.activityState == .stale }
+    guard let newest = shown.max(by: { $0.content.state.sentAt < $1.content.state.sentAt }) else { return }
+    for activity in shown where activity.id != newest.id {
+      await activity.end(nil, dismissalPolicy: .immediate)
+    }
   }
 
   /// 인증값이 새로 생기거나 바뀌었을 때 마지막 토큰들을 (아직 보내지 않았으면) 보낸다.

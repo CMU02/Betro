@@ -33,7 +33,8 @@
       "!**/convex/_generated",
       "!data",
       "!**/migrations/**/snapshot.json",
-      "!.claude/skills"
+      "!.claude/skills",
+      "!**/*.xcassets/**/*.svg"
     ]
   },
   "formatter": {

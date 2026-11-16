@@ -967,6 +967,27 @@ describe("RunnerCore 푸시 응답", () => {
 		expect(await sessions(h)).toHaveLength(0);
 	});
 
+	test("같은 기기에 새 세션이 열리면 앞의 세션에 종료를 보내고 replaced로 닫는다", async () => {
+		const h = harness();
+		addAndroid(h);
+		const later = makePlan(PLAN_ANDROID_2);
+		later.schedule.leaveMinute += 2;
+		h.db.addPlan(ANDROID_INSTALL, later);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [firstId] = await onlySession(h);
+		await tickAt(h, core, T0 + 2 * MINUTE);
+
+		const ends = h.push.sent.filter((sent) => fcmDataOf(sent).event === "end");
+		expect(ends).toHaveLength(1);
+		expect(fcmDataOf(ends[0] as SentRequest).sessionId).toBe(firstId);
+		const first = h.db.sessions.get(firstId);
+		expect(first?.status).toBe("ended");
+		expect(first?.endReason).toBe("replaced");
+		const [, entry] = await onlySession(h);
+		expect(entry.state.planId).toBe(PLAN_ANDROID_2);
+	});
+
 	test("ExpiredProviderToken이면 JWT를 새로 만들어 같은 tick에 한 번 다시 보낸다", async () => {
 		const sign = spyOn(crypto.subtle, "sign");
 		try {
@@ -1207,6 +1228,30 @@ describe("RunnerCore 도착판", () => {
 				(sentAts[i] as number) - (sentAts[i - 1] as number)
 			).toBeLessThanOrEqual(120);
 		}
+	});
+
+	test("다음 차가 기점에서 출발 대기 중이면 푸시와 진행 중 세션에 awaitingDeparture가 실리고, 그대로면 다시 보내지 않는다", async () => {
+		const h = harness();
+		addAndroid(h);
+		// 노선에 달리는 차량이 없고 모든 정류장의 칸이 "출발대기"다(2026-11-12 6411 기점).
+		h.boards.handler = () =>
+			routeStops([], h.clock.now, h.clock.now).map((stop) => ({
+				...stop,
+				awaitingDeparture: true,
+			}));
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const first = contentOf(h.push.sent.at(-1) as SentRequest);
+		expect(first.awaitingDeparture).toBe(true);
+		expect(first.stopsAway).toBeNull();
+		expect(first.positionState).toBe("live");
+		expect(
+			(await core.activeSession(ANDROID_INSTALL))?.content.awaitingDeparture
+		).toBe(true);
+
+		const before = h.push.sent.length;
+		await tickAt(h, core, T0 + 20 * SECOND);
+		expect(h.push.sent.length).toBe(before);
 	});
 
 	test("버스는 탈 차량이 10분 뒤면 60초, 5분 뒤면 30초마다 부른다", async () => {

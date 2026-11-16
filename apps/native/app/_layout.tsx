@@ -16,6 +16,7 @@ import { AppText } from "@/components/ui/app-text";
 import { Screen } from "@/components/ui/screen";
 import { AppThemeProvider, useAppTheme } from "@/contexts/app-theme-context";
 import { passActivityCredentials } from "@/lib/commute/activity-credentials";
+import { showLockSamples } from "@/lib/commute/lock-sample-presenter";
 import { appCrashSink } from "@/lib/crash/app-crash-reporting";
 import {
 	configureCrashReporting,
@@ -173,6 +174,10 @@ function StackLayout() {
 					<Stack.Screen name="places/[placeId]" />
 					<Stack.Screen name="places/leg" />
 					<Stack.Screen name="commute/[placeId]" />
+				</Stack.Protected>
+				{/* 개발용 표본 화면은 EXPO_PUBLIC_LOCK_SAMPLES=1일 때만 열린다(딥링크로도). */}
+				<Stack.Protected guard={!showOnboarding && showLockSamples}>
+					<Stack.Screen name="settings/lock-samples" />
 				</Stack.Protected>
 				<Stack.Protected guard={showOnboarding}>
 					<Stack.Screen name="onboarding" />

@@ -24,6 +24,11 @@ export interface NextLegContent {
 
 /** 푸시로 보내는 값 v1(스펙 5.3). 시각은 epoch 초. 문장은 기기가 만든다. */
 export interface ContentState {
+	/**
+	 * walk·wait에서 탈 차량이 아직 노선 기점에서 출발을 기다린다. 기기는 "위치 확인 중" 대신
+	 * "출발 대기 중"을 보인다. 아니면 키가 없다(배포된 옛 앱은 모르는 키를 무시한다).
+	 */
+	awaitingDeparture?: true;
 	/** 처음 계산한 목적지 도착보다 늦어진 분(0 이상). */
 	delayMinutes: number;
 	/** 목적지 도착 예상. */
@@ -200,8 +205,10 @@ export function buildContent(
 		? null
 		: (legEstimate?.stopsAway ?? null);
 	const showsLeave = state.stage === "walk" && legIndex === 0;
+	const awaitingDeparture = boarding && legEstimate?.awaitingDeparture === true;
 
 	return {
+		...(awaitingDeparture ? { awaitingDeparture } : {}),
 		delayMinutes: delayMinutesOf(state, primary),
 		destinationEtaEpoch: toEpochOrNull(primary?.destinationEtaAt),
 		etaEpoch: toEpochOrNull(etaAt),
@@ -272,6 +279,7 @@ function isStageChange(prev: ContentState, next: ContentState): boolean {
 
 function isValueChange(prev: ContentState, next: ContentState): boolean {
 	return (
+		prev.awaitingDeparture !== next.awaitingDeparture ||
 		prev.stopsAway !== next.stopsAway ||
 		minuteOf(prev.etaEpoch) !== minuteOf(next.etaEpoch) ||
 		prev.positionState !== next.positionState ||
