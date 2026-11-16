@@ -20,6 +20,7 @@ class ShowRecord : Record {
   @Field val channelName: String = ""
   @Field val content: ContentRecord = ContentRecord()
   @Field val endLabel: String = ""
+  @Field val planId: String = ""
   @Field val seq: Double = 0.0
   @Field val sessionId: String = ""
 }
@@ -36,6 +37,7 @@ class CommuteNotificationModule : Module() {
       CommuteNotifier.show(
         context,
         input.sessionId,
+        input.planId,
         input.seq.toLong(),
         CommuteContent(
           title = input.content.title,

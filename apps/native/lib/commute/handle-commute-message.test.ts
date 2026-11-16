@@ -98,6 +98,7 @@ it("shows a start message and acknowledges it once with a ms timestamp", async (
 	expect(shown[0]?.content.title).toBe("6411 · 2정거장 전");
 	expect(shown[0]?.content.header).toBe("출근 · 회사까지");
 	expect(shown[0]?.endLabel).toBe("종료");
+	expect(shown[0]?.planId).toBe("plan-1");
 	expect(calls).toEqual([
 		{
 			body: { shownAt: NOW_MS },

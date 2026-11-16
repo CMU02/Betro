@@ -6,6 +6,8 @@ export interface ShowInput {
 	channelName: string;
 	content: NotificationContent;
 	endLabel: string;
+	/** 알림을 누르면 이 예약의 17을 연다(`Betro://commute?plan=`). */
+	planId: string;
 	seq: number;
 	sessionId: string;
 }

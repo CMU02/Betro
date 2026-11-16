@@ -12,6 +12,8 @@ export interface ShowRequest {
 	channelName: string;
 	content: NotificationContent;
 	endLabel: string;
+	/** 알림을 누르면 이 예약의 17을 연다(`Betro://commute?plan=`). */
+	planId: string;
 	seq: number;
 	sessionId: string;
 }
@@ -106,6 +108,7 @@ export async function handleCommuteMessage(
 		channelName: deps.t("commute.notification.channel"),
 		content: notificationContent(model),
 		endLabel: deps.t("commute.lock.action.end"),
+		planId,
 		seq: state.seq,
 		sessionId,
 	});

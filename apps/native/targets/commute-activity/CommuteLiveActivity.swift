@@ -28,6 +28,7 @@ struct CommuteLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: CommuteActivityAttributes.self) { context in
       CommuteLockScreenView(model: Self.model(for: context), state: context.state)
+        .widgetURL(Self.guideURL(planId: context.attributes.planId))
     } dynamicIsland: { context in
       let model = Self.model(for: context)
       return DynamicIsland {
@@ -44,7 +45,17 @@ struct CommuteLiveActivity: Widget {
       } minimal: {
         CommuteIsland.minimal(model: model)
       }
+      .widgetURL(Self.guideURL(planId: context.attributes.planId))
     }
+  }
+
+  /// 누르면 그 장소의 17 출퇴근 안내를 연다(TS `guideLink`와 같은 모양).
+  static func guideURL(planId: String) -> URL? {
+    var components = URLComponents()
+    components.scheme = "Betro"
+    components.host = "commute"
+    components.queryItems = [URLQueryItem(name: "plan", value: planId)]
+    return components.url
   }
 
   /// 머리줄은 앱이 `setPlanHeaders`로 앱 그룹에 둔 값이고, 없으면 "출퇴근"이다.

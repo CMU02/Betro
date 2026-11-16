@@ -64,6 +64,7 @@ function androidPresenter(): LockSamplePresenter | null {
 				channelName: t("commute.notification.channel"),
 				content: notificationContent(model),
 				endLabel: t("commute.lock.action.end"),
+				planId: SAMPLE_PLAN_ID,
 				seq: 1,
 				sessionId,
 			});

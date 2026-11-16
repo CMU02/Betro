@@ -43,6 +43,7 @@ object CommuteNotifier {
   fun show(
     context: Context,
     sessionId: String,
+    planId: String,
     seq: Long,
     content: CommuteContent,
     endLabel: String,
@@ -57,7 +58,7 @@ object CommuteNotifier {
     }
     val manager = context.getSystemService(NotificationManager::class.java)
     ensureChannel(manager, channelName)
-    manager.notify(NOTIFICATION_ID, build(context, sessionId, content, endLabel))
+    manager.notify(NOTIFICATION_ID, build(context, sessionId, planId, content, endLabel))
     prefs.edit().putString(KEY_SESSION, sessionId).putLong(KEY_SEQ, seq).apply()
     return true
   }
@@ -95,8 +96,10 @@ object CommuteNotifier {
   private fun expandedText(content: CommuteContent): String =
     (listOf(content.body) + content.lines).joinToString("\n")
 
-  private fun openIntent(context: Context): PendingIntent {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(OPEN_URI)).setPackage(context.packageName)
+  /** 누르면 그 장소의 17 출퇴근 안내를 연다(TS `guideLink`와 같은 모양). */
+  private fun openIntent(context: Context, planId: String): PendingIntent {
+    val uri = Uri.parse(OPEN_URI).buildUpon().appendQueryParameter("plan", planId).build()
+    val intent = Intent(Intent.ACTION_VIEW, uri).setPackage(context.packageName)
     return PendingIntent.getActivity(
       context,
       0,
@@ -120,6 +123,7 @@ object CommuteNotifier {
   private fun build(
     context: Context,
     sessionId: String,
+    planId: String,
     content: CommuteContent,
     endLabel: String,
   ): Notification {
@@ -136,7 +140,7 @@ object CommuteNotifier {
         .setStyle(Notification.BigTextStyle().bigText(expanded))
         .setOngoing(true)
         .setOnlyAlertOnce(true)
-        .setContentIntent(openIntent(context))
+        .setContentIntent(openIntent(context, planId))
         .addAction(Notification.Action.Builder(null, endLabel, endIntent(context, sessionId)).build())
       if (countdownAt != null) {
         builder.setWhen(countdownAt)
@@ -164,7 +168,7 @@ object CommuteNotifier {
       .setOngoing(true)
       .setOnlyAlertOnce(true)
       .setPriority(NotificationCompat.PRIORITY_HIGH)
-      .setContentIntent(openIntent(context))
+      .setContentIntent(openIntent(context, planId))
       .addAction(0, endLabel, endIntent(context, sessionId))
     if (countdownAt != null) {
       builder.setWhen(countdownAt)
