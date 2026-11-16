@@ -374,6 +374,13 @@
 - 다이내믹 아일랜드 Compact(2026-11-16, 미러링 끄고): 맥에서 `xcrun devicectl device process launch --payload-url "Betro://settings/lock-samples?show=17" com.cmu02.betro`로 표본을 띄우고 다른 앱(날씨)을 열어 앱을 뒤로 보냈다. 배지 "146"과 "7:54"가 넘치지 않는다(`1ad84fe`에서 링크를 더함).
 - 남은 것: Expanded(아일랜드를 길게 눌러야 해서 손이 필요), Minimal(다른 앱의 Live Activity가 함께 있어야 보인다. 같은 앱의 Activity 둘은 하나만 보인다). 제안 줄의 분은 푸시 때만 바뀐다(타이머 대상 아님).
 
+#### 안내는 기기마다 하나 (2026-11-16, 사용자 결정)
+
+잠금화면과 아일랜드의 Betro 안내는 늘 하나다.
+- iOS(`477c16f`): 앱 시작 때와 새 Activity가 생길 때 `sentAt`이 가장 늦은 것만 남기고 나머지를 바로 끝낸다(`CommuteTokenReporter.endAllButNewest`). 끝 푸시를 놓친 지난 세션 위에 새 시작 푸시가 쌓이지 않는다. Android는 알림 ID 4101 하나를 덮어써서 원래 하나다.
+- 서버(`d25b2fa`): 같은 설치에 새 세션이 열리면 앞의 진행 중 세션에 종료를 보내고 `replaced`로 닫는다(예약 시각이 겹치는 경로 둘). `EndReason`에 `replaced`를 더했다(D1 `end_reason`은 text라 마이그레이션 없음).
+- 배포: `betro-server` 버전 `5fd71539`(이 브랜치 `d25b2fa`, 아직 push 전), 되돌릴 버전 `e66711cc`. 배포 뒤 `GET /`, `/v1/ref/subway/lines`, `/v1/ref/bus/routes` 200. 이 배포로 "출발 대기 중"(`awaitingDeparture`)도 함께 나간다.
+
 - [ ] **Step 2: 시나리오**(기기마다, 2-E 화면으로 몇 분 뒤 시작하는 경로를 등록)
 
   | # | 상태 | 기대 |
