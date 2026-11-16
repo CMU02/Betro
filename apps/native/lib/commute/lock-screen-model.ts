@@ -92,6 +92,22 @@ function awaitsDeparture(state: ContentState): boolean {
 	return state.awaitingDeparture === true && state.positionState === "live";
 }
 
+/**
+ * "출발 대기 중"을 쓰는 경우(지나갔어요·나가기 전이 아니고, walk·wait에서 정거장 수를 모름).
+ * 이때 탈 시각은 차량 없이 "준비된 시각 + 배차간격"으로 낸 값이라 1분마다 같이 밀린다(2026-11-16 기기 확인).
+ * 그래서 시각·남은 시간·타이머를 보이지 않고 정류장 이름만 둔다.
+ */
+function showsAwaitingDeparture(state: ContentState, now: number): boolean {
+	const waiting = state.stage === "walk" || state.stage === "wait";
+	return (
+		waiting &&
+		awaitsDeparture(state) &&
+		knownStops(state.stopsAway) === null &&
+		!showsPassed(state) &&
+		beforeLeaveOf(state, now) === null
+	);
+}
+
 function statusLine(state: ContentState, deps: LockScreenDeps): string {
 	const { t, now } = deps;
 	const { etaEpoch, stage } = state;
@@ -281,13 +297,17 @@ export function lockScreenModel(
 ): LockScreenModel {
 	const clock = (epoch: number) => formatClock(epoch, deps.timezone);
 	const tag = tagOf(state);
+	// 상세·남은 시간은 출발 대기 중이면 시각 없이 그린다. 상태 줄은 원래 값으로 정한다.
+	const timed = showsAwaitingDeparture(state, deps.now)
+		? { ...state, etaEpoch: null }
+		: state;
 	return {
 		actions: actionsOf(deps.platform),
-		countdownEpoch: countdownEpochOf(state, deps.now),
-		detail: detailLine(state, deps, clock),
+		countdownEpoch: countdownEpochOf(timed, deps.now),
+		detail: detailLine(timed, deps, clock),
 		header: deps.header ?? deps.t("commute.lock.header.fallback"),
 		lineName: state.lineName,
-		minutes: minutesLabel(state, deps),
+		minutes: minutesLabel(timed, deps),
 		mode: state.mode,
 		moreLegs: moreLegsLine(state, deps.t),
 		nextLegs: nextLegLines(state, deps.t, clock),

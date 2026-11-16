@@ -50,16 +50,21 @@ public enum CommuteCopy {
     let nowEpoch = now.timeIntervalSince1970
     let clock = clockFormatter(timeZone: timeZone)
     let tag = tagOf(state)
+    // 상세·남은 시간은 출발 대기 중이면 시각 없이 그린다. 상태 줄은 원래 값으로 정한다.
+    var timed = state
+    if showsAwaitingDeparture(state, now: nowEpoch) {
+      timed.etaEpoch = nil
+    }
     return CommuteLockModel(
-      detail: detailLine(state, now: nowEpoch, clock: clock, t: t),
+      detail: detailLine(timed, now: nowEpoch, clock: clock, t: t),
       header: header ?? t("commute.lock.header.fallback", [:]),
       lineName: state.lineName,
       mode: state.mode,
       status: statusLine(state, now: nowEpoch, clock: clock, t: t),
       tag: tag,
       tagLabel: t("commute.lock.tag.\(tag)", [:]),
-      minutes: minutesLabel(state, now: nowEpoch, t: t),
-      countdownEpoch: countdownEpoch(state, now: nowEpoch),
+      minutes: minutesLabel(timed, now: nowEpoch, t: t),
+      countdownEpoch: countdownEpoch(timed, now: nowEpoch),
       suggestion: suggestionLine(state, now: nowEpoch, t: t),
       moreLegs: moreLegsLine(state, t: t),
       nextLegs: nextLegLines(state, clock: clock, t: t)
@@ -99,6 +104,16 @@ public enum CommuteCopy {
   /// 새 도착판에서 탈 차량이 아직 기점에서 떠나지 않았다. 묵은 위치에서는 "위치 확인 중"을 둔다.
   static func awaitsDeparture(_ state: CommuteActivityAttributes.ContentState) -> Bool {
     state.awaitingDeparture == true && state.positionState == "live"
+  }
+
+  /// "출발 대기 중"을 쓰는 경우. 이때 탈 시각은 차량 없이 낸 값이라 1분마다 같이 밀려서
+  /// 시각·남은 시간·타이머를 보이지 않는다(TS `showsAwaitingDeparture`).
+  static func showsAwaitingDeparture(_ state: CommuteActivityAttributes.ContentState, now: Double) -> Bool {
+    (state.stage == "walk" || state.stage == "wait")
+      && awaitsDeparture(state)
+      && knownStops(state.stopsAway) == nil
+      && !showsPassed(state)
+      && beforeLeave(state, now: now) == nil
   }
 
   /// 첫 구간 walk 단계에서 나가는 시각이 아직 오지 않았으면 그 시각과 탑승 시각.
