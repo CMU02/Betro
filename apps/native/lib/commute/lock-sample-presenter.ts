@@ -17,9 +17,11 @@ export interface LockSamplePresenter {
 /** 표본 Activity의 `planId`. 머리줄이 없어 "출퇴근"으로 보인다(`setPlanHeaders`는 부르지 않는다). */
 const SAMPLE_PLAN_ID = "sample";
 
+/** iOS는 새 Activity가 앞의 것 아래에 쌓이므로, 표본을 띄우기 전에 앞의 표본을 끝낸다(Android처럼 하나만 보인다). */
 const iosPresenter: LockSamplePresenter = {
 	endAll: () => CommuteActivity.endAll(),
 	show: async (sample, index) => {
+		await CommuteActivity.endAll();
 		await CommuteActivity.startLocal(
 			{ planId: SAMPLE_PLAN_ID, sessionId: `sample-${index}` },
 			lockSampleState(sample, Date.now() / 1000)

@@ -295,8 +295,16 @@ struct CommuteMinutesText: View {
   let style: CommuteTextStyle
   let color: Color
 
-  /// 분이 세 자리가 되는 남은 시간(100분).
+  /// 분이 두 자리, 세 자리가 되는 남은 시간(10분, 100분).
+  private static let twoDigitSeconds: TimeInterval = 10 * 60
   private static let threeDigitSeconds: TimeInterval = 100 * 60
+
+  /// 지금 남은 분의 자릿수만큼 폭을 잡는다. "00:00"으로 늘 잡으면 "9:41" 뒤에 한 자리만큼 빈칸이 생긴다.
+  /// 다음 푸시(최대 약 2분) 전에 10분 아래로 내려가면 그동안만 한 자리 빈칸이 남는다.
+  private static func placeholder(remaining: TimeInterval) -> String {
+    if remaining >= threeDigitSeconds { return "000:00" }
+    return remaining >= twoDigitSeconds ? "00:00" : "0:00"
+  }
 
   var body: some View {
     if let end = model.countdownEpoch.map({ Date(timeIntervalSince1970: $0) }), end > Date() {
@@ -309,12 +317,11 @@ struct CommuteMinutesText: View {
     }
   }
 
-  /// 타이머 `Text`는 남는 폭을 다 차지하려 해서, 보이지 않는 자리 글자("00:00")로 폭을 정하고 그 위에 얹는다.
+  /// 타이머 `Text`는 남는 폭을 다 차지하려 해서, 보이지 않는 자리 글자("0:00" 등)로 폭을 정하고 그 위에 얹는다.
   /// 시각은 `showsHours: false`라 1시간 넘게 남아도 "75:00"처럼 분으로 센다.
   private func timer(until end: Date) -> some View {
     let now = Date()
-    let placeholder = end.timeIntervalSince(now) >= Self.threeDigitSeconds ? "000:00" : "00:00"
-    return Text(verbatim: placeholder)
+    return Text(verbatim: Self.placeholder(remaining: end.timeIntervalSince(now)))
       .monospacedDigit()
       .commuteStyle(style, color: color)
       .lineLimit(1)
