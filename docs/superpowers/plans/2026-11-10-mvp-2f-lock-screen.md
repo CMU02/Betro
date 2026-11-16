@@ -374,6 +374,18 @@
 - 다이내믹 아일랜드 Compact(2026-11-16, 미러링 끄고): 맥에서 `xcrun devicectl device process launch --payload-url "Betro://settings/lock-samples?show=17" com.cmu02.betro`로 표본을 띄우고 다른 앱(날씨)을 열어 앱을 뒤로 보냈다. 배지 "146"과 "7:54"가 넘치지 않는다(`1ad84fe`에서 링크를 더함).
 - 남은 것: Expanded(아일랜드를 길게 눌러야 해서 손이 필요), Minimal(다른 앱의 Live Activity가 함께 있어야 보인다. 같은 앱의 Activity 둘은 하나만 보인다). 제안 줄의 분은 푸시 때만 바뀐다(타이머 대상 아님).
 
+#### Step 1 기록: Android 에뮬레이터 API 36.1 (2026-11-16)
+
+이 브랜치 `assembleRelease`(R8, `EXPO_PUBLIC_LOCK_SAMPLES=1`, 운영 서버)를 새 AVD `Betro_Check_36_1`(PIN 없음)에 깔고 `adb shell am start -d 'Betro://settings/lock-samples?show=N'`과 `adb exec-out screencap`으로 봤다. 기존 `Betro_API_36_1`은 예전에 건 화면 잠금 PIN 때문에 사용자 저장소가 잠겨(`RUNNING_LOCKED`) 앱이 열리지 않아 손대지 않았다.
+- 알림이 승격된다(`flags=…PROMOTED_ONGOING`). extras: `showChronometer`·`chronometerCountDown` true, `showWhen` true, `shortCriticalText` 없음, 본문에 남은 분 없음.
+- 상태바 칩이 타이머를 센다("06:43" → 5초 뒤 "06:36"). "곧" 사례는 칩 글자 "곧", 본문 끝 " · 곧".
+- 잠금화면 카드: 머리줄 "Betro • 출퇴근 • 07:32"(타이머), 제목 "146 · 2정거장 전", 본문, 남은 구간 두 줄(둘째 끝 "외 1구간"), "종료".
+- 잠금화면에서 "종료": 앱이 열리지 않고 알림이 사라진다(표본 세션은 서버가 404, 리뷰 수정대로 지운다).
+- 0을 지나면 칩은 아이콘만 남고, 카드 머리의 타이머는 "−00:39"처럼 음수로 센다. 서버가 다음 값을 보낼 때(최대 약 2분)까지만이다. 남김(고치려면 기기에서 도착 시각에 알림을 다시 그리는 예약이 필요하다).
+- 고친 것(`267bca1`): 작은 아이콘이 앱 아이콘이라 칩과 알림에서 검은 동그라미로 보였다. 수단에 맞춰 버스·열차 그림(iOS Minimal과 같은 SVG를 벡터 드로어블로)으로 바꿨고, 칩에서 버스·열차 그림을 확인했다.
+- iOS와 다른 점: Android 타이머는 "07:52"처럼 분에 0을 붙인다(시스템 형식).
+- API 36.0(새 AVD `Betro_Check_36_0`): 승격되지 않고(`flags=ONGOING_EVENT|ONLY_ALERT_ONCE`) 일반 진행 중 알림으로 보인다. 버스 아이콘, 머리 타이머 "07:50", 오류·크래시 없음.
+
 #### 안내는 기기마다 하나 (2026-11-16, 사용자 결정)
 
 잠금화면과 아일랜드의 Betro 안내는 늘 하나다.
