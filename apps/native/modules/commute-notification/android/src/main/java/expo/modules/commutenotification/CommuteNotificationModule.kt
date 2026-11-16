@@ -12,6 +12,7 @@ class ContentRecord : Record {
   @Field val header: String = ""
   @Field val lines: List<String> = emptyList()
   @Field val chipText: String = ""
+  @Field val countdownAtMs: Double? = null
 }
 
 class ShowRecord : Record {
@@ -41,6 +42,7 @@ class CommuteNotificationModule : Module() {
           header = input.content.header,
           lines = input.content.lines,
           chipText = input.content.chipText,
+          countdownAtMs = input.content.countdownAtMs?.toLong(),
         ),
         input.endLabel,
         input.channelName,

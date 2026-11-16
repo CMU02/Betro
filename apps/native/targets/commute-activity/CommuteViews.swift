@@ -288,7 +288,48 @@ struct CommuteTitleRow: View {
   }
 }
 
-/// 남은 분(Title/3) + 상세(Body/M).
+/// 남은 시간. 끝 시각(`countdownEpoch`)이 있으면 시스템 타이머가 푸시 사이에도 거꾸로 센다("11:42").
+/// 없으면 받은 글자("곧")를 그대로 둔다. 타이머는 0:00에서 멈춘다.
+struct CommuteMinutesText: View {
+  let model: CommuteLockModel
+  let style: CommuteTextStyle
+  let color: Color
+
+  /// 분이 세 자리가 되는 남은 시간(100분).
+  private static let threeDigitSeconds: TimeInterval = 100 * 60
+
+  var body: some View {
+    if let end = model.countdownEpoch.map({ Date(timeIntervalSince1970: $0) }), end > Date() {
+      timer(until: end)
+    } else if let minutes = model.minutes {
+      Text(verbatim: minutes)
+        .commuteStyle(style, color: color)
+        .lineLimit(1)
+        .fixedSize()
+    }
+  }
+
+  /// 타이머 `Text`는 남는 폭을 다 차지하려 해서, 보이지 않는 자리 글자("00:00")로 폭을 정하고 그 위에 얹는다.
+  /// 시각은 `showsHours: false`라 1시간 넘게 남아도 "75:00"처럼 분으로 센다.
+  private func timer(until end: Date) -> some View {
+    let now = Date()
+    let placeholder = end.timeIntervalSince(now) >= Self.threeDigitSeconds ? "000:00" : "00:00"
+    return Text(verbatim: placeholder)
+      .monospacedDigit()
+      .commuteStyle(style, color: color)
+      .lineLimit(1)
+      .fixedSize()
+      .hidden()
+      .overlay(alignment: .leading) {
+        Text(timerInterval: now...end, countsDown: true, showsHours: false)
+          .monospacedDigit()
+          .commuteStyle(style, color: color)
+          .lineLimit(1)
+      }
+  }
+}
+
+/// 남은 시간(Title/3) + 상세(Body/M).
 struct CommuteDetailRow: View {
   let model: CommuteLockModel
   let stopName: String
@@ -296,12 +337,7 @@ struct CommuteDetailRow: View {
 
   var body: some View {
     HStack(spacing: CommuteLayout.detailGap) {
-      if let minutes = model.minutes {
-        Text(verbatim: minutes)
-          .commuteStyle(.title3, color: CommuteColors.textPrimary.color(scheme))
-          .lineLimit(1)
-          .fixedSize()
-      }
+      CommuteMinutesText(model: model, style: .title3, color: CommuteColors.textPrimary.color(scheme))
       CommuteStopText(
         text: model.detail,
         stopName: stopName,
@@ -463,14 +499,8 @@ enum CommuteIsland {
     CommuteLineBadge(lineName: model.lineName, mode: model.mode, size: .regular, scheme: scheme)
   }
 
-  @ViewBuilder
   static func compactTrailing(model: CommuteLockModel) -> some View {
-    if let minutes = model.minutes {
-      Text(verbatim: minutes)
-        .commuteStyle(.labelM, color: CommuteColors.textPrimary.color(scheme))
-        .lineLimit(1)
-        .fixedSize()
-    }
+    CommuteMinutesText(model: model, style: .labelM, color: CommuteColors.textPrimary.color(scheme))
   }
 
   /// Minimal: 수단 아이콘(`Icon/bus-front` 3:67, `Icon/train-front` 3:56), `text/accent` 색.

@@ -13,6 +13,11 @@ export interface LockScreenNextLeg {
 export interface LockScreenModel {
 	/** iOS는 버튼이 없고, Android는 "종료" 하나다. */
 	actions: LockScreenAction[];
+	/**
+	 * 남은 분을 시스템 타이머로 셀 때 그 끝 시각(epoch 초, 탈 차량의 도착 예정). `minutes`가 "N분"일 때만 있고,
+	 * "곧"이거나 시각이 없으면 null이다. 잠금화면은 이 값으로 푸시 사이에도 줄어드는 타이머를 그린다.
+	 */
+	countdownEpoch: number | null;
 	detail: string;
 	header: string;
 	lineName: string;
@@ -167,24 +172,38 @@ function detailLine(
 	return t(key, { eta: clock(state.etaEpoch), stop: state.stopName });
 }
 
+/** 남은 분을 보일 때 그 기준 시각. 도착했거나 끝났으면 없다. */
+function minutesEtaOf(state: ContentState): number | null {
+	if (state.stage === "arrived" || state.stage === "ended") {
+		return null;
+	}
+	return state.etaEpoch;
+}
+
 function minutesLabel(
 	state: ContentState,
 	deps: LockScreenDeps
 ): string | null {
-	if (
-		state.etaEpoch === null ||
-		state.stage === "arrived" ||
-		state.stage === "ended"
-	) {
+	const eta = minutesEtaOf(state);
+	if (eta === null) {
 		return null;
 	}
-	const remaining = state.etaEpoch - deps.now;
+	const remaining = eta - deps.now;
 	if (remaining < SECONDS_PER_MINUTE) {
 		return deps.t("commute.lock.minutes.soon");
 	}
 	return deps.t("commute.lock.minutes.value", {
 		m: Math.floor(remaining / SECONDS_PER_MINUTE),
 	});
+}
+
+/** "N분"을 보일 때만 그 끝 시각을 준다(1분 미만의 "곧"은 타이머로 바꾸지 않는다). */
+function countdownEpochOf(state: ContentState, now: number): number | null {
+	const eta = minutesEtaOf(state);
+	if (eta === null || eta - now < SECONDS_PER_MINUTE) {
+		return null;
+	}
+	return eta;
 }
 
 function tagOf(state: ContentState): LockScreenTag {
@@ -264,6 +283,7 @@ export function lockScreenModel(
 	const tag = tagOf(state);
 	return {
 		actions: actionsOf(deps.platform),
+		countdownEpoch: countdownEpochOf(state, deps.now),
 		detail: detailLine(state, deps, clock),
 		header: deps.header ?? deps.t("commute.lock.header.fallback"),
 		lineName: state.lineName,

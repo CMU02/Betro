@@ -3,9 +3,12 @@ import { expect, it } from "bun:test";
 import type { LockScreenModel } from "./lock-screen-model";
 import { notificationContent } from "./notification-content";
 
+const COUNTDOWN_EPOCH = 1_794_265_380; // 2026-11-10 08:03 KST
+
 function model(overrides: Partial<LockScreenModel> = {}): LockScreenModel {
 	return {
 		actions: ["end"],
+		countdownEpoch: COUNTDOWN_EPOCH,
 		detail: "노량진역 · 08:12 도착",
 		header: "출근 · 회사까지",
 		lineName: "6411",
@@ -21,23 +24,40 @@ function model(overrides: Partial<LockScreenModel> = {}): LockScreenModel {
 	};
 }
 
-it("puts the line and status in the title and the minutes after the detail", () => {
+it("puts the line and status in the title and hands the countdown to the system timer", () => {
 	expect(notificationContent(model())).toEqual({
-		body: "노량진역 · 08:12 도착 · 3분",
+		body: "노량진역 · 08:12 도착",
 		chipText: "3분",
+		countdownAtMs: COUNTDOWN_EPOCH * 1000,
 		header: "출근 · 회사까지",
 		lines: [],
 		title: "6411 · 2정거장 전",
 	});
 });
 
+it("keeps the soon label after the detail when there is no timer", () => {
+	const content = notificationContent(
+		model({ countdownEpoch: null, minutes: "곧" })
+	);
+
+	expect(content.body).toBe("노량진역 · 08:12 도착 · 곧");
+	expect(content.chipText).toBe("곧");
+	expect(content.countdownAtMs).toBeNull();
+});
+
 it("leaves no dangling separator and shows the line in the chip without minutes", () => {
 	const content = notificationContent(
-		model({ detail: "노량진역", minutes: null, status: "위치 확인 중" })
+		model({
+			countdownEpoch: null,
+			detail: "노량진역",
+			minutes: null,
+			status: "위치 확인 중",
+		})
 	);
 
 	expect(content.body).toBe("노량진역");
 	expect(content.chipText).toBe("6411");
+	expect(content.countdownAtMs).toBeNull();
 });
 
 it("lists up to two next legs and ends the second with the remaining count", () => {

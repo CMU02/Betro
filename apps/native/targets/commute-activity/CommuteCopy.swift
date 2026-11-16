@@ -20,6 +20,8 @@ public struct CommuteLockModel: Hashable {
   public var tag: String
   public var tagLabel: String
   public var minutes: String?
+  /// 남은 분을 시스템 타이머로 셀 끝 시각(epoch 초). `minutes`가 "N분"일 때만 있고 "곧"·시각 없음이면 nil(TS `countdownEpoch`).
+  public var countdownEpoch: Double?
   public var suggestion: String?
   /// 남은 구간이 3개 이상이면 "외 {n}구간"(n = 남은 수 - 2).
   public var moreLegs: String?
@@ -57,6 +59,7 @@ public enum CommuteCopy {
       tag: tag,
       tagLabel: t("commute.lock.tag.\(tag)", [:]),
       minutes: minutesLabel(state, now: nowEpoch, t: t),
+      countdownEpoch: countdownEpoch(state, now: nowEpoch),
       suggestion: suggestionLine(state, now: nowEpoch, t: t),
       moreLegs: moreLegsLine(state, t: t),
       nextLegs: nextLegLines(state, clock: clock, t: t)
@@ -185,19 +188,29 @@ public enum CommuteCopy {
     return t(key, ["eta": clock(etaEpoch), "stop": state.stopName])
   }
 
+  /// 남은 분을 보일 때 그 기준 시각. 도착했거나 끝났으면 없다.
+  static func minutesEta(_ state: CommuteActivityAttributes.ContentState) -> Double? {
+    guard state.stage != "arrived", state.stage != "ended" else { return nil }
+    return state.etaEpoch
+  }
+
   static func minutesLabel(
     _ state: CommuteActivityAttributes.ContentState,
     now: Double,
     t: Translate
   ) -> String? {
-    guard let etaEpoch = state.etaEpoch, state.stage != "arrived", state.stage != "ended" else {
-      return nil
-    }
+    guard let etaEpoch = minutesEta(state) else { return nil }
     let remaining = etaEpoch - now
     if remaining < secondsPerMinute {
       return t("commute.lock.minutes.soon", [:])
     }
     return t("commute.lock.minutes.value", ["m": String(Int((remaining / secondsPerMinute).rounded(.down)))])
+  }
+
+  /// "N분"을 보일 때만 그 끝 시각을 준다(1분 미만의 "곧"은 타이머로 바꾸지 않는다).
+  static func countdownEpoch(_ state: CommuteActivityAttributes.ContentState, now: Double) -> Double? {
+    guard let etaEpoch = minutesEta(state), etaEpoch - now >= secondsPerMinute else { return nil }
+    return etaEpoch
   }
 
   static func tagOf(_ state: CommuteActivityAttributes.ContentState) -> String {

@@ -17,6 +17,8 @@ data class CommuteContent(
   val header: String,
   val lines: List<String>,
   val chipText: String,
+  /** 남은 시간을 거꾸로 세는 chronometer의 끝 시각(epoch 밀리초). null이면 `chipText`·본문의 글자만 쓴다. */
+  val countdownAtMs: Long?,
 )
 
 /**
@@ -121,6 +123,7 @@ object CommuteNotifier {
   ): Notification {
     val icon = context.applicationInfo.icon
     val expanded = expandedText(content)
+    val countdownAt = content.countdownAtMs
     if (Build.VERSION.SDK_INT >= PROMOTION_API) {
       val builder = Notification.Builder(context, CHANNEL_ID)
         .setSmallIcon(icon)
@@ -130,16 +133,26 @@ object CommuteNotifier {
         .setStyle(Notification.BigTextStyle().bigText(expanded))
         .setOngoing(true)
         .setOnlyAlertOnce(true)
-        .setShowWhen(false)
         .setContentIntent(openIntent(context))
         .addAction(Notification.Action.Builder(null, endLabel, endIntent(context, sessionId)).build())
+      if (countdownAt != null) {
+        builder.setWhen(countdownAt)
+          .setShowWhen(true)
+          .setUsesChronometer(true)
+          .setChronometerCountDown(true)
+      } else {
+        builder.setShowWhen(false)
+      }
       // API 36.0의 Notification.Builder에는 setRequestPromotedOngoing·setShortCriticalText가 없다(실험 5).
       // 같은 의미의 extras 키(EXTRA_REQUEST_PROMOTED_ONGOING, EXTRA_SHORT_CRITICAL_TEXT)를 직접 넣는다. 리플렉션은 R8에서 깨진다.
       builder.extras.putBoolean("android.requestPromotedOngoing", true)
-      builder.extras.putString("android.shortCriticalText", content.chipText)
+      // 타이머가 있으면 칩이 `when`의 chronometer를 센다. 칩 글자를 함께 두면 글자가 앞설 수 있어 넣지 않는다.
+      if (countdownAt == null) {
+        builder.extras.putString("android.shortCriticalText", content.chipText)
+      }
       return builder.build()
     }
-    return NotificationCompat.Builder(context, CHANNEL_ID)
+    val builder = NotificationCompat.Builder(context, CHANNEL_ID)
       .setSmallIcon(icon)
       .setContentTitle(content.title)
       .setContentText(content.body)
@@ -147,10 +160,17 @@ object CommuteNotifier {
       .setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
       .setOngoing(true)
       .setOnlyAlertOnce(true)
-      .setShowWhen(false)
       .setPriority(NotificationCompat.PRIORITY_HIGH)
       .setContentIntent(openIntent(context))
       .addAction(0, endLabel, endIntent(context, sessionId))
-      .build()
+    if (countdownAt != null) {
+      builder.setWhen(countdownAt)
+        .setShowWhen(true)
+        .setUsesChronometer(true)
+        .setChronometerCountDown(true)
+    } else {
+      builder.setShowWhen(false)
+    }
+    return builder.build()
   }
 }

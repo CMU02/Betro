@@ -107,6 +107,12 @@ for item in cases {
   check("suggestion", model.suggestion, expected["suggestion"])
   check("moreLegs", model.moreLegs, expected["moreLegs"])
   check("header", model.header, header ?? strings["commute.lock.header.fallback"])
+  let wantedCountdown = expected["countdownEpoch"] as? Double
+  if model.countdownEpoch != wantedCountdown {
+    problems.append(
+      "countdownEpoch: got \(model.countdownEpoch.map { String($0) } ?? "null"), want \(wantedCountdown.map { String($0) } ?? "null")"
+    )
+  }
 
   let wantedLegs = expected["nextLegs"] as? [[String: String]] ?? []
   if wantedLegs.count != model.nextLegs.count {
