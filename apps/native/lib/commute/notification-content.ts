@@ -15,6 +15,8 @@ export interface NotificationContent {
 	header: string;
 	/** 펼친 본문 아래 줄: 남은 구간 최대 2줄, 제안이 있으면 제안 한 줄. */
 	lines: string[];
+	/** 작은 아이콘(알림·상태바 칩): bus면 버스, subway면 열차. */
+	mode: LockScreenModel["mode"];
 	title: string;
 }
 
@@ -44,6 +46,7 @@ export function notificationContent(
 		countdownAtMs: counting ? countdownEpoch * MS_PER_SECOND : null,
 		header: model.header,
 		lines: model.suggestion === null ? nextLegLines(model) : [model.suggestion],
+		mode: model.mode,
 		title: `${model.lineName}${SEPARATOR}${model.status}`,
 	};
 }

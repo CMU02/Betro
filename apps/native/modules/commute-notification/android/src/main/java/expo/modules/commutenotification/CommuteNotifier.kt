@@ -19,6 +19,8 @@ data class CommuteContent(
   val chipText: String,
   /** 남은 시간을 거꾸로 세는 chronometer의 끝 시각(epoch 밀리초). null이면 `chipText`·본문의 글자만 쓴다. */
   val countdownAtMs: Long?,
+  /** "bus" | "subway". 작은 아이콘을 고른다. */
+  val mode: String,
 )
 
 /**
@@ -121,7 +123,8 @@ object CommuteNotifier {
     content: CommuteContent,
     endLabel: String,
   ): Notification {
-    val icon = context.applicationInfo.icon
+    // 앱 아이콘은 단색으로 바뀌면 동그라미 하나가 되어, 수단 아이콘(iOS 아일랜드 Minimal과 같은 그림)을 쓴다.
+    val icon = if (content.mode == "subway") R.drawable.commute_train else R.drawable.commute_bus
     val expanded = expandedText(content)
     val countdownAt = content.countdownAtMs
     if (Build.VERSION.SDK_INT >= PROMOTION_API) {

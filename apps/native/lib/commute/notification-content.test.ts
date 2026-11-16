@@ -31,8 +31,13 @@ it("puts the line and status in the title and hands the countdown to the system 
 		countdownAtMs: COUNTDOWN_EPOCH * 1000,
 		header: "출근 · 회사까지",
 		lines: [],
+		mode: "bus",
 		title: "6411 · 2정거장 전",
 	});
+});
+
+it("passes the mode so the small icon shows a train for the subway", () => {
+	expect(notificationContent(model({ mode: "subway" })).mode).toBe("subway");
 });
 
 it("keeps the soon label after the detail when there is no timer", () => {
