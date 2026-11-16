@@ -15,6 +15,7 @@ export type Stage = "walk" | "wait" | "ride" | "arrived" | "ended";
 /**
  * `push-rejected`는 APNs·FCM이 토큰이 아닌 이유(400·403, 예: `TopicDisallowed`)로 시작을 거절했거나
  * 갱신을 세션당 상한만큼 거절해 실행기가 닫은 세션이다.
+ * `replaced`는 같은 기기에 새 세션이 열려 닫은 앞 세션이다(잠금화면 안내는 기기마다 하나).
  */
 export type EndReason =
 	| "arrived"
@@ -22,7 +23,8 @@ export type EndReason =
 	| "timeout"
 	| "no-token"
 	| "plan-removed"
-	| "push-rejected";
+	| "push-rejected"
+	| "replaced";
 
 /** 세션 하나의 상태. JSON으로 그대로 저장한다. */
 export interface SessionState {
