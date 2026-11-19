@@ -188,10 +188,12 @@ describe("startSession", () => {
 		const state = started(transferPlan);
 		expect(state).toEqual({
 			boardedBy: [null, null],
+			earlyBoardFrom: null,
 			endReason: null,
 			estimates: [],
 			fixed: [null, null],
 			initialDestinationEtaAt: null,
+			leave: null,
 			leaveAt: at(10),
 			legIndex: 0,
 			passed: null,
@@ -764,5 +766,25 @@ describe("advance: 처음 목적지 도착과 seq", () => {
 		expect(
 			step(state, at(5), busBoardsAt(at(5)), { kind: "boarded" }).seq
 		).toBe(7);
+	});
+});
+
+describe("advance: 여유 판단", () => {
+	it("늦게 시작한 세션은 끝까지 leave가 null", () => {
+		const first = step(started(), at(11), busBoardsAt(at(11)));
+		expect(first.leave).toBeNull();
+		const second = step(first, at(12), busBoardsAt(at(12)));
+		expect(second.leave).toBeNull();
+	});
+
+	it("옛 저장 상태(leave·earlyBoardFrom 없음)도 advance가 던지지 않는다", () => {
+		const { leave: _leave, earlyBoardFrom: _early, ...stored } = caughtB();
+		// B 08:17 − 3분 − 5분 = 08:09, 등록 시각 08:10보다 일러 빠듯
+		const next = step(stored, at(1), busBoardsAt(at(1)));
+		expect(next.leave).toEqual({
+			safeLeaveAt: at(9),
+			slack: "tight",
+			vehicleId: "B",
+		});
 	});
 });
