@@ -647,13 +647,22 @@ function judgeLeave(
 	return { overWaitMs, verdict };
 }
 
-/** 마지막 safe 기록의 safeLeaveAt부터 그 뒤 첫 boundary ok 보낸 기록까지. */
+/**
+ * 마지막 safe 기록의 safeLeaveAt부터 그 뒤 첫 boundary ok 보낸 기록까지.
+ * safeLeaveAt 전에 다른 문장으로 바뀌었으면 그 시각에 내릴 "여유 있어요"가 없으니 null이다.
+ */
 function boundaryDelayOf(
 	records: AccuracyRecord[],
+	leaves: LeaveRecord[],
 	lastSafe: LeaveRecord | null
 ): number | null {
 	const from = lastSafe?.safeLeaveAt ?? null;
-	if (from === null) {
+	if (lastSafe === null || from === null) {
+		return null;
+	}
+	const replaced = leaves[leaves.indexOf(lastSafe) + 1];
+	const isWithdrawnInTime = replaced !== undefined && replaced.at < from;
+	if (isWithdrawnInTime) {
 		return null;
 	}
 	let first: number | null = null;
@@ -687,7 +696,7 @@ function leaveSummaryOf(
 		) ?? null;
 	const lastSafe = leaves.findLast((record) => record.shown === "safe") ?? null;
 	const seen = {
-		boundaryDelayMs: boundaryDelayOf(records, lastSafe),
+		boundaryDelayMs: boundaryDelayOf(records, leaves, lastSafe),
 		sawSafe: lastSafe !== null,
 		sawTight: leaves.some((record) => record.shown === "tight"),
 	};

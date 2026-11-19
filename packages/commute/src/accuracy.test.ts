@@ -821,6 +821,33 @@ describe("summarize의 leave", () => {
 		expect(leave?.boundaryDelayMs).toBe(5000);
 	});
 
+	it("safeLeave 전에 roomy로 바뀌었으면 그 뒤 boundary ok는 경계 지연이 아니다", () => {
+		const roomy = leaveRecord({
+			at: at(7, 30),
+			safeLeaveAt: null,
+			shown: "roomy",
+		});
+		const records = [safe, roomy, sendRecord(at(10), "boundary", "ok")];
+		expect(summarize(records).leave?.boundaryDelayMs).toBeNull();
+		expect(
+			dailyReport("2026-11-10", [summarize(records)]).leave.boundaryLate
+		).toBe(0);
+	});
+
+	it("safeLeave가 지난 뒤에 바뀐 기록은 경계 지연을 막지 않는다", () => {
+		const tight = leaveRecord({
+			at: at(8, 5),
+			safeLeaveAt: null,
+			shown: "tight",
+		});
+		const { leave } = summarize([
+			safe,
+			sendRecord(at(8, 5), "boundary", "ok"),
+			tight,
+		]);
+		expect(leave?.boundaryDelayMs).toBe(5000);
+	});
+
 	it("end 기록의 boardedEarly를 earlyBoarded로 옮긴다", () => {
 		const end = (boardedEarly?: boolean): AccuracyRecord => ({
 			at: at(30),
