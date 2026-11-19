@@ -17,7 +17,7 @@
  * 쓸 수 있는 때가 받은 때이기 때문이다(스펙 4.3 "처음 뜬 실시간 예측").
  */
 import { readdirSync, readFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative as relativeTo, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { gunzipSync } from "node:zlib";
 import { commuteConfig } from "../packages/commute/src/config";
@@ -64,11 +64,19 @@ function fail(message: string): never {
 function inWorkingDir(option: string, path: string): string {
 	const base = process.cwd();
 	const resolved = resolve(base, path);
-	const fromBase = relative(base, resolved);
+	const fromBase = relativeTo(base, resolved);
 	if (fromBase.startsWith("..") || isAbsolute(fromBase)) {
 		return fail(`${option}: 실행한 폴더 밖의 경로는 읽지 않습니다 (${path})`);
 	}
 	return resolved;
+}
+
+/** 주지 않은 선택 경로는 그대로 두고, 준 경로는 `inWorkingDir`로 확인한다. */
+function optionalPathIn(
+	option: string,
+	path: string | undefined
+): string | undefined {
+	return path === undefined ? undefined : inWorkingDir(option, path);
 }
 
 function readText(path: string): string {
@@ -259,11 +267,7 @@ function main(): void {
 	const busTargets = targets.filter(
 		(target): target is BusTarget => target.mode === "bus"
 	);
-	const subwayDirArg = values["subway-dir"];
-	const subwayDir =
-		subwayDirArg === undefined
-			? undefined
-			: inWorkingDir("--subway-dir", subwayDirArg);
+	const subwayDir = optionalPathIn("--subway-dir", values["subway-dir"]);
 	if (subwayTargets.length > 0 && subwayDir !== undefined) {
 		const statnIds = new Set(subwayTargets.map((target) => target.statnId));
 		const snapshots = readSubwaySnapshots(subwayDir, statnIds);
@@ -273,11 +277,7 @@ function main(): void {
 			samples.push(...subwaySamplesFor(target, snapshots, arrivals, biasSec));
 		}
 	}
-	const busFileArg = values["bus-file"];
-	const busFile =
-		busFileArg === undefined
-			? undefined
-			: inWorkingDir("--bus-file", busFileArg);
+	const busFile = optionalPathIn("--bus-file", values["bus-file"]);
 	/** 버스 `/dump`에서 뺀 줄, 대상마다 관측으로 쓰지 않은 응답의 이유별 개수. */
 	const busInput: {
 		droppedLines: BusDropCounts;
