@@ -1,6 +1,8 @@
 import type { CommuteConfig } from "../config";
 import { marginSecFor } from "../config";
 import type { CommutePlan } from "../plan";
+import type { ContentState } from "./content";
+import { leaveShownAt } from "./content";
 import type { SessionState } from "./stage";
 
 const SECOND_MS = 1000;
@@ -100,4 +102,34 @@ export function nextLeaveView(
 		? null
 		: Math.min(floored, leaveAt - SAFE_LEAVE_GAP_MS);
 	return { safeLeaveAt, slack, vehicleId: input.vehicleId };
+}
+
+/**
+ * 보낸 값이 보낸 순간 "safeLeave에 나가면 여유 있어요"를 보였으면 조기 탑승 기준을 남긴다(스펙 4.6).
+ * 기준 시각은 safeLeaveEpoch + 첫 도보. 같은 차량이면 이른 쪽을 남기고, 차량이 바뀌면 바꾼다.
+ * 보내지 못한 값은 사용자가 본 적이 없으므로 보낸 뒤에만 부른다.
+ */
+export function earlyBoardAfterSend(
+	state: SessionState,
+	sent: ContentState,
+	plan: CommutePlan
+): SessionState {
+	const leave = state.leave ?? null;
+	const safeLeaveEpoch = sent.safeLeaveEpoch ?? null;
+	const isSafeShown = leaveShownAt(sent, sent.sentAt) === "safe";
+	if (leave === null || safeLeaveEpoch === null || !isSafeShown) {
+		return state;
+	}
+	const firstWalkMinutes =
+		plan.routes.find((route) => route.rank === 0)?.walkMinutes[0] ?? 0;
+	const at = safeLeaveEpoch * SECOND_MS + firstWalkMinutes * MINUTE_MS;
+	const prev = state.earlyBoardFrom ?? null;
+	const isSameVehicle = prev !== null && prev.vehicleId === leave.vehicleId;
+	return {
+		...state,
+		earlyBoardFrom: {
+			at: isSameVehicle ? Math.min(prev.at, at) : at,
+			vehicleId: leave.vehicleId,
+		},
+	};
 }

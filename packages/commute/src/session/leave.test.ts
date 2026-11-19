@@ -2,9 +2,10 @@ import { describe, expect, it } from "bun:test";
 import type { CommuteConfig } from "../config";
 import { commuteConfig } from "../config";
 import type { BusLeg, CommutePlan, Route } from "../plan";
+import type { ContentState } from "./content";
 import type { LegEstimate } from "./estimate";
 import type { LeaveView } from "./leave";
-import { nextLeaveView } from "./leave";
+import { earlyBoardAfterSend, nextLeaveView } from "./leave";
 import type { SessionState } from "./stage";
 
 const SECOND_MS = 1000;
@@ -15,6 +16,10 @@ const config = commuteConfig({});
 /** 08:mm:ss */
 function at(minute: number, second = 0): number {
 	return BASE + minute * MINUTE_MS + second * SECOND_MS;
+}
+
+function epoch(ms: number): number {
+	return Math.floor(ms / SECOND_MS);
 }
 
 const busLeg: BusLeg = {
@@ -193,5 +198,106 @@ describe("nextLeaveView", () => {
 				view: judge(null, now, boardEtaAt, state, withConfig),
 			}).toEqual({ label, view: null });
 		}
+	});
+});
+
+describe("earlyBoardAfterSend", () => {
+	const tightA: LeaveView = {
+		safeLeaveAt: at(8),
+		slack: "tight",
+		vehicleId: "A",
+	};
+
+	/** 08:06에 보낸 "safeLeave에 나가면 여유 있어요" 값. 나가는 시각 08:10. */
+	function sentSafe(
+		safeLeaveAt: number,
+		overrides: Partial<ContentState> = {}
+	): ContentState {
+		return {
+			delayMinutes: 0,
+			destinationEtaEpoch: epoch(at(40)),
+			etaEpoch: epoch(at(16)),
+			etaState: "live",
+			leaveEpoch: epoch(at(10)),
+			leaveSlack: "tight",
+			legCount: 1,
+			legIndex: 0,
+			lineName: "6411",
+			mode: "bus",
+			nextLegs: [],
+			passed: null,
+			positionState: "live",
+			safeLeaveEpoch: epoch(safeLeaveAt),
+			sentAt: epoch(at(6)),
+			seq: 1,
+			stage: "walk",
+			stopName: "노량진역",
+			stopsAway: 2,
+			suggestion: null,
+			v: 1,
+			...overrides,
+		};
+	}
+
+	it("safe를 보냈으면 safeLeave + 첫 도보와 그 차량을 기록한다", () => {
+		const state = stateOf({}, { leave: tightA });
+		expect(
+			earlyBoardAfterSend(state, sentSafe(at(8)), plan).earlyBoardFrom
+		).toEqual({ at: at(13), vehicleId: "A" });
+	});
+
+	it("같은 차량으로 더 이른 safe를 보내면 이른 쪽으로 줄인다", () => {
+		const state = stateOf(
+			{},
+			{ earlyBoardFrom: { at: at(13), vehicleId: "A" }, leave: tightA }
+		);
+		expect(
+			earlyBoardAfterSend(state, sentSafe(at(7)), plan).earlyBoardFrom
+		).toEqual({ at: at(12), vehicleId: "A" });
+	});
+
+	it("같은 차량으로 더 늦은 safe를 보내면 이른 쪽을 그대로 둔다", () => {
+		const state = stateOf(
+			{},
+			{ earlyBoardFrom: { at: at(12), vehicleId: "A" }, leave: tightA }
+		);
+		expect(
+			earlyBoardAfterSend(state, sentSafe(at(9)), plan).earlyBoardFrom
+		).toEqual({ at: at(12), vehicleId: "A" });
+	});
+
+	it("차량이 바뀌면 새 차량으로 바꾼다", () => {
+		const state = stateOf(
+			{},
+			{
+				earlyBoardFrom: { at: at(12), vehicleId: "A" },
+				leave: { safeLeaveAt: at(9), slack: "tight", vehicleId: "B" },
+			}
+		);
+		expect(
+			earlyBoardAfterSend(state, sentSafe(at(9)), plan).earlyBoardFrom
+		).toEqual({ at: at(14), vehicleId: "B" });
+	});
+
+	it("보낸 순간 tight가 보이면 그대로 둔다", () => {
+		const state = stateOf(
+			{},
+			{ earlyBoardFrom: { at: at(13), vehicleId: "A" }, leave: tightA }
+		);
+		const atBoundary = sentSafe(at(8), { sentAt: epoch(at(8)) });
+		const afterBoundary = sentSafe(at(8), { sentAt: epoch(at(8, 30)) });
+		expect(earlyBoardAfterSend(state, atBoundary, plan)).toEqual(state);
+		expect(earlyBoardAfterSend(state, afterBoundary, plan)).toEqual(state);
+	});
+
+	it("safe가 아닌 값이나 여유 판단이 없으면 그대로 둔다", () => {
+		const roomy = sentSafe(at(8), {
+			leaveSlack: "roomy",
+			safeLeaveEpoch: null,
+		});
+		const withLeave = stateOf({}, { leave: tightA });
+		expect(earlyBoardAfterSend(withLeave, roomy, plan)).toEqual(withLeave);
+		const { leave: _leave, earlyBoardFrom: _early, ...stored } = stateOf();
+		expect(earlyBoardAfterSend(stored, sentSafe(at(8)), plan)).toEqual(stored);
 	});
 });

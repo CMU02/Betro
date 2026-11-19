@@ -28,8 +28,11 @@ export type EndReason =
 
 /** 세션 하나의 상태. JSON으로 그대로 저장한다. */
 export interface SessionState {
-	/** 구간마다 탑승을 판단한 근거. 시각 추정이면 time, "탔어요"면 user. */
-	boardedBy: ("time" | "user" | null)[];
+	/**
+	 * 구간마다 탑승을 판단한 근거. 시각 추정이면 time, "탔어요"면 user,
+	 * "여유 있어요"를 보고 일찍 나가 readyAt 전에 탔다고 보면 early(스펙 4.6).
+	 */
+	boardedBy: ("time" | "user" | "early" | null)[];
 	/** 조기 탑승 판정의 기준(Task 4). 옛 저장값에는 없으므로 없으면 null로 본다. */
 	earlyBoardFrom?: { vehicleId: string; at: number } | null;
 	endReason: EndReason | null;
@@ -207,7 +210,8 @@ function applyInput(
 
 /**
  * 잡은 차량이 승차 정류장을 지났으면(규칙 3): 정류장에 있을 시각 뒤에 지났으면 탄 것으로 보고,
- * 그 전에 지났으면 그 차량을 놓고 다시 고르게 한다.
+ * 그 전에 지났으면 그 차량을 놓고 다시 고르게 한다. 다만 첫 구간에서 "여유 있어요"를 보낸 차량이
+ * 기록한 시각과 readyAt 사이에 지났으면 일찍 나가 탄 것으로 본다(스펙 4.6).
  */
 function checkPassed(
 	state: SessionState,
@@ -230,6 +234,20 @@ function checkPassed(
 		return {
 			...state,
 			boardedBy: replaceAt(state.boardedBy, index, "time"),
+			readyAt: passedEntry.at,
+			stage: "ride",
+		};
+	}
+	const earlyBoardFrom = state.earlyBoardFrom ?? null;
+	const isEarlyBoarding =
+		index === 0 &&
+		earlyBoardFrom !== null &&
+		earlyBoardFrom.vehicleId === fixedId &&
+		earlyBoardFrom.at <= passedEntry.at;
+	if (isEarlyBoarding) {
+		return {
+			...state,
+			boardedBy: replaceAt(state.boardedBy, index, "early"),
 			readyAt: passedEntry.at,
 			stage: "ride",
 		};
