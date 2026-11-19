@@ -11,12 +11,13 @@
  * - `--subway-dir`: R2 `raw/subway-all/…`, `events/subway/…`를 같은 경로로 내려받은 폴더.
  * - `--bus-file`: 버스 수집 Worker의 `/dump` NDJSON.
  * - `--lead-window`: 예측 시점 창(분). 실험 6과 맞춰 볼 때만 바꾼다(예: `4,6`).
+ * - 세 경로는 모두 실행한 폴더 안이어야 한다(예: 저장소 루트에서 `.cache/leave-margin/…`).
  *
  * 예측의 `at`은 원천 시각이 아니라 수집기가 받은 시각(`fetchedAt`)이다. 세션이 그 예측을 처음
  * 쓸 수 있는 때가 받은 때이기 때문이다(스펙 4.3 "처음 뜬 실시간 예측").
  */
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { gunzipSync } from "node:zlib";
 import { commuteConfig } from "../packages/commute/src/config";
@@ -57,6 +58,17 @@ const EVENTS_SUBWAY_DIR = "events/subway/";
 
 function fail(message: string): never {
 	throw new Error(message);
+}
+
+/** CLI로 받은 경로를 실행한 폴더 기준으로 풀고, 그 폴더 밖이면 멈춘다. */
+function inWorkingDir(option: string, path: string): string {
+	const base = process.cwd();
+	const resolved = resolve(base, path);
+	const fromBase = relative(base, resolved);
+	if (fromBase.startsWith("..") || isAbsolute(fromBase)) {
+		return fail(`${option}: 실행한 폴더 밖의 경로는 읽지 않습니다 (${path})`);
+	}
+	return resolved;
 }
 
 function readText(path: string): string {
@@ -138,7 +150,7 @@ function readTargets(path: string): Target[] {
 	if (!Array.isArray(parsed)) {
 		return fail(`${path}: 배열이 아님`);
 	}
-	return parsed.map(targetOf);
+	return parsed.map((raw, index) => targetOf(raw, index));
 }
 
 // ── 지하철 ──────────────────────────────────────────────────────────
@@ -231,7 +243,10 @@ function main(): void {
 			targets: { type: "string" },
 		},
 	});
-	const targetsPath = values.targets ?? fail("--targets가 필요합니다");
+	const targetsPath = inWorkingDir(
+		"--targets",
+		values.targets ?? fail("--targets가 필요합니다")
+	);
 	const targets = readTargets(targetsPath);
 	const maxSec = maxSecOf(values["max-sec"]);
 	const windowMin = leadWindowOf(values["lead-window"]);
@@ -244,7 +259,11 @@ function main(): void {
 	const busTargets = targets.filter(
 		(target): target is BusTarget => target.mode === "bus"
 	);
-	const subwayDir = values["subway-dir"];
+	const subwayDirArg = values["subway-dir"];
+	const subwayDir =
+		subwayDirArg === undefined
+			? undefined
+			: inWorkingDir("--subway-dir", subwayDirArg);
 	if (subwayTargets.length > 0 && subwayDir !== undefined) {
 		const statnIds = new Set(subwayTargets.map((target) => target.statnId));
 		const snapshots = readSubwaySnapshots(subwayDir, statnIds);
@@ -254,7 +273,11 @@ function main(): void {
 			samples.push(...subwaySamplesFor(target, snapshots, arrivals, biasSec));
 		}
 	}
-	const busFile = values["bus-file"];
+	const busFileArg = values["bus-file"];
+	const busFile =
+		busFileArg === undefined
+			? undefined
+			: inWorkingDir("--bus-file", busFileArg);
 	/** 버스 `/dump`에서 뺀 줄, 대상마다 관측으로 쓰지 않은 응답의 이유별 개수. */
 	const busInput: {
 		droppedLines: BusDropCounts;
