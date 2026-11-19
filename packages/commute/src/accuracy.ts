@@ -198,7 +198,8 @@ export interface DailyCommuteReport {
 
 /**
  * 하루치 나가는 시각 판정(스펙 4.7). `sessions`는 `leave` 요약이 있는 세션 수, `earlyBoarded`는 모든 세션에서 센다.
- * 비율의 분모는 잰 세션(sure + boundary + wrong)이고, 0이면 null이다.
+ * `rateLow`·`rateHigh`의 분모는 잰 세션(sure + boundary + wrong)이고, `rateSafeOrTight`의 분모는
+ * `sessions`다. 분모가 0이면 null이다.
  */
 export interface LeaveReport {
 	boundary: number;
@@ -209,7 +210,11 @@ export interface LeaveReport {
 	overWaitMeanMs: number | null;
 	rateHigh: number | null;
 	rateLow: number | null;
+	/** `sawSafeOrTight ÷ sessions`. 과잉 보수를 막는 지표(스펙 4.7). */
+	rateSafeOrTight: number | null;
 	sawSafe: number;
+	/** safe나 tight 기록이 하나라도 있는 세션 수. 둘 다 있는 세션은 한 번만 센다. */
+	sawSafeOrTight: number;
 	sawTight: number;
 	sessions: number;
 	/** unknown이 잰 세션보다 많으면 "undecidable". */
@@ -843,6 +848,9 @@ function leaveReportOf(summaries: SessionSummary[]): LeaveReport {
 	}
 	const measured = counts.sure + counts.boundary + counts.wrong;
 	const delays = leaves.map((leave) => leave.boundaryDelayMs).filter(isNumber);
+	const sawSafeOrTight = leaves.filter(
+		(leave) => leave.sawSafe || leave.sawTight
+	).length;
 	return {
 		...counts,
 		boundaryDelayMaxMs: delays.length === 0 ? null : Math.max(...delays),
@@ -854,7 +862,9 @@ function leaveReportOf(summaries: SessionSummary[]): LeaveReport {
 		),
 		rateHigh: ratioOf(counts.sure + counts.boundary, measured),
 		rateLow: ratioOf(counts.sure, measured),
+		rateSafeOrTight: ratioOf(sawSafeOrTight, leaves.length),
 		sawSafe: leaves.filter((leave) => leave.sawSafe).length,
+		sawSafeOrTight,
 		sawTight: leaves.filter((leave) => leave.sawTight).length,
 		sessions: leaves.length,
 		status: counts.unknown > measured ? "undecidable" : "ok",

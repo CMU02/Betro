@@ -940,7 +940,9 @@ const noLeave = {
 	overWaitMeanMs: null,
 	rateHigh: null,
 	rateLow: null,
+	rateSafeOrTight: null,
 	sawSafe: 0,
+	sawSafeOrTight: 0,
 	sawTight: 0,
 	sessions: 0,
 	status: "ok",
@@ -980,9 +982,33 @@ describe("dailyReport의 leave", () => {
 			overWaitMeanMs: 40_000 / 3,
 			rateHigh: 1,
 			rateLow: 0.75,
+			rateSafeOrTight: 1,
 			sawSafe: 4,
+			sawSafeOrTight: 4,
 			sessions: 4,
 			sure: 3,
+		});
+	});
+
+	it("safe나 tight를 하나라도 보인 세션은 겹쳐도 한 번만 세고, 비율의 분모는 leave가 있는 세션이다", () => {
+		const report = dailyReport("2026-11-10", [
+			withLeave({ sawSafe: true, sawTight: true }),
+			withLeave({ sawSafe: true, sawTight: false }),
+			withLeave({
+				sawSafe: false,
+				sawTight: true,
+				shown: null,
+				verdict: "tightOnly",
+			}),
+			withLeave({ sawSafe: false, sawTight: false, shown: "roomy" }),
+			summary({ leave: null }),
+		]);
+		expect(report.leave).toMatchObject({
+			rateSafeOrTight: 0.75,
+			sawSafe: 2,
+			sawSafeOrTight: 3,
+			sawTight: 2,
+			sessions: 4,
 		});
 	});
 
