@@ -851,14 +851,27 @@ describe("summarize의 leave", () => {
 		expect(summarize([]).leave).toBeNull();
 	});
 
-	it("경계 지연은 safeLeave부터 그 뒤 첫 boundary ok 보낸 기록까지", () => {
+	/** safe 문장을 바꾼 값이 나가며 남은 기록. */
+	const replacedAt = (time: number, shown: LeaveRecord["shown"] = "tight") =>
+		leaveRecord({ at: time, safeLeaveAt: null, shown });
+	const endAt = (time: number): AccuracyRecord => ({
+		at: time,
+		kind: "end",
+		planId: PLAN_ID,
+		reason: "arrived",
+		sessionId: SESSION_ID,
+	});
+
+	it("경계 지연은 safeLeave부터 safe 문장을 바꾼 다음 leave 기록까지", () => {
 		const { leave } = summarize([
 			safe,
 			sendRecord(at(7, 50), "boundary", "ok"),
-			sendRecord(at(8, 2), "change", "ok"),
+			sendRecord(at(8, 2), "change", "retry"),
 			sendRecord(at(8, 3), "boundary", "retry"),
 			sendRecord(at(8, 5), "boundary", "ok"),
+			replacedAt(at(8, 5)),
 			sendRecord(at(10), "boundary", "ok"),
+			endAt(at(20)),
 		]);
 		expect(leave?.boundaryDelayMs).toBe(5000);
 	});
@@ -869,7 +882,12 @@ describe("summarize의 leave", () => {
 			safeLeaveAt: null,
 			shown: "roomy",
 		});
-		const records = [safe, roomy, sendRecord(at(10), "boundary", "ok")];
+		const records = [
+			safe,
+			roomy,
+			sendRecord(at(10), "boundary", "ok"),
+			endAt(at(20)),
+		];
 		expect(summarize(records).leave?.boundaryDelayMs).toBeNull();
 		expect(
 			dailyReport("2026-11-10", [summarize(records)]).leave.boundaryLate
@@ -877,17 +895,67 @@ describe("summarize의 leave", () => {
 	});
 
 	it("safeLeave가 지난 뒤에 바뀐 기록은 경계 지연을 막지 않는다", () => {
-		const tight = leaveRecord({
-			at: at(8, 5),
-			safeLeaveAt: null,
-			shown: "tight",
-		});
 		const { leave } = summarize([
 			safe,
 			sendRecord(at(8, 5), "boundary", "ok"),
-			tight,
+			replacedAt(at(8, 5)),
 		]);
 		expect(leave?.boundaryDelayMs).toBe(5000);
+	});
+
+	it("경계 푸시가 실패하고 다른 이유로 보낸 값이 먼저 tight로 바꾸면 그 값까지만 잰다", () => {
+		const { leave } = summarize([
+			safe,
+			sendRecord(at(8), "boundary", "retry"),
+			sendRecord(at(8, 10), "change", "ok"),
+			replacedAt(at(8, 10)),
+			sendRecord(at(10), "boundary", "ok"),
+			endAt(at(20)),
+		]);
+		expect(leave?.boundaryDelayMs).toBe(10_000);
+	});
+
+	it("safeLeave 뒤로 바꾼 값이 나가지 않고 세션이 끝나면 끝난 시각까지 재고 늦은 세션으로 센다", () => {
+		const records = [
+			safe,
+			sendRecord(at(8), "boundary", "retry"),
+			sendRecord(at(9), "heartbeat", "retry"),
+			endAt(at(10)),
+		];
+		expect(summarize(records).leave?.boundaryDelayMs).toBe(120_000);
+		expect(dailyReport("2026-11-10", [summarize(records)]).leave).toMatchObject(
+			{ boundaryDelayMaxMs: 120_000, boundaryLate: 1 }
+		);
+	});
+
+	it("end 기록이 없으면 가장 늦은 기록의 시각까지 잰다", () => {
+		const { leave } = summarize([
+			safe,
+			sendRecord(at(8), "boundary", "retry"),
+			sendRecord(at(9), "heartbeat", "retry"),
+		]);
+		expect(leave?.boundaryDelayMs).toBe(60_000);
+	});
+
+	it("세션이 safeLeave 전에 끝나면 경계 지연은 null", () => {
+		expect(summarize([safe, endAt(at(7, 30))]).leave?.boundaryDelayMs).toBe(
+			null
+		);
+	});
+
+	it("도보가 끝나 남은 none 기록도 safe 문장을 바꾼 기록으로 본다", () => {
+		const early = summarize([
+			safe,
+			replacedAt(at(7, 30), "none"),
+			endAt(at(20)),
+		]);
+		expect(early.leave?.boundaryDelayMs).toBeNull();
+		const late = summarize([
+			safe,
+			replacedAt(at(8, 40), "none"),
+			endAt(at(20)),
+		]);
+		expect(late.leave?.boundaryDelayMs).toBe(40_000);
 	});
 
 	it("end 기록의 boardedEarly를 earlyBoarded로 옮긴다", () => {

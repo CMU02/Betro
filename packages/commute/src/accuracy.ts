@@ -145,7 +145,10 @@ export interface LeaveMark {
 
 /** 세션 하나의 나가는 시각 판정(스펙 4.7). */
 export interface LeaveSummary {
-	/** 마지막 `safe` 기록의 `safeLeaveAt`부터 그 뒤 첫 `boundary` ok 보낸 기록까지. */
+	/**
+	 * 마지막 `safe` 기록의 `safeLeaveAt`부터 그 safe 문장을 바꾼 다음 `leave` 기록까지(보낸 이유는
+	 * 묻지 않는다). 다음 기록이 없으면 세션이 끝난 시각까지. 그 시각이 `safeLeaveAt` 전이면 null.
+	 */
 	boundaryDelayMs: number | null;
 	/** `safe`로 판정했고 도착을 쟀을 때만 `max(0, low − ready)`. */
 	overWaitMs: number | null;
@@ -663,8 +666,30 @@ function judgeLeave(
 }
 
 /**
- * 마지막 safe 기록의 safeLeaveAt부터 그 뒤 첫 boundary ok 보낸 기록까지.
- * safeLeaveAt 전에 다른 문장으로 바뀌었으면 그 시각에 내릴 "여유 있어요"가 없으니 null이다.
+ * 세션이 화면을 더 갱신하지 않게 된 시각. end 기록이 있으면 그 시각이고, 없으면 시각(`at`)이 있는
+ * 기록 중 가장 늦은 것이다. 도착 기록은 세션이 끝난 뒤 따라가기로도 남아 넣지 않는다.
+ */
+function sessionEndAt(records: AccuracyRecord[]): number | null {
+	const end = records.findLast((record) => record.kind === "end");
+	if (end !== undefined) {
+		return end.at;
+	}
+	let latest: number | null = null;
+	for (const record of records) {
+		if ("at" in record && (latest === null || record.at > latest)) {
+			latest = record.at;
+		}
+	}
+	return latest;
+}
+
+/**
+ * 마지막 safe 기록의 safeLeaveAt부터 그 safe 문장이 화면에서 내려간 때까지.
+ * `leave` 기록은 문장·safeLeaveAt·차량이 바뀐 값이 실제로 나갔을 때만 남으니, 마지막 safe 다음
+ * `leave` 기록이 그 문장을 바꾼 값이다(보낸 이유는 묻지 않는다).
+ * - 다음 기록이 safeLeaveAt 전이면 그 시각에 내릴 "여유 있어요"가 없으니 null이다.
+ * - 다음 기록이 없으면 세션이 끝날 때까지 safe 문장이 남은 것이라 세션이 끝난 시각까지 잰다.
+ *   그 시각도 safeLeaveAt 전이면 null이다.
  */
 function boundaryDelayOf(
 	records: AccuracyRecord[],
@@ -676,22 +701,11 @@ function boundaryDelayOf(
 		return null;
 	}
 	const replaced = leaves[leaves.indexOf(lastSafe) + 1];
-	const isWithdrawnInTime = replaced !== undefined && replaced.at < from;
-	if (isWithdrawnInTime) {
-		return null;
+	if (replaced !== undefined) {
+		return replaced.at < from ? null : replaced.at - from;
 	}
-	let first: number | null = null;
-	for (const record of records) {
-		const isBoundaryOk =
-			record.kind === "send" &&
-			record.reason === "boundary" &&
-			record.outcome === "ok" &&
-			record.at >= from;
-		if (isBoundaryOk && (first === null || record.at < first)) {
-			first = record.at;
-		}
-	}
-	return first === null ? null : first - from;
+	const endAt = sessionEndAt(records);
+	return endAt !== null && endAt > from ? endAt - from : null;
 }
 
 /** 세션의 나가는 시각 판정. 마지막 roomy·safe 기록 하나로 판정하고, 없으면 tightOnly. */
