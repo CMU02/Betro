@@ -531,6 +531,28 @@ describe("sessionStripModel", () => {
 		});
 	});
 
+	it("나가기 전 여유 문구에 남은 분을 붙인다", () => {
+		const strip = sessionStripModel({
+			now: NOW + 5 * 60,
+			places: [place],
+			session: sessionOf([], {
+				content: {
+					...CONTENT,
+					etaEpoch: NOW + 17 * 60,
+					leaveEpoch: NOW + 10 * 60,
+					leaveSlack: "tight",
+					legCount: 1,
+					nextLegs: [],
+					safeLeaveEpoch: NOW + 8 * 60,
+					stage: "walk",
+				},
+			}),
+			t,
+			timezone: TIMEZONE,
+		});
+		expect(strip?.status).toBe("08:08에 나가면 여유 있어요 · 12분");
+	});
+
 	it("leaves out the minutes when there is no time", () => {
 		const strip = sessionStripModel({
 			now: NOW,

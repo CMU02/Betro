@@ -91,7 +91,8 @@ describe("fetchActiveSession", () => {
 		expect(await fetchActiveSession(client)).toEqual({
 			ok: true,
 			session: {
-				content: CONTENT,
+				// 옛 푸시 값에는 여유 필드가 없어서 null로 읽는다
+				content: { ...CONTENT, leaveSlack: null, safeLeaveEpoch: null },
 				planId: PLAN_ID,
 				routes: [MAIN_ROUTE, ALT_ROUTE] as ActiveSessionView["routes"],
 				sessionId: SESSION_ID,

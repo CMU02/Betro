@@ -47,6 +47,8 @@ export function lockSampleState(sample: LockSample, now: number): ContentState {
 			...leg,
 			boardEtaEpoch: shift(leg.boardEtaEpoch, offset),
 		})),
+		// 여유 판단이 없는 옛 사례에는 키가 없어서 null로 둔다.
+		safeLeaveEpoch: shift(state.safeLeaveEpoch ?? null, offset),
 		sentAt: state.sentAt + offset,
 		suggestion: state.suggestion
 			? {

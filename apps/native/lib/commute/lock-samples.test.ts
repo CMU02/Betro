@@ -60,3 +60,17 @@ it("keeps null epochs null and shifts leave and suggestion times", () => {
 	expect(shifted.suggestion?.boardEtaEpoch).toBe(NOW + 180);
 	expect(base.state.etaEpoch).not.toBeNull();
 });
+
+it("shifts the safe leave time so the tight sample keeps its sentence", () => {
+	const sample = lockSamples().find(
+		(item) => item.name === "leave tight before safe shows the earlier time"
+	);
+	if (!sample) {
+		throw new Error("fixture case is missing");
+	}
+	const shifted = lockSampleState(sample, NOW);
+	expect(shifted.safeLeaveEpoch).toBe(
+		(sample.state.safeLeaveEpoch ?? 0) + NOW - sample.now
+	);
+	expect(shifted.leaveSlack).toBe("tight");
+});

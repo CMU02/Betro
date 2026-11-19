@@ -132,8 +132,14 @@ function build(
 export function apnsStartRequest(
 	input: ApnsBase & {
 		attributes: { planId: string; sessionId: string };
+		/** 밀리초. 있으면 `stale-date`로 넣는다(업데이트 토큰 전에도 safe 문장이 남지 않게). */
+		staleAt?: number;
 	}
 ): Request {
+	const staleDate =
+		input.staleAt === undefined
+			? {}
+			: { "stale-date": toEpochSec(input.staleAt) };
 	return build(input, PRIORITY_START, {
 		alert: {
 			body: { "loc-key": "commute.start.body" },
@@ -143,6 +149,7 @@ export function apnsStartRequest(
 		"attributes-type": ATTRIBUTES_TYPE,
 		"content-state": input.state,
 		event: "start",
+		...staleDate,
 		timestamp: toEpochSec(input.now),
 	});
 }

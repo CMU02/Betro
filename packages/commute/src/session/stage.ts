@@ -3,6 +3,8 @@ import type { CommutePlan, Leg, Route } from "../plan";
 import type { StopBoard, TransitBoards } from "../sources/types";
 import type { RouteEstimate } from "./estimate";
 import { estimateRoute } from "./estimate";
+import type { LeaveView } from "./leave";
+import { nextLeaveView } from "./leave";
 
 const MINUTE_MS = 60_000;
 /** "탔어요"를 눌렀을 때 막 지난 차량으로 보는 범위. */
@@ -28,14 +30,21 @@ export type EndReason =
 
 /** 세션 하나의 상태. JSON으로 그대로 저장한다. */
 export interface SessionState {
-	/** 구간마다 탑승을 판단한 근거. 시각 추정이면 time, "탔어요"면 user. */
-	boardedBy: ("time" | "user" | null)[];
+	/**
+	 * 구간마다 탑승을 판단한 근거. 시각 추정이면 time, "탔어요"면 user,
+	 * "여유 있어요"를 보고 일찍 나가 readyAt 전에 탔다고 보면 early(스펙 4.6).
+	 */
+	boardedBy: ("time" | "user" | "early" | null)[];
+	/** 조기 탑승 판정의 기준(Task 4). 옛 저장값에는 없으므로 없으면 null로 본다. */
+	earlyBoardFrom?: { vehicleId: string; at: number } | null;
 	endReason: EndReason | null;
 	/** 기본 경로가 먼저, 그 뒤 대안. 탑승 뒤에는 기본 경로만. */
 	estimates: RouteEstimate[];
 	/** 구간마다 잡았거나 탄 차량. */
 	fixed: (string | null)[];
 	initialDestinationEtaAt: number | null;
+	/** 지난 tick의 여유 판단(스펙 4.2). 옛 저장값에는 없으므로 없으면 null로 본다. */
+	leave?: LeaveView | null;
 	leaveAt: number;
 	legIndex: number;
 	/** 이번 advance에서 잡은 차량이 지나가 다시 골랐으면 그 노선. 다음 advance에서 null로 돌아간다. */
@@ -80,7 +89,13 @@ function isBeforeBoarding(state: SessionState): boolean {
 }
 
 function endWith(state: SessionState, reason: EndReason): SessionState {
-	return { ...state, endReason: reason, passed: null, stage: "ended" };
+	return {
+		...state,
+		endReason: reason,
+		leave: null,
+		passed: null,
+		stage: "ended",
+	};
 }
 
 export function startSession(
@@ -91,10 +106,12 @@ export function startSession(
 	const legCount = primaryRoute(plan)?.legs.length ?? 0;
 	return {
 		boardedBy: Array.from({ length: legCount }, () => null),
+		earlyBoardFrom: null,
 		endReason: null,
 		estimates: [],
 		fixed: Array.from({ length: legCount }, () => null),
 		initialDestinationEtaAt: null,
+		leave: null,
 		leaveAt: due.leaveAt,
 		legIndex: 0,
 		passed: null,
@@ -195,7 +212,8 @@ function applyInput(
 
 /**
  * 잡은 차량이 승차 정류장을 지났으면(규칙 3): 정류장에 있을 시각 뒤에 지났으면 탄 것으로 보고,
- * 그 전에 지났으면 그 차량을 놓고 다시 고르게 한다.
+ * 그 전에 지났으면 그 차량을 놓고 다시 고르게 한다. 다만 첫 구간에서 "여유 있어요"를 보낸 차량이
+ * 기록한 시각과 readyAt 사이에 지났으면 일찍 나가 탄 것으로 본다(스펙 4.6).
  */
 function checkPassed(
 	state: SessionState,
@@ -218,6 +236,20 @@ function checkPassed(
 		return {
 			...state,
 			boardedBy: replaceAt(state.boardedBy, index, "time"),
+			readyAt: passedEntry.at,
+			stage: "ride",
+		};
+	}
+	const earlyBoardFrom = state.earlyBoardFrom ?? null;
+	const isEarlyBoarding =
+		index === 0 &&
+		earlyBoardFrom !== null &&
+		earlyBoardFrom.vehicleId === fixedId &&
+		earlyBoardFrom.at <= passedEntry.at;
+	if (isEarlyBoarding) {
+		return {
+			...state,
+			boardedBy: replaceAt(state.boardedBy, index, "early"),
 			readyAt: passedEntry.at,
 			stage: "ride",
 		};
@@ -456,7 +488,7 @@ export function advance(
 		return endWith(state, "plan-removed");
 	}
 	if (state.stage === "arrived") {
-		return endIfArrived({ ...state, passed: null }, now, config);
+		return endIfArrived({ ...state, leave: null, passed: null }, now, config);
 	}
 	const readyAt =
 		state.readyAt ??
@@ -475,6 +507,7 @@ export function advance(
 		{
 			...next,
 			initialDestinationEtaAt: next.initialDestinationEtaAt ?? destinationEtaAt,
+			leave: nextLeaveView(state.leave ?? null, next, plan, now, config),
 		},
 		now,
 		config

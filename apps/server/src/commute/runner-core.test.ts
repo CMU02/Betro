@@ -624,6 +624,7 @@ interface Aps {
 	attributes?: unknown;
 	"content-state"?: ContentState;
 	event?: string;
+	"stale-date"?: number;
 }
 
 function apsOf(sent: SentRequest): Aps {
@@ -1849,5 +1850,233 @@ describe("RunnerCore 정확도 기록", () => {
 		expect(commuteReportDate(fourAm - MINUTE, DEFAULT_TIMEZONE)).toBe(
 			"2026-11-09"
 		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// 나가는 시각의 여유(스펙 4.5~4.7)
+
+/** T0(07:55)부터 m분 s초. 나가는 시각 08:05는 atMinute(10)이다. */
+function atMinute(minutes: number, seconds = 0): number {
+	return T0 + minutes * MINUTE + seconds * SECOND;
+}
+
+/** 밀리초 → epoch 초(ContentState·APNs 단위). */
+function epoch(ms: number): number {
+	return Math.floor(ms / SECOND);
+}
+
+function recordsFor(h: Harness, sessionId: string): AccuracyRecord[] {
+	return h.records.rows.get(sessionId) ?? [];
+}
+
+function leaveRecordsFor(h: Harness, sessionId: string): AccuracyRecord[] {
+	return recordsFor(h, sessionId).filter((record) => record.kind === "leave");
+}
+
+async function sessionOfPlan(
+	h: Harness,
+	planId: string
+): Promise<[string, SessionEntry]> {
+	const found = (await sessions(h)).find(
+		([, entry]) => entry.state.planId === planId
+	);
+	if (!found) {
+		throw new Error(`session of ${planId} missing`);
+	}
+	return found;
+}
+
+describe("RunnerCore 나가는 시각의 여유", () => {
+	// V1은 08:11:24에 승차 정류장에 닿는다. 여유 폭 3분, 도보 5분이면 08:03:24에 나가야 해서
+	// 08:05는 빠듯하고, 분 단위로 내린 08:03(atMinute(8))에 나가면 여유가 있다.
+
+	test("safe를 실은 값이 retry면 조기 탑승 기준과 leave 기록이 없고, ok로 나가면 둘 다 남는다", async () => {
+		const h = harness();
+		addAndroid(h);
+		h.push.respond = () => ({ reason: null, status: 503 });
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [sessionId, failed] = await onlySession(h);
+		const tried = contentOf(h.push.sent[0] as SentRequest);
+		expect(tried.leaveSlack).toBe("tight");
+		expect(tried.safeLeaveEpoch).toBe(epoch(atMinute(8)));
+		expect(failed.lastContent).toBeNull();
+		expect(failed.state.earlyBoardFrom).toBeNull();
+		expect(leaveRecordsFor(h, sessionId)).toEqual([]);
+
+		h.push.respond = () => ({ reason: null, status: 200 });
+		await tickAt(h, core, atMinute(0, 30));
+		// heartbeat로 같은 값을 다시 보내도 leave 기록은 한 줄이다.
+		await tickAt(h, core, atMinute(3));
+		const [, sent] = await onlySession(h);
+		expect(sent.state.earlyBoardFrom).toEqual({
+			at: atMinute(13),
+			vehicleId: "V1",
+		});
+		expect(sent.lastLeave).toEqual({
+			safeLeaveAt: atMinute(8),
+			shown: "safe",
+			vehicleId: "V1",
+		});
+		expect(leaveRecordsFor(h, sessionId)).toEqual([
+			expect.objectContaining({
+				at: atMinute(0, 30),
+				firstWalkMs: 5 * MINUTE,
+				kind: "leave",
+				leaveAt: atMinute(10),
+				marginSec: 180,
+				safeLeaveAt: atMinute(8),
+				sessionId,
+				shown: "safe",
+				vehicleId: "V1",
+			}),
+		]);
+	});
+
+	test("safe를 보낸 뒤 도보가 끝나 wait 값이 나가면 none 기록을 한 줄만 남기고 판정은 safe로 한다", async () => {
+		const h = harness();
+		addAndroid(h);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [sessionId] = await onlySession(h);
+		// 경계 푸시와 나가는 시각 푸시가 모두 실패해 safe 문장이 도보가 끝날 때까지 남는다.
+		h.push.respond = () => ({ reason: null, status: 503 });
+		await tickAt(h, core, atMinute(8));
+		await tickAt(h, core, atMinute(10));
+		await tickAt(h, core, atMinute(15));
+		expect(leaveRecordsFor(h, sessionId)).toEqual([
+			expect.objectContaining({ at: T0, shown: "safe" }),
+		]);
+
+		h.push.respond = () => ({ reason: null, status: 200 });
+		await tickAt(h, core, atMinute(15, 30));
+		expect(contentOf(h.push.sent.at(-1) as SentRequest).stage).toBe("wait");
+		await tickAt(h, core, atMinute(16));
+		const [, waiting] = await onlySession(h);
+		expect(waiting.lastLeave).toEqual({
+			safeLeaveAt: null,
+			shown: "none",
+			vehicleId: "V1",
+		});
+		expect(leaveRecordsFor(h, sessionId)).toEqual([
+			expect.objectContaining({ at: T0, shown: "safe" }),
+			expect.objectContaining({
+				at: atMinute(15, 30),
+				safeLeaveAt: null,
+				shown: "none",
+				vehicleId: "V1",
+			}),
+		]);
+
+		h.clock.now = atMinute(16, 10);
+		await core.input(ANDROID_INSTALL, sessionId, { kind: "end" });
+		expect((await summaryOf(h, sessionId))?.leave).toMatchObject({
+			sawSafe: true,
+			shown: "safe",
+		});
+	});
+
+	test("iOS 갱신이 safe를 실으면 stale-date가 safeLeaveEpoch로 당겨진다", async () => {
+		const h = harness();
+		addIos(h);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [sessionId] = await onlySession(h);
+		h.db.addToken(IOS_INSTALL, "apns-activity", ACTIVITY_TOKEN, {
+			sessionId,
+		});
+		await tickAt(h, core, atMinute(6));
+		const update = h.push.sent.at(-1) as SentRequest;
+		expect(apsOf(update).event).toBe("update");
+		expect(contentOf(update).safeLeaveEpoch).toBe(epoch(atMinute(8)));
+		// 기본(now + heartbeat + tick)은 atMinute(8, 20)이다.
+		expect(apsOf(update)["stale-date"]).toBe(epoch(atMinute(8)));
+	});
+
+	test("업데이트 토큰 전에 safe를 실은 iOS 시작 푸시에도 stale-date가 safeLeaveEpoch로 붙는다", async () => {
+		const h = harness();
+		addIos(h);
+		h.push.respond = () => ({ reason: null, status: 503 });
+		const core = h.core();
+		await tickAt(h, core, T0);
+		h.push.respond = () => ({ reason: null, status: 200 });
+		await tickAt(h, core, atMinute(6));
+		const start = h.push.sent.at(-1) as SentRequest;
+		expect(apsOf(start).event).toBe("start");
+		expect(contentOf(start).safeLeaveEpoch).toBe(epoch(atMinute(8)));
+		expect(apsOf(start)["stale-date"]).toBe(epoch(atMinute(8)));
+	});
+
+	test("마지막으로 보낸 값의 경계가 다음 tick보다 이르면 그 시각에 깨어나고, 그때 경계 푸시를 보낸다", async () => {
+		const h = harness();
+		addAndroid(h);
+		// 도보 1분이면 08:07:24에 나가도 되니 08:05는 여유가 있다. 경계는 나가는 시각 atMinute(10)뿐이다.
+		const roomy = makePlan(PLAN_ANDROID_2);
+		roomy.routes = roomy.routes.map((route) => ({
+			...route,
+			walkMinutes: [1, 3],
+		}));
+		h.db.addPlan(ANDROID_INSTALL_2, roomy);
+		h.db.addToken(ANDROID_INSTALL_2, "fcm", FCM_TOKEN_2, {
+			env: "production",
+		});
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [roomyId, roomyEntry] = await sessionOfPlan(h, PLAN_ANDROID_2);
+		expect(roomyEntry.lastContent?.leaveSlack).toBe("roomy");
+
+		const woke = await tickAt(h, core, atMinute(7, 50));
+		// now + tickMs(atMinute(8, 20))보다 safe 경계 atMinute(8)이 이르다.
+		expect(woke.nextAlarmAt).toBe(atMinute(8));
+
+		const next = await tickAt(h, core, atMinute(8));
+		const [safeId] = await sessionOfPlan(h, PLAN_ANDROID);
+		const boundarySends = (id: string) =>
+			recordsFor(h, id).filter(
+				(record) => record.kind === "send" && record.reason === "boundary"
+			);
+		expect(boundarySends(safeId)).toEqual([
+			expect.objectContaining({ at: atMinute(8), outcome: "ok" }),
+		]);
+		expect(boundarySends(roomyId)).toEqual([]);
+		expect(next.nextAlarmAt).toBe(atMinute(8, 30));
+	});
+
+	test("일찍 나가서 탄 구간이 있는 세션이 닫히면 end 기록의 boardedEarly가 true다", async () => {
+		const h = harness();
+		addAndroid(h);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [sessionId, entry] = await onlySession(h);
+		entry.state = { ...entry.state, boardedBy: ["early"] };
+		await h.store.put(`session:${sessionId}`, entry);
+		h.clock.now = atMinute(0, 30);
+		expect(await core.input(ANDROID_INSTALL, sessionId, { kind: "end" })).toBe(
+			"ok"
+		);
+		const ends = ndjsonOf(h, sessionId)
+			.trim()
+			.split("\n")
+			.map((line) => JSON.parse(line) as AccuracyRecord)
+			.filter((record) => record.kind === "end");
+		expect(ends).toEqual([expect.objectContaining({ boardedEarly: true })]);
+		expect((await summaryOf(h, sessionId))?.earlyBoarded).toBe(true);
+	});
+
+	test("일찍 타지 않은 세션의 end 기록은 boardedEarly가 false다", async () => {
+		const h = harness();
+		addAndroid(h);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [sessionId] = await onlySession(h);
+		h.clock.now = atMinute(0, 30);
+		await core.input(ANDROID_INSTALL, sessionId, { kind: "end" });
+		const end = ndjsonOf(h, sessionId)
+			.trim()
+			.split("\n")
+			.map((line) => JSON.parse(line) as AccuracyRecord)
+			.find((record) => record.kind === "end");
+		expect(end).toMatchObject({ boardedEarly: false });
 	});
 });

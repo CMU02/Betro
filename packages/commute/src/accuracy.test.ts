@@ -1,14 +1,21 @@
 import { describe, expect, it } from "bun:test";
-import type { AccuracyRecord, SessionSummary } from "./accuracy";
+import type {
+	AccuracyRecord,
+	LeaveRecord,
+	LeaveSummary,
+	SessionSummary,
+} from "./accuracy";
 import {
 	dailyReport,
 	inputRecordOf,
+	leaveRecordOf,
 	recordsOf,
 	suggestionRecordOf,
 	summarize,
 } from "./accuracy";
-import { DEFAULT_TIMEZONE } from "./config";
+import { commuteConfig, DEFAULT_TIMEZONE } from "./config";
 import type { BusLeg, CommutePlan, Route, SubwayLeg } from "./plan";
+import type { ContentState } from "./session/content";
 import type { LegEstimate, RouteEstimate } from "./session/estimate";
 import type { SessionState } from "./session/stage";
 import type { StopBoard, TransitBoards } from "./sources/types";
@@ -25,6 +32,12 @@ const PLAN_ID = "0b9f3a52-6d1c-4f0e-9a51-1c7f7b0f4a10";
 function at(minute: number, second = 0): number {
 	return BASE + minute * MINUTE_MS + second * SECOND_MS;
 }
+
+function epoch(ms: number): number {
+	return Math.floor(ms / SECOND_MS);
+}
+
+const config = commuteConfig({});
 
 const busLeg: BusLeg = {
 	alight: { name: "고속터미널", seq: 40, stop: "seoul-bus:119000040" },
@@ -404,6 +417,149 @@ describe("inputRecordOf and suggestionRecordOf", () => {
 	});
 });
 
+/** 08:07에 보낸 첫 구간 도보 값. 나가는 시각 08:10, "08:08에 나가면 여유 있어요". */
+function sentContent(overrides: Partial<ContentState> = {}): ContentState {
+	return {
+		delayMinutes: 0,
+		destinationEtaEpoch: epoch(at(24, 24)),
+		etaEpoch: epoch(at(16)),
+		etaState: "live",
+		leaveEpoch: epoch(at(10)),
+		leaveSlack: "tight",
+		legCount: 1,
+		legIndex: 0,
+		lineName: "6411",
+		mode: "bus",
+		nextLegs: [],
+		passed: null,
+		positionState: "live",
+		safeLeaveEpoch: epoch(at(8)),
+		sentAt: epoch(at(7)),
+		seq: 3,
+		stage: "walk",
+		stopName: "노량진역",
+		stopsAway: 4,
+		suggestion: null,
+		v: 1,
+		...overrides,
+	};
+}
+
+describe("leaveRecordOf", () => {
+	const walking = sessionState({
+		fixed: ["V1"],
+		leave: { safeLeaveAt: at(8), slack: "tight", vehicleId: "V1" },
+		leaveAt: at(10),
+	});
+
+	it("첫 구간 도보에서 보낸 safe 값을 여유 폭·첫 도보와 함께 남긴다", () => {
+		expect(leaveRecordOf(walking, sentContent(), plan, config, null)).toEqual({
+			at: at(7),
+			firstWalkMs: 300_000,
+			kind: "leave",
+			leaveAt: at(10),
+			line: busLeg.line,
+			marginSec: 180,
+			safeLeaveAt: at(8),
+			sessionId: SESSION_ID,
+			shown: "safe",
+			stop: busLeg.board.stop,
+			vehicleId: "V1",
+		});
+	});
+
+	it("보낸 값이 마지막 기록과 같으면 남기지 않는다", () => {
+		expect(
+			leaveRecordOf(walking, sentContent(), plan, config, {
+				safeLeaveAt: at(8),
+				shown: "safe",
+				vehicleId: "V1",
+			})
+		).toBeNull();
+	});
+
+	it("시계가 safeLeave를 지나 보낸 값은 tight로 따로 남긴다", () => {
+		const record = leaveRecordOf(
+			walking,
+			sentContent({ sentAt: epoch(at(8)) }),
+			plan,
+			config,
+			{ safeLeaveAt: at(8), shown: "safe", vehicleId: "V1" }
+		);
+		expect(record).toMatchObject({ at: at(8), shown: "tight" });
+	});
+
+	it("여유 판단이 없으면 잡은 차량으로 남긴다", () => {
+		const record = leaveRecordOf(
+			sessionState({ fixed: ["V7"], leaveAt: at(10) }),
+			sentContent({ leaveSlack: null, safeLeaveEpoch: null }),
+			plan,
+			config,
+			null
+		);
+		expect(record).toMatchObject({
+			safeLeaveAt: null,
+			shown: "none",
+			vehicleId: "V7",
+		});
+	});
+
+	it("남긴 기록 없이 탄 뒤(ride)에는 남기지 않는다", () => {
+		const riding = sessionState({ fixed: ["V1"], stage: "ride" });
+		expect(
+			leaveRecordOf(
+				riding,
+				sentContent({ leaveEpoch: null, stage: "ride" }),
+				plan,
+				config,
+				null
+			)
+		).toBeNull();
+	});
+
+	it("도보가 끝나 wait로 보낸 값은 나가는 시각이 내려간 것으로 none을 한 번 남긴다", () => {
+		const waiting = sessionState({
+			fixed: ["V1"],
+			leave: { safeLeaveAt: at(8), slack: "tight", vehicleId: "V1" },
+			leaveAt: at(10),
+			stage: "wait",
+		});
+		const sent = sentContent({ sentAt: epoch(at(9)), stage: "wait" });
+		expect(
+			leaveRecordOf(waiting, sent, plan, config, {
+				safeLeaveAt: at(8),
+				shown: "safe",
+				vehicleId: "V1",
+			})
+		).toEqual({
+			at: at(9),
+			firstWalkMs: 300_000,
+			kind: "leave",
+			leaveAt: at(10),
+			line: busLeg.line,
+			marginSec: 180,
+			safeLeaveAt: null,
+			sessionId: SESSION_ID,
+			shown: "none",
+			stop: busLeg.board.stop,
+			vehicleId: "V1",
+		});
+	});
+
+	it("도보가 끝난 뒤 마지막 기록이 이미 none이면 다시 남기지 않는다", () => {
+		const riding = sessionState({ fixed: ["V1"], stage: "ride" });
+		expect(
+			leaveRecordOf(
+				riding,
+				sentContent({ leaveEpoch: null, stage: "ride" }),
+				plan,
+				config,
+				{ safeLeaveAt: null, shown: "none", vehicleId: "V1" }
+			)
+		).toBeNull();
+	});
+});
+
 function prediction(
 	overrides: Partial<Extract<AccuracyRecord, { kind: "prediction" }>>
 ): AccuracyRecord {
@@ -574,9 +730,254 @@ describe("summarize", () => {
 	});
 });
 
+/** 정류장 S(노량진역)·차량 A·도보 5분. 기본은 08:07에 보낸 "08:08에 나가면 여유 있어요". */
+function leaveRecord(overrides: Partial<LeaveRecord> = {}): LeaveRecord {
+	return {
+		at: at(7),
+		firstWalkMs: 5 * MINUTE_MS,
+		kind: "leave",
+		leaveAt: at(10),
+		line: busLeg.line,
+		marginSec: 180,
+		safeLeaveAt: at(8),
+		sessionId: SESSION_ID,
+		shown: "safe",
+		stop: busLeg.board.stop,
+		vehicleId: "A",
+		...overrides,
+	};
+}
+
+function sendRecord(
+	time: number,
+	reason: string,
+	outcome: string
+): AccuracyRecord {
+	return {
+		at: time,
+		kind: "send",
+		outcome,
+		reason,
+		seq: 1,
+		sessionId: SESSION_ID,
+	};
+}
+
+describe("summarize의 leave", () => {
+	const safe = leaveRecord();
+	const judged = (low: number, high: number) =>
+		summarize([safe, arrival("A", busLeg.board.stop, low, high)]).leave;
+
+	it("ready(= safeLeave + 도보)가 도착 구간 앞이면 sure, 과잉 대기는 low − ready", () => {
+		expect(judged(at(13, 30), at(14))).toEqual({
+			boundaryDelayMs: null,
+			overWaitMs: 30_000,
+			sawSafe: true,
+			sawTight: false,
+			shown: "safe",
+			verdict: "sure",
+		});
+	});
+
+	it("ready가 도착 구간 안이면 boundary", () => {
+		expect(judged(at(12, 40), at(13, 20))).toMatchObject({
+			overWaitMs: 0,
+			verdict: "boundary",
+		});
+	});
+
+	it("ready가 도착 구간 뒤면 wrong, 과잉 대기는 0에서 자른다", () => {
+		expect(judged(at(12), at(12, 50))).toMatchObject({
+			overWaitMs: 0,
+			verdict: "wrong",
+		});
+	});
+
+	it("실제 도착이 없으면 unknown", () => {
+		expect(summarize([safe]).leave).toEqual({
+			boundaryDelayMs: null,
+			overWaitMs: null,
+			sawSafe: true,
+			sawTight: false,
+			shown: "safe",
+			verdict: "unknown",
+		});
+	});
+
+	it("다른 차량의 도착으로는 판정하지 않는다", () => {
+		const other = arrival("B", busLeg.board.stop, at(13, 30), at(14));
+		expect(summarize([safe, other]).leave?.verdict).toBe("unknown");
+	});
+
+	it("tight 기록만 있으면 tightOnly", () => {
+		const tight = leaveRecord({ safeLeaveAt: null, shown: "tight" });
+		expect(summarize([tight]).leave).toEqual({
+			boundaryDelayMs: null,
+			overWaitMs: null,
+			sawSafe: false,
+			sawTight: true,
+			shown: null,
+			verdict: "tightOnly",
+		});
+	});
+
+	it("safe 뒤 roomy면 마지막 roomy를 leaveAt + 도보로 판정하고 과잉 대기는 재지 않는다", () => {
+		const roomy = leaveRecord({
+			at: at(7, 30),
+			safeLeaveAt: null,
+			shown: "roomy",
+		});
+		expect(
+			summarize([safe, roomy, arrival("A", busLeg.board.stop, at(15), at(16))])
+				.leave
+		).toMatchObject({
+			overWaitMs: null,
+			sawSafe: true,
+			shown: "roomy",
+			verdict: "sure",
+		});
+		expect(
+			summarize([
+				safe,
+				roomy,
+				arrival("A", busLeg.board.stop, at(14), at(14, 30)),
+			]).leave?.verdict
+		).toBe("wrong");
+	});
+
+	it("none 기록만 있거나 기록이 없으면 leave는 null", () => {
+		const none = leaveRecord({ safeLeaveAt: null, shown: "none" });
+		expect(summarize([none]).leave).toBeNull();
+		expect(summarize([]).leave).toBeNull();
+	});
+
+	/** safe 문장을 바꾼 값이 나가며 남은 기록. */
+	const replacedAt = (time: number, shown: LeaveRecord["shown"] = "tight") =>
+		leaveRecord({ at: time, safeLeaveAt: null, shown });
+	const endAt = (time: number): AccuracyRecord => ({
+		at: time,
+		kind: "end",
+		planId: PLAN_ID,
+		reason: "arrived",
+		sessionId: SESSION_ID,
+	});
+
+	it("경계 지연은 safeLeave부터 safe 문장을 바꾼 다음 leave 기록까지", () => {
+		const { leave } = summarize([
+			safe,
+			sendRecord(at(7, 50), "boundary", "ok"),
+			sendRecord(at(8, 2), "change", "retry"),
+			sendRecord(at(8, 3), "boundary", "retry"),
+			sendRecord(at(8, 5), "boundary", "ok"),
+			replacedAt(at(8, 5)),
+			sendRecord(at(10), "boundary", "ok"),
+			endAt(at(20)),
+		]);
+		expect(leave?.boundaryDelayMs).toBe(5000);
+	});
+
+	it("safeLeave 전에 roomy로 바뀌었으면 그 뒤 boundary ok는 경계 지연이 아니다", () => {
+		const roomy = leaveRecord({
+			at: at(7, 30),
+			safeLeaveAt: null,
+			shown: "roomy",
+		});
+		const records = [
+			safe,
+			roomy,
+			sendRecord(at(10), "boundary", "ok"),
+			endAt(at(20)),
+		];
+		expect(summarize(records).leave?.boundaryDelayMs).toBeNull();
+		expect(
+			dailyReport("2026-11-10", [summarize(records)]).leave.boundaryLate
+		).toBe(0);
+	});
+
+	it("safeLeave가 지난 뒤에 바뀐 기록은 경계 지연을 막지 않는다", () => {
+		const { leave } = summarize([
+			safe,
+			sendRecord(at(8, 5), "boundary", "ok"),
+			replacedAt(at(8, 5)),
+		]);
+		expect(leave?.boundaryDelayMs).toBe(5000);
+	});
+
+	it("경계 푸시가 실패하고 다른 이유로 보낸 값이 먼저 tight로 바꾸면 그 값까지만 잰다", () => {
+		const { leave } = summarize([
+			safe,
+			sendRecord(at(8), "boundary", "retry"),
+			sendRecord(at(8, 10), "change", "ok"),
+			replacedAt(at(8, 10)),
+			sendRecord(at(10), "boundary", "ok"),
+			endAt(at(20)),
+		]);
+		expect(leave?.boundaryDelayMs).toBe(10_000);
+	});
+
+	it("safeLeave 뒤로 바꾼 값이 나가지 않고 세션이 끝나면 끝난 시각까지 재고 늦은 세션으로 센다", () => {
+		const records = [
+			safe,
+			sendRecord(at(8), "boundary", "retry"),
+			sendRecord(at(9), "heartbeat", "retry"),
+			endAt(at(10)),
+		];
+		expect(summarize(records).leave?.boundaryDelayMs).toBe(120_000);
+		expect(dailyReport("2026-11-10", [summarize(records)]).leave).toMatchObject(
+			{ boundaryDelayMaxMs: 120_000, boundaryLate: 1 }
+		);
+	});
+
+	it("end 기록이 없으면 가장 늦은 기록의 시각까지 잰다", () => {
+		const { leave } = summarize([
+			safe,
+			sendRecord(at(8), "boundary", "retry"),
+			sendRecord(at(9), "heartbeat", "retry"),
+		]);
+		expect(leave?.boundaryDelayMs).toBe(60_000);
+	});
+
+	it("세션이 safeLeave 전에 끝나면 경계 지연은 null", () => {
+		expect(summarize([safe, endAt(at(7, 30))]).leave?.boundaryDelayMs).toBe(
+			null
+		);
+	});
+
+	it("도보가 끝나 남은 none 기록도 safe 문장을 바꾼 기록으로 본다", () => {
+		const early = summarize([
+			safe,
+			replacedAt(at(7, 30), "none"),
+			endAt(at(20)),
+		]);
+		expect(early.leave?.boundaryDelayMs).toBeNull();
+		const late = summarize([
+			safe,
+			replacedAt(at(8, 40), "none"),
+			endAt(at(20)),
+		]);
+		expect(late.leave?.boundaryDelayMs).toBe(40_000);
+	});
+
+	it("end 기록의 boardedEarly를 earlyBoarded로 옮긴다", () => {
+		const end = (boardedEarly?: boolean): AccuracyRecord => ({
+			at: at(30),
+			kind: "end",
+			planId: PLAN_ID,
+			reason: "arrived",
+			sessionId: SESSION_ID,
+			...(boardedEarly === undefined ? {} : { boardedEarly }),
+		});
+		expect(summarize([end(true)]).earlyBoarded).toBe(true);
+		expect(summarize([end(false)]).earlyBoarded).toBe(false);
+		expect(summarize([end()]).earlyBoarded).toBe(false);
+	});
+});
+
 function summary(overrides: Partial<SessionSummary>): SessionSummary {
 	return {
+		earlyBoarded: false,
 		endReason: "arrived",
+		leave: null,
 		maxSendGapMs: 60_000,
 		planId: PLAN_ID,
 		predictions: [],
@@ -597,6 +998,168 @@ function scored(errorMs: number): SessionSummary["predictions"][number] {
 		stop: busLeg.board.stop,
 	};
 }
+
+/** 나가는 시각 기록이 없는 날의 leave. */
+const noLeave = {
+	boundary: 0,
+	boundaryDelayMaxMs: null,
+	boundaryLate: 0,
+	earlyBoarded: 0,
+	overWaitMeanMs: null,
+	rateHigh: null,
+	rateLow: null,
+	rateSafeOrTight: null,
+	sawSafe: 0,
+	sawSafeOrTight: 0,
+	sawTight: 0,
+	sessions: 0,
+	status: "ok",
+	sure: 0,
+	tightOnly: 0,
+	unknown: 0,
+	wrong: 0,
+} as const;
+
+function leaveSummary(overrides: Partial<LeaveSummary> = {}): LeaveSummary {
+	return {
+		boundaryDelayMs: null,
+		overWaitMs: null,
+		sawSafe: true,
+		sawTight: false,
+		shown: "safe",
+		verdict: "sure",
+		...overrides,
+	};
+}
+
+function withLeave(overrides: Partial<LeaveSummary>): SessionSummary {
+	return summary({ leave: leaveSummary(overrides) });
+}
+
+describe("dailyReport의 leave", () => {
+	it("sure 3, boundary 1이면 하한 0.75, 상한 1", () => {
+		const report = dailyReport("2026-11-10", [
+			withLeave({ overWaitMs: 30_000 }),
+			withLeave({ overWaitMs: 10_000 }),
+			withLeave({ overWaitMs: null, shown: "roomy" }),
+			withLeave({ overWaitMs: 0, verdict: "boundary" }),
+		]);
+		expect(report.leave).toEqual({
+			...noLeave,
+			boundary: 1,
+			overWaitMeanMs: 40_000 / 3,
+			rateHigh: 1,
+			rateLow: 0.75,
+			rateSafeOrTight: 1,
+			sawSafe: 4,
+			sawSafeOrTight: 4,
+			sessions: 4,
+			sure: 3,
+		});
+	});
+
+	it("safe나 tight를 하나라도 보인 세션은 겹쳐도 한 번만 세고, 비율의 분모는 leave가 있는 세션이다", () => {
+		const report = dailyReport("2026-11-10", [
+			withLeave({ sawSafe: true, sawTight: true }),
+			withLeave({ sawSafe: true, sawTight: false }),
+			withLeave({
+				sawSafe: false,
+				sawTight: true,
+				shown: null,
+				verdict: "tightOnly",
+			}),
+			withLeave({ sawSafe: false, sawTight: false, shown: "roomy" }),
+			summary({ leave: null }),
+		]);
+		expect(report.leave).toMatchObject({
+			rateSafeOrTight: 0.75,
+			sawSafe: 2,
+			sawSafeOrTight: 3,
+			sawTight: 2,
+			sessions: 4,
+		});
+	});
+
+	it("unknown이 잰 세션보다 많으면 판정 불가", () => {
+		const report = dailyReport("2026-11-10", [
+			withLeave({}),
+			withLeave({}),
+			withLeave({}),
+			withLeave({ verdict: "boundary" }),
+			...Array.from({ length: 5 }, () => withLeave({ verdict: "unknown" })),
+		]);
+		expect(report.leave).toMatchObject({
+			rateHigh: 1,
+			rateLow: 0.75,
+			sessions: 9,
+			status: "undecidable",
+			unknown: 5,
+		});
+	});
+
+	it("unknown이 잰 세션과 같으면 ok", () => {
+		const report = dailyReport("2026-11-10", [
+			withLeave({}),
+			withLeave({ verdict: "unknown" }),
+		]);
+		expect(report.leave.status).toBe("ok");
+	});
+
+	it("tightOnly는 분모에서 빼고 따로 센다", () => {
+		const report = dailyReport("2026-11-10", [
+			withLeave({ verdict: "wrong" }),
+			withLeave({
+				sawSafe: false,
+				sawTight: true,
+				shown: null,
+				verdict: "tightOnly",
+			}),
+		]);
+		expect(report.leave).toMatchObject({
+			rateHigh: 0,
+			rateLow: 0,
+			sawSafe: 1,
+			sawTight: 1,
+			tightOnly: 1,
+			wrong: 1,
+		});
+	});
+
+	it("경계 지연은 최댓값과 30초를 넘은 세션 수", () => {
+		const report = dailyReport("2026-11-10", [
+			withLeave({ boundaryDelayMs: 5000 }),
+			withLeave({ boundaryDelayMs: 40_000 }),
+			withLeave({ boundaryDelayMs: null }),
+		]);
+		expect(report.leave).toMatchObject({
+			boundaryDelayMaxMs: 40_000,
+			boundaryLate: 1,
+		});
+	});
+
+	it("일찍 탄 세션은 leave가 없어도 센다", () => {
+		const report = dailyReport("2026-11-10", [
+			summary({ earlyBoarded: true }),
+			summary({ earlyBoarded: false }),
+		]);
+		expect(report.leave).toEqual({ ...noLeave, earlyBoarded: 1 });
+	});
+
+	it("배포 전에 저장된 요약(leave·earlyBoarded 키 없음)도 던지지 않고 세지 않는다", () => {
+		const old: SessionSummary = {
+			endReason: "arrived",
+			maxSendGapMs: 60_000,
+			planId: PLAN_ID,
+			predictions: [],
+			sessionId: SESSION_ID,
+			startDelayMs: 10_000,
+			suggestions: [],
+		};
+		const report = dailyReport("2026-11-10", [old]);
+		expect(report.sessions).toBe(1);
+		expect(report.leave).toEqual(noLeave);
+	});
+});
 
 describe("dailyReport", () => {
 	it("counts starts, accuracy bands, end reasons and suggestion verdicts", () => {
@@ -629,6 +1192,7 @@ describe("dailyReport", () => {
 			},
 			date: "2026-11-10",
 			endReasons: { arrived: 2, user: 1 },
+			leave: noLeave,
 			maxSendGapMs: 95_000,
 			sessions: 3,
 			starts: { late: 1, onTime: 2, unknown: 0 },
@@ -641,6 +1205,7 @@ describe("dailyReport", () => {
 			accuracy: {},
 			date: "2026-11-10",
 			endReasons: {},
+			leave: noLeave,
 			maxSendGapMs: 0,
 			sessions: 0,
 			starts: { late: 0, onTime: 0, unknown: 0 },

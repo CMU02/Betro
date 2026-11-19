@@ -188,10 +188,12 @@ describe("startSession", () => {
 		const state = started(transferPlan);
 		expect(state).toEqual({
 			boardedBy: [null, null],
+			earlyBoardFrom: null,
 			endReason: null,
 			estimates: [],
 			fixed: [null, null],
 			initialDestinationEtaAt: null,
+			leave: null,
 			leaveAt: at(10),
 			legIndex: 0,
 			passed: null,
@@ -764,5 +766,98 @@ describe("advance: 처음 목적지 도착과 seq", () => {
 		expect(
 			step(state, at(5), busBoardsAt(at(5)), { kind: "boarded" }).seq
 		).toBe(7);
+	});
+});
+
+describe("advance: 여유 판단", () => {
+	it("늦게 시작한 세션은 끝까지 leave가 null", () => {
+		const first = step(started(), at(11), busBoardsAt(at(11)));
+		expect(first.leave).toBeNull();
+		const second = step(first, at(12), busBoardsAt(at(12)));
+		expect(second.leave).toBeNull();
+	});
+
+	it("옛 저장 상태(leave·earlyBoardFrom 없음)도 advance가 던지지 않는다", () => {
+		const { leave: _leave, earlyBoardFrom: _early, ...stored } = caughtB();
+		// B 08:17 − 3분 − 5분 = 08:09, 등록 시각 08:10보다 일러 빠듯
+		const next = step(stored, at(1), busBoardsAt(at(1)));
+		expect(next.leave).toEqual({
+			safeLeaveAt: at(9),
+			slack: "tight",
+			vehicleId: "B",
+		});
+	});
+});
+
+describe("advance: 일찍 나가서 탄 경우", () => {
+	/** A를 잡고 08:13부터 일찍 탈 수 있다고 기록한 상태. readyAt 08:15. */
+	function earlyA(vehicleId = "A"): SessionState {
+		return {
+			...caughtB(),
+			earlyBoardFrom: { at: at(13), vehicleId },
+			fixed: ["A"],
+		};
+	}
+
+	/** A가 passedAt에 승차 정류장을 지난 도착판. 다른 차량은 없다. 주행 14분. */
+	function passedA(now: number, passedAt: number): TransitBoards {
+		return fakeBoards(now, [
+			[
+				busLeg,
+				{
+					board: stopBoard([], { passed: [{ at: passedAt, vehicleId: "A" }] }),
+					progress: { A: { etaAt: at(28), method: "official", stopsAway: 3 } },
+					rideMs: 14 * MINUTE_MS,
+				},
+			],
+			[altBusLeg, altView],
+		]);
+	}
+
+	it("기록한 시각과 readyAt 사이에 같은 차량이 지나면 early로 탄다", () => {
+		const state = step(earlyA(), at(14), passedA(at(14), at(14)));
+		expect(state.stage).toBe("ride");
+		expect(state.boardedBy).toEqual(["early"]);
+		expect(state.readyAt).toBe(at(14));
+		expect(state.fixed).toEqual(["A"]);
+		expect(state.passed).toBeNull();
+	});
+
+	it("기록한 시각에 딱 맞춰 지나도 early로 탄다", () => {
+		const state = step(earlyA(), at(13), passedA(at(13), at(13)));
+		expect(state.stage).toBe("ride");
+		expect(state.boardedBy).toEqual(["early"]);
+	});
+
+	it("readyAt 뒤에 지나면 지금처럼 time으로 탄다", () => {
+		const state = step(earlyA(), at(16), passedA(at(16), at(16)));
+		expect(state.stage).toBe("ride");
+		expect(state.boardedBy).toEqual(["time"]);
+		expect(state.readyAt).toBe(at(16));
+	});
+
+	it("기록한 시각보다 먼저 지나면 지금처럼 놓친 것으로 본다", () => {
+		const state = step(earlyA(), at(12), passedA(at(12), at(12)));
+		expect(state.passed).toEqual({ lineName: "6411" });
+		expect(state.fixed[0]).toBeNull();
+		expect(state.skip).toContain("A");
+		expect(state.boardedBy).toEqual([null]);
+	});
+
+	it("기록한 차량이 다르면 readyAt 전에 지나간 차량은 놓친 것으로 본다", () => {
+		const state = step(earlyA("B"), at(14), passedA(at(14), at(14)));
+		expect(state.passed).toEqual({ lineName: "6411" });
+		expect(state.fixed[0]).toBeNull();
+		expect(state.skip).toContain("A");
+		expect(state.boardedBy).toEqual([null]);
+	});
+
+	it("early로 탄 뒤 다음 advance에서도 ride가 유지되고 대안을 계산하지 않는다", () => {
+		const boarded = step(earlyA(), at(14), passedA(at(14), at(14)));
+		const next = step(boarded, at(15), passedA(at(15), at(14)));
+		expect(next.stage).toBe("ride");
+		expect(next.boardedBy).toEqual(["early"]);
+		expect(next.readyAt).toBe(at(14));
+		expect(next.estimates.map((estimate) => estimate.rank)).toEqual([0]);
 	});
 });

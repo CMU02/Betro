@@ -38,6 +38,11 @@ export interface ContentState {
 	etaState: "live" | "estimated";
 	/** 첫 구간 walk 단계의 나가는 시각. 그 밖에는 null. */
 	leaveEpoch: number | null;
+	/**
+	 * 나가는 시각의 여유(스펙 4.4). 계산하지 않는 경우에는 null.
+	 * 배포 전에 저장된 옛 값에는 키가 없다(undefined는 null과 같다).
+	 */
+	leaveSlack?: "roomy" | "tight" | null;
 	legCount: number;
 	legIndex: number;
 	lineName: string;
@@ -46,6 +51,11 @@ export interface ContentState {
 	nextLegs: NextLegContent[];
 	passed: { lineName: string } | null;
 	positionState: "live" | "stale" | "none";
+	/**
+	 * leaveSlack이 tight이고 당기는 폭이 상한 안일 때만 값. 분 단위로 내림한 epoch 초, leaveAt − 60초 이하.
+	 * 옛 값에는 키가 없다(undefined는 null과 같다).
+	 */
+	safeLeaveEpoch?: number | null;
 	sentAt: number;
 	/** 세션 안에서 보낼 때마다 1씩 오른다. 기기는 더 작은 값을 버린다. */
 	seq: number;
@@ -68,8 +78,11 @@ export type SendDecision =
 	| {
 			send: true;
 			priority: 5 | 10;
-			reason: "change" | "stage" | "heartbeat";
+			reason: "boundary" | "change" | "stage" | "heartbeat";
 	  };
+
+/** 기기가 고르는 나가기 전 문장(스펙 4.5 표). none은 나가는 시각이 화면에 없거나 여유를 모르는 경우. */
+export type LeaveShown = "roomy" | "safe" | "tight" | "none";
 
 function toEpoch(ms: number): number {
 	return Math.floor(ms / MS_PER_SECOND);
@@ -205,6 +218,9 @@ export function buildContent(
 		? null
 		: (legEstimate?.stopsAway ?? null);
 	const showsLeave = state.stage === "walk" && legIndex === 0;
+	// 나가는 시각이 지난 뒤에는 여유를 싣지 않는다. 옛 저장 상태에는 leave가 없다.
+	const leave =
+		showsLeave && now < state.leaveAt ? (state.leave ?? null) : null;
 	const awaitingDeparture = boarding && legEstimate?.awaitingDeparture === true;
 
 	return {
@@ -214,6 +230,7 @@ export function buildContent(
 		etaEpoch: toEpochOrNull(etaAt),
 		etaState: legEstimate?.etaState ?? "estimated",
 		leaveEpoch: showsLeave ? toEpoch(state.leaveAt) : null,
+		leaveSlack: leave?.slack ?? null,
 		legCount,
 		legIndex,
 		lineName: leg?.lineName ?? "",
@@ -221,6 +238,7 @@ export function buildContent(
 		nextLegs: nextLegsOf(state, route, legIndex, primary),
 		passed: state.passed ? { lineName: state.passed.lineName } : null,
 		positionState: legEstimate?.positionState ?? "none",
+		safeLeaveEpoch: toEpochOrNull(leave?.safeLeaveAt),
 		sentAt: toEpoch(now),
 		seq: state.seq + 1,
 		stage: state.stage,
@@ -291,7 +309,108 @@ function isValueChange(prev: ContentState, next: ContentState): boolean {
 	);
 }
 
-/** 보낼지 정한다. 단계 변화는 높은 우선순위, 표시가 바뀐 값은 낮은 우선순위, 오래 조용하면 heartbeat. */
+/** 나가는 시각이 atSec(epoch 초)에 화면에 보이는가. 부등호는 스펙 4.5와 같은 `at < leaveEpoch`. */
+function isLeaveVisibleAt(content: ContentState, atSec: number): boolean {
+	return content.leaveEpoch !== null && atSec < content.leaveEpoch;
+}
+
+/** atSec(epoch 초)에 기기가 고르는 나가기 전 문장. 스펙 4.5 표. */
+export function leaveShownAt(content: ContentState, atSec: number): LeaveShown {
+	const slack = content.leaveSlack ?? null;
+	const safeLeaveEpoch = content.safeLeaveEpoch ?? null;
+	const isFirstWalk = content.stage === "walk" && content.legIndex === 0;
+	const isLive =
+		content.etaState !== "estimated" && content.positionState === "live";
+	if (
+		!(isFirstWalk && isLeaveVisibleAt(content, atSec) && isLive) ||
+		content.passed !== null ||
+		slack === null
+	) {
+		return "none";
+	}
+	if (slack === "roomy") {
+		return "roomy";
+	}
+	return safeLeaveEpoch !== null && atSec < safeLeaveEpoch ? "safe" : "tight";
+}
+
+/** now 뒤의 가장 이른 경계(safeLeaveEpoch, leaveEpoch) 밀리초. 없으면 null. */
+export function nextLeaveBoundaryMs(
+	content: ContentState,
+	now: number
+): number | null {
+	const safeLeaveEpoch =
+		content.leaveSlack === "tight" ? (content.safeLeaveEpoch ?? null) : null;
+	let earliest: number | null = null;
+	for (const boundary of [safeLeaveEpoch, content.leaveEpoch]) {
+		if (boundary === null) {
+			continue;
+		}
+		const boundaryMs = boundary * MS_PER_SECOND;
+		if (boundaryMs > now && (earliest === null || boundaryMs < earliest)) {
+			earliest = boundaryMs;
+		}
+	}
+	return earliest;
+}
+
+/**
+ * iOS stale-date 밀리초. 기본은 다음 heartbeat에 tick 하나를 더한 때.
+ * safe 문장을 싣는 값이면 safeLeaveEpoch로 당겨, 경계 푸시가 늦어도 "여유 있어요"가 남지 않게 한다.
+ */
+export function staleAtFor(
+	content: ContentState,
+	now: number,
+	config: CommuteConfig
+): number {
+	const fallback = now + config.heartbeatMs + config.tickMs;
+	const safeLeaveEpoch = content.safeLeaveEpoch ?? null;
+	if (
+		safeLeaveEpoch === null ||
+		leaveShownAt(content, toEpoch(now)) !== "safe"
+	) {
+		return fallback;
+	}
+	return Math.min(fallback, safeLeaveEpoch * MS_PER_SECOND);
+}
+
+/** 직전 값이 새 값 없이 시계만으로 다른 문장이 되었는가(경계를 지남). */
+function isBoundaryCrossed(prev: ContentState, nowSec: number): boolean {
+	return (
+		leaveShownAt(prev, prev.sentAt) !== leaveShownAt(prev, nowSec) ||
+		isLeaveVisibleAt(prev, prev.sentAt) !== isLeaveVisibleAt(prev, nowSec)
+	);
+}
+
+/** 지금 화면에 남은 문장(직전 값을 보낸 시각에 고른 것)과 새 값으로 지금 고를 문장이 다른가. */
+function isLeaveShownChange(
+	prev: ContentState,
+	next: ContentState,
+	nowSec: number
+): boolean {
+	return (
+		leaveShownAt(prev, prev.sentAt) !== leaveShownAt(next, nowSec) ||
+		isLeaveVisibleAt(prev, prev.sentAt) !== isLeaveVisibleAt(next, nowSec)
+	);
+}
+
+/** 문장은 그대로 safe이고 권하는 시각의 분만 바뀌었는가. */
+function isSafeLeaveMinuteChange(
+	prev: ContentState,
+	next: ContentState,
+	nowSec: number
+): boolean {
+	return (
+		leaveShownAt(next, nowSec) === "safe" &&
+		minuteOf(prev.safeLeaveEpoch ?? null) !==
+			minuteOf(next.safeLeaveEpoch ?? null)
+	);
+}
+
+/**
+ * 보낼지 정한다. 단계 변화와 시계가 경계를 지나 문장이 바뀌는 때는 높은 우선순위,
+ * 표시가 바뀐 값은 낮은 우선순위, 오래 조용하면 heartbeat.
+ */
 export function decideSend(
 	prev: ContentState | null,
 	next: ContentState,
@@ -305,7 +424,17 @@ export function decideSend(
 	if (isStageChange(prev, next)) {
 		return { priority: PRIORITY_STAGE, reason: "stage", send: true };
 	}
-	if (isValueChange(prev, next)) {
+	const nowSec = toEpoch(now);
+	if (isBoundaryCrossed(prev, nowSec)) {
+		return { priority: PRIORITY_STAGE, reason: "boundary", send: true };
+	}
+	if (isLeaveShownChange(prev, next, nowSec)) {
+		return { priority: PRIORITY_STAGE, reason: "stage", send: true };
+	}
+	if (
+		isValueChange(prev, next) ||
+		isSafeLeaveMinuteChange(prev, next, nowSec)
+	) {
 		return { priority: PRIORITY_CHANGE, reason: "change", send: true };
 	}
 	if (lastSentAt === null || now - lastSentAt >= config.heartbeatMs) {

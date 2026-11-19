@@ -44,6 +44,8 @@ export const ko = {
 				/** 탈 차량이 아직 노선 기점에서 떠나지 않았다(서울 버스 "출발대기"). */
 				awaitingDeparture: "출발 대기 중",
 				beforeLeave: "{leave}에 나가세요",
+				beforeLeaveSafe: "{safeLeave}에 나가면 여유 있어요",
+				beforeLeaveTight: "{leave}에 나가면 빠듯해요",
 				passedBus: "{passedLine}번이 지나갔어요",
 				passedSubway: "{passedLine} 열차가 지나갔어요",
 				ride: "하차까지 {n}정거장",

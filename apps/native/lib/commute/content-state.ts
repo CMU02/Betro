@@ -6,6 +6,7 @@ export type CommuteStage = "walk" | "wait" | "ride" | "arrived" | "ended";
 export type CommuteMode = "bus" | "subway";
 export type PositionState = "live" | "stale" | "none";
 export type EtaState = "live" | "estimated";
+export type LeaveSlack = "roomy" | "tight";
 
 export interface ContentStateSuggestion {
 	boardEtaEpoch: number;
@@ -34,6 +35,8 @@ export interface ContentState {
 	etaEpoch: number | null;
 	etaState: EtaState;
 	leaveEpoch: number | null;
+	/** 나가는 시각의 여유 판단. 옛 서버의 값에는 없어서 null로 읽는다. */
+	leaveSlack: LeaveSlack | null;
 	legCount: number;
 	legIndex: number;
 	lineName: string;
@@ -42,6 +45,8 @@ export interface ContentState {
 	nextLegs: NextLegContent[];
 	passed: { lineName: string } | null;
 	positionState: PositionState;
+	/** 빠듯할 때 여유 있게 나갈 수 있는 시각(epoch 초). 없으면 null. */
+	safeLeaveEpoch: number | null;
 	sentAt: number;
 	seq: number;
 	stage: CommuteStage;
@@ -55,6 +60,7 @@ const STAGES: readonly string[] = ["walk", "wait", "ride", "arrived", "ended"];
 const MODES: readonly string[] = ["bus", "subway"];
 const POSITION_STATES: readonly string[] = ["live", "stale", "none"];
 const ETA_STATES: readonly string[] = ["live", "estimated"];
+const LEAVE_SLACKS: readonly string[] = ["roomy", "tight"];
 
 type Raw = Record<string, unknown>;
 
@@ -83,6 +89,14 @@ function nullableNumber(value: unknown): number | null | undefined {
 		return null;
 	}
 	return isNumber(value) ? value : undefined;
+}
+
+/** 키가 없거나 null이면 null, 알려진 값이면 그 값, 그 밖이면 undefined(잘못된 값). */
+function parseLeaveSlack(value: unknown): LeaveSlack | null | undefined {
+	if (value === null || value === undefined) {
+		return null;
+	}
+	return oneOf<LeaveSlack>(value, LEAVE_SLACKS) ? value : undefined;
 }
 
 /** 없거나 null·false면 null(표시 없음), true면 true, 그 밖의 타입이면 undefined(잘못된 값). */
@@ -191,6 +205,8 @@ export function parseContentState(input: unknown): ContentState | null {
 	const etaEpoch = nullableNumber(input.etaEpoch);
 	const leaveEpoch = nullableNumber(input.leaveEpoch);
 	const destinationEtaEpoch = nullableNumber(input.destinationEtaEpoch);
+	const leaveSlack = parseLeaveSlack(input.leaveSlack);
+	const safeLeaveEpoch = nullableNumber(input.safeLeaveEpoch);
 	const passed = parsePassed(input.passed);
 	const suggestion = parseSuggestion(input.suggestion);
 	const nextLegs = parseNextLegs(input.nextLegs);
@@ -212,6 +228,8 @@ export function parseContentState(input: unknown): ContentState | null {
 		stopsAway === undefined ||
 		etaEpoch === undefined ||
 		leaveEpoch === undefined ||
+		leaveSlack === undefined ||
+		safeLeaveEpoch === undefined ||
 		destinationEtaEpoch === undefined ||
 		passed === undefined ||
 		suggestion === undefined ||
@@ -227,6 +245,7 @@ export function parseContentState(input: unknown): ContentState | null {
 		etaEpoch,
 		etaState,
 		leaveEpoch,
+		leaveSlack,
 		legCount,
 		legIndex,
 		lineName,
@@ -234,6 +253,7 @@ export function parseContentState(input: unknown): ContentState | null {
 		nextLegs,
 		passed,
 		positionState,
+		safeLeaveEpoch,
 		sentAt,
 		seq,
 		stage,

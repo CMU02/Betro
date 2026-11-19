@@ -87,6 +87,30 @@ function beforeLeaveOf(
 	return { etaEpoch, leaveEpoch };
 }
 
+/**
+ * 나가기 전 문장. 시간표 추정이거나 여유 판단이 없으면 등록한 시각 그대로,
+ * 빠듯하면 `now < safeLeaveEpoch`일 때만 "여유 있어요"를 보인다(서버와 같은 부등호).
+ */
+function beforeLeaveLine(
+	state: ContentState,
+	deps: LockScreenDeps,
+	clock: (epoch: number) => string,
+	leaveEpoch: number
+): string {
+	const { t, now } = deps;
+	const leave = clock(leaveEpoch);
+	if (tagOf(state) === "estimated" || state.leaveSlack !== "tight") {
+		return t("commute.lock.status.beforeLeave", { leave });
+	}
+	const { safeLeaveEpoch } = state;
+	if (safeLeaveEpoch !== null && now < safeLeaveEpoch) {
+		return t("commute.lock.status.beforeLeaveSafe", {
+			safeLeave: clock(safeLeaveEpoch),
+		});
+	}
+	return t("commute.lock.status.beforeLeaveTight", { leave });
+}
+
 /** 새 도착판에서 탈 차량이 아직 기점에서 떠나지 않았다. 묵은 위치에서는 "위치 확인 중"을 둔다. */
 function awaitsDeparture(state: ContentState): boolean {
 	return state.awaitingDeparture === true && state.positionState === "live";
@@ -108,7 +132,11 @@ function showsAwaitingDeparture(state: ContentState, now: number): boolean {
 	);
 }
 
-function statusLine(state: ContentState, deps: LockScreenDeps): string {
+function statusLine(
+	state: ContentState,
+	deps: LockScreenDeps,
+	clock: (epoch: number) => string
+): string {
 	const { t, now } = deps;
 	const { etaEpoch, stage } = state;
 	if (state.passed && etaEpoch !== null) {
@@ -120,9 +148,7 @@ function statusLine(state: ContentState, deps: LockScreenDeps): string {
 	}
 	const beforeLeave = beforeLeaveOf(state, now);
 	if (beforeLeave) {
-		return t("commute.lock.status.beforeLeave", {
-			leave: formatClock(beforeLeave.leaveEpoch, deps.timezone),
-		});
+		return beforeLeaveLine(state, deps, clock, beforeLeave.leaveEpoch);
 	}
 	const stops = knownStops(state.stopsAway);
 	if (stage === "walk" || stage === "wait") {
@@ -311,7 +337,7 @@ export function lockScreenModel(
 		mode: state.mode,
 		moreLegs: moreLegsLine(state, deps.t),
 		nextLegs: nextLegLines(state, deps.t, clock),
-		status: statusLine(state, deps),
+		status: statusLine(state, deps, clock),
 		suggestion: suggestionLine(state, deps),
 		tag,
 		tagLabel: deps.t(`commute.lock.tag.${tag}`),
