@@ -82,6 +82,30 @@ function beforeLeaveOf(
 	return { etaEpoch, leaveEpoch };
 }
 
+/**
+ * 나가기 전 문장. 시간표 추정이거나 여유 판단이 없으면 등록한 시각 그대로,
+ * 빠듯하면 `now < safeLeaveEpoch`일 때만 "여유 있어요"를 보인다(서버와 같은 부등호).
+ */
+function beforeLeaveLine(
+	state: ContentState,
+	deps: LockScreenDeps,
+	clock: (epoch: number) => string,
+	leaveEpoch: number
+): string {
+	const { t, now } = deps;
+	const leave = clock(leaveEpoch);
+	if (tagOf(state) === "estimated" || state.leaveSlack !== "tight") {
+		return t("commute.lock.status.beforeLeave", { leave });
+	}
+	const { safeLeaveEpoch } = state;
+	if (safeLeaveEpoch !== null && now < safeLeaveEpoch) {
+		return t("commute.lock.status.beforeLeaveSafe", {
+			safeLeave: clock(safeLeaveEpoch),
+		});
+	}
+	return t("commute.lock.status.beforeLeaveTight", { leave });
+}
+
 function statusLine(
 	state: ContentState,
 	deps: LockScreenDeps,
@@ -101,9 +125,7 @@ function statusLine(
 	}
 	const beforeLeave = beforeLeaveOf(state, now);
 	if (beforeLeave) {
-		return t("commute.lock.status.beforeLeave", {
-			leave: clock(beforeLeave.leaveEpoch),
-		});
+		return beforeLeaveLine(state, deps, clock, beforeLeave.leaveEpoch);
 	}
 	const stops = knownStops(state.stopsAway);
 	if (stage === "walk" || stage === "wait") {

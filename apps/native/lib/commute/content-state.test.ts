@@ -51,7 +51,9 @@ const NEXT_LEGS = [
 it("parses the sample payload", () => {
 	expect(parsed()).toEqual({
 		...SAMPLE,
+		leaveSlack: null,
 		nextLegs: [],
+		safeLeaveEpoch: null,
 	} as ReturnType<typeof parsed>);
 });
 
@@ -151,4 +153,25 @@ it("drops same and older seq, applies newer", () => {
 
 it("drops everything for an ended session", () => {
 	expect(shouldApply({ ended: true, seq: 1 }, parsed())).toBe(false);
+});
+
+it("키가 없는 옛 값의 여유 필드는 null로 읽는다", () => {
+	const state = parseContentState(SAMPLE);
+	expect(state?.leaveSlack).toBeNull();
+	expect(state?.safeLeaveEpoch).toBeNull();
+});
+
+it("여유 판단과 여유 있게 나갈 시각을 그대로 읽는다", () => {
+	const state = parseContentState({
+		...SAMPLE,
+		leaveSlack: "tight",
+		safeLeaveEpoch: 1_794_265_680,
+	});
+	expect(state?.leaveSlack).toBe("tight");
+	expect(state?.safeLeaveEpoch).toBe(1_794_265_680);
+});
+
+it("모르는 여유 값이나 숫자가 아닌 시각이면 값 전체를 버린다", () => {
+	expect(parseContentState({ ...SAMPLE, leaveSlack: "maybe" })).toBeNull();
+	expect(parseContentState({ ...SAMPLE, safeLeaveEpoch: "08:08" })).toBeNull();
 });
