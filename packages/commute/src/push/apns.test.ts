@@ -148,6 +148,22 @@ describe("apns 요청", () => {
 		});
 	});
 
+	it("시작 요청에 staleAt 을 주면 stale-date 를 초로 담고, 없으면 키가 없다", async () => {
+		const withStale = apnsStartRequest({
+			...startInput,
+			staleAt: NOW + 150_000,
+		});
+		const { aps } = (await withStale.json()) as {
+			aps: Record<string, unknown>;
+		};
+		expect(aps.event).toBe("start");
+		expect(aps["stale-date"]).toBe(1_800_000_150);
+		const without = (await apnsStartRequest(startInput).json()) as {
+			aps: Record<string, unknown>;
+		};
+		expect("stale-date" in without.aps).toBe(false);
+	});
+
 	it("env 가 production 이면 운영 호스트", () => {
 		const request = apnsStartRequest({ ...startInput, env: "production" });
 		expect(new URL(request.url).host).toBe("api.push.apple.com");

@@ -4,6 +4,8 @@ import {
 	dailyReport,
 	type FollowTarget,
 	inputRecordOf,
+	type LeaveMark,
+	leaveRecordOf,
 	recordsOf,
 	type SessionSummary,
 	suggestionRecordOf,
@@ -33,7 +35,10 @@ import {
 	buildContent,
 	type ContentState,
 	decideSend,
+	nextLeaveBoundaryMs,
+	staleAtFor,
 } from "@Betro/commute/session/content";
+import { earlyBoardAfterSend } from "@Betro/commute/session/leave";
 import {
 	advance,
 	type EndReason,
@@ -125,6 +130,11 @@ export interface SessionEntry {
 	installId: string;
 	/** 마지막으로 보낸 값. null이면 아직 시작을 보내지 못했다. */
 	lastContent: ContentState | null;
+	/**
+	 * 마지막으로 남긴 `leave` 기록의 문장·safeLeaveAt·차량. 같은 값이면 다시 남기지 않는다.
+	 * 이 필드가 생기기 전에 저장된 세션 항목에는 없다(null로 본다).
+	 */
+	lastLeave?: LeaveMark | null;
 	lastSentAt: number | null;
 	platform: Platform | null;
 	/**
@@ -304,6 +314,23 @@ function outcomeOf(
 /** 새로 만든 JWT·액세스 토큰도 인증 오류면 키나 계정 설정 문제라 `config`로 본다. */
 function renewedOutcome(outcome: SendOutcome): SendOutcome {
 	return outcome === "jwt-expired" ? "config" : outcome;
+}
+
+/** 둘 중 이른 시각. null은 없는 것으로 본다. */
+function earlierOf(a: number, b: number | null): number;
+function earlierOf(a: number | null, b: number | null): number | null;
+function earlierOf(a: number | null, b: number | null): number | null {
+	if (a === null) {
+		return b;
+	}
+	return b === null ? a : Math.min(a, b);
+}
+
+/** 마지막으로 보낸 값이 now 뒤에 시계만으로 다른 문장이 되는 시각. 보낸 값이 없으면 null. */
+function leaveBoundaryOf(entry: SessionEntry, now: number): number | null {
+	return entry.lastContent === null
+		? null
+		: nextLeaveBoundaryMs(entry.lastContent, now);
 }
 
 /** 시작 푸시 결과로 세션을 닫아야 하면 그 이유. 다시 보내거나 이어 가면 null. */
@@ -557,6 +584,7 @@ export class RunnerCore {
 		const follows = await store.list<FollowEntry>(FOLLOW_PREFIX);
 		let open = 0;
 		let following = 0;
+		let boundary: number | null = null;
 		if (entries.size > 0 || follows.size > 0) {
 			const plans = await this.#plansOf(entries);
 			const raw = await this.#rawBoards(
@@ -572,13 +600,18 @@ export class RunnerCore {
 				const id = key.slice(SESSION_PREFIX.length);
 				if (await this.#stepSafely(id, entry, plans, boards, now)) {
 					open += 1;
+					boundary = earlierOf(boundary, leaveBoundaryOf(entry, now));
 				}
 			});
 			following = await this.#followUp(boards, now);
 		}
 		const busy = open + following;
 		await this.#prune(now, busy);
-		return { nextAlarmAt: busy > 0 ? now + config.tickMs : nextMinute(now) };
+		if (busy === 0) {
+			return { nextAlarmAt: nextMinute(now) };
+		}
+		// 나가기 전 문장이 시계만으로 바뀌는 경계가 다음 tick보다 이르면 그때 깨어나 경계 푸시를 보낸다.
+		return { nextAlarmAt: earlierOf(now + config.tickMs, boundary) };
 	}
 
 	async #stepSafely(
@@ -693,6 +726,7 @@ export class RunnerCore {
 			dueAt: due.startAt,
 			installId,
 			lastContent: null,
+			lastLeave: null,
 			lastSentAt: null,
 			platform,
 			rejectedUpdates: 0,
@@ -1081,13 +1115,45 @@ export class RunnerCore {
 				: this.#close(id, entry, rows, now));
 			return false;
 		}
-		const suggestion =
-			entry.lastContent === content ? content.suggestion : null;
+		const isSent = entry.lastContent === content;
+		if (isSent) {
+			this.#afterLeaveSent(id, entry, content, plan);
+		}
+		const suggestion = isSent ? content.suggestion : null;
 		if (suggestion && lastSent?.suggestion?.rank !== suggestion.rank) {
 			await this.#suggested(id, entry, plan, suggestion.rank, now);
 		}
 		await store.put(sessionKey(id), entry);
 		return true;
+	}
+
+	/**
+	 * 값이 나갔다: 보낸 순간 safe 문장이었으면 조기 탑승 기준을 남기고(스펙 4.6), 문장이 바뀌었으면
+	 * `leave` 기록을 남긴다(스펙 4.7). 보내지 못한 값은 사용자가 보지 않았으니 부르지 않는다.
+	 */
+	#afterLeaveSent(
+		id: string,
+		entry: SessionEntry,
+		content: ContentState,
+		plan: CommutePlan
+	): void {
+		entry.state = earlyBoardAfterSend(entry.state, content, plan);
+		const record = leaveRecordOf(
+			entry.state,
+			content,
+			plan,
+			this.#ports.config,
+			entry.lastLeave ?? null
+		);
+		if (record === null) {
+			return;
+		}
+		this.#note(id, record);
+		entry.lastLeave = {
+			safeLeaveAt: record.safeLeaveAt,
+			shown: record.shown,
+			vehicleId: record.vehicleId,
+		};
 	}
 
 	/** 제안이 나갔다: 기록을 남기고 두 차량을 하차 정류장까지 따라가게 한다. */
@@ -1191,6 +1257,7 @@ export class RunnerCore {
 					env: row.env,
 					jwt,
 					now,
+					staleAt: staleAtFor(content, now, config),
 					state: content,
 					token: row.token,
 					topic: secrets.apnsTopic,
@@ -1264,7 +1331,7 @@ export class RunnerCore {
 					jwt,
 					now,
 					priority: decision.priority,
-					staleAt: now + config.heartbeatMs + config.tickMs,
+					staleAt: staleAtFor(content, now, config),
 					state: content,
 					token: row.token,
 					topic: secrets.apnsTopic,
@@ -1411,6 +1478,7 @@ export class RunnerCore {
 		}
 		this.#note(id, {
 			at: now,
+			boardedEarly: entry.state.boardedBy.includes("early"),
 			kind: "end",
 			planId: entry.state.planId,
 			reason,
