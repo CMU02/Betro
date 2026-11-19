@@ -675,9 +675,10 @@ git commit -m "feat(native): show the safe leave time on the lock screen model"
 - **Swift `ContentState`**: 선택 필드 `leaveSlack: String?`, `safeLeaveEpoch: Int?`를 더합니다. 없는 키는 `nil`입니다.
 - **`CommuteCopy`**:
   - Task 7의 `statusLine` 규칙과 같은 부등호(`now < safeLeaveEpoch`)를 씁니다.
-  - `context.isStale`이면 `beforeLeave`로 내립니다.
+  - 태그가 "시간표 추정"이면(`etaState == estimated`, `positionState != live`, 또는 `context.isStale`) `beforeLeave`로 내립니다. JS는 `tagOf(state) === "estimated"`입니다.
+  - `leaveSlack`이 `tight`가 아니면(`roomy`, `nil`) `beforeLeave`입니다. `tight`이고 `safeLeaveEpoch != nil && now < safeLeaveEpoch`이면 `beforeLeaveSafe`(`{safeLeave}`), 그 밖에는 `beforeLeaveTight`(`{leave}`)입니다.
 - **`Localizable.strings`**: `commute.lock.status.beforeLeaveSafe`, `commute.lock.status.beforeLeaveTight`(Global Constraints 문구)를 더합니다.
-- **Swift 표본 테스트**: `lock-screen-cases.json`의 `leave *` 사례 여섯 개를 통과해야 합니다.
+- **Swift 표본 테스트**: `lock-screen-cases.json`의 `leave *` 사례 여섯 개(`leave roomy keeps the registered time`, `leave tight before safe shows the earlier time`, `leave tight at the safe minute is tight`, `leave tight without safe is tight`, `leave estimated falls back`, `leave hysteresis cap`)를 통과해야 합니다.
 - **Android(Task 6)**: Kotlin 타입 변경은 없습니다(JS가 만든 `LockScreenModel`을 받음). 실기기에서 safe 문구가 보이는지만 확인합니다.
 
 - [ ] **Step 1: 2-F 계획에 덧붙입니다**
