@@ -1,11 +1,16 @@
 import { localParts } from "./calendar";
+import type { CommuteConfig } from "./config";
+import { marginSecFor } from "./config";
 import type { CommutePlan, Leg, Route } from "./plan";
 import type { LineRef, StopRef } from "./refs";
 import { parseRef } from "./refs";
+import type { ContentState, LeaveShown } from "./session/content";
+import { leaveShownAt } from "./session/content";
 import type { LegEstimate } from "./session/estimate";
 import type { EndReason, SessionInput, SessionState } from "./session/stage";
 import type { ArrivalMethod, StopBoard, TransitBoards } from "./sources/types";
 
+const SECOND_MS = 1000;
 const MINUTE_MS = 60_000;
 /** 7.1: 차량이 내 정류장에 오기 5분 전 시점의 예측을 잰다. */
 const TARGET_LEAD_MS = 5 * MINUTE_MS;
@@ -16,6 +21,8 @@ const WITHIN_60_MS = MINUTE_MS;
 const WITHIN_120_MS = 2 * MINUTE_MS;
 const ON_TIME_MS = MINUTE_MS;
 const HALF = 2;
+/** 경계 지연이 이보다 길면 실패로 센다(스펙 5장). */
+const BOUNDARY_LATE_MS = 30_000;
 
 /**
  * 정확도 기록 한 줄(5.4). 세션이 끝나면 모아서 요약하고 R2에 남긴다.
@@ -88,12 +95,31 @@ export type AccuracyRecord =
 			outcome: string;
 	  }
 	| {
+			/**
+			 * 첫 구간 도보에서 실제로 보낸 나가는 시각(스펙 4.7). `shown`은 보낸 시각에 기기가 고른 문장이고,
+			 * `safeLeaveAt`은 보낸 `safeLeaveEpoch`(밀리초)다. 차량은 여유를 판단한 차량, 없으면 잡은 차량.
+			 */
+			kind: "leave";
+			at: number;
+			sessionId: string;
+			line: LineRef;
+			stop: StopRef;
+			vehicleId: string | null;
+			leaveAt: number;
+			safeLeaveAt: number | null;
+			firstWalkMs: number;
+			marginSec: number;
+			shown: LeaveShown;
+	  }
+	| {
 			/** 세션이 닫힌 시각과 이유. 요약의 `planId`, `endReason`이 여기서 나온다. */
 			kind: "end";
 			at: number;
 			sessionId: string;
 			planId: string;
 			reason: EndReason;
+			/** 일찍 나가서 탄(`boardedBy: "early"`) 구간이 있었는가. 배포 전 기록에는 키가 없다. */
+			boardedEarly?: boolean;
 	  };
 
 export interface SuggestedVehicle {
@@ -106,9 +132,34 @@ export interface SuggestedVehicle {
 type PredictionRecord = Extract<AccuracyRecord, { kind: "prediction" }>;
 type ArrivalRecord = Extract<AccuracyRecord, { kind: "arrival" }>;
 type SuggestionRecord = Extract<AccuracyRecord, { kind: "suggestion" }>;
+export type LeaveRecord = Extract<AccuracyRecord, { kind: "leave" }>;
+
+/** 마지막으로 남긴 `leave` 기록의 세 값. 셋이 모두 같으면 다시 남기지 않는다. */
+export interface LeaveMark {
+	safeLeaveAt: number | null;
+	shown: LeaveShown;
+	vehicleId: string | null;
+}
+
+/** 세션 하나의 나가는 시각 판정(스펙 4.7). */
+export interface LeaveSummary {
+	/** 마지막 `safe` 기록의 `safeLeaveAt`부터 그 뒤 첫 `boundary` ok 보낸 기록까지. */
+	boundaryDelayMs: number | null;
+	/** `safe`로 판정했고 도착을 쟀을 때만 `max(0, low − ready)`. */
+	overWaitMs: number | null;
+	sawSafe: boolean;
+	sawTight: boolean;
+	/** 판정한 기록의 문장. `tightOnly`면 null. */
+	shown: "roomy" | "safe" | null;
+	verdict: "sure" | "boundary" | "wrong" | "unknown" | "tightOnly";
+}
 
 export interface SessionSummary {
+	/** 일찍 나가서 탄 세션인가. 배포 전에 저장된 요약에는 키가 없다(undefined는 false와 같다). */
+	earlyBoarded?: boolean;
 	endReason: EndReason;
+	/** 나가는 시각 판정. `none` 말고 남은 기록이 없으면 null. 옛 요약에는 키가 없다(undefined는 null과 같다). */
+	leave?: LeaveSummary | null;
 	maxSendGapMs: number;
 	planId: string;
 	predictions: {
@@ -135,11 +186,36 @@ export interface DailyCommuteReport {
 	>;
 	date: string;
 	endReasons: Record<string, number>;
+	leave: LeaveReport;
 	maxSendGapMs: number;
 	sessions: number;
 	/** `onTime`은 `startDelayMs`가 ±60초 안이다. */
 	starts: { late: number; onTime: number; unknown: number };
 	suggestions: { faster: number; slower: number; unknown: number };
+}
+
+/**
+ * 하루치 나가는 시각 판정(스펙 4.7). `sessions`는 `leave` 요약이 있는 세션 수, `earlyBoarded`는 모든 세션에서 센다.
+ * 비율의 분모는 잰 세션(sure + boundary + wrong)이고, 0이면 null이다.
+ */
+export interface LeaveReport {
+	boundary: number;
+	boundaryDelayMaxMs: number | null;
+	/** 경계 지연이 30초를 넘은 세션 수. */
+	boundaryLate: number;
+	earlyBoarded: number;
+	overWaitMeanMs: number | null;
+	rateHigh: number | null;
+	rateLow: number | null;
+	sawSafe: number;
+	sawTight: number;
+	sessions: number;
+	/** unknown이 잰 세션보다 많으면 "undecidable". */
+	status: "ok" | "undecidable";
+	sure: number;
+	tightOnly: number;
+	unknown: number;
+	wrong: number;
 }
 
 function routeOf(plan: CommutePlan, rank: number): Route | undefined {
@@ -418,6 +494,55 @@ export function suggestionRecordOf(
 	};
 }
 
+function msOrNull(epochSec: number | null | undefined): number | null {
+	return epochSec === null || epochSec === undefined
+		? null
+		: epochSec * SECOND_MS;
+}
+
+/**
+ * 보낸 값 기준의 `leave` 기록(스펙 4.7). 보낸 뒤에만 부른다.
+ * 첫 구간 도보가 아니거나, 문장·safeLeaveAt·차량이 `last`와 같으면 null.
+ */
+export function leaveRecordOf(
+	state: SessionState,
+	sent: ContentState,
+	plan: CommutePlan,
+	config: CommuteConfig,
+	last: LeaveMark | null
+): LeaveRecord | null {
+	const isFirstWalk = sent.stage === "walk" && sent.legIndex === 0;
+	const route = routeOf(plan, 0);
+	const leg = route?.legs[0];
+	if (!isFirstWalk || route === undefined || leg === undefined) {
+		return null;
+	}
+	const shown = leaveShownAt(sent, sent.sentAt);
+	const safeLeaveAt = msOrNull(sent.safeLeaveEpoch);
+	const vehicleId = state.leave?.vehicleId ?? state.fixed[0] ?? null;
+	const isSameAsLast =
+		last !== null &&
+		last.shown === shown &&
+		last.safeLeaveAt === safeLeaveAt &&
+		last.vehicleId === vehicleId;
+	if (isSameAsLast) {
+		return null;
+	}
+	return {
+		at: sent.sentAt * SECOND_MS,
+		firstWalkMs: (route.walkMinutes[0] ?? 0) * MINUTE_MS,
+		kind: "leave",
+		leaveAt: state.leaveAt,
+		line: leg.line,
+		marginSec: marginSecFor(config, leg.mode, leg.line),
+		safeLeaveAt,
+		sessionId: state.sessionId,
+		shown,
+		stop: leg.board.stop,
+		vehicleId,
+	};
+}
+
 function midOf(record: ArrivalRecord): number {
 	return (record.low + record.high) / HALF;
 }
@@ -495,6 +620,87 @@ function judgeSuggestion(
 	return { gainMs, verdict: gainMs > 0 ? "faster" : "slower" };
 }
 
+/** "보여 준 나가는 시각 + 첫 도보"(ready)를 그 차량의 실제 도착 구간과 비교한다. */
+function judgeLeave(
+	record: LeaveRecord,
+	arrivals: Map<string, ArrivalRecord>
+): Pick<LeaveSummary, "overWaitMs" | "verdict"> {
+	const shownLeaveAt =
+		record.shown === "roomy" ? record.leaveAt : record.safeLeaveAt;
+	const arrival =
+		record.vehicleId === null
+			? undefined
+			: arrivals.get(`${record.stop}|${record.vehicleId}`);
+	if (shownLeaveAt === null || arrival === undefined) {
+		return { overWaitMs: null, verdict: "unknown" };
+	}
+	const ready = shownLeaveAt + record.firstWalkMs;
+	let verdict: LeaveSummary["verdict"] = "wrong";
+	if (ready <= arrival.low) {
+		verdict = "sure";
+	} else if (ready <= arrival.high) {
+		verdict = "boundary";
+	}
+	// roomy는 배차 때문에 기다리는 시간이 섞여 과잉 대기에 넣지 않는다.
+	const overWaitMs =
+		record.shown === "safe" ? Math.max(0, arrival.low - ready) : null;
+	return { overWaitMs, verdict };
+}
+
+/** 마지막 safe 기록의 safeLeaveAt부터 그 뒤 첫 boundary ok 보낸 기록까지. */
+function boundaryDelayOf(
+	records: AccuracyRecord[],
+	lastSafe: LeaveRecord | null
+): number | null {
+	const from = lastSafe?.safeLeaveAt ?? null;
+	if (from === null) {
+		return null;
+	}
+	let first: number | null = null;
+	for (const record of records) {
+		const isBoundaryOk =
+			record.kind === "send" &&
+			record.reason === "boundary" &&
+			record.outcome === "ok" &&
+			record.at >= from;
+		if (isBoundaryOk && (first === null || record.at < first)) {
+			first = record.at;
+		}
+	}
+	return first === null ? null : first - from;
+}
+
+/** 세션의 나가는 시각 판정. 마지막 roomy·safe 기록 하나로 판정하고, 없으면 tightOnly. */
+function leaveSummaryOf(
+	records: AccuracyRecord[],
+	arrivals: Map<string, ArrivalRecord>
+): LeaveSummary | null {
+	const leaves = records.filter(
+		(record): record is LeaveRecord => record.kind === "leave"
+	);
+	if (!leaves.some((record) => record.shown !== "none")) {
+		return null;
+	}
+	const judged =
+		leaves.findLast(
+			(record) => record.shown === "roomy" || record.shown === "safe"
+		) ?? null;
+	const lastSafe = leaves.findLast((record) => record.shown === "safe") ?? null;
+	const seen = {
+		boundaryDelayMs: boundaryDelayOf(records, lastSafe),
+		sawSafe: lastSafe !== null,
+		sawTight: leaves.some((record) => record.shown === "tight"),
+	};
+	if (judged === null) {
+		return { ...seen, overWaitMs: null, shown: null, verdict: "tightOnly" };
+	}
+	return {
+		...seen,
+		...judgeLeave(judged, arrivals),
+		shown: judged.shown === "roomy" ? "roomy" : "safe",
+	};
+}
+
 function maxOkGap(records: AccuracyRecord[]): number {
 	const times = records
 		.filter((record) => record.kind === "send" && record.outcome === "ok")
@@ -530,7 +736,9 @@ export function summarize(records: AccuracyRecord[]): SessionSummary {
 	}
 	const shownAt = start ? (start.shownAt ?? start.tokenAt) : null;
 	return {
+		earlyBoarded: end?.boardedEarly === true,
 		endReason: end?.reason ?? "user",
+		leave: leaveSummaryOf(records, arrivals),
 		maxSendGapMs: maxOkGap(records),
 		planId: end?.planId ?? predictions[0]?.planId ?? "",
 		predictions: scorePredictions(arrivals, predictions),
@@ -590,6 +798,50 @@ function accuracyOf(
 	return accuracy;
 }
 
+function isNumber(value: number | null): value is number {
+	return value !== null;
+}
+
+function ratioOf(part: number, whole: number): number | null {
+	return whole === 0 ? null : part / whole;
+}
+
+function meanOf(values: number[]): number | null {
+	if (values.length === 0) {
+		return null;
+	}
+	return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/** 옛 요약에 `leave`·`earlyBoarded` 키가 없어도 던지지 않는다. */
+function leaveReportOf(summaries: SessionSummary[]): LeaveReport {
+	const leaves = summaries
+		.map((summary) => summary.leave ?? null)
+		.filter((leave): leave is LeaveSummary => leave !== null);
+	const counts = { boundary: 0, sure: 0, tightOnly: 0, unknown: 0, wrong: 0 };
+	for (const { verdict } of leaves) {
+		counts[verdict] += 1;
+	}
+	const measured = counts.sure + counts.boundary + counts.wrong;
+	const delays = leaves.map((leave) => leave.boundaryDelayMs).filter(isNumber);
+	return {
+		...counts,
+		boundaryDelayMaxMs: delays.length === 0 ? null : Math.max(...delays),
+		boundaryLate: delays.filter((delay) => delay > BOUNDARY_LATE_MS).length,
+		earlyBoarded: summaries.filter((summary) => summary.earlyBoarded === true)
+			.length,
+		overWaitMeanMs: meanOf(
+			leaves.map((leave) => leave.overWaitMs).filter(isNumber)
+		),
+		rateHigh: ratioOf(counts.sure + counts.boundary, measured),
+		rateLow: ratioOf(counts.sure, measured),
+		sawSafe: leaves.filter((leave) => leave.sawSafe).length,
+		sawTight: leaves.filter((leave) => leave.sawTight).length,
+		sessions: leaves.length,
+		status: counts.unknown > measured ? "undecidable" : "ok",
+	};
+}
+
 /** 하루치 세션 요약 → 일일 보고서(7.1 기준을 매일 본다). 요약이 없어도 던지지 않는다. */
 export function dailyReport(
 	date: string,
@@ -609,6 +861,7 @@ export function dailyReport(
 		accuracy: accuracyOf(summaries),
 		date,
 		endReasons,
+		leave: leaveReportOf(summaries),
 		maxSendGapMs,
 		sessions: summaries.length,
 		starts: countStarts(summaries),
