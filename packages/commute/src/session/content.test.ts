@@ -2,7 +2,14 @@ import { describe, expect, it } from "bun:test";
 import { commuteConfig } from "../config";
 import type { BusLeg, CommutePlan, Route, SubwayLeg } from "../plan";
 import type { ContentState } from "./content";
-import { activityAttributes, buildContent, decideSend } from "./content";
+import {
+	activityAttributes,
+	buildContent,
+	decideSend,
+	leaveShownAt,
+	nextLeaveBoundaryMs,
+	staleAtFor,
+} from "./content";
 import type { LegEstimate, RouteEstimate } from "./estimate";
 import type { SessionState } from "./stage";
 
@@ -138,6 +145,7 @@ function content(overrides: Partial<ContentState> = {}): ContentState {
 		etaEpoch: epoch(at(25)),
 		etaState: "live",
 		leaveEpoch: epoch(at(10)),
+		leaveSlack: null,
 		legCount: 1,
 		legIndex: 0,
 		lineName: "6411",
@@ -145,6 +153,7 @@ function content(overrides: Partial<ContentState> = {}): ContentState {
 		nextLegs: [],
 		passed: null,
 		positionState: "live",
+		safeLeaveEpoch: null,
 		sentAt: epoch(at(1)),
 		seq: 5,
 		stage: "walk",
@@ -519,6 +528,162 @@ describe("buildContent nextLegs", () => {
 	});
 });
 
+describe("buildContent leave", () => {
+	const leave = { safeLeaveAt: at(8), slack: "tight" as const, vehicleId: "A" };
+
+	it("state.leave가 tight·at(8)이고 now가 at(5)이면 두 필드를 싣는다", () => {
+		const result = buildContent(stateOf({ leave }), plan, at(5), config);
+		expect(result.leaveSlack).toBe("tight");
+		expect(result.safeLeaveEpoch).toBe(epoch(at(8)));
+	});
+
+	it("now가 나가는 시각(at(10))이면 두 필드는 null", () => {
+		const result = buildContent(stateOf({ leave }), plan, at(10), config);
+		expect(result.leaveSlack).toBeNull();
+		expect(result.safeLeaveEpoch).toBeNull();
+	});
+
+	it("state.leave가 undefined(옛 저장 상태)이면 두 필드는 null", () => {
+		const { leave: _dropped, ...rest } = stateOf({ leave });
+		const result = buildContent(rest as SessionState, plan, at(5), config);
+		expect(result.leaveSlack).toBeNull();
+		expect(result.safeLeaveEpoch).toBeNull();
+	});
+});
+
+describe("leaveShownAt", () => {
+	const tight = content({
+		leaveSlack: "tight",
+		safeLeaveEpoch: epoch(at(8)),
+	});
+
+	it("tight·safe at(8)이면 at(7, 59)에는 safe", () => {
+		expect(leaveShownAt(tight, epoch(at(7, 59)))).toBe("safe");
+	});
+
+	it("시계가 정확히 safeLeaveEpoch이면 tight", () => {
+		expect(leaveShownAt(tight, epoch(at(8)))).toBe("tight");
+	});
+
+	it("tight인데 safeLeaveEpoch가 null이면 tight", () => {
+		const noSafe = content({ leaveSlack: "tight", safeLeaveEpoch: null });
+		expect(leaveShownAt(noSafe, epoch(at(5)))).toBe("tight");
+	});
+
+	it("roomy이면 roomy", () => {
+		expect(leaveShownAt(content({ leaveSlack: "roomy" }), epoch(at(5)))).toBe(
+			"roomy"
+		);
+	});
+
+	it("leaveSlack이 null이거나 없으면 none", () => {
+		expect(leaveShownAt(content(), epoch(at(5)))).toBe("none");
+		const { leaveSlack: _a, safeLeaveEpoch: _b, ...rest } = tight;
+		expect(leaveShownAt(rest as ContentState, epoch(at(5)))).toBe("none");
+	});
+
+	it("시간표 추정이면 none", () => {
+		const estimated = content({
+			etaState: "estimated",
+			leaveSlack: "tight",
+			safeLeaveEpoch: epoch(at(8)),
+		});
+		expect(leaveShownAt(estimated, epoch(at(5)))).toBe("none");
+	});
+
+	it("위치가 live가 아니면 none", () => {
+		const stale = content({ leaveSlack: "roomy", positionState: "stale" });
+		expect(leaveShownAt(stale, epoch(at(5)))).toBe("none");
+	});
+
+	it("나가는 시각(at(10))이 되면 어떤 값이든 none", () => {
+		expect(leaveShownAt(tight, epoch(at(10)))).toBe("none");
+		expect(leaveShownAt(content({ leaveSlack: "roomy" }), epoch(at(10)))).toBe(
+			"none"
+		);
+	});
+
+	it("passed가 있으면 none", () => {
+		const passed = content({
+			leaveSlack: "roomy",
+			passed: { lineName: "6411" },
+		});
+		expect(leaveShownAt(passed, epoch(at(5)))).toBe("none");
+	});
+
+	it("walk 첫 구간이 아니거나 나가는 시각이 없으면 none", () => {
+		expect(
+			leaveShownAt(
+				content({ leaveSlack: "roomy", stage: "wait" }),
+				epoch(at(5))
+			)
+		).toBe("none");
+		expect(
+			leaveShownAt(content({ leaveSlack: "roomy", legIndex: 1 }), epoch(at(5)))
+		).toBe("none");
+		expect(
+			leaveShownAt(
+				content({ leaveEpoch: null, leaveSlack: "roomy" }),
+				epoch(at(5))
+			)
+		).toBe("none");
+	});
+});
+
+describe("nextLeaveBoundaryMs", () => {
+	const tight = content({
+		leaveSlack: "tight",
+		safeLeaveEpoch: epoch(at(8)),
+	});
+
+	it("tight·safe at(8)·leave at(10)이면 now 뒤의 가장 이른 경계", () => {
+		expect(nextLeaveBoundaryMs(tight, at(7))).toBe(at(8));
+		expect(nextLeaveBoundaryMs(tight, at(8, 10))).toBe(at(10));
+		expect(nextLeaveBoundaryMs(tight, at(10))).toBeNull();
+	});
+
+	it("roomy이면 leaveEpoch만 본다", () => {
+		const roomy = content({
+			leaveSlack: "roomy",
+			safeLeaveEpoch: epoch(at(8)),
+		});
+		expect(nextLeaveBoundaryMs(roomy, at(7))).toBe(at(10));
+	});
+
+	it("나가는 시각이 없으면 null", () => {
+		expect(
+			nextLeaveBoundaryMs(content({ leaveEpoch: null }), at(7))
+		).toBeNull();
+	});
+});
+
+describe("staleAtFor", () => {
+	it("safe를 싣는 값이면 safeLeaveEpoch로 당긴다", () => {
+		const safe = content({
+			leaveSlack: "tight",
+			safeLeaveEpoch: epoch(at(8)),
+		});
+		expect(staleAtFor(safe, at(6), config)).toBe(at(8));
+	});
+
+	it("roomy이면 now + heartbeatMs + tickMs", () => {
+		const roomy = content({ leaveSlack: "roomy" });
+		expect(staleAtFor(roomy, at(6), config)).toBe(
+			at(6) + config.heartbeatMs + config.tickMs
+		);
+	});
+
+	it("safeLeaveEpoch가 기본 오래됨 시각보다 늦으면 기본값", () => {
+		const safe = content({
+			leaveSlack: "tight",
+			safeLeaveEpoch: epoch(at(9)),
+		});
+		expect(staleAtFor(safe, at(6), config)).toBe(
+			at(6) + config.heartbeatMs + config.tickMs
+		);
+	});
+});
+
 describe("decideSend", () => {
 	const NOW = at(2);
 
@@ -733,6 +898,101 @@ describe("decideSend", () => {
 			expect(
 				decideSend(old, content({ nextLegs: [third] }), last, NOW, config)
 			).toEqual({ priority: 10, reason: "stage", send: true });
+		});
+	});
+
+	describe("나가는 시각의 여유", () => {
+		function shown(
+			slack: "roomy" | "tight" | null,
+			safeAt: number | null,
+			sentAt: number
+		): ContentState {
+			return content({
+				leaveSlack: slack,
+				safeLeaveEpoch: safeAt === null ? null : epoch(safeAt),
+				sentAt: epoch(sentAt),
+			});
+		}
+
+		it("경계: 값은 같고 시계만 safeLeaveEpoch를 넘으면 10 boundary", () => {
+			const prev = shown("tight", at(8), at(7, 30));
+			const next = shown("tight", at(8), at(8));
+			expect(decideSend(prev, next, at(7, 30), at(8), config)).toEqual({
+				priority: 10,
+				reason: "boundary",
+				send: true,
+			});
+		});
+
+		it("나가는 시각 경계를 넘으면 10 boundary", () => {
+			const prev = shown("roomy", null, at(9, 40));
+			const next = shown("roomy", null, at(10));
+			expect(decideSend(prev, next, at(9, 40), at(10), config)).toEqual({
+				priority: 10,
+				reason: "boundary",
+				send: true,
+			});
+		});
+
+		it("여유를 계산하지 못해도 나가는 시각 경계를 넘으면 10 boundary", () => {
+			const prev = shown(null, null, at(9, 40));
+			const next = shown(null, null, at(10));
+			expect(decideSend(prev, next, at(9, 40), at(10), config)).toEqual({
+				priority: 10,
+				reason: "boundary",
+				send: true,
+			});
+		});
+
+		it("차가 빨라져 safeLeaveEpoch가 now 앞으로 오면 10 stage", () => {
+			const prev = shown("tight", at(8), at(6, 30));
+			const next = shown("tight", at(7), at(7, 30));
+			expect(decideSend(prev, next, at(6, 30), at(7, 30), config)).toEqual({
+				priority: 10,
+				reason: "stage",
+				send: true,
+			});
+		});
+
+		it("safe 문장 그대로 safeLeaveEpoch의 분만 바뀌면 5 change", () => {
+			const prev = shown("tight", at(8), at(6));
+			const next = shown("tight", at(7), at(6, 10));
+			expect(decideSend(prev, next, at(6), at(6, 10), config)).toEqual({
+				priority: 5,
+				reason: "change",
+				send: true,
+			});
+		});
+
+		it("tight가 보이는 동안 safeLeaveEpoch의 분만 바뀌면 보내지 않는다", () => {
+			const prev = shown("tight", at(6), at(7));
+			const next = shown("tight", at(5), at(7, 20));
+			expect(decideSend(prev, next, at(7), at(7, 20), config)).toEqual({
+				send: false,
+			});
+		});
+
+		it("roomy에서 safe로 바뀌면 10 stage", () => {
+			const prev = shown("roomy", null, at(4, 30));
+			const next = shown("tight", at(8), at(5));
+			expect(decideSend(prev, next, at(4, 30), at(5), config)).toEqual({
+				priority: 10,
+				reason: "stage",
+				send: true,
+			});
+		});
+
+		it("두 키가 없는 옛 직전 값과 두 필드가 null인 새 값은 같다고 본다", () => {
+			const {
+				leaveSlack: _a,
+				safeLeaveEpoch: _b,
+				...rest
+			} = shown(null, null, at(4, 30));
+			const old = rest as ContentState;
+			const next = shown(null, null, at(5));
+			expect(decideSend(old, next, at(4, 30), at(5), config)).toEqual({
+				send: false,
+			});
 		});
 	});
 
