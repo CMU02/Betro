@@ -98,6 +98,8 @@ export type AccuracyRecord =
 			/**
 			 * 첫 구간 도보에서 실제로 보낸 나가는 시각(스펙 4.7). `shown`은 보낸 시각에 기기가 고른 문장이고,
 			 * `safeLeaveAt`은 보낸 `safeLeaveEpoch`(밀리초)다. 차량은 여유를 판단한 차량, 없으면 잡은 차량.
+			 * 도보가 끝나 나가는 시각이 화면에서 내려가면 그 값을 보낸 시각에 `shown: "none"`,
+			 * `safeLeaveAt: null`로 한 번 더 남는다.
 			 */
 			kind: "leave";
 			at: number;
@@ -502,7 +504,9 @@ function msOrNull(epochSec: number | null | undefined): number | null {
 
 /**
  * 보낸 값 기준의 `leave` 기록(스펙 4.7). 보낸 뒤에만 부른다.
- * 첫 구간 도보가 아니거나, 문장·safeLeaveAt·차량이 `last`와 같으면 null.
+ * 첫 구간 도보 밖에서 보낸 값은 나가는 시각이 화면에서 내려간 것이라, 마지막 기록이 `none`이
+ * 아니면 `shown: "none"`으로 한 번 남기고 그 뒤로는 null이다. 문장·safeLeaveAt·차량이 `last`와
+ * 같아도 null.
  */
 export function leaveRecordOf(
 	state: SessionState,
@@ -511,14 +515,20 @@ export function leaveRecordOf(
 	config: CommuteConfig,
 	last: LeaveMark | null
 ): LeaveRecord | null {
-	const isFirstWalk = sent.stage === "walk" && sent.legIndex === 0;
 	const route = routeOf(plan, 0);
 	const leg = route?.legs[0];
-	if (!isFirstWalk || route === undefined || leg === undefined) {
+	if (route === undefined || leg === undefined) {
 		return null;
 	}
-	const shown = leaveShownAt(sent, sent.sentAt);
-	const safeLeaveAt = msOrNull(sent.safeLeaveEpoch);
+	const isFirstWalk = sent.stage === "walk" && sent.legIndex === 0;
+	const hasLeftScreen = !isFirstWalk && last !== null && last.shown !== "none";
+	if (!(isFirstWalk || hasLeftScreen)) {
+		return null;
+	}
+	const shown: LeaveShown = isFirstWalk
+		? leaveShownAt(sent, sent.sentAt)
+		: "none";
+	const safeLeaveAt = isFirstWalk ? msOrNull(sent.safeLeaveEpoch) : null;
 	const vehicleId = state.leave?.vehicleId ?? state.fixed[0] ?? null;
 	const isSameAsLast =
 		last !== null &&

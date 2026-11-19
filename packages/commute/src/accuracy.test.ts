@@ -504,7 +504,7 @@ describe("leaveRecordOf", () => {
 		});
 	});
 
-	it("탄 뒤(ride)에는 남기지 않는다", () => {
+	it("남긴 기록 없이 탄 뒤(ride)에는 남기지 않는다", () => {
 		const riding = sessionState({ fixed: ["V1"], stage: "ride" });
 		expect(
 			leaveRecordOf(
@@ -513,6 +513,48 @@ describe("leaveRecordOf", () => {
 				plan,
 				config,
 				null
+			)
+		).toBeNull();
+	});
+
+	it("도보가 끝나 wait로 보낸 값은 나가는 시각이 내려간 것으로 none을 한 번 남긴다", () => {
+		const waiting = sessionState({
+			fixed: ["V1"],
+			leave: { safeLeaveAt: at(8), slack: "tight", vehicleId: "V1" },
+			leaveAt: at(10),
+			stage: "wait",
+		});
+		const sent = sentContent({ sentAt: epoch(at(9)), stage: "wait" });
+		expect(
+			leaveRecordOf(waiting, sent, plan, config, {
+				safeLeaveAt: at(8),
+				shown: "safe",
+				vehicleId: "V1",
+			})
+		).toEqual({
+			at: at(9),
+			firstWalkMs: 300_000,
+			kind: "leave",
+			leaveAt: at(10),
+			line: busLeg.line,
+			marginSec: 180,
+			safeLeaveAt: null,
+			sessionId: SESSION_ID,
+			shown: "none",
+			stop: busLeg.board.stop,
+			vehicleId: "V1",
+		});
+	});
+
+	it("도보가 끝난 뒤 마지막 기록이 이미 none이면 다시 남기지 않는다", () => {
+		const riding = sessionState({ fixed: ["V1"], stage: "ride" });
+		expect(
+			leaveRecordOf(
+				riding,
+				sentContent({ leaveEpoch: null, stage: "ride" }),
+				plan,
+				config,
+				{ safeLeaveAt: null, shown: "none", vehicleId: "V1" }
 			)
 		).toBeNull();
 	});

@@ -1934,6 +1934,49 @@ describe("RunnerCore 나가는 시각의 여유", () => {
 		]);
 	});
 
+	test("safe를 보낸 뒤 도보가 끝나 wait 값이 나가면 none 기록을 한 줄만 남기고 판정은 safe로 한다", async () => {
+		const h = harness();
+		addAndroid(h);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [sessionId] = await onlySession(h);
+		// 경계 푸시와 나가는 시각 푸시가 모두 실패해 safe 문장이 도보가 끝날 때까지 남는다.
+		h.push.respond = () => ({ reason: null, status: 503 });
+		await tickAt(h, core, atMinute(8));
+		await tickAt(h, core, atMinute(10));
+		await tickAt(h, core, atMinute(15));
+		expect(leaveRecordsFor(h, sessionId)).toEqual([
+			expect.objectContaining({ at: T0, shown: "safe" }),
+		]);
+
+		h.push.respond = () => ({ reason: null, status: 200 });
+		await tickAt(h, core, atMinute(15, 30));
+		expect(contentOf(h.push.sent.at(-1) as SentRequest).stage).toBe("wait");
+		await tickAt(h, core, atMinute(16));
+		const [, waiting] = await onlySession(h);
+		expect(waiting.lastLeave).toEqual({
+			safeLeaveAt: null,
+			shown: "none",
+			vehicleId: "V1",
+		});
+		expect(leaveRecordsFor(h, sessionId)).toEqual([
+			expect.objectContaining({ at: T0, shown: "safe" }),
+			expect.objectContaining({
+				at: atMinute(15, 30),
+				safeLeaveAt: null,
+				shown: "none",
+				vehicleId: "V1",
+			}),
+		]);
+
+		h.clock.now = atMinute(16, 10);
+		await core.input(ANDROID_INSTALL, sessionId, { kind: "end" });
+		expect((await summaryOf(h, sessionId))?.leave).toMatchObject({
+			sawSafe: true,
+			shown: "safe",
+		});
+	});
+
 	test("iOS 갱신이 safe를 실으면 stale-date가 safeLeaveEpoch로 당겨진다", async () => {
 		const h = harness();
 		addIos(h);
