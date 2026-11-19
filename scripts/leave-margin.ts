@@ -143,28 +143,31 @@ function pushTo<K, V>(map: Map<K, V[]>, key: K, value: V): void {
 	map.set(key, list);
 }
 
-/** 오름차순 시각 → 도착 묶음마다 첫 시각. `SAME_VISIT_MS`보다 벌어지면 다른 도착이다. */
-function firstOfVisits(times: number[]): number[] {
-	const sorted = [...times].sort((a, b) => a - b);
-	const firsts: number[] = [];
+/** 도착으로 잡힌 기록 → 도착 묶음마다 첫 기록. `SAME_VISIT_MS`보다 벌어지면 다른 도착이다. */
+function firstOfVisits<T extends { sourceAt: number }>(records: T[]): T[] {
+	const sorted = [...records].sort((a, b) => a.sourceAt - b.sourceAt);
+	const firsts: T[] = [];
 	let last: number | null = null;
-	for (const time of sorted) {
-		if (last === null || time - last > SAME_VISIT_MS) {
-			firsts.push(time);
+	for (const record of sorted) {
+		if (last === null || record.sourceAt - last > SAME_VISIT_MS) {
+			firsts.push(record);
 		}
-		last = time;
+		last = record.sourceAt;
 	}
 	return firsts;
 }
 
-/** 오름차순 `times`에서 `value`보다 작은 가장 큰 값. */
-function latestBefore(times: number[], value: number): number | null {
-	let found: number | null = null;
-	for (const time of times) {
-		if (time >= value) {
+/** 받은 시각 오름차순 `records`에서 `fetchedAt`이 `value`보다 이른 마지막 것. */
+function latestBefore<T extends { fetchedAt: number }>(
+	records: T[],
+	value: number
+): T | null {
+	let found: T | null = null;
+	for (const record of records) {
+		if (record.fetchedAt >= value) {
 			break;
 		}
-		found = time;
+		found = record;
 	}
 	return found;
 }
@@ -343,7 +346,8 @@ function isSubwayArrive(value: unknown): value is SubwayObservation {
 		value.status === "arrive" &&
 		typeof value.rawTrainNo === "string" &&
 		typeof value.statnId === "string" &&
-		typeof value.sourceAt === "number"
+		typeof value.sourceAt === "number" &&
+		typeof value.observedAt === "number"
 	);
 }
 
@@ -362,7 +366,10 @@ function readSubwayArrivals(dir: string): SubwayObservation[] {
 /**
  * 지하철 대상 하나의 표본. 예측은 스냅샷마다 `stationBoard`(노선 보정 포함)로 만든다.
  * 실제 도착은 이벤트에서 그 열차가 대상 역에 `arrive`로 처음 잡힌 원천 시각을 `high`로,
- * 그보다 이른 직전 스냅샷의 원천 시각(그 역 행의 가장 늦은 `recptnDt`)을 `low`로 둔다(실험 6).
+ * 그 이벤트를 낸 스냅샷 바로 앞 스냅샷의 원천 시각(그 역 행의 가장 늦은 `recptnDt`)을 `low`로
+ * 둔다(실험 6). 이벤트의 `observedAt`은 원본 줄의 `fetchedAt`과 같은 값이라 스냅샷을 맞출 수 있다.
+ * 이벤트를 낸 스냅샷 안에서는 행마다 `recptnDt`가 달라 그 역 시각이 `high`보다 이를 수 있으므로
+ * 그 스냅샷의 시각은 `low`로 쓰지 않는다.
  */
 function subwaySamplesFor(
 	target: SubwayTarget,
@@ -371,7 +378,8 @@ function subwaySamplesFor(
 	biasSec: number
 ): MarginSample[] {
 	const predictions = new Map<string, Prediction[]>();
-	const sourceTimes: number[] = [];
+	/** 받은 시각 순서의 스냅샷마다 그 역 도착판의 원천 시각. */
+	const boardTimes: { fetchedAt: number; sourceAt: number }[] = [];
 	let prev: StationRow[] | null = null;
 	for (const snapshot of snapshots) {
 		const rows = snapshot.rows.get(target.statnId) ?? [];
@@ -385,30 +393,43 @@ function subwaySamplesFor(
 			biasSec,
 			snapshot.fetchedAt
 		);
-		sourceTimes.push(board.sourceAt);
+		boardTimes.push({
+			fetchedAt: snapshot.fetchedAt,
+			sourceAt: board.sourceAt,
+		});
 		collectPredictions(board, snapshot.fetchedAt, predictions);
 		prev = rows;
 	}
-	sourceTimes.sort((a, b) => a - b);
 
-	const arriveTimes = new Map<string, number[]>();
+	const arriveTimes = new Map<
+		string,
+		{ observedAt: number; sourceAt: number }[]
+	>();
 	for (const arrival of arrivals) {
 		if (
 			arrival.statnId === target.statnId &&
 			arrival.direction === target.direction &&
 			arrival.sourceAt !== null
 		) {
-			pushTo(arriveTimes, arrival.rawTrainNo, arrival.sourceAt);
+			pushTo(arriveTimes, arrival.rawTrainNo, {
+				observedAt: arrival.observedAt,
+				sourceAt: arrival.sourceAt,
+			});
 		}
 	}
 	const samples: MarginSample[] = [];
 	for (const [trainNo, times] of arriveTimes) {
-		for (const high of firstOfVisits(times)) {
-			const low = latestBefore(sourceTimes, high);
+		for (const first of firstOfVisits(times)) {
+			const low = latestBefore(boardTimes, first.observedAt)?.sourceAt ?? null;
 			const sample =
 				low === null
 					? null
-					: sampleOf(target, low, high, predictions.get(trainNo) ?? []);
+					: sampleOf(
+							target,
+							low,
+							first.sourceAt,
+							predictions.get(trainNo) ?? []
+						);
 			if (sample) {
 				samples.push(sample);
 			}
@@ -476,8 +497,9 @@ function readBusResponses(path: string): BusResponse[] {
 
 /**
  * 버스 대상 하나의 표본. 예측은 응답마다 `busBoards`의 대상 정류장 도착판이다.
- * 실제 도착은 차량이 대상 정류장을 지났거나(`passed`) 정류장에 있는(`stopsAway` 0) 첫 응답의
- * 원천 시각을 `high`로, 직전 응답의 원천 시각을 `low`로 둔다.
+ * 실제 도착은 차량이 대상 정류장 예측 목록에서 사라졌거나, 지났거나(`passed`), 정류장에
+ * 있는(`stopsAway` 0) 첫 응답의 원천 시각을 `high`로, 직전 응답의 원천 시각을 `low`로 둔다.
+ * 실패·빈 응답은 읽을 때 뺐으므로 "사라짐"은 성공한 두 응답 사이에서만 본다.
  */
 function busSamplesFor(
 	target: BusTarget,
@@ -487,6 +509,8 @@ function busSamplesFor(
 	const lastArrivedAt = new Map<string, number>();
 	const arrivals: { high: number; low: number; vehicleId: string }[] = [];
 	let prev: RouteStopArrival[] | null = null;
+	/** 직전 응답에서 대상 정류장 목록에 있던 차량. */
+	let prevListed = new Set<string>();
 	for (const response of responses) {
 		if (response.routeId !== null && response.routeId !== target.routeId) {
 			continue;
@@ -501,7 +525,11 @@ function busSamplesFor(
 			seq
 		);
 		collectPredictions(board, response.fetchedAt, predictions);
+		const listed = new Set(
+			board.approaching.map((vehicle) => vehicle.vehicleId)
+		);
 		const arrived = [
+			...[...prevListed].filter((vehicleId) => !listed.has(vehicleId)),
 			...board.passed.map((vehicle) => vehicle.vehicleId),
 			...board.approaching
 				.filter((vehicle) => vehicle.stopsAway === 0)
@@ -521,6 +549,7 @@ function busSamplesFor(
 			lastArrivedAt.set(vehicleId, board.sourceAt);
 		}
 		prev = response.stops;
+		prevListed = listed;
 	}
 	const samples: MarginSample[] = [];
 	for (const arrival of arrivals) {
