@@ -430,7 +430,7 @@ git commit -m "feat(commute): accept early boarding after a safe leave time"
   }
 // "end" 기록에 boardedEarly?: boolean 추가
 export interface LeaveMark { shown: LeaveShown; safeLeaveAt: number | null; vehicleId: string | null }
-/** 보낸 값 기준. 첫 구간 walk가 아니거나 last와 같으면 null. */
+/** 보낸 값 기준. 같은 LeaveMark거나, 첫 구간 walk가 아니면서 직전 기록이 none이거나 없으면 null. */
 export function leaveRecordOf(state: SessionState, sent: ContentState, plan: CommutePlan, config: CommuteConfig, last: LeaveMark | null): LeaveRecord | null;
 export interface LeaveSummary {
 	verdict: "sure" | "boundary" | "wrong" | "unknown" | "tightOnly";
@@ -443,6 +443,7 @@ export interface LeaveSummary {
 // SessionSummary에 leave: LeaveSummary | null, earlyBoarded: boolean 추가
 // DailyCommuteReport에 leave 추가:
 // { sessions; sure; boundary; wrong; unknown; tightOnly; sawSafe; sawTight;
+//   sawSafeOrTight: number; rateSafeOrTight: number | null;   // safe나 tight를 본 세션 수와 그 비율(둘 다 본 세션은 한 번)
 //   rateLow: number | null; rateHigh: number | null; status: "ok" | "undecidable";
 //   overWaitMeanMs: number | null; boundaryDelayMaxMs: number | null; boundaryLate: number; earlyBoarded: number }
 ```
@@ -452,7 +453,7 @@ export interface LeaveSummary {
 **`leaveRecordOf`**
 - 첫 구간 walk에서 보낸 safe 값이면 `shown: "safe"`, `safeLeaveAt: at(8)`, `firstWalkMs: 300000`, `marginSec: 180`인 기록을 냅니다.
 - 같은 `LeaveMark`면 `null`입니다.
-- `stage: "ride"`이면 `null`입니다.
+- `stage: "ride"`이면 `null`입니다. 단 직전 기록(`last`)이 `none`이 아니면 화면에서 내려간 것이라 `shown: "none"` 기록을 한 번 냅니다.
 
 **`summarize`의 `leave`**: `safe` at(8) 기록 하나(차량 A, 정류장 S, 도보 5분이라 `ready` = at(13))에 대해 판정합니다.
 
@@ -470,7 +471,9 @@ export interface LeaveSummary {
 | `tight` 기록만 | `verdict: "tightOnly"`, `sawTight: true` |
 | `safe` 뒤 `roomy` 기록 | `shown: "roomy"`, `ready = leaveAt + 도보`로 판정. `overWaitMs: null` |
 | `none` 기록만 | `leave: null` |
-| `safe` at(8) 뒤 `send{reason: "boundary", outcome: "ok", at: at(8, 5)}` | `boundaryDelayMs: 5000` |
+| `safe` at(8) 뒤 `safe`를 바꾼 `leave` 기록(보낸 이유는 묻지 않음) at(8, 5) | `boundaryDelayMs: 5000` |
+| `safe` at(8) 뒤 at(7, 50)에 나간 `leave` 기록(철회) | `boundaryDelayMs: null` |
+| `safe` at(8) 뒤 `leave` 기록 없이 `end` at(8, 40) | `boundaryDelayMs: 40000` |
 | `end{boardedEarly: true}` | `earlyBoarded: true` |
 
 **`dailyReport`**
@@ -501,7 +504,8 @@ Expected: FAIL
 
 **지표**
 - `overWaitMs`: `safe`일 때만 `max(0, low − ready)`입니다.
-- `boundaryDelayMs`: 마지막 `safe` 기록의 `safeLeaveAt` 이후 첫 `reason: "boundary"`, `outcome: "ok"` 보낸 기록까지의 시간입니다.
+- `boundaryDelayMs`: 마지막 `safe` 기록의 `safeLeaveAt`부터 그 safe 문장이 내려간 때까지입니다. 마지막 `safe` 다음 `leave` 기록이 그 문장을 바꾼 값이라 그 기록의 시각까지 재고, 보낸 이유는 묻지 않습니다. 그 기록이 `safeLeaveAt`보다 이르면(철회) `null`입니다. 그 뒤 기록이 없으면 세션이 끝난 시각(`end`, 없으면 시각이 있는 기록 중 가장 늦은 것)까지 재고, 그 시각이 `safeLeaveAt` 이전이면 `null`입니다.
+- `sawSafeOrTight`: `sawSafe`나 `sawTight`인 세션 수이고, `rateSafeOrTight`는 이를 나가는 시각 판정 대상 세션 수로 나눈 값입니다(0이면 `null`).
 - `rateLow` = sure ÷ (sure + boundary + wrong), `rateHigh` = (sure + boundary) ÷ 같은 분모입니다. 분모가 0이면 둘 다 `null`입니다.
 - `status`: unknown이 (sure + boundary + wrong)보다 많으면 `"undecidable"`입니다.
 
@@ -771,7 +775,7 @@ bun scripts/leave-margin.ts --targets targets.json [--subway-dir <dir>] [--bus-f
 - **실제 도착**: 이벤트에서 그 열차가 대상 역에 `arrive`로 처음 잡힌 원천 시각을 `high`로, 그 직전 스냅샷 시각을 `low`로 둡니다(실험 6과 같은 방법).
 
 **버스 어댑터**: `--bus-file`은 수집 Worker의 `/dump` NDJSON입니다.
-- **예측**: 응답마다 `parseRouteArrivals`로 도착 예측을 얻습니다.
+- **예측**: 응답마다 `parseRouteArrivals`로 도착 예측을 얻습니다. 대상 노선 칸이 없거나(`otherRoute`), 대상 정류장 칸이 없거나 읽히지 않거나(`stopMissing`), 대상 정류장의 차량 칸이 하나라도 읽히지 않은(`vehicleUnparsed`) 응답은 관측으로 쓰지 않고 이유별로 세어 출력합니다. 읽히지 않은 칸을 "차량이 사라짐"으로 오해해 가짜 도착을 만들지 않기 위해서입니다.
 - **실제 도착**: 차량이 대상 정류장 예측 목록에서 사라지거나 지난 첫 응답 시각을 `high`로, 그 직전 응답 시각을 `low`로 둡니다.
 
 **출력**: `leaveMargins` 결과 JSON과 함께 다음을 stdout에 냅니다.
