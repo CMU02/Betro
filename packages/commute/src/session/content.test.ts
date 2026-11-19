@@ -262,6 +262,39 @@ describe("buildContent", () => {
 		expect(result.stopsAway).toBeNull();
 	});
 
+	it("다음 차가 기점에서 출발 대기 중이면 탑승 전에만 awaitingDeparture를 담는다", () => {
+		const waiting = {
+			awaitingDeparture: true,
+			etaState: "estimated",
+			method: "headway",
+			stopsAway: null,
+			vehicleId: null,
+		} as const;
+		const wait = buildContent(
+			stateOf({
+				estimates: [routeEstimate(0, at(40), waiting)],
+				fixed: [null],
+				stage: "wait",
+			}),
+			plan,
+			at(1),
+			config
+		);
+		expect(wait.awaitingDeparture).toBe(true);
+		expect(wait.stopsAway).toBeNull();
+		const ride = buildContent(
+			stateOf({
+				boardedBy: ["user"],
+				estimates: [routeEstimate(0, at(40), { ...waiting, boardEtaAt: null })],
+				stage: "ride",
+			}),
+			plan,
+			at(25),
+			config
+		);
+		expect(ride.awaitingDeparture).toBeUndefined();
+	});
+
 	it("passed를 그대로 옮긴다", () => {
 		const result = buildContent(
 			stateOf({ passed: { lineName: "6411" } }),
@@ -783,6 +816,7 @@ describe("decideSend", () => {
 			content({ etaState: "estimated" }),
 			content({ delayMinutes: 2 }),
 			content({ destinationEtaEpoch: epoch(at(41)) }),
+			content({ awaitingDeparture: true, etaEpoch: base }),
 		]) {
 			expect(decideSend(prev, next, last, NOW, config)).toEqual({
 				priority: 5,

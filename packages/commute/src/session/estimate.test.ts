@@ -665,6 +665,59 @@ describe("estimateRoute: 도착판 범위 밖", () => {
 		expect(estimate.legs[0]?.method).toBe("headway");
 	});
 
+	it("범위 밖이고 다음 차가 기점에서 출발 대기 중이면 awaitingDeparture", () => {
+		const boards = fakeBoards([
+			[
+				busLeg,
+				{
+					board: stopBoard([vehicle("A", at(11))], {
+						awaitingDeparture: true,
+					}),
+					rideMs: 14 * MINUTE_MS,
+				},
+			],
+		]);
+		const estimate = estimateRoute(busRoute, boards, input(at(15)), config);
+		expect(estimate.legs[0]?.vehicleId).toBeNull();
+		expect(estimate.legs[0]?.stopsAway).toBeNull();
+		expect(estimate.legs[0]?.awaitingDeparture).toBe(true);
+	});
+
+	it("탈 차량을 도착판에서 골랐으면 출발 대기 표시를 하지 않는다", () => {
+		const boards = fakeBoards([
+			[
+				busLeg,
+				{
+					board: stopBoard([vehicle("A", at(20))], {
+						awaitingDeparture: true,
+					}),
+					rideMs: 14 * MINUTE_MS,
+				},
+			],
+		]);
+		const estimate = estimateRoute(busRoute, boards, input(at(15)), config);
+		expect(estimate.legs[0]?.vehicleId).toBe("A");
+		expect(estimate.legs[0]?.awaitingDeparture).toBeUndefined();
+	});
+
+	it("묵은 도착판은 출발 대기 표시를 하지 않는다", () => {
+		const boards = fakeBoards([
+			[
+				busLeg,
+				{
+					board: stopBoard([], {
+						awaitingDeparture: true,
+						sourceAt: at(10) - 10 * MINUTE_MS,
+					}),
+					rideMs: 14 * MINUTE_MS,
+				},
+			],
+		]);
+		const estimate = estimateRoute(busRoute, boards, input(at(15)), config);
+		expect(estimate.legs[0]?.positionState).toBe("stale");
+		expect(estimate.legs[0]?.awaitingDeparture).toBeUndefined();
+	});
+
 	it("범위 밖인데 배차간격을 모르면 boardEtaAt은 null", () => {
 		const boards = fakeBoards([
 			[

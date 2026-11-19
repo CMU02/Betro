@@ -19,6 +19,11 @@ const ESTIMATED_METHODS: ReadonlySet<ArrivalMethod> = new Set<ArrivalMethod>([
 /** 경로 한 구간의 탈 차량과 도착 예상. */
 export interface LegEstimate {
 	alightEtaAt: number | null;
+	/**
+	 * 새 도착판에서 탈 차량을 고르지 못했고, 그 다음 차량이 아직 노선 기점에서 출발을 기다린다.
+	 * 기기는 "위치 확인 중" 대신 "출발 대기 중"을 보인다. 아니면 없다.
+	 */
+	awaitingDeparture?: true;
 	boardEtaAt: number | null;
 	/** 시각의 확신. 위치와 따로 본다(4.3). */
 	etaState: "live" | "estimated";
@@ -59,6 +64,7 @@ interface EstimateInput {
 /** 승차 정류장에서 고른 결과. alightEtaAt은 진행 정보에서 바로 얻었을 때만 있다. */
 interface Pick {
 	alightEtaAt?: number | null;
+	awaitingDeparture?: true;
 	boardEtaAt: number | null;
 	method: ArrivalMethod | null;
 	stopsAway: number | null;
@@ -207,6 +213,7 @@ function pickFree(
 		};
 	}
 	return {
+		...(board.awaitingDeparture ? { awaitingDeparture: true } : {}),
 		boardEtaAt: beyondBoard(board, readyAt, knownHeadway(board)),
 		method: "headway",
 		stopsAway: null,
@@ -300,6 +307,7 @@ function estimateLeg(
 			: pickFixed(leg, board, fixedId, isBoarded ? readyAt : null, boards);
 	const alightEtaAt = alightFrom(leg, pick, boards);
 	return {
+		...(pick.awaitingDeparture ? { awaitingDeparture: true } : {}),
 		alightEtaAt,
 		boardEtaAt: pick.boardEtaAt,
 		etaState: etaStateOf(pick, alightEtaAt),

@@ -5,6 +5,7 @@ import fixture from "./__fixtures__/lock-screen-cases.json";
 import type { ContentState } from "./content-state";
 import {
 	type ActiveSessionView,
+	endedSessionId,
 	endOutcome,
 	endSession,
 	fetchActiveSession,
@@ -240,6 +241,36 @@ describe("settleActiveSession", () => {
 		expect(
 			settleActiveSession(undefined, { ok: false, reason: "offline" })
 		).toEqual({ checking: true, session: null });
+	});
+});
+
+describe("endedSessionId", () => {
+	const session: ActiveSessionView = {
+		content: CONTENT,
+		planId: PLAN_ID,
+		routes: [],
+		sessionId: SESSION_ID,
+	};
+	const live = { checking: false, session };
+
+	it("names the last session once the server answers without it", () => {
+		expect(endedSessionId(live, { checking: false, session: null })).toBe(
+			SESSION_ID
+		);
+		expect(
+			endedSessionId(live, {
+				checking: false,
+				session: { ...session, sessionId: "other" },
+			})
+		).toBe(SESSION_ID);
+	});
+
+	it("is null while checking, without a last session, or for the same session", () => {
+		expect(endedSessionId(live, { checking: true, session })).toBeNull();
+		expect(
+			endedSessionId(undefined, { checking: false, session: null })
+		).toBeNull();
+		expect(endedSessionId(live, live)).toBeNull();
 	});
 });
 

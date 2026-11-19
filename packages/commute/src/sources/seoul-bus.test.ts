@@ -103,6 +103,13 @@ describe("parseRouteArrivals", () => {
 		expect(stopAt(stops6411, 1).vehicles).toEqual([]);
 	});
 
+	it("marks a stop whose next unlisted bus still waits at the route origin", () => {
+		// 6411 표본: 1번은 두 칸 모두 "출발대기", 2번은 둘째 칸만, 39번은 두 대가 다 달린다.
+		expect(stopAt(stops6411, 1).awaitingDeparture).toBe(true);
+		expect(stopAt(stops6411, 2).awaitingDeparture).toBe(true);
+		expect(stopAt(stops6411, 39).awaitingDeparture).toBeUndefined();
+	});
+
 	it("treats headerCd 4 as an empty success", () => {
 		expect(
 			parseRouteArrivals({
@@ -146,6 +153,12 @@ describe("routeArrivalsUrl", () => {
 });
 
 describe("busBoards.board", () => {
+	it("passes on that the next unlisted bus waits at the route origin", () => {
+		const boards = busBoards(null, stops6411, FETCHED_6411);
+		expect(boards.board(1).awaitingDeparture).toBe(true);
+		expect(boards.board(39).awaitingDeparture).toBeUndefined();
+	});
+
 	it("turns the two approaching vehicles into official arrivals", () => {
 		const board = busBoards(null, stops6411, FETCHED_6411).board(39);
 		expect(board).toEqual({

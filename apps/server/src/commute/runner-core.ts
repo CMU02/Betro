@@ -760,6 +760,41 @@ export class RunnerCore {
 		this.#log(
 			`commute start session=${sessionId} plan=${plan.planId} platform=${platform ?? "none"}`
 		);
+		await this.#replaceOlder(installId, sessionId, now);
+	}
+
+	/**
+	 * 잠금화면과 아일랜드의 안내는 기기마다 하나다. 새 세션을 연 뒤 같은 설치의 앞 세션에 종료를 보내고
+	 * `replaced`로 닫는다. 예약 시각이 겹치는 경로가 둘이면 나중에 시작한 쪽만 남는다.
+	 */
+	async #replaceOlder(
+		installId: string,
+		keepId: string,
+		now: number
+	): Promise<void> {
+		const { store } = this.#ports;
+		const entries = await store.list<SessionEntry>(SESSION_PREFIX);
+		const older = [...entries].filter(
+			([key, entry]) =>
+				entry.installId === installId &&
+				entry.state.stage !== "ended" &&
+				key !== sessionKey(keepId)
+		);
+		if (older.length === 0) {
+			return;
+		}
+		const rows = await this.#tokens(installId);
+		for (const [key, entry] of older) {
+			const id = key.slice(SESSION_PREFIX.length);
+			entry.state = endedState(entry.state, "replaced");
+			try {
+				// 앞 세션은 몇 개 안 되고, 하나씩 닫아야 같은 토큰 행을 겹쳐 지우지 않는다.
+				// biome-ignore lint/performance/noAwaitInLoops: 차례대로 닫는다.
+				await this.#finish(id, entry, null, rows, now);
+			} catch (error) {
+				this.#log(`commute session=${id} replace failed: ${errorText(error)}`);
+			}
+		}
 	}
 
 	async #plansOf(entries: Map<string, SessionEntry>): Promise<PlanLookup> {

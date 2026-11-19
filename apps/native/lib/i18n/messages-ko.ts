@@ -20,6 +20,10 @@ export const ko = {
 				eta: "{stop} · {eta} 도착",
 				etaEstimated: "{stop} · 약 {eta} 도착",
 				noEta: "{stop}",
+				passedBus: "다음 차 {eta} · {stop}",
+				passedBusEstimated: "다음 차 약 {eta} · {stop}",
+				passedSubway: "다음 열차 {eta} · {stop}",
+				passedSubwayEstimated: "다음 열차 약 {eta} · {stop}",
 			},
 			header: {
 				fallback: "출퇴근",
@@ -37,11 +41,13 @@ export const ko = {
 			status: {
 				arrived: "{stop} 도착",
 				arriving: "곧 도착",
+				/** 탈 차량이 아직 노선 기점에서 떠나지 않았다(서울 버스 "출발대기"). */
+				awaitingDeparture: "출발 대기 중",
 				beforeLeave: "{leave}에 나가세요",
 				beforeLeaveSafe: "{safeLeave}에 나가면 여유 있어요",
 				beforeLeaveTight: "{leave}에 나가면 빠듯해요",
-				passedBus: "{passedLine}번이 지나갔어요 · 다음 차 {eta}",
-				passedSubway: "{passedLine} 열차가 지나갔어요 · 다음 열차 {eta}",
+				passedBus: "{passedLine}번이 지나갔어요",
+				passedSubway: "{passedLine} 열차가 지나갔어요",
 				ride: "하차까지 {n}정거장",
 				rideLast: "이번에 내려요",
 				rideUnknown: "이동 중",
@@ -57,6 +63,10 @@ export const ko = {
 				estimated: "시간표 추정",
 				live: "실시간",
 			},
+		},
+		/** Android 진행 중 알림 */
+		notification: {
+			channel: "출퇴근 안내",
 		},
 	},
 	/** 17 출퇴근 안내 */
@@ -443,6 +453,15 @@ export const ko = {
 		},
 		dataSources: {
 			title: "데이터 출처",
+		},
+		/** `EXPO_PUBLIC_LOCK_SAMPLES=1`일 때만 보이는 행과 화면. 표본 값으로 잠금화면을 띄운다. */
+		lockSamples: {
+			endAll: "표본 모두 끝내기",
+			failed: "표본을 띄우지 못했어요",
+			intro:
+				"사례를 누르면 그 값으로 잠금화면 안내를 띄워요. 시각은 지금 기준으로 옮겨요.",
+			subtitle: "표본 값으로 잠금화면 안내를 띄워요",
+			title: "잠금화면 표본",
 		},
 		mapQuality: {
 			high3d: "고화질 3D",

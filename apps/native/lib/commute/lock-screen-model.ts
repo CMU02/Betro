@@ -13,6 +13,11 @@ export interface LockScreenNextLeg {
 export interface LockScreenModel {
 	/** iOS는 버튼이 없고, Android는 "종료" 하나다. */
 	actions: LockScreenAction[];
+	/**
+	 * 남은 분을 시스템 타이머로 셀 때 그 끝 시각(epoch 초, 탈 차량의 도착 예정). `minutes`가 "N분"일 때만 있고,
+	 * "곧"이거나 시각이 없으면 null이다. 잠금화면은 이 값으로 푸시 사이에도 줄어드는 타이머를 그린다.
+	 */
+	countdownEpoch: number | null;
 	detail: string;
 	header: string;
 	lineName: string;
@@ -106,6 +111,27 @@ function beforeLeaveLine(
 	return t("commute.lock.status.beforeLeaveTight", { leave });
 }
 
+/** 새 도착판에서 탈 차량이 아직 기점에서 떠나지 않았다. 묵은 위치에서는 "위치 확인 중"을 둔다. */
+function awaitsDeparture(state: ContentState): boolean {
+	return state.awaitingDeparture === true && state.positionState === "live";
+}
+
+/**
+ * "출발 대기 중"을 쓰는 경우(지나갔어요·나가기 전이 아니고, walk·wait에서 정거장 수를 모름).
+ * 이때 탈 시각은 차량 없이 "준비된 시각 + 배차간격"으로 낸 값이라 1분마다 같이 밀린다(2026-11-16 기기 확인).
+ * 그래서 시각·남은 시간·타이머를 보이지 않고 정류장 이름만 둔다.
+ */
+function showsAwaitingDeparture(state: ContentState, now: number): boolean {
+	const waiting = state.stage === "walk" || state.stage === "wait";
+	return (
+		waiting &&
+		awaitsDeparture(state) &&
+		knownStops(state.stopsAway) === null &&
+		!showsPassed(state) &&
+		beforeLeaveOf(state, now) === null
+	);
+}
+
 function statusLine(
 	state: ContentState,
 	deps: LockScreenDeps,
@@ -118,10 +144,7 @@ function statusLine(
 			state.mode === "subway"
 				? "commute.lock.status.passedSubway"
 				: "commute.lock.status.passedBus";
-		return t(passedKey, {
-			eta: clock(etaEpoch),
-			passedLine: state.passed.lineName,
-		});
+		return t(passedKey, { passedLine: state.passed.lineName });
 	}
 	const beforeLeave = beforeLeaveOf(state, now);
 	if (beforeLeave) {
@@ -130,7 +153,9 @@ function statusLine(
 	const stops = knownStops(state.stopsAway);
 	if (stage === "walk" || stage === "wait") {
 		if (stops === null) {
-			return t("commute.lock.status.unknown");
+			return awaitsDeparture(state)
+				? t("commute.lock.status.awaitingDeparture")
+				: t("commute.lock.status.unknown");
 		}
 		return stops >= 1
 			? t("commute.lock.status.stopsAway", { n: stops })
@@ -147,12 +172,31 @@ function statusLine(
 	return t("commute.lock.status.arrived", { stop: state.stopName });
 }
 
+/** 지나간 차 다음 차의 시각은 상태 줄이 아니라 상세 줄에 둔다(Figma `1구간 지나감`). */
+function passedDetailKey(state: ContentState): MessageKey {
+	const estimated = state.etaState !== "live";
+	if (state.mode === "subway") {
+		return estimated
+			? "commute.lock.detail.passedSubwayEstimated"
+			: "commute.lock.detail.passedSubway";
+	}
+	return estimated
+		? "commute.lock.detail.passedBusEstimated"
+		: "commute.lock.detail.passedBus";
+}
+
 function detailLine(
 	state: ContentState,
 	deps: LockScreenDeps,
 	clock: (epoch: number) => string
 ): string {
 	const { t } = deps;
+	if (showsPassed(state) && state.etaEpoch !== null) {
+		return t(passedDetailKey(state), {
+			eta: clock(state.etaEpoch),
+			stop: state.stopName,
+		});
+	}
 	const beforeLeave = beforeLeaveOf(state, deps.now);
 	if (beforeLeave) {
 		return t("commute.lock.detail.beforeLeave", {
@@ -170,24 +214,38 @@ function detailLine(
 	return t(key, { eta: clock(state.etaEpoch), stop: state.stopName });
 }
 
+/** 남은 분을 보일 때 그 기준 시각. 도착했거나 끝났으면 없다. */
+function minutesEtaOf(state: ContentState): number | null {
+	if (state.stage === "arrived" || state.stage === "ended") {
+		return null;
+	}
+	return state.etaEpoch;
+}
+
 function minutesLabel(
 	state: ContentState,
 	deps: LockScreenDeps
 ): string | null {
-	if (
-		state.etaEpoch === null ||
-		state.stage === "arrived" ||
-		state.stage === "ended"
-	) {
+	const eta = minutesEtaOf(state);
+	if (eta === null) {
 		return null;
 	}
-	const remaining = state.etaEpoch - deps.now;
+	const remaining = eta - deps.now;
 	if (remaining < SECONDS_PER_MINUTE) {
 		return deps.t("commute.lock.minutes.soon");
 	}
 	return deps.t("commute.lock.minutes.value", {
 		m: Math.floor(remaining / SECONDS_PER_MINUTE),
 	});
+}
+
+/** "N분"을 보일 때만 그 끝 시각을 준다(1분 미만의 "곧"은 타이머로 바꾸지 않는다). */
+function countdownEpochOf(state: ContentState, now: number): number | null {
+	const eta = minutesEtaOf(state);
+	if (eta === null || eta - now < SECONDS_PER_MINUTE) {
+		return null;
+	}
+	return eta;
 }
 
 function tagOf(state: ContentState): LockScreenTag {
@@ -265,12 +323,17 @@ export function lockScreenModel(
 ): LockScreenModel {
 	const clock = (epoch: number) => formatClock(epoch, deps.timezone);
 	const tag = tagOf(state);
+	// 상세·남은 시간은 출발 대기 중이면 시각 없이 그린다. 상태 줄은 원래 값으로 정한다.
+	const timed = showsAwaitingDeparture(state, deps.now)
+		? { ...state, etaEpoch: null }
+		: state;
 	return {
 		actions: actionsOf(deps.platform),
-		detail: detailLine(state, deps, clock),
+		countdownEpoch: countdownEpochOf(timed, deps.now),
+		detail: detailLine(timed, deps, clock),
 		header: deps.header ?? deps.t("commute.lock.header.fallback"),
 		lineName: state.lineName,
-		minutes: minutesLabel(state, deps),
+		minutes: minutesLabel(timed, deps),
 		mode: state.mode,
 		moreLegs: moreLegsLine(state, deps.t),
 		nextLegs: nextLegLines(state, deps.t, clock),

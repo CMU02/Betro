@@ -12,8 +12,10 @@ import { AppState } from "react-native";
 import type { MessageKey } from "@/lib/i18n/translate";
 import { serverClient } from "@/lib/server/app-server";
 
+import { clearAppCommuteNotification } from "./app-commute";
 import {
 	type ActiveSessionState,
+	endedSessionId,
 	endOutcome,
 	endSession,
 	fetchActiveSession,
@@ -47,11 +49,20 @@ export function useActiveSession(options: { enabled?: boolean } = {}): {
 	const visible = enabled && focused && appActive;
 	const query = useQuery({
 		enabled: visible,
-		queryFn: async () =>
-			settleActiveSession(
-				queryClient.getQueryData<ActiveSessionState>(ACTIVE_SESSION_KEY),
+		queryFn: async () => {
+			const previous =
+				queryClient.getQueryData<ActiveSessionState>(ACTIVE_SESSION_KEY);
+			const next = settleActiveSession(
+				previous,
 				await fetchActiveSession(serverClient)
-			),
+			);
+			const ended = endedSessionId(previous, next);
+			if (ended !== null) {
+				// 끝 푸시를 놓쳤어도 Android 알림이 남지 않게 한다.
+				clearAppCommuteNotification(ended);
+			}
+			return next;
+		},
 		queryKey: ACTIVE_SESSION_KEY,
 		refetchInterval: visible ? REFRESH_MS : false,
 		staleTime: 0,
@@ -98,7 +109,11 @@ export function useEndSession(): {
 			setEnding(true);
 			setNotice(null);
 			try {
-				const outcome = endOutcome(await endSession(serverClient, sessionId));
+				const result = await endSession(serverClient, sessionId);
+				if (result !== "failed") {
+					clearAppCommuteNotification(sessionId);
+				}
+				const outcome = endOutcome(result);
 				if (outcome.clear) {
 					queryClient.setQueryData(ACTIVE_SESSION_KEY, NO_SESSION);
 				} else if (outcome.notice === null) {

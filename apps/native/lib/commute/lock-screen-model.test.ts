@@ -10,6 +10,7 @@ const NOW = 1_794_265_200; // 2026-11-10 08:00 KST
 
 interface Case {
 	expected: {
+		countdownEpoch: number | null;
 		detail: string;
 		minutes: string | null;
 		moreLegs: string | null;
@@ -76,6 +77,7 @@ for (const item of cases) {
 		expect(model.status).toBe(item.expected.status);
 		expect(model.detail).toBe(item.expected.detail);
 		expect(model.minutes).toBe(item.expected.minutes);
+		expect(model.countdownEpoch).toBe(item.expected.countdownEpoch);
 		expect(model.tag).toBe(item.expected.tag);
 		expect(model.suggestion).toBe(item.expected.suggestion);
 		expect(model.nextLegs).toEqual(item.expected.nextLegs);

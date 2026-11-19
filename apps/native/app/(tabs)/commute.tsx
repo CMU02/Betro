@@ -1,7 +1,7 @@
 import { DEFAULT_TIMEZONE } from "@Betro/commute/config";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { BriefcaseIcon } from "lucide-react-native";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { View } from "react-native";
 import { withUniwind } from "uniwind";
 
@@ -12,6 +12,7 @@ import { AppText } from "@/components/ui/app-text";
 import { EmptyState } from "@/components/ui/empty-state";
 import { OfflineNotice } from "@/components/ui/offline-notice";
 import { Screen } from "@/components/ui/screen";
+import { placeIdForPlan } from "@/lib/commute/guide-link";
 import { sessionStripModel } from "@/lib/commute/guide-model";
 import {
 	useActiveSession,
@@ -58,6 +59,18 @@ export default function CommuteTab() {
 		(place: Place) => openGuideById(place.id),
 		[openGuideById]
 	);
+
+	// 잠금화면 카드·아일랜드·Android 알림의 `Betro://commute?plan=…`: 그 장소의 17을 연다.
+	// 한 번 연 뒤 `plan`을 지워 뒤로 와서 다시 열리지 않게 한다.
+	const { plan } = useLocalSearchParams<{ plan?: string }>();
+	useEffect(() => {
+		const placeId = placeIdForPlan(places, plan);
+		if (plan === undefined || placeId === null) {
+			return;
+		}
+		router.setParams({ plan: undefined });
+		openGuideById(placeId);
+	}, [openGuideById, places, plan, router]);
 	const editPlace = useCallback(
 		(place: Place) =>
 			openSetupOnce(() =>

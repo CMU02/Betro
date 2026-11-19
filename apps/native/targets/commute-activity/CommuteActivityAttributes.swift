@@ -79,6 +79,8 @@ public struct CommuteActivityAttributes: ActivityAttributes {
     public var suggestion: Suggestion?
     /// 남은 구간(최대 3개). 옛 서버의 값에는 키가 없어 nil로 디코딩된다.
     public var nextLegs: [NextLeg]?
+    /// 탈 차량이 아직 노선 기점에서 출발을 기다린다. 서버는 true일 때만 키를 보내고, 없으면 nil이다.
+    public var awaitingDeparture: Bool?
 
     public init(
       v: Int,
@@ -99,7 +101,8 @@ public struct CommuteActivityAttributes: ActivityAttributes {
       delayMinutes: Int,
       destinationEtaEpoch: Double?,
       suggestion: Suggestion?,
-      nextLegs: [NextLeg]? = nil
+      nextLegs: [NextLeg]? = nil,
+      awaitingDeparture: Bool? = nil
     ) {
       self.v = v
       self.seq = seq
@@ -120,6 +123,7 @@ public struct CommuteActivityAttributes: ActivityAttributes {
       self.destinationEtaEpoch = destinationEtaEpoch
       self.suggestion = suggestion
       self.nextLegs = nextLegs
+      self.awaitingDeparture = awaitingDeparture
     }
   }
 

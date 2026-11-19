@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icon/bus-front: 진행 중 알림과 상태바 칩의 작은 아이콘. iOS 아일랜드 Minimal과 같은 그림(targets/commute-activity/Assets.xcassets). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="24dp"
+  android:height="24dp"
+  android:viewportWidth="18"
+  android:viewportHeight="18">
+  <path
+    android:pathData="M3 4.5L1.5 5.25"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round"
+    android:strokeWidth="2" />
+  <path
+    android:pathData="M7.5 4.5H10.5"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round"
+    android:strokeWidth="2" />
+  <path
+    android:pathData="M16.5 5.25L15 4.5"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round"
+    android:strokeWidth="2" />
+  <path
+    android:pathData="M4.5 2.25H13.5C14.3284 2.25 15 2.92157 15 3.75V12.75C15 13.5784 14.3284 14.25 13.5 14.25H4.5C3.67157 14.25 3 13.5784 3 12.75V3.75C3 2.92157 3.67157 2.25 4.5 2.25Z"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round"
+    android:strokeWidth="2" />
+  <path
+    android:pathData="M3 8.25H15"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round"
+    android:strokeWidth="2" />
+  <path
+    android:pathData="M6 11.25H6.0075"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round"
+    android:strokeWidth="2" />
+  <path
+    android:pathData="M12 11.25H12.0075"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round"
+    android:strokeWidth="2" />
+  <path
+    android:pathData="M4.5 14.25V15.75"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round"
+    android:strokeWidth="2" />
+  <path
+    android:pathData="M13.5 15.75V14.25"
+    android:strokeColor="#FFFFFFFF"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round"
+    android:strokeWidth="2" />
+</vector>
