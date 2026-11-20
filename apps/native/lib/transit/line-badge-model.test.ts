@@ -43,6 +43,17 @@ describe("lineBadgeModel bus", () => {
 		expect(model.regionKey).toBeNull();
 	});
 
+	it("Seoul night buses (routeType 15) keep the default color, not GBIS 15", () => {
+		const model = lineBadgeModel({ ...bus("15"), name: "N26" });
+		expect(model.colorToken).toBe("bus/trunk");
+		expect(model.label).toBe("N26");
+		expect(model.regionKey).toBeNull();
+	});
+
+	it("Seoul routeType 14 keeps the default color, not GBIS 14", () => {
+		expect(lineBadgeModel(bus("14")).colorToken).toBe("bus/trunk");
+	});
+
 	it("shows the region label for non-Seoul routes of any type", () => {
 		expect(lineBadgeModel(bus("3", "gyeonggi")).regionKey).toBe(
 			"transit.region.gyeonggi"

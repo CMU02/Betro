@@ -3,9 +3,7 @@ import { parseRef } from "@Betro/commute/refs";
 import type { MessageKey } from "@/lib/i18n/translate";
 import type { TransitTokenName } from "@/theme/tokens";
 
-import { type BusKind, busKindOf } from "./bus-route-type";
-
-export type BusRegion = "seoul" | "gyeonggi" | "incheon";
+import { type BusKind, type BusRegion, busKindOf } from "./bus-route-type";
 
 export type LineBadgeInput =
 	| { mode: "bus"; routeType: string; region: BusRegion; name: string }
@@ -90,8 +88,8 @@ const SUBWAY_COLOR_BY_LINE: Record<string, TransitTokenName> = {
 	"ui-sinseol": "line/ui-sinseol",
 };
 
-function busColorOf(routeType: string): TransitTokenName {
-	const kind = busKindOf(routeType);
+function busColorOf(routeType: string, region: BusRegion): TransitTokenName {
+	const kind = busKindOf(routeType, region);
 	if (kind !== null) {
 		return BUS_COLOR_BY_KIND[kind];
 	}
@@ -118,7 +116,7 @@ function subwayKeyOf(line: string): string {
 export function lineBadgeModel(input: LineBadgeInput): LineBadgeModel {
 	if (input.mode === "bus") {
 		return {
-			colorToken: busColorOf(input.routeType),
+			colorToken: busColorOf(input.routeType, input.region),
 			label: labelOf(input.name),
 			regionKey:
 				REGION_KEY_BY_ROUTE_TYPE[input.routeType] ??

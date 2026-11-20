@@ -358,7 +358,7 @@ export function subwayLeg(
 export function busRouteRow(route: BusRouteMatch, t: Translate): BusRouteRow {
 	// 경기·인천 노선은 시·군 이름으로 같은 번호를 구분한다. 서울은 지역 이름을 쓴다.
 	const region = route.areaName ?? t(REGION_KEYS[route.region]);
-	const kind = busKindOf(route.routeType);
+	const kind = busKindOf(route.routeType, route.region);
 	const typeKey = kind === null ? undefined : BUS_KIND_KEYS[kind];
 	return {
 		badge: {

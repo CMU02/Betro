@@ -270,6 +270,17 @@ it("labels search results so same-number routes differ by region", () => {
 	);
 });
 
+it("keeps Seoul night buses (routeType 15) off the GBIS type table", () => {
+	const night = busRouteRow(
+		{ ...SEOUL_341, name: "N26", routeType: "15", shortName: "N26" },
+		t
+	);
+	expect(night.sub).toBe("서울 버스");
+	expect(
+		busRouteRow({ ...SEOUL_341, routeType: "14", shortName: "9401" }, t).sub
+	).toBe("서울 버스");
+});
+
 it("names the known branches and numbers the rest", () => {
 	expect(branchLabel("main", 0, t)).toBe("본선");
 	expect(branchLabel("seongsu", 1, t)).toBe("성수지선");
