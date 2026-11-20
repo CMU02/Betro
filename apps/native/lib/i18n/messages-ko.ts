@@ -507,6 +507,10 @@ export const ko = {
 			subtitle: "표본 값으로 잠금화면 안내를 띄워요",
 			title: "잠금화면 표본",
 		},
+		mapLines: {
+			empty: "등록한 경로가 없어요",
+			title: "노선별 지도 표시",
+		},
 		mapQuality: {
 			high3d: "고화질 3D",
 			standard: "표준",
@@ -522,6 +526,7 @@ export const ko = {
 			about: "정보",
 			developer: "개발",
 			display: "화면",
+			mapLines: "내 노선",
 			notifications: "알림",
 		},
 		smoothMotion: {
