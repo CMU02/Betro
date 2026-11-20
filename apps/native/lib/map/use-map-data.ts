@@ -20,7 +20,6 @@ import {
 	busVehiclesForLeg,
 	subwayBranchForLeg,
 	subwayVehiclesForLeg,
-	visibleLegs,
 } from "./leg-vehicles";
 import {
 	type BusMap,
@@ -52,6 +51,7 @@ import {
 	type TrackPoint,
 } from "./motion";
 import { createPoller } from "./polling";
+import { mapLegFlags, watchRefsOf } from "./regional-legs";
 import type { MapSelection } from "./selection";
 import { viewFromSession } from "./session-view";
 import { useMapVisible } from "./use-map-visible";
@@ -66,7 +66,6 @@ const ROUTE_VIEW_INTERVAL_MS = 15_000;
 export const RENDER_TICK_MS = 1000;
 /** 참조 데이터(노선 선, 정류장)는 하루 단위로 바뀐다. */
 export const MAP_REF_STALE_MS = 10 * 60 * 1000;
-const SEOUL_BUS_PREFIX = "seoul-bus:";
 
 const mapRefCache = createMapRefCache(Storage);
 
@@ -99,6 +98,8 @@ export interface MapLeg {
 	leg: Leg;
 	/** 이 구간 노선의 참조 지도와 거리 선. 받기 전이거나 못 받았으면 null. */
 	map: BusMap | SubwayMap | null;
+	/** 이 구간 노선에 실시간 정보가 연결되어 있는가. 경기·인천 노선은 false이고 선과 정류장만 있다. */
+	realtime: boolean;
 	shape: [number, number][];
 	showVehicles: boolean;
 	track: BusTrack | SubwayTrack | null;
@@ -144,12 +145,13 @@ export function refKey(leg: MapLineRef): string {
 
 /** 기기 저장본을 먼저 읽고 서버 ETag로 바뀐 때만 다시 받는다. 받지 못하고 저장본도 없으면 던져 다시 시도하게 한다. */
 export function loadRefMap(leg: MapLineRef): Promise<BusMap | SubwayMap> {
-	const bareLine = leg.line.slice(leg.line.indexOf(":") + 1);
 	if (leg.mode === "bus") {
+		// 출처 접두사가 붙은 전체 노선 ID를 보낸다. 서버가 서울·경기·인천을 접두사로 가른다.
 		return loadCachedRef<BusMap>(mapRefCache, refKey(leg), (etag) =>
-			fetchBusMap(serverClient, bareLine, etag)
+			fetchBusMap(serverClient, leg.line, etag)
 		);
 	}
+	const bareLine = leg.line.slice(leg.line.indexOf(":") + 1);
 	return loadCachedRef<SubwayMap>(mapRefCache, refKey(leg), (etag) =>
 		fetchSubwayMap(serverClient, bareLine, etag)
 	);
@@ -299,10 +301,12 @@ function renderLeg(args: {
 	legTrack: LegTrack | null;
 	motionStates: ReadonlyMap<string, MotionState>;
 	nowMs: number;
+	realtime: boolean;
 	showVehicles: boolean;
 	snapshots: Snapshots;
 }): MapLeg {
-	const { boardedId, leg, legIndex, legTrack, nowMs, showVehicles } = args;
+	const { boardedId, leg, legIndex, legTrack, nowMs, realtime, showVehicles } =
+		args;
 	const vehicles: RenderVehicle[] = [];
 	if (showVehicles && legTrack !== null) {
 		for (const vehicle of legVehicles(
@@ -327,6 +331,7 @@ function renderLeg(args: {
 		...legSpanM(leg, legTrack),
 		leg,
 		map: legTrack?.map ?? null,
+		realtime,
 		shape: trackShape(legTrack),
 		showVehicles,
 		track: legTrack?.track ?? null,
@@ -383,7 +388,7 @@ export function useMapData(
 	const hiddenLines = preferences.hiddenMapLines;
 
 	const legsWithFlags = useMemo(
-		() => (route === null ? [] : visibleLegs(route, hiddenLines)),
+		() => (route === null ? [] : mapLegFlags(route, hiddenLines)),
 		[route, hiddenLines]
 	);
 	const allHidden = route !== null && allLinesHidden(route, hiddenLines);
@@ -437,21 +442,9 @@ export function useMapData(
 		return routeView;
 	}, [route, sessionRoute, session, routeView]);
 
-	// 하트비트. 이 경로 버스 노선의 seoul-bus ref만 보낸다.
+	// 하트비트. 이 경로 버스 노선의 seoul-bus ref만 보낸다. 경기·인천 노선은 보지 않는다.
 	const watchRefs = useMemo(
-		() =>
-			route === null
-				? []
-				: [
-						...new Set(
-							route.legs
-								.filter(
-									(leg) =>
-										leg.mode === "bus" && leg.line.startsWith(SEOUL_BUS_PREFIX)
-								)
-								.map((leg) => leg.line)
-						),
-					],
+		() => (route === null ? [] : watchRefsOf(route)),
 		[route]
 	);
 	useVisiblePoll(
@@ -553,7 +546,7 @@ export function useMapData(
 	// biome-ignore lint/correctness/useExhaustiveDependencies: motionVersion이 ref 안 상태의 변경을 알린다.
 	const legs = useMemo<MapLeg[]>(
 		() =>
-			legsWithFlags.map(({ leg, showVehicles }, legIndex) =>
+			legsWithFlags.map(({ leg, realtime, showVehicles }, legIndex) =>
 				renderLeg({
 					boardedId: boardedFor(route, sessionRoute, session, legIndex),
 					leg,
@@ -561,6 +554,7 @@ export function useMapData(
 					legTrack: legTracks[legIndex] ?? null,
 					motionStates: motion.current,
 					nowMs,
+					realtime,
 					showVehicles,
 					snapshots,
 				})

@@ -399,20 +399,23 @@ function useCenterOnHere(
 	}, [here, mapRef, ready, userMoved]);
 }
 
-/** 칩 위·경로 목록 아래의 알약들. 지금 경로, 노선이 모두 꺼졌다는 안내, 시간표 추정 도착 예상이다. */
+/** 칩 위·경로 목록 아래의 알약들. 지금 경로, 노선이 모두 꺼졌다는 안내, 실시간이 없는 구간 안내, 시간표 추정 도착 예상이다. */
 function RouteStatus({
 	allHidden,
 	estimated,
+	noRealtime,
 	routeLabel,
 }: {
 	allHidden: boolean;
 	estimated: string | null;
+	noRealtime: boolean;
 	routeLabel: string | null;
 }) {
 	return (
 		<View className="gap-2 px-4" pointerEvents="box-none">
 			{routeLabel === null ? null : <MapPill label={routeLabel} />}
 			{allHidden ? <MapPill label={t("map.allHidden")} /> : null}
+			{noRealtime ? <MapPill label={t("map.noRealtime")} /> : null}
 			{estimated === null ? null : (
 				<MapPill label={estimated} tone="estimated" />
 			)}
@@ -466,6 +469,7 @@ function PlacesOverlay({
 				<RouteStatus
 					allHidden={data.allHidden}
 					estimated={estimatedOf(data)}
+					noRealtime={data.legs.some((mapLeg) => !mapLeg.realtime)}
 					routeLabel={current === null ? null : routeOptionLabel(current)}
 				/>
 			)}

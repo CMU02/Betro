@@ -3,6 +3,8 @@ import { parseRef } from "@Betro/commute/refs";
 import type { MessageKey } from "@/lib/i18n/translate";
 import type { TransitTokenName } from "@/theme/tokens";
 
+import { type BusKind, busKindOf } from "./bus-route-type";
+
 export type BusRegion = "seoul" | "gyeonggi" | "incheon";
 
 export type LineBadgeInput =
@@ -21,14 +23,22 @@ export interface LineBadgeModel {
 const EMPTY_LABEL = "-";
 const DEFAULT_BUS_COLOR: TransitTokenName = "bus/trunk";
 
-/** 서울 버스 API의 routeType. 7 인천, 8 경기는 광역 색에 지역 글자를 붙인다. */
+/** 노선 종류별 색. 경기 일반형은 지선, 직행좌석·좌석·광역급행은 광역 색이고, 마을버스는 마을 색이다. */
+const BUS_COLOR_BY_KIND = {
+	airport: "bus/airport",
+	branch: "bus/branch",
+	circular: "bus/circular",
+	direct: "bus/express",
+	express: "bus/express",
+	general: "bus/branch",
+	seat: "bus/express",
+	trunk: "bus/trunk",
+	village: "bus/village",
+	wide: "bus/express",
+} as const satisfies Record<BusKind, TransitTokenName>;
+
+/** 서울 버스 API의 routeType 7 인천, 8 경기는 광역 색에 지역 글자를 붙인다. */
 const BUS_COLOR_BY_ROUTE_TYPE: Record<string, TransitTokenName> = {
-	"1": "bus/airport",
-	"2": "bus/village",
-	"3": "bus/trunk",
-	"4": "bus/branch",
-	"5": "bus/circular",
-	"6": "bus/express",
 	"7": "bus/express",
 	"8": "bus/express",
 };
@@ -80,6 +90,14 @@ const SUBWAY_COLOR_BY_LINE: Record<string, TransitTokenName> = {
 	"ui-sinseol": "line/ui-sinseol",
 };
 
+function busColorOf(routeType: string): TransitTokenName {
+	const kind = busKindOf(routeType);
+	if (kind !== null) {
+		return BUS_COLOR_BY_KIND[kind];
+	}
+	return BUS_COLOR_BY_ROUTE_TYPE[routeType] ?? DEFAULT_BUS_COLOR;
+}
+
 function labelOf(name: string): string {
 	const trimmed = name.trim();
 	return trimmed === "" ? EMPTY_LABEL : trimmed;
@@ -100,7 +118,7 @@ function subwayKeyOf(line: string): string {
 export function lineBadgeModel(input: LineBadgeInput): LineBadgeModel {
 	if (input.mode === "bus") {
 		return {
-			colorToken: BUS_COLOR_BY_ROUTE_TYPE[input.routeType] ?? DEFAULT_BUS_COLOR,
+			colorToken: busColorOf(input.routeType),
 			label: labelOf(input.name),
 			regionKey:
 				REGION_KEY_BY_ROUTE_TYPE[input.routeType] ??

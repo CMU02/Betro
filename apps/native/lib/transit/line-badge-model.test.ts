@@ -123,3 +123,35 @@ describe("lineBadgeModel subway", () => {
 		}
 	});
 });
+
+describe("lineBadgeModel regional bus", () => {
+	it.each([
+		["30", "bus/village"],
+		["11", "bus/express"],
+		["14", "bus/express"],
+		["13", "bus/branch"],
+		["16", "bus/circular"],
+	])(
+		"GBIS code %s uses %s with the Gyeonggi label",
+		(routeType, colorToken) => {
+			const model = lineBadgeModel(bus(routeType, "gyeonggi"));
+			expect(model.colorToken).toBe(colorToken);
+			expect(model.regionKey).toBe("transit.region.gyeonggi");
+		}
+	);
+
+	it("TAGO village type keeps the village color with the Incheon label", () => {
+		const model = lineBadgeModel(bus("마을버스", "incheon"));
+		expect(model.colorToken).toBe("bus/village");
+		expect(model.regionKey).toBe("transit.region.incheon");
+	});
+
+	it("TAGO trunk and express types use their own colors", () => {
+		expect(lineBadgeModel(bus("간선버스", "incheon")).colorToken).toBe(
+			"bus/trunk"
+		);
+		expect(lineBadgeModel(bus("광역버스", "incheon")).colorToken).toBe(
+			"bus/express"
+		);
+	});
+});

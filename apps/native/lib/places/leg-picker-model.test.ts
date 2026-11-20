@@ -62,6 +62,7 @@ const LOOP_STOPS: BusStop[] = [
 ];
 
 const SEOUL_341: BusRouteMatch = {
+	areaName: null,
 	line: "seoul-bus:100100341",
 	name: "341",
 	region: "seoul",
@@ -70,6 +71,7 @@ const SEOUL_341: BusRouteMatch = {
 };
 
 const GYEONGGI_M5107: BusRouteMatch = {
+	areaName: null,
 	line: "seoul-bus:234000884",
 	name: "M5107광주",
 	region: "gyeonggi",
@@ -500,4 +502,70 @@ it("puts the target row near the top without scrolling past the end", () => {
 	expect(
 		alightScrollOffset({ contentHeight: 300, rowY: 200, viewportHeight: 500 })
 	).toBe(0);
+});
+
+const GBIS_11_GOYANG: BusRouteMatch = {
+	areaName: "고양",
+	line: "gbis:200000101",
+	name: "11",
+	region: "gyeonggi",
+	routeType: "30",
+	shortName: "11",
+};
+
+const GBIS_11_HWASEONG: BusRouteMatch = {
+	areaName: "화성",
+	line: "gbis:233000011",
+	name: "11",
+	region: "gyeonggi",
+	routeType: "30",
+	shortName: "11",
+};
+
+const TAGO_ICN: BusRouteMatch = {
+	areaName: "인천",
+	line: "tago:ICB165000012",
+	name: "12",
+	region: "incheon",
+	routeType: "마을버스",
+	shortName: "12",
+};
+
+it("tells same-number GBIS village buses apart by area name", () => {
+	const goyang = busRouteRow(GBIS_11_GOYANG, t);
+	const hwaseong = busRouteRow(GBIS_11_HWASEONG, t);
+	expect(goyang.sub).toBe("고양 마을");
+	expect(hwaseong.sub).toBe("화성 마을");
+	expect(goyang.badge).toEqual({
+		mode: "bus",
+		name: "11",
+		region: "gyeonggi",
+		routeType: "30",
+	});
+});
+
+it("falls back to the region when a GBIS route has no area name or an unknown type", () => {
+	expect(busRouteRow({ ...GBIS_11_GOYANG, areaName: null }, t).sub).toBe(
+		"경기 마을"
+	);
+	expect(busRouteRow({ ...GBIS_11_GOYANG, routeType: "99" }, t).sub).toBe(
+		"고양 버스"
+	);
+});
+
+it("labels TAGO routes with the Incheon area name and type", () => {
+	expect(busRouteRow(TAGO_ICN, t).sub).toBe("인천 마을");
+});
+
+it("keeps the gbis prefix on the saved leg and its stops", () => {
+	const board = stop(1, "백석역", { stop: "gbis:228000001" });
+	const alight = stop(2, "마두역", { stop: "gbis:228000002" });
+	const leg = busLeg(GBIS_11_GOYANG, board, alight);
+	expect(leg.line).toBe("gbis:200000101");
+	expect(leg.board.stop).toBe("gbis:228000001");
+	expect(leg.alight.stop).toBe("gbis:228000002");
+	expect(busMetaOf(GBIS_11_GOYANG)).toEqual({
+		region: "gyeonggi",
+		routeType: "30",
+	});
 });

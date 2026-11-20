@@ -27,6 +27,7 @@ function fakeClient(response: ServerResponse): {
 }
 
 const ROUTE = {
+	areaName: null,
 	line: "100100124",
 	name: "341",
 	region: "seoul",
@@ -53,6 +54,25 @@ describe("searchBusRoutes", () => {
 		});
 		expect(calls[0]?.method).toBe("GET");
 		expect(calls[0]?.path).toBe("/v1/ref/bus/routes?q=341");
+	});
+
+	it("reads the area name and defaults a missing one to null", async () => {
+		const { areaName: _omit, ...withoutArea } = ROUTE;
+		const { client } = fakeClient({
+			json: {
+				batchId: "b1",
+				routes: [
+					{ ...ROUTE, areaName: "고양", line: "gbis:1" },
+					{ ...withoutArea, line: "seoul-bus:2" },
+				],
+			},
+			status: 200,
+		});
+		const result = await searchBusRoutes(client, "341");
+		expect(result.ok && result.value.map((route) => route.areaName)).toEqual([
+			"고양",
+			null,
+		]);
 	});
 
 	it("does not call the server for a blank query", async () => {

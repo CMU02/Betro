@@ -100,6 +100,12 @@ describe("map ref fetchers", () => {
 		expect(calls[0]?.path).toBe("/v1/ref/map/bus/seoul-bus%3A100100124");
 	});
 
+	it("fetchBusMap sends the whole prefixed GBIS line", async () => {
+		const { client, calls } = fakeClient({ json: BUS_MAP, status: 200 });
+		await fetchBusMap(client, "gbis:200000101", null);
+		expect(calls[0]?.path).toBe("/v1/ref/map/bus/gbis%3A200000101");
+	});
+
 	it("fetchSubwayMap reads branches", async () => {
 		const { client, calls } = fakeClient({
 			etag: '"submap-1-2-3"',
