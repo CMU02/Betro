@@ -163,6 +163,51 @@ it("positionAt never decreases and ignores a clock before the anchor", () => {
 	expect(positionAt(state, sec(10))).toBeCloseTo(150);
 });
 
+it("loop line stations start at the beginning when the first one sits off the seam", () => {
+	// 2호선 본선처럼 처음과 끝이 이어지는 고리. 선은 첫 역을 지나서 시작해 시작점은 첫 역에서 붙임 거리보다 멀고,
+	// 돌아오는 끝 구간이 첫 역 바로 옆을 지난다(실데이터: 시청에서 시작점 84m, 끝 구간 61m).
+	// 첫 역이 끝에 붙으면 뒤의 모든 역이 끝으로 몰린다.
+	const side = 2000;
+	const METERS_PER_LAT_DEG = (6_371_008.8 * Math.PI) / 180;
+	const at = (x: number, y: number): [number, number] => [
+		LNG + x / METERS_PER_LNG_DEG,
+		LAT + y / METERS_PER_LAT_DEG,
+	];
+	const station = (x: number, y: number, seq: number) => ({
+		lat: at(x, y)[1],
+		lng: at(x, y)[0],
+		name: `${seq}`,
+		nextRunSec: 100,
+		offsetM: 0,
+		seq,
+		stop: `seoul-subway:L${seq}`,
+	});
+	const loop: SubwayMap["branches"][number] = {
+		branchKey: "main",
+		direction: "up",
+		shape: [
+			at(0, 0),
+			at(side, 0),
+			at(side, side),
+			at(-200, side),
+			at(-200, 0),
+			at(0, 0),
+		],
+		stations: [
+			station(-120, -60, 0),
+			station(side, -10, 1),
+			station(side + 10, side, 2),
+			station(-200 - 10, side / 2, 3),
+		],
+	};
+	const track = createSubwayTrack(loop);
+	const distances = track?.stations.map((s) => s.distanceM) ?? [];
+	expect(distances[0] ?? -1).toBeLessThan(100);
+	expect(distances[1] ?? -1).toBeCloseTo(side, -1);
+	expect(distances[2] ?? -1).toBeCloseTo(side * 2, -1);
+	expect(distances[3] ?? -1).toBeCloseTo(side * 3 + 200 + side / 2, -1);
+});
+
 describe("subway", () => {
 	const branch: SubwayMap["branches"][number] = {
 		branchKey: "main",

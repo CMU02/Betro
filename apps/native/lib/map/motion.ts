@@ -337,9 +337,9 @@ function nearestInRange(
 function projectForward(
 	geometry: Geometry,
 	target: LngLat,
-	fromM: number
+	fromM: number,
+	endM: number = totalLength(geometry)
 ): number {
-	const endM = totalLength(geometry);
 	let best: { distanceM: number; offsetM: number } | null = null;
 	let snapped = false;
 	for (
@@ -364,12 +364,21 @@ function projectForward(
 	return best?.distanceM ?? fromM;
 }
 
-/** 정류장(역) 좌표를 순서대로 선에 투영한 거리. 앞 정류장보다 뒤로 가지 않는다. */
+/**
+ * 정류장(역) 좌표를 순서대로 선에 투영한 거리. 앞 정류장보다 뒤로 가지 않는다.
+ * 첫 정류장은 선의 앞쪽 절반에서만 찾는다. 고리 노선(2호선 본선)은 처음과 끝이 같은 점이고
+ * 선이 첫 역을 조금 지나서 시작하기도 해서(실데이터: 시청에서 84m), 첫 역이 선 끝에 붙으면
+ * 뒤의 모든 역이 끝으로 몰린다.
+ */
 function projectStops(geometry: Geometry, stops: readonly LngLat[]): number[] {
 	const distances: number[] = [];
+	const firstStopLimitM = totalLength(geometry) / 2;
 	let previous = 0;
-	for (const stop of stops) {
-		previous = projectForward(geometry, stop, previous);
+	for (const [index, stop] of stops.entries()) {
+		previous =
+			index === 0
+				? projectForward(geometry, stop, previous, firstStopLimitM)
+				: projectForward(geometry, stop, previous);
 		distances.push(previous);
 	}
 	return distances;
