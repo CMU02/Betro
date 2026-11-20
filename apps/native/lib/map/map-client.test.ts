@@ -81,12 +81,21 @@ const SUBWAY_MAP = {
 };
 
 describe("map ref fetchers", () => {
-	it("fetchBusMap reads the shape and stops", async () => {
+	it("fetchBusMap reads the shape and stops and reads a missing direction as null", async () => {
 		const { client, calls } = fakeClient({ json: BUS_MAP, status: 200 });
 		const result = await fetchBusMap(client, "seoul-bus:100100124", null);
 		expect(result).toEqual({
 			ok: true,
-			value: { etag: null, value: BUS_MAP },
+			value: {
+				etag: null,
+				value: {
+					...BUS_MAP,
+					stops: BUS_MAP.stops.map((stop) => ({
+						...stop,
+						directionName: null,
+					})),
+				},
+			},
 		});
 		expect(calls[0]?.path).toBe("/v1/ref/map/bus/seoul-bus%3A100100124");
 	});

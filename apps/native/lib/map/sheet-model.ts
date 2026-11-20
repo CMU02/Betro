@@ -29,6 +29,8 @@ export interface SheetModel {
 }
 
 interface TrackStop {
+	/** 버스 정류장의 진행 방면. 지하철 역과 모르는 정류장은 없다. */
+	directionName?: string | null;
 	name: string;
 	seq: number;
 	stop: string;
@@ -141,9 +143,11 @@ function directionOf(
 	}
 	const { stops, loop } = track;
 	if (leg.mode === "bus") {
+		// 왕복 노선은 마지막 정류장이 출발지라, 차량이 있는 정류장의 방면을 먼저 쓴다.
+		const here = stops[positionIndex(stops, positionSeq)];
 		return {
 			key: "map.sheet.direction.bus",
-			params: { name: stops.at(-1)?.name ?? "" },
+			params: { name: here?.directionName ?? stops.at(-1)?.name ?? "" },
 		};
 	}
 	if (loop) {

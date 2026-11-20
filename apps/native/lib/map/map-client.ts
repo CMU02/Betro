@@ -20,6 +20,8 @@ const busMapSchema = z.object({
 	stops: z.array(
 		z.object({
 			arsId: z.string().nullable(),
+			/** 정류장별 진행 방면(서울 노선 정보). 이 필드가 없던 서버 응답은 null로 읽는다. */
+			directionName: z.string().nullable().default(null),
 			lat: z.number(),
 			lng: z.number(),
 			name: z.string(),

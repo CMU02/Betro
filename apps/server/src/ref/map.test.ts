@@ -84,8 +84,20 @@ async function seedBus(): Promise<void> {
 	});
 	await db.insert(busRouteStop).values(
 		[
-			{ arsId: "01002", name: "둘째", seq: 2, stationId: "S2" },
-			{ arsId: null, name: "첫째", seq: 1, stationId: "S1" },
+			{
+				arsId: "01002",
+				directionName: "첫째",
+				name: "둘째",
+				seq: 2,
+				stationId: "S2",
+			},
+			{
+				arsId: null,
+				directionName: null,
+				name: "첫째",
+				seq: 1,
+				stationId: "S1",
+			},
 		].map((stop) => ({
 			...stop,
 			apiSectDistM: 0,
@@ -264,7 +276,7 @@ describe("bus map", () => {
 		const res = await get(`/bus/seoul-bus:${ROUTE_ID}`);
 		expect(res.status).toBe(200);
 		expect(res.headers.get("cache-control")).toBe(CACHE_CONTROL);
-		expect(res.headers.get("etag")).toBe(`"busmap-${busBatchId}"`);
+		expect(res.headers.get("etag")).toBe(`"busmap-2-${busBatchId}"`);
 		expect(await res.json()).toEqual({
 			batchId: busBatchId,
 			line: `seoul-bus:${ROUTE_ID}`,
@@ -272,6 +284,7 @@ describe("bus map", () => {
 			stops: [
 				{
 					arsId: null,
+					directionName: null,
 					lat: 37.5,
 					lng: 127,
 					name: "첫째",
@@ -280,6 +293,7 @@ describe("bus map", () => {
 				},
 				{
 					arsId: "01002",
+					directionName: "첫째",
 					lat: 37.5,
 					lng: 127.01,
 					name: "둘째",
@@ -297,10 +311,10 @@ describe("bus map", () => {
 
 	test("304 when If-None-Match matches", async () => {
 		const res = await get(`/bus/${ROUTE_ID}`, {
-			"If-None-Match": `"busmap-${busBatchId}"`,
+			"If-None-Match": `"busmap-2-${busBatchId}"`,
 		});
 		expect(res.status).toBe(304);
-		expect(res.headers.get("etag")).toBe(`"busmap-${busBatchId}"`);
+		expect(res.headers.get("etag")).toBe(`"busmap-2-${busBatchId}"`);
 	});
 });
 

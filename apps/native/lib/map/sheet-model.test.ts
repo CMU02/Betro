@@ -13,8 +13,13 @@ const busLeg: BusLeg = {
 	mode: "bus",
 };
 
-const busStop = (seq: number, name: string) => ({
+const busStop = (
+	seq: number,
+	name: string,
+	directionName: string | null = null
+) => ({
 	arsId: null,
+	directionName,
 	lat: 37,
 	lng: 127,
 	name,
@@ -42,6 +47,31 @@ const emptyView = (approaching: RouteViewLeg["approaching"]): RouteViewLeg => ({
 	method: null,
 	positionState: "live",
 	vehicleId: null,
+});
+
+it("bus sheet heads toward the stop's own direction on a round-trip route", () => {
+	// 왕복 노선은 마지막 정류장이 출발지다. 서울 노선 정보의 정류장별 방면(directionName)을 쓴다.
+	const roundTrip: BusMap = {
+		...busMap,
+		stops: [
+			busStop(1, "기점", "반환점"),
+			busStop(2, "둘", "반환점"),
+			busStop(4, "넷", "반환점"),
+			busStop(5, "반환점", "기점"),
+			busStop(9, "기점", null),
+		],
+	};
+	const model = sheetModel({
+		boarded: false,
+		leg: busLeg,
+		map: roundTrip,
+		nowMs: NOW,
+		observedAt: NOW,
+		positionSeq: 2,
+		vehicleId: "V1",
+		view: emptyView([]),
+	});
+	expect(model.directionParams).toEqual({ name: "반환점" });
 });
 
 it("bus sheet lists one past stop, now, next stops and ends at my stop with minutes from approaching", () => {

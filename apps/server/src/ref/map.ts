@@ -29,11 +29,18 @@ import { currentTrackBatch, findLineKey } from "./subway";
 
 const CACHE_CONTROL = "public, max-age=86400";
 const MIDDLE_DIVISOR = 2;
+/**
+ * 버스 지도 응답 형식의 판. 필드를 더하면 올려서, 예전 응답을 저장해 둔 앱이 같은 배치라도 새로 받게 한다.
+ * 2: 정류장별 진행 방면(`directionName`).
+ */
+const BUS_MAP_FORMAT = 2;
 
 type LngLat = [number, number];
 
 export interface BusMapStop {
 	arsId: string | null;
+	/** 이 정류장에서 차량이 가는 방면(서울 노선 정보). 왕복 노선은 마지막 정류장이 출발지라 이 값을 쓴다. */
+	directionName: string | null;
 	lat: number;
 	lng: number;
 	name: string;
@@ -126,6 +133,7 @@ export async function findBusMap(
 	const stops = await db
 		.select({
 			arsId: busRouteStop.arsId,
+			directionName: busRouteStop.directionName,
 			lat: busRouteStop.lat,
 			lng: busRouteStop.lng,
 			name: busRouteStop.name,
@@ -353,7 +361,7 @@ export function createMapRefRoutes(db: Database): Hono {
 			db,
 			stripBusPrefix(c.req.param("busRouteId")),
 			(batchId) => {
-				etag = `"busmap-${batchId}"`;
+				etag = `"busmap-${BUS_MAP_FORMAT}-${batchId}"`;
 				return ifNoneMatchMatches(c.req.header("if-none-match"), etag);
 			}
 		);
@@ -362,7 +370,7 @@ export function createMapRefRoutes(db: Database): Hono {
 		}
 		const headers = {
 			"Cache-Control": CACHE_CONTROL,
-			ETag: `"busmap-${found.batchId}"`,
+			ETag: `"busmap-${BUS_MAP_FORMAT}-${found.batchId}"`,
 		};
 		if (found.notModified) {
 			return c.body(null, 304, headers);
