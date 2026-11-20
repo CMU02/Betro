@@ -7,6 +7,7 @@ import {
 } from "@Betro/commute/config";
 import type { CommutePlan } from "@Betro/commute/plan";
 import type { EndReason } from "@Betro/commute/session/stage";
+import type { BusSchedule } from "@Betro/commute/sources/bus-schedule";
 import {
 	parseRouteArrivals,
 	type RouteStopArrival,
@@ -21,6 +22,7 @@ import {
 	install,
 	pushToken,
 } from "@Betro/db/schema/commute";
+import { busRoute, referenceBatch } from "@Betro/db/schema/transit";
 import { fcmAccessTokenRequest } from "@Betro/realtime/alerts";
 import { KOREAN_PUBLIC_HOLIDAYS } from "@Betro/realtime/holidays";
 import { serviceDayAt } from "@Betro/realtime/time";
@@ -29,7 +31,7 @@ import type {
 	R2Bucket,
 	SqlStorage,
 } from "@cloudflare/workers-types";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray } from "drizzle-orm";
 import arrAll150Sample from "../../../../packages/commute/src/__fixtures__/arr-all-150.json";
 import arrAll6411Sample from "../../../../packages/commute/src/__fixtures__/arr-all-6411.json";
 import { liveUpstream } from "../collector/cf-ports";
@@ -329,6 +331,56 @@ export class D1TokenStore implements TokenStore {
 			.where(eq(commuteSession.installId, installId));
 		await this.#db.delete(install).where(eq(install.id, installId));
 	}
+}
+
+/** 한 번에 묻는 노선 수. D1은 한 문장의 바인딩 값을 100개까지만 받는다. */
+const BUS_SCHEDULE_IDS_PER_QUERY = 90;
+
+/**
+ * 현재 `bus_route` 배치에서 노선의 배차간격·첫차·막차를 읽는다. 키는 접두사 없는 `busRouteId`.
+ * 배치에 없거나 배차간격이 없는(0 이하 포함) 노선은 빠진다.
+ */
+export async function readBusSchedules(
+	db: Database,
+	busRouteIds: string[]
+): Promise<Record<string, BusSchedule>> {
+	const ids = [...new Set(busRouteIds)];
+	const chunks: string[][] = [];
+	for (let start = 0; start < ids.length; start += BUS_SCHEDULE_IDS_PER_QUERY) {
+		chunks.push(ids.slice(start, start + BUS_SCHEDULE_IDS_PER_QUERY));
+	}
+	const found = await Promise.all(
+		chunks.map((chunk) =>
+			db
+				.select({
+					firstBusMinute: busRoute.firstBusMinute,
+					headwayMin: busRoute.headwayMin,
+					lastBusMinute: busRoute.lastBusMinute,
+					routeId: busRoute.routeId,
+				})
+				.from(busRoute)
+				.innerJoin(referenceBatch, eq(referenceBatch.id, busRoute.batchId))
+				.where(
+					and(
+						eq(referenceBatch.kind, "bus_route"),
+						eq(referenceBatch.isCurrent, true),
+						inArray(busRoute.routeId, chunk),
+						gt(busRoute.headwayMin, 0)
+					)
+				)
+		)
+	);
+	const schedules: Record<string, BusSchedule> = {};
+	for (const row of found.flat()) {
+		if (row.headwayMin !== null) {
+			schedules[row.routeId] = {
+				firstBusMinute: row.firstBusMinute,
+				headwayMin: row.headwayMin,
+				lastBusMinute: row.lastBusMinute,
+			};
+		}
+	}
+	return schedules;
 }
 
 /**
@@ -633,6 +685,7 @@ export function runnerPorts(
 				env,
 				upstreamMode === "live" ? liveUpstream : arrivalFixtureUpstream
 			),
+			busSchedules: (busRouteIds) => readBusSchedules(db, busRouteIds),
 			clock: () => Date.now(),
 			config: runnerConfig(env),
 			log,

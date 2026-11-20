@@ -7,6 +7,7 @@ import {
 import type { CommutePlan } from "@Betro/commute/plan";
 import type { ContentState } from "@Betro/commute/session/content";
 import type { EndReason } from "@Betro/commute/session/stage";
+import type { BusSchedule } from "@Betro/commute/sources/bus-schedule";
 import type { RouteStopArrival } from "@Betro/commute/sources/seoul-bus";
 import type {
 	StationRow,
@@ -499,6 +500,21 @@ const emptyTimetable: TimetablePort = {
 	rideMs: () => Promise.resolve(null),
 };
 
+/** 정적 버스 일정 포트. 기본은 일정이 없다. 부른 노선 목록을 남긴다. */
+class FakeBusSchedules {
+	readonly calls: string[][] = [];
+	handler: (busRouteIds: string[]) => Record<string, BusSchedule> | Error =
+		() => ({});
+
+	read = (busRouteIds: string[]): Promise<Record<string, BusSchedule>> => {
+		this.calls.push(busRouteIds);
+		const result = this.handler(busRouteIds);
+		return result instanceof Error
+			? Promise.reject(result)
+			: Promise.resolve(result);
+	};
+}
+
 function harness(overrides: Partial<CommuteConfig> = {}) {
 	const clock = { now: T0 };
 	const logs: string[] = [];
@@ -508,11 +524,13 @@ function harness(overrides: Partial<CommuteConfig> = {}) {
 	const boards = new FakeBoards(clock);
 	const records = new MemoryRecords();
 	const blobs = new MemoryBlobs();
+	const busSchedules = new FakeBusSchedules();
 	const config: CommuteConfig = { ...commuteConfig({}), ...overrides };
 	const core = () =>
 		new RunnerCore({
 			blobs,
 			boards,
+			busSchedules: busSchedules.read,
 			clock: () => clock.now,
 			config,
 			log: (line) => logs.push(line),
@@ -535,6 +553,7 @@ function harness(overrides: Partial<CommuteConfig> = {}) {
 	return {
 		blobs,
 		boards,
+		busSchedules,
 		clock,
 		config,
 		core,
@@ -1352,6 +1371,50 @@ describe("RunnerCore 도착판", () => {
 		h.boards.stationRows[GANGNAM] = late;
 		await tickAt(h, core, late.fetchedAt + 5 * SECOND);
 		expect(await savedOf()).toEqual({ cur: late, prev: null });
+	});
+
+	test("버스 도착판이 없으면 정적 배차간격의 반을 더한 추정을 쓴다", async () => {
+		const h = harness();
+		addAndroid(h);
+		h.boards.handler = () => new UpstreamStoppedError("auth");
+		h.busSchedules.handler = (ids) =>
+			Object.fromEntries(
+				ids.map((id) => [
+					id,
+					{ firstBusMinute: null, headwayMin: 10, lastBusMinute: null },
+				])
+			);
+		await tickAt(h, h.core(), T0);
+		expect(h.busSchedules.calls.at(-1)).toEqual([ROUTE_ID]);
+		const [, entry] = await onlySession(h);
+		const leg = entry.state.estimates[0]?.legs[0];
+		expect(leg?.method).toBe("headway");
+		expect(leg?.positionState).toBe("none");
+		expect(leg?.etaState).toBe("estimated");
+		expect(leg?.boardEtaAt).not.toBeNull();
+	});
+
+	test("정적 일정을 읽지 못해도 tick은 계속 가고 시각은 null로 둔다", async () => {
+		const h = harness();
+		addAndroid(h);
+		h.boards.handler = () => new UpstreamStoppedError("auth");
+		h.busSchedules.handler = () => new Error("D1 down");
+		await tickAt(h, h.core(), T0);
+		const [, entry] = await onlySession(h);
+		const leg = entry.state.estimates[0]?.legs[0];
+		expect(leg?.method).toBe("headway");
+		expect(leg?.boardEtaAt).toBeNull();
+		expect(h.logs.some((line) => line.includes("bus schedules"))).toBe(true);
+		expect(h.push.sent.length).toBeGreaterThan(0);
+	});
+
+	test("버스 구간이 없으면 정적 일정을 읽지 않는다", async () => {
+		const h = harness();
+		h.db.addPlan(ANDROID_INSTALL, makeSubwayPlan(PLAN_ANDROID));
+		h.db.addToken(ANDROID_INSTALL, "fcm", FCM_TOKEN, { env: "production" });
+		await tickAt(h, h.core(), T0);
+		expect(await sessions(h)).toHaveLength(1);
+		expect(h.busSchedules.calls).toEqual([]);
 	});
 
 	test("상류가 응답하지 못하면 1초, 2초 뒤 두 번까지 다시 부르고 시도마다 예산을 쓴다", async () => {

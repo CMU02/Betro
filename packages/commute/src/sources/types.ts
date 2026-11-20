@@ -60,4 +60,9 @@ export interface TransitBoards {
 	board: (leg: Leg, at: "board" | "alight") => StopBoard | null;
 	progress: (leg: Leg, vehicleId: string) => Progress | null;
 	rideMs: (leg: Leg, vehicleId: string | null) => number | null;
+	/**
+	 * 도착판에 배차간격이 없을 때 쓰는 정적 배차간격(ms). 그 시각이 운행 시간 밖이거나
+	 * 정적 자료가 없으면 null. 출처가 정적 자료를 주지 않으면 없다.
+	 */
+	scheduledHeadwayMs?: (leg: Leg, atEpochMs: number) => number | null;
 }

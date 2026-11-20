@@ -874,7 +874,26 @@ export class RunnerCore {
 		await runLimited([...busRoutes], 1, ([routeId, near]) =>
 			this.#collectBus(routeId, near, raw, now, pollBus)
 		);
+		await this.#collectBusSchedules([...busRoutes.keys()], raw);
 		return raw;
+	}
+
+	/**
+	 * 도착판이 없을 때의 추정에 쓰는 버스 노선의 정적 배차간격. 읽지 못하면 로그만 남기고
+	 * 일정 없이 간다(한 tick의 모든 세션이 이 조회 하나에 막히지 않게).
+	 */
+	async #collectBusSchedules(
+		busRouteIds: string[],
+		raw: RawBoards
+	): Promise<void> {
+		if (busRouteIds.length === 0) {
+			return;
+		}
+		try {
+			raw.busSchedules = await this.#ports.busSchedules(busRouteIds);
+		} catch (error) {
+			this.#log(`commute bus schedules failed: ${errorText(error)}`);
+		}
 	}
 
 	/** 기본 경로의 지금 구간이 이 노선이고, 탑승 전이며, 잡은 차량이 가까운가. */

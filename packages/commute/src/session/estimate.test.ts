@@ -450,6 +450,27 @@ describe("estimateRoute: 묵은 도착판", () => {
 		expect(leg?.boardEtaAt).toBe(at(17));
 	});
 
+	it("묵었고 도착판 배차간격을 모르면 정적 배차간격으로 추정한다", () => {
+		const boards: TransitBoards = {
+			...fakeBoards([
+				[
+					busLeg,
+					{
+						board: stopBoard([vehicle("A", at(13))], {
+							headwayMs: null,
+							sourceAt: at(10) - 151 * SECOND_MS,
+						}),
+						rideMs: null,
+					},
+				],
+			]),
+			scheduledHeadwayMs: () => 8 * MINUTE_MS,
+		};
+		const [leg] = estimateRoute(busRoute, boards, input(at(15)), config).legs;
+		expect(leg?.positionState).toBe("stale");
+		expect(leg?.boardEtaAt).toBe(at(19));
+	});
+
 	it("묵었고 배차간격을 모르면 boardEtaAt은 null", () => {
 		const boards = fakeBoards([
 			[
@@ -582,6 +603,55 @@ describe("estimateRoute: 도착판 없음", () => {
 		expect(leg?.alightEtaAt).toBeNull();
 		expect(leg?.vehicleId).toBeNull();
 		expect(estimate.destinationEtaAt).toBeNull();
+	});
+
+	it("uses scheduled headway when the board is missing", () => {
+		const asked: [Leg, number][] = [];
+		const boards: TransitBoards = {
+			...fakeBoards([]),
+			scheduledHeadwayMs: (askedLeg, atEpochMs) => {
+				asked.push([askedLeg, atEpochMs]);
+				return 10 * MINUTE_MS;
+			},
+		};
+		const readyAt = at(15);
+		const [leg] = estimateRoute(busRoute, boards, input(readyAt), config).legs;
+		expect(asked).toEqual([[busLeg, readyAt]]);
+		expect(leg?.boardEtaAt).toBe(readyAt + 5 * MINUTE_MS);
+		expect(leg?.etaState).toBe("estimated");
+		expect(leg?.method).toBe("headway");
+		expect(leg?.positionState).toBe("none");
+		expect(leg?.vehicleId).toBeNull();
+	});
+
+	it("keeps null ETA when no board and no schedule", () => {
+		const boards: TransitBoards = {
+			...fakeBoards([]),
+			scheduledHeadwayMs: () => null,
+		};
+		const [leg] = estimateRoute(busRoute, boards, input(at(15)), config).legs;
+		expect(leg?.boardEtaAt).toBeNull();
+		expect(leg?.etaState).toBe("estimated");
+	});
+
+	it("does not ask the schedule when readyAt is unknown", () => {
+		let asked = 0;
+		const boards: TransitBoards = {
+			...fakeBoards([]),
+			scheduledHeadwayMs: () => {
+				asked += 1;
+				return 10 * MINUTE_MS;
+			},
+		};
+		// 첫 구간 하차를 모르면 둘째 구간의 readyAt이 null이다.
+		const estimate = estimateRoute(
+			transferRoute,
+			boards,
+			input(at(15)),
+			config
+		);
+		expect(asked).toBe(1);
+		expect(estimate.legs[1]?.boardEtaAt).toBeNull();
 	});
 
 	it("첫 구간을 모르면 둘째 구간도 고르지 않는다", () => {
