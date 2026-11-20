@@ -16,7 +16,7 @@ import {
 	trackStation,
 } from "@Betro/db/schema/transit";
 import { and, asc, count, desc, eq, ne } from "drizzle-orm";
-import { type AssembledBusRoute, BUS_SHAPE_ATTRIBUTION } from "../bus/assemble";
+import { type AssembledBusRoute, busShapeAttribution } from "../bus/assemble";
 import type { CrosswalkRow } from "../crosswalk/match";
 import { isLineKey, type LineKey } from "../lines";
 import type { Trip } from "../timetable/model";
@@ -217,7 +217,7 @@ export async function loadBusRoutes(
 			}
 			const busRouteId = inserted.id;
 			await tx.insert(busRouteShape).values({
-				attribution: BUS_SHAPE_ATTRIBUTION,
+				attribution: busShapeAttribution(route.source),
 				busRouteId,
 				coords: route.coords,
 				lengthM: route.lengthM,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { AssembledBusRoute, BusAssembleResult } from "./assemble";
-import { renderBusRouteReport } from "./report";
+import { renderBusRouteReport, renderRegionalReport } from "./report";
 
 const TOP_N = 20;
 // 한글이 든 String.raw는 Bun이 \u 이스케이프로 바꿔 버리므로 ASCII만 String.raw로 쓴다.
@@ -351,5 +351,55 @@ describe("renderBusRouteReport", () => {
 				expect(line.endsWith("|")).toBe(true);
 			}
 		}
+	});
+});
+
+describe("renderRegionalReport", () => {
+	it("출처별 적재·제외·겹침 수와 출처 표기를 보인다", () => {
+		const markdown = renderRegionalReport([
+			{
+				attribution: "경기도 버스정보(GBIS)",
+				duplicates: 3,
+				excluded: [
+					{
+						issues: [
+							{ code: "too-few-stops", detail: "1 stops", level: "error" },
+						],
+						routeId: "241000001",
+						routeName: "11|1",
+					},
+				],
+				inScope: 10,
+				listed: 15,
+				loadable: 8,
+				minRatio: 0.9,
+				missingRaw: ["241000002"],
+				ok: false,
+				outOfScope: 2,
+				source: "gbis",
+			},
+			{
+				attribution: "국토교통부 TAGO",
+				duplicates: 0,
+				excluded: [],
+				inScope: 0,
+				listed: null,
+				loadable: 0,
+				minRatio: 0.9,
+				missingRaw: [],
+				ok: true,
+				outOfScope: 0,
+				source: "tago",
+			},
+		]).join("\n");
+		expect(markdown).toContain(
+			"| gbis | false | 15 | 2 | 3 | 10 | 8 | 1 | 1 | 80.0% | 90% |"
+		);
+		expect(markdown).toContain("| tago | true | 목록 없음 |");
+		expect(markdown).toContain("- gbis 출처: 경기도 버스정보(GBIS)");
+		expect(markdown).toContain(
+			`| 11${ESCAPED_PIPE}1 | 241000001 | too-few-stops | 1 stops |`
+		);
+		expect(markdown).toContain("- 241000002");
 	});
 });

@@ -1,4 +1,8 @@
-import { busRoute, referenceBatch } from "@Betro/db/schema/transit";
+import {
+	busRoute,
+	busRouteShape,
+	referenceBatch,
+} from "@Betro/db/schema/transit";
 import { createTestDb } from "@Betro/db/test-db";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -219,6 +223,141 @@ describe("buildBusRoutes", () => {
 			// 1/2만 적재 가능해 비율 기준(0.98)으로만 ok가 아니다.
 			expect(built.ok).toBe(false);
 		}
+	});
+
+	describe("GBIS·TAGO 노선", () => {
+		const GBIS_ID = "241308701";
+		const gbisRow = (routeId: string) => ({
+			areaName: "고양",
+			cityCode: null,
+			name: "011",
+			routeId,
+			routeTypeCode: "30",
+		});
+		async function putRegional(
+			source: string,
+			fileName: string,
+			body: string
+		): Promise<string> {
+			const path = rawPath(dataDir, source, fileName);
+			await mkdir(dirname(path), { recursive: true });
+			await writeFile(path, body);
+			return path;
+		}
+		async function putGbisRoute(routeId: string) {
+			await putRegional(
+				"gbis-route-stations",
+				`${routeId}.json`,
+				await fixture(`gbis-route-stations-${GBIS_ID}.json`)
+			);
+			await putRegional(
+				"gbis-route-info",
+				`${routeId}.json`,
+				await fixture(`gbis-route-info-${GBIS_ID}.json`)
+			);
+		}
+		const putGbisList = (rows: unknown[]) =>
+			putRegional(
+				"gbis-route-list",
+				"2026-11-20/routes.json",
+				`${JSON.stringify(rows)}\n`
+			);
+
+		it("서울 노선과 함께 적재하고 출처 표기를 붙인다", async () => {
+			await putGbisList([gbisRow(GBIS_ID)]);
+			await putGbisRoute(GBIS_ID);
+			const db = await createTestDb();
+			const result = await buildBusRoutes({
+				dataDir,
+				db,
+				dryRun: false,
+				routes: [ROUTE],
+			});
+			expect(result.ok).toBe(true);
+			const rows = await db.select().from(busRoute);
+			expect(rows.map((row) => [row.source, row.routeId])).toEqual([
+				["seoul", ROUTE.routeId],
+				["gbis", GBIS_ID],
+			]);
+			const gbis = rows.find((row) => row.source === "gbis");
+			expect(gbis).toMatchObject({
+				areaName: "고양",
+				headwayMin: 10,
+				region: "gyeonggi",
+				sourceCity: null,
+			});
+			const shapes = await db
+				.select({
+					attribution: busRouteShape.attribution,
+					busRouteId: busRouteShape.busRouteId,
+				})
+				.from(busRouteShape);
+			expect(
+				shapes.find((shape) => shape.busRouteId === gbis?.id)?.attribution
+			).toBe("경기도 버스정보(GBIS)");
+			const [batch] = await db.select().from(referenceBatch);
+			expect(Object.keys(batch?.sourceManifest ?? {})).toContain(
+				"gbisRouteList"
+			);
+			expect(Object.keys(batch?.sourceManifest ?? {})).not.toContain(
+				"tagoRouteList"
+			);
+			expect(await readFile(result.mdPath, "utf8")).toContain("gbis");
+		});
+
+		it("서울 노선과 같은 ID의 GBIS 노선은 버리고 서울 행만 남긴다", async () => {
+			await putGbisList([gbisRow(ROUTE.routeId)]);
+			await putGbisRoute(ROUTE.routeId);
+			const db = await createTestDb();
+			const result = await buildBusRoutes({
+				dataDir,
+				db,
+				dryRun: false,
+				routes: [ROUTE],
+			});
+			expect(result.ok).toBe(true);
+			const rows = await db.select().from(busRoute);
+			expect(rows.map((row) => [row.source, row.routeId])).toEqual([
+				["seoul", ROUTE.routeId],
+			]);
+		});
+
+		it("적재 가능 비율이 90% 미만이면 적재하지 않는다", async () => {
+			await putGbisList([gbisRow(GBIS_ID), gbisRow("241308702")]);
+			await putGbisRoute(GBIS_ID);
+			const db = await createTestDb();
+			const result = await buildBusRoutes({
+				dataDir,
+				db,
+				dryRun: false,
+				routes: [ROUTE],
+			});
+			expect(result.ok).toBe(false);
+			expect(await db.select().from(referenceBatch)).toHaveLength(0);
+			const summary = JSON.parse(await readFile(result.jsonPath, "utf8"));
+			expect(summary.regional.gbis).toMatchObject({
+				inScope: 2,
+				loadable: 1,
+				missingRaw: ["241308702"],
+			});
+		});
+
+		it("GBIS 원본이 바뀌면 다시 적재한다", async () => {
+			await putGbisList([gbisRow(GBIS_ID)]);
+			await putGbisRoute(GBIS_ID);
+			const db = await createTestDb();
+			const options = { dataDir, db, dryRun: false, routes: [ROUTE] };
+			expect((await buildBusRoutes(options)).batchId).toBeDefined();
+			const stations = JSON.parse(
+				await fixture(`gbis-route-stations-${GBIS_ID}.json`)
+			);
+			await putRegional(
+				"gbis-route-stations",
+				`${GBIS_ID}.json`,
+				JSON.stringify(stations)
+			);
+			expect((await buildBusRoutes(options)).batchId).toBeDefined();
+		});
 	});
 
 	it("does not load on dry-run", async () => {

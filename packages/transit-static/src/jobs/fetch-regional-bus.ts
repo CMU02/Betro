@@ -1,5 +1,6 @@
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { isInScopeRegionalRoute } from "../bus/scope";
 import { rawPath } from "../paths";
 import { readRaw, saveRaw } from "../raw-store";
 import {
@@ -68,24 +69,22 @@ const GBIS_TERMS: readonly string[] = [
 const TAGO_INCHEON_CITY_CODE = "23";
 const TAGO_LIST_ROWS = "3000";
 const TAGO_STATION_ROWS = "500";
-// 시외(41·42·43)·공항(51·52·53)은 서울 쪽에서 공항버스를 빼는 것과 같은 기준으로 범위 밖이다.
-const GBIS_OUT_OF_SCOPE_TYPES: ReadonlySet<string> = new Set([
-	"41",
-	"42",
-	"43",
-	"51",
-	"52",
-	"53",
-]);
 const LIST_FRESH_DAYS = 7;
 const DAY_MS = 86_400_000;
 const DATE_LENGTH = 10;
 const DATE_DIR_RE = /^\d{4}-\d{2}-\d{2}$/;
 const SAFE_ID_RE = /^[A-Za-z0-9_-]+$/;
-const ROUTES_FILE = "routes.json";
+/** 검색어별 목록을 합친 파일 이름. `<source>-route-list/<UTC 날짜>/routes.json`에 쓴다. */
+export const REGIONAL_ROUTES_FILE = "routes.json";
 
-const STEP_SOURCE = (source: RegionalSource, step: Step): string =>
-	`${source}-route-${step === "list" ? "list" : step}`;
+/** 원본 저장 폴더 이름(`gbis-route-list`, `tago-route-stations` 등). */
+export const regionalRawSource = (source: RegionalSource, step: Step): string =>
+	`${source}-route-${step}`;
+const STEP_SOURCE = regionalRawSource;
+
+/** 원본 파일 이름으로 써도 되는 노선 ID인지. 아니면 받지도 읽지도 않는다. */
+export const isSafeRegionalRouteId = (routeId: string): boolean =>
+	SAFE_ID_RE.test(routeId);
 
 const defaultSleep = (ms: number) =>
 	new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -352,10 +351,7 @@ async function loadRouteList(
 }
 
 function inScope(source: RegionalSource, row: RegionalRouteRow): boolean {
-	if (source === "tago") {
-		return true;
-	}
-	return !GBIS_OUT_OF_SCOPE_TYPES.has(row.routeTypeCode);
+	return isInScopeRegionalRoute(source, row.routeTypeCode);
 }
 
 /** 노선 하나의 한 단계를 받는다. 한도·인증 실패로 전체를 멈춰야 하면 false. */
@@ -442,7 +438,7 @@ export async function fetchRegionalRoutes(
 	const merged = rawPath(
 		options.dataDir,
 		STEP_SOURCE(options.source, "list"),
-		`${today}/${ROUTES_FILE}`
+		`${today}/${REGIONAL_ROUTES_FILE}`
 	);
 	await mkdir(dirname(merged), { recursive: true });
 	await writeFile(merged, `${JSON.stringify(routes)}\n`);
