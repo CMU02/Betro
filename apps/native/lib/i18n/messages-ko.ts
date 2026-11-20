@@ -260,6 +260,24 @@ export const ko = {
 		},
 		towards: "{name} 방면",
 	},
+	map: {
+		sheet: {
+			direction: {
+				bus: "{name} 방면",
+				subway: "{loop} · {name} 방면",
+			},
+			estimated: "시간표 추정",
+			live: "실시간 · {seconds}초 전 위치",
+			loop: {
+				inner: "내선순환",
+				outer: "외선순환",
+			},
+			mine: "내 정류장",
+			mineStation: "내가 탈 역",
+			minutes: "{minutes}분",
+			trainNo: "열차 {no}",
+		},
+	},
 	/** 서버에 닿지 않을 때 화면 위 안내(비행기 모드, Wi-Fi·데이터 꺼짐, 서버 장애) */
 	network: {
 		offline: {

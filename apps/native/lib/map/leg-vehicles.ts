@@ -67,13 +67,18 @@ interface StationOrder {
 const LOOP_LINE_KEY = "2";
 const LOOP_BRANCH_KEY = "main";
 
+/** 순환 가지(2호선 본선)인지. */
+export function isLoopBranch(lineKey: string, branchKey: string): boolean {
+	return lineKey === LOOP_LINE_KEY && branchKey === LOOP_BRANCH_KEY;
+}
+
 /** 구간 방향의 가지 중 승차역(가능하면 하차역도)을 지나는 것의 역 순서. 없으면 null. */
 function stationOrder(leg: SubwayLeg, map: SubwayMap): StationOrder | null {
 	const lineKey = bareId(leg.line);
 	const candidates = map.branches
 		.filter((branch) => branch.direction === leg.direction)
 		.map((branch) => ({
-			loop: lineKey === LOOP_LINE_KEY && branch.branchKey === LOOP_BRANCH_KEY,
+			loop: isLoopBranch(lineKey, branch.branchKey),
 			order: new Map(
 				branch.stations.map((station) => [station.stop, station.seq])
 			),
