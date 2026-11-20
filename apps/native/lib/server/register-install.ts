@@ -64,8 +64,8 @@ export function withRegistrationReset(
 	clear: () => Promise<void>
 ): ServerClient {
 	return {
-		async request(method, path, body) {
-			const response = await client.request(method, path, body);
+		async request(method, path, body, options) {
+			const response = await client.request(method, path, body, options);
 			if (response.status === STATUS_UNAUTHORIZED) {
 				try {
 					await clear();
