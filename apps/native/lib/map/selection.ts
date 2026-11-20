@@ -79,8 +79,8 @@ function legMatches(
  */
 function sessionRank(place: Place, session: ActiveSessionView): number {
 	const { legIndex, lineName, mode } = session.content;
-	const route = place.plan.routes
-		.toSorted((a, b) => a.rank - b.rank)
+	const route = [...place.plan.routes]
+		.sort((a, b) => a.rank - b.rank)
 		.find((candidate) => legMatches(candidate.legs[legIndex], mode, lineName));
 	return route?.rank ?? BASE_RANK;
 }
@@ -165,8 +165,8 @@ export function routeOptions(
 	place: Place,
 	selection: MapSelection
 ): RouteOption[] {
-	return place.plan.routes
-		.toSorted((a, b) => a.rank - b.rank)
+	return [...place.plan.routes]
+		.sort((a, b) => a.rank - b.rank)
 		.map((route) => ({
 			lineNames: route.legs.map((leg) => leg.lineName),
 			rank: route.rank,
