@@ -59,43 +59,74 @@ describe("withRegionalRoutes", () => {
 	const list: BusRouteListRow[] = [
 		{
 			busRouteId: "100100290",
+			firstBusMinute: null,
+			headwayMin: null,
+			lastBusMinute: null,
 			name: "6411",
 			routeType: "4",
 			shortName: "6411",
 		},
 		{
 			busRouteId: "234001243",
+			firstBusMinute: null,
+			headwayMin: null,
+			lastBusMinute: null,
 			name: "M5107광주",
 			routeType: "8",
 			shortName: "M5107",
 		},
 		{
 			busRouteId: "165000215",
+			firstBusMinute: null,
+			headwayMin: null,
+			lastBusMinute: null,
 			name: "M6450인천",
 			routeType: "7",
 			shortName: "M6450",
 		},
 		// 엑셀에 없는 서울 노선은 목록에서 더하지 않는다(엑셀이 서울 노선의 출처).
-		{ busRouteId: "100100999", name: "999", routeType: "4", shortName: "999" },
+		{
+			busRouteId: "100100999",
+			firstBusMinute: null,
+			headwayMin: null,
+			lastBusMinute: null,
+			name: "999",
+			routeType: "4",
+			shortName: "999",
+		},
 	];
 
 	it("adds Incheon and Gyeonggi routes from the list to the xlsx routes", () => {
 		expect(withRegionalRoutes(xlsx, list)).toEqual([
 			{
+				firstBusMinute: null,
+				headwayMin: null,
+				lastBusMinute: null,
 				maxSeq: 117,
 				routeId: "100100290",
 				routeName: "6411",
 				shortName: "6411",
 				stopCount: 117,
 			},
-			{ maxSeq: 30, routeId: "111900010", routeName: "강남01", stopCount: 30 },
 			{
+				maxSeq: 30,
+				routeId: "111900010",
+				routeName: "강남01",
+				stopCount: 30,
+			},
+			{
+				firstBusMinute: null,
+				headwayMin: null,
+				lastBusMinute: null,
 				routeId: "165000215",
 				routeName: "M6450인천",
 				routeType: "7",
 				shortName: "M6450",
 			},
 			{
+				firstBusMinute: null,
+				headwayMin: null,
+				lastBusMinute: null,
 				routeId: "234001243",
 				routeName: "M5107광주",
 				routeType: "8",
@@ -111,6 +142,9 @@ describe("withRegionalRoutes", () => {
 		);
 		expect(merged.filter((e) => e.routeId === "234001243")).toEqual([
 			{
+				firstBusMinute: null,
+				headwayMin: null,
+				lastBusMinute: null,
 				maxSeq: 40,
 				routeId: "234001243",
 				routeName: "M5107",

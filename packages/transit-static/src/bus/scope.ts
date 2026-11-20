@@ -94,6 +94,12 @@ export function isMapObservedRouteType(routeType: string): boolean {
  * 노선 목록(getBusRouteList)에서만 온 인천·경기 노선은 없다.
  */
 export interface BusRouteEntry {
+	/** 첫차 시각(0시부터의 분). 노선 목록에 없으면 없다. */
+	firstBusMinute?: number | null;
+	/** 배차간격(분). 노선 목록에 없으면 없다. */
+	headwayMin?: number | null;
+	/** 막차 시각(0시부터의 분). 노선 목록에 없으면 없다. */
+	lastBusMinute?: number | null;
 	/** 엑셀 노선의 가장 큰 순번. 엑셀에 없는 노선은 없다. */
 	maxSeq?: number;
 	routeId: string;
@@ -117,7 +123,15 @@ export function withRegionalRoutes(
 	const listed = new Map(list.map((row) => [row.busRouteId, row]));
 	const entries: BusRouteEntry[] = xlsxRoutes.map((entry) => {
 		const row = listed.get(entry.routeId);
-		return row ? { ...entry, shortName: row.shortName } : { ...entry };
+		return row
+			? {
+					...entry,
+					firstBusMinute: row.firstBusMinute,
+					headwayMin: row.headwayMin,
+					lastBusMinute: row.lastBusMinute,
+					shortName: row.shortName,
+				}
+			: { ...entry };
 	});
 	const known = new Set(xlsxRoutes.map((entry) => entry.routeId));
 	const regional = list
@@ -131,6 +145,9 @@ export function withRegionalRoutes(
 		}
 		known.add(row.busRouteId);
 		entries.push({
+			firstBusMinute: row.firstBusMinute,
+			headwayMin: row.headwayMin,
+			lastBusMinute: row.lastBusMinute,
 			routeId: row.busRouteId,
 			routeName: row.name,
 			routeType: row.routeType,

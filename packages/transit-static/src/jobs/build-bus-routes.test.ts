@@ -99,6 +99,30 @@ describe("buildBusRoutes", () => {
 		);
 	});
 
+	it("loads headway and first/last bus minutes from the route list entry", async () => {
+		const db = await createTestDb();
+		const result = await buildBusRoutes({
+			dataDir,
+			db,
+			dryRun: false,
+			routes: [
+				{
+					...ROUTE,
+					firstBusMinute: 270,
+					headwayMin: 13,
+					lastBusMinute: 1370,
+				},
+			],
+		});
+		expect(result.ok).toBe(true);
+		const [row] = await db.select().from(busRoute);
+		expect(row).toMatchObject({
+			firstBusMinute: 270,
+			headwayMin: 13,
+			lastBusMinute: 1370,
+		});
+	});
+
 	it("loads the short name from the route list entry", async () => {
 		const db = await createTestDb();
 		const result = await buildBusRoutes({
