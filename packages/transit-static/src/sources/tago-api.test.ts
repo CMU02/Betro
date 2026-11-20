@@ -170,6 +170,8 @@ describe("tagoUrl", () => {
 			key,
 			CITY_CODE
 		);
+		// 서비스키가 평문으로 가지 않게 https로 부른다(2026-11-21 TAGO https 응답 확인).
+		expect(url.startsWith("https://apis.data.go.kr/1613000/")).toBe(true);
 		expect(url).toContain("cityCode=23");
 		expect(url).toContain("_type=json");
 		const masked = maskKey(url, key);

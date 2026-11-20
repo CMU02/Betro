@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { maskKey } from "../src/sources/seoul-bus-api";
 
 const GBIS_BASE = "https://apis.data.go.kr/6410000/busrouteservice/v2";
-const TAGO_BASE = "http://apis.data.go.kr/1613000/BusRouteInfoInqireService";
+const TAGO_BASE = "https://apis.data.go.kr/1613000/BusRouteInfoInqireService";
 const MAX_CALLS = 30;
 const ENV_PATH = new URL("../.env", import.meta.url).pathname;
 const KEY_LINE_RE = /^DATA_GO_KR_API_KEY\s*=\s*"?([^"\s]+)"?/m;

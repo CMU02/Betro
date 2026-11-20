@@ -15,7 +15,7 @@ import {
 	toArray,
 } from "./regional-bus-types";
 
-const TAGO_BASE = "http://apis.data.go.kr/1613000/BusRouteInfoInqireService";
+const TAGO_BASE = "https://apis.data.go.kr/1613000/BusRouteInfoInqireService";
 const INCHEON_CITY_CODE = "23";
 const INCHEON_AREA_NAME = "인천";
 
