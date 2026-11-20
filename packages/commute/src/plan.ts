@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { LineRef, StopRef } from "./refs";
-import { SOURCE_IDS } from "./refs";
+import { BUS_SOURCE_IDS, SOURCE_IDS, SUBWAY_SOURCE_IDS } from "./refs";
 
 export interface BusLeg {
 	alight: { name: string; seq: number; stop: StopRef };
@@ -59,6 +59,12 @@ function sourceOf(ref: string): string {
 	return ref.slice(0, ref.indexOf(":"));
 }
 
+/** 수단마다 받는 출처. 버스 구간은 서울 버스·GBIS·TAGO, 지하철 구간은 서울 지하철이다. */
+const SOURCES_BY_MODE: Record<Leg["mode"], readonly string[]> = {
+	bus: BUS_SOURCE_IDS,
+	subway: SUBWAY_SOURCE_IDS,
+};
+
 const busStopSchema = z
 	.object({
 		name: z.string().min(1),
@@ -114,6 +120,13 @@ const legSchema = z
 	.discriminatedUnion("mode", [busLegSchema, subwayLegSchema])
 	.superRefine((leg, ctx) => {
 		const source = sourceOf(leg.line);
+		if (!SOURCES_BY_MODE[leg.mode].includes(source)) {
+			ctx.addIssue({
+				code: "custom",
+				message: `source ${source} does not carry mode ${leg.mode}`,
+				path: ["line"],
+			});
+		}
 		if (
 			sourceOf(leg.board.stop) !== source ||
 			sourceOf(leg.alight.stop) !== source

@@ -161,6 +161,41 @@ function makePlan(
 	};
 }
 
+/**
+ * 경기(GBIS) 노선 한 구간. 노선 ID를 서울 6411과 같게 두어, 출처를 보지 않고 ID만 쓰면
+ * 서울 도착 정보를 부르게 된다.
+ */
+function regionalLeg(): BusLeg {
+	return {
+		alight: { name: "다", seq: ALIGHT_SEQ, stop: "gbis:228000174" },
+		board: { name: "라", seq: BOARD_SEQ, stop: "gbis:228000160" },
+		line: `gbis:${ROUTE_ID}`,
+		lineName: "11",
+		mode: "bus",
+	};
+}
+
+function makeRegionalPlan(planId: string): CommutePlan {
+	const plan = makePlan(planId);
+	plan.routes = [{ legs: [regionalLeg()], rank: 0, walkMinutes: [5, 3] }];
+	return plan;
+}
+
+/** 배차간격 10분, 운행 시간 제한 없음. 요청한 노선 가운데 `lines`에만 준다. */
+function tenMinuteHeadway(
+	lines: string[]
+): (ids: string[]) => Record<string, BusSchedule> {
+	return (ids) =>
+		Object.fromEntries(
+			ids
+				.filter((id) => lines.includes(id))
+				.map((id) => [
+					id,
+					{ firstBusMinute: null, headwayMin: 10, lastBusMinute: null },
+				])
+		);
+}
+
 interface SimVehicle {
 	arriveBoardAt: number;
 	id: string;
@@ -1387,7 +1422,7 @@ describe("RunnerCore 도착판", () => {
 				])
 			);
 		await tickAt(h, h.core(), T0);
-		expect(h.busSchedules.calls.at(-1)).toEqual([ROUTE_ID]);
+		expect(h.busSchedules.calls.at(-1)).toEqual([`seoul-bus:${ROUTE_ID}`]);
 		const [, entry] = await onlySession(h);
 		const leg = entry.state.estimates[0]?.legs[0];
 		expect(leg?.method).toBe("headway");
@@ -1417,6 +1452,55 @@ describe("RunnerCore 도착판", () => {
 		await tickAt(h, h.core(), T0);
 		expect(await sessions(h)).toHaveLength(1);
 		expect(h.busSchedules.calls).toEqual([]);
+	});
+
+	test("GBIS 구간 하나로 된 세션은 서울 도착 정보와 예산을 쓰지 않고 배차간격의 반으로 승차를 추정한다", async () => {
+		const h = harness();
+		h.db.addPlan(ANDROID_INSTALL, makeRegionalPlan(PLAN_ANDROID));
+		h.db.addToken(ANDROID_INSTALL, "fcm", FCM_TOKEN, { env: "production" });
+		h.busSchedules.handler = tenMinuteHeadway([`gbis:${ROUTE_ID}`]);
+		await tickAt(h, h.core(), T0);
+		expect(h.boards.busCalls).toEqual([]);
+		expect(await h.store.get(`budget:${SERVICE_DATE}`)).toBeUndefined();
+		expect(await h.store.get(`busRoute:${ROUTE_ID}`)).toBeUndefined();
+		expect(h.busSchedules.calls.at(-1)).toEqual([`gbis:${ROUTE_ID}`]);
+		const [, entry] = await onlySession(h);
+		// 나가는 시각 08:05 + 첫 도보 5분에 승차 정류장에 선다.
+		expect(entry.state.readyAt).toBe(T0 + 15 * MINUTE);
+		expect(entry.state.estimates[0]?.legs[0]).toMatchObject({
+			boardEtaAt: T0 + 20 * MINUTE,
+			etaState: "estimated",
+			method: "headway",
+			positionState: "none",
+		});
+		expect(h.push.sent.length).toBeGreaterThan(0);
+
+		await tickAt(h, h.core(), T0 + TICK_STEP);
+		expect(h.boards.busCalls).toEqual([]);
+		expect(await h.store.get(`budget:${SERVICE_DATE}`)).toBeUndefined();
+	});
+
+	test("서울 구간과 GBIS 구간이 섞이면 서울 노선만 부르고 두 노선의 일정을 전체 노선 ID로 읽는다", async () => {
+		const h = harness();
+		const plan = makePlan(PLAN_ANDROID);
+		const [seoulLeg] = (plan.routes[0] as Route).legs;
+		plan.routes = [
+			{
+				legs: [seoulLeg as BusLeg, regionalLeg()],
+				rank: 0,
+				walkMinutes: [5, 2, 3],
+			},
+		];
+		h.db.addPlan(ANDROID_INSTALL, plan);
+		h.db.addToken(ANDROID_INSTALL, "fcm", FCM_TOKEN, { env: "production" });
+		await tickAt(h, h.core(), T0);
+		expect(await sessions(h)).toHaveLength(1);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID]);
+		expect(await h.store.get<number>(`budget:${SERVICE_DATE}`)).toBe(1);
+		expect([...(h.busSchedules.calls.at(-1) ?? [])].sort()).toEqual([
+			`gbis:${ROUTE_ID}`,
+			`seoul-bus:${ROUTE_ID}`,
+		]);
 	});
 
 	test("상류가 응답하지 못하면 1초, 2초 뒤 두 번까지 다시 부르고 시도마다 예산을 쓴다", async () => {
@@ -1862,6 +1946,31 @@ describe("RunnerCore 경로 보기", () => {
 		);
 	});
 
+	test("GBIS 구간의 경로 보기는 서울 도착 정보를 부르지 않고 배차간격의 반으로 승차를 추정한다", async () => {
+		const h = harness();
+		h.busSchedules.handler = tenMinuteHeadway([`gbis:${ROUTE_ID}`]);
+		const route: Route = {
+			legs: [regionalLeg()],
+			rank: 0,
+			walkMinutes: [5, 3],
+		};
+		const view = await h.core().routeView(route, T0);
+		expect(h.boards.busCalls).toEqual([]);
+		expect(await h.store.get(`budget:${SERVICE_DATE}`)).toBeUndefined();
+		expect(h.busSchedules.calls.at(-1)).toEqual([`gbis:${ROUTE_ID}`]);
+		expect(view.legs).toEqual([
+			{
+				approaching: [],
+				boardEtaAt: T0 + 10 * MINUTE,
+				etaState: "estimated",
+				method: "headway",
+				positionState: "none",
+				vehicleId: null,
+			},
+		]);
+		expect(view.destinationEtaAt).toBeNull();
+	});
+
 	test("D1에 없는 노선의 경로 보기는 던지지 않고 시각이 null인 estimated 구간을 돌려준다", async () => {
 		const h = harness();
 		h.boards.handler = () => new Error("unknown route");
@@ -1877,7 +1986,9 @@ describe("RunnerCore 경로 보기", () => {
 			],
 		};
 		const view = await h.core().routeView(route, T0);
-		expect(h.busSchedules.calls.at(-1)).toEqual([MISSING_ROUTE_ID]);
+		expect(h.busSchedules.calls.at(-1)).toEqual([
+			`seoul-bus:${MISSING_ROUTE_ID}`,
+		]);
 		expect(view).toEqual({
 			destinationEtaAt: null,
 			legs: [

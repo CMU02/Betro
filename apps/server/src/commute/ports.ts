@@ -110,10 +110,11 @@ export interface RunnerPorts {
 	blobs: CommuteBlobs;
 	boards: BoardSource;
 	/**
-	 * 버스 노선의 정적 배차간격·첫차·막차(D1 현재 `bus_route` 배치). 키와 인자는 접두사 없는
-	 * `busRouteId`이고, 일정이 없는 노선은 빠진다. 도착판이 없을 때의 추정에 쓴다.
+	 * 버스 노선의 정적 배차간격·첫차·막차(D1 현재 `bus_route` 배치). 키와 인자는 전체 노선 ID
+	 * (`leg.line`)이고, 일정이 없는 노선은 빠진다. 도착판이 없을 때의 추정과 실시간 연결이 없는
+	 * 노선(GBIS·TAGO)의 추정에 쓴다.
 	 */
-	busSchedules: (busRouteIds: string[]) => Promise<Record<string, BusSchedule>>;
+	busSchedules: (lines: string[]) => Promise<Record<string, BusSchedule>>;
 	clock: () => number;
 	config: CommuteConfig;
 	log: (line: string) => void;

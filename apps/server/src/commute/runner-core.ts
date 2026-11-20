@@ -29,7 +29,7 @@ import {
 	reusableJwt,
 } from "@Betro/commute/push/apns";
 import { classifyFcm, fcmCommuteRequest } from "@Betro/commute/push/fcm";
-import { parseRef } from "@Betro/commute/refs";
+import { type LineRef, parseRef } from "@Betro/commute/refs";
 import {
 	activityAttributes,
 	buildContent,
@@ -443,6 +443,28 @@ function watchedLegs(state: SessionState, plan: CommutePlan): Leg[] {
 	return legs;
 }
 
+/**
+ * 실시간 도착 정보를 부르는 서울 버스 구간이면 맨 노선 ID(`busRouteId`), 아니면 null.
+ * GBIS·TAGO 구간은 아직 실시간 연결이 없어 정적 배차간격으로만 추정한다(5-B에서 잇는다).
+ * GBIS 노선 ID는 서울 것과 같은 값일 수 있으니 ID만 보고 서울 도착 정보를 부르면 안 된다.
+ */
+function seoulBusRouteIdOf(leg: Leg): string | null {
+	if (leg.mode !== "bus") {
+		return null;
+	}
+	const { id, source } = parseRef(leg.line);
+	return source === "seoul-bus" ? id : null;
+}
+
+/** 한 tick에 모을 도착판의 대상. */
+interface BoardTargets {
+	/** 정적 일정을 읽을 버스 노선(전체 노선 ID). 실시간 연결이 없는 노선도 들어간다. */
+	busLines: Set<LineRef>;
+	/** 서울 busRouteId → 탈 차량이 가까운 탑승 전 세션이 있는가. */
+	busRoutes: Map<string, boolean>;
+	stations: Set<string>;
+}
+
 function subwayLegsIn(legs: Leg[]): SubwayLeg[] {
 	return legs.filter((leg): leg is SubwayLeg => leg.mode === "subway");
 }
@@ -655,10 +677,15 @@ export class RunnerCore {
 	async #routeView(route: Route, now: number): Promise<RouteView> {
 		const { config } = this.#ports;
 		const busRouteIds = new Set<string>();
+		const busLines = new Set<LineRef>();
 		const stations = new Set<string>();
 		for (const leg of route.legs) {
 			if (leg.mode === "bus") {
-				busRouteIds.add(parseRef(leg.line).id);
+				busLines.add(leg.line);
+				const routeId = seoulBusRouteIdOf(leg);
+				if (routeId !== null) {
+					busRouteIds.add(routeId);
+				}
 			} else {
 				stations.add(parseRef(leg.board.stop).id);
 				stations.add(parseRef(leg.alight.stop).id);
@@ -676,7 +703,7 @@ export class RunnerCore {
 		await runLimited([...busRouteIds], 1, (routeId) =>
 			this.#collectBus(routeId, false, raw, now, true, "map")
 		);
-		await this.#collectBusSchedules([...busRouteIds], raw);
+		await this.#collectBusSchedules([...busLines], raw);
 		const boards = assembleBoards(raw, config);
 		const estimate = estimateRoute(
 			route,
@@ -952,9 +979,6 @@ export class RunnerCore {
 			subway: {},
 			timetable: { arrivals: {}, rideMs: {} },
 		};
-		/** busRouteId → 탈 차량이 가까운 탑승 전 세션이 있는가. */
-		const busRoutes = new Map<string, boolean>();
-		const stations = new Set<string>();
 		const withPlans: [SessionEntry, CommutePlan][] = [];
 		for (const entry of entries.values()) {
 			const plan = plans.get(entry.state.planId)?.plan;
@@ -962,27 +986,11 @@ export class RunnerCore {
 				withPlans.push([entry, plan]);
 			}
 		}
-		for (const [entry, plan] of withPlans) {
-			for (const leg of watchedLegs(entry.state, plan)) {
-				if (leg.mode === "bus") {
-					const routeId = parseRef(leg.line).id;
-					const near = this.#isNear(entry, plan, routeId, now);
-					busRoutes.set(routeId, (busRoutes.get(routeId) ?? false) || near);
-				} else {
-					stations.add(parseRef(leg.board.stop).id);
-					stations.add(parseRef(leg.alight.stop).id);
-				}
-			}
-		}
-		// 제안을 따라가는 구간은 하차 정류장만 본다(탈 차량이 가깝다고 보지 않는다).
-		for (const leg of followed) {
-			if (leg.mode === "bus") {
-				const routeId = parseRef(leg.line).id;
-				busRoutes.set(routeId, busRoutes.get(routeId) ?? false);
-			} else {
-				stations.add(parseRef(leg.alight.stop).id);
-			}
-		}
+		const { busLines, busRoutes, stations } = this.#boardTargets(
+			withPlans,
+			followed,
+			now
+		);
 		await Promise.all(
 			withPlans.map(([entry, plan]) => this.#refreshTimetable(entry, plan, now))
 		);
@@ -995,33 +1003,72 @@ export class RunnerCore {
 		await runLimited([...busRoutes], 1, ([routeId, near]) =>
 			this.#collectBus(routeId, near, raw, now, pollBus, "session")
 		);
-		await this.#collectBusSchedules([...busRoutes.keys()], raw);
+		await this.#collectBusSchedules([...busLines], raw);
 		return raw;
+	}
+
+	/** 이 tick에 볼 서울 버스 노선(가까운 차량 여부), 정적 일정을 읽을 버스 노선, 지하철역. */
+	#boardTargets(
+		withPlans: [SessionEntry, CommutePlan][],
+		followed: Leg[],
+		now: number
+	): BoardTargets {
+		const targets: BoardTargets = {
+			busLines: new Set(),
+			busRoutes: new Map(),
+			stations: new Set(),
+		};
+		const { busLines, busRoutes, stations } = targets;
+		for (const [entry, plan] of withPlans) {
+			for (const leg of watchedLegs(entry.state, plan)) {
+				if (leg.mode === "subway") {
+					stations.add(parseRef(leg.board.stop).id);
+					stations.add(parseRef(leg.alight.stop).id);
+					continue;
+				}
+				busLines.add(leg.line);
+				const routeId = seoulBusRouteIdOf(leg);
+				if (routeId !== null) {
+					const near = this.#isNear(entry, plan, leg.line, now);
+					busRoutes.set(routeId, (busRoutes.get(routeId) ?? false) || near);
+				}
+			}
+		}
+		// 제안을 따라가는 구간은 하차 정류장만 본다(탈 차량이 가깝다고 보지 않는다).
+		for (const leg of followed) {
+			if (leg.mode === "subway") {
+				stations.add(parseRef(leg.alight.stop).id);
+				continue;
+			}
+			busLines.add(leg.line);
+			const routeId = seoulBusRouteIdOf(leg);
+			if (routeId !== null) {
+				busRoutes.set(routeId, busRoutes.get(routeId) ?? false);
+			}
+		}
+		return targets;
 	}
 
 	/**
 	 * 도착판이 없을 때의 추정에 쓰는 버스 노선의 정적 배차간격. 읽지 못하면 로그만 남기고
 	 * 일정 없이 간다(한 tick의 모든 세션이 이 조회 하나에 막히지 않게).
 	 */
-	async #collectBusSchedules(
-		busRouteIds: string[],
-		raw: RawBoards
-	): Promise<void> {
-		if (busRouteIds.length === 0) {
+	async #collectBusSchedules(lines: LineRef[], raw: RawBoards): Promise<void> {
+		if (lines.length === 0) {
 			return;
 		}
 		try {
-			raw.busSchedules = await this.#ports.busSchedules(busRouteIds);
+			raw.busSchedules = await this.#ports.busSchedules(lines);
 		} catch (error) {
 			this.#log(`commute bus schedules failed: ${errorText(error)}`);
 		}
 	}
 
-	/** 기본 경로의 지금 구간이 이 노선이고, 탑승 전이며, 잡은 차량이 가까운가. */
+	/** 기본 경로의 지금 구간이 이 노선(전체 노선 ID)이고, 탑승 전이며, 잡은 차량이 가까운가. */
 	#isNear(
 		entry: SessionEntry,
 		plan: CommutePlan,
-		routeId: string,
+		line: LineRef,
 		now: number
 	): boolean {
 		const { state } = entry;
@@ -1031,7 +1078,7 @@ export class RunnerCore {
 		const leg = plan.routes.find((route) => route.rank === 0)?.legs[
 			state.legIndex
 		];
-		if (leg?.mode !== "bus" || parseRef(leg.line).id !== routeId) {
+		if (leg?.mode !== "bus" || leg.line !== line) {
 			return false;
 		}
 		const boardEtaAt =

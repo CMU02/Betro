@@ -53,6 +53,24 @@ const subwayLeg = {
 	mode: "subway",
 };
 
+/** 경기 마을버스(GBIS) 한 구간. */
+const gbisLeg = {
+	alight: { name: "다", seq: 9, stop: "gbis:228000174" },
+	board: { name: "라", seq: 2, stop: "gbis:228000160" },
+	line: "gbis:241001920",
+	lineName: "11",
+	mode: "bus",
+};
+
+/** 인천 버스(TAGO) 한 구간. */
+const tagoLeg = {
+	alight: { name: "마", seq: 12, stop: "tago:ICB164000397" },
+	board: { name: "바", seq: 4, stop: "tago:ICB164000380" },
+	line: "tago:ICB165000012",
+	lineName: "1",
+	mode: "bus",
+};
+
 describe("parsePlan", () => {
 	test("accepts a one-leg bus plan", () => {
 		expect(parsePlan(basePlan()).ok).toBe(true);
@@ -155,6 +173,43 @@ describe("parsePlan", () => {
 		const plan = clone();
 		plan.routes[0].legs[0].board.stop = "seoul-subway:1002000222";
 		expect(issuesOf(plan).length).toBeGreaterThan(0);
+	});
+
+	test("accepts GBIS and TAGO bus legs", () => {
+		const plan = clone();
+		plan.routes[0].legs = [gbisLeg, tagoLeg];
+		plan.routes[0].walkMinutes = [5, 4, 3];
+		expect(parsePlan(plan).ok).toBe(true);
+	});
+
+	test("rejects a GBIS leg whose stops come from another source", () => {
+		const plan = clone();
+		plan.routes[0].legs = [
+			{
+				...gbisLeg,
+				alight: { ...gbisLeg.alight, stop: "seoul-bus:228000174" },
+			},
+		];
+		expect(issuesOf(plan).join("\n")).toContain("one source");
+	});
+
+	test("rejects a source that does not carry the leg's mode", () => {
+		const busOnSubway = clone();
+		busOnSubway.routes[0].legs[0].line = "seoul-subway:line2";
+		busOnSubway.routes[0].legs[0].board.stop = "seoul-subway:1002000222";
+		busOnSubway.routes[0].legs[0].alight.stop = "seoul-subway:1002000223";
+		expect(issuesOf(busOnSubway).join("\n")).toContain("mode");
+
+		const subwayOnGbis = clone();
+		subwayOnGbis.routes[0].legs = [
+			{
+				...subwayLeg,
+				alight: { name: "강남", stop: "gbis:1002000223" },
+				board: { name: "성수", stop: "gbis:1002000222" },
+				line: "gbis:line2",
+			},
+		];
+		expect(issuesOf(subwayOnGbis).join("\n")).toContain("mode");
 	});
 
 	test("rejects a subway leg with the same board and alight station", () => {

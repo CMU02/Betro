@@ -28,6 +28,15 @@ const busLeg: BusLeg = {
 	mode: "bus",
 };
 
+/** 경기 마을버스(GBIS). 노선 ID가 서울 6411과 같아도 다른 노선이다. */
+const gbisLeg: BusLeg = {
+	alight: { name: "다", seq: 9, stop: "gbis:228000174" },
+	board: { name: "라", seq: 2, stop: "gbis:228000160" },
+	line: "gbis:100100290",
+	lineName: "11",
+	mode: "bus",
+};
+
 const subwayLeg: SubwayLeg = {
 	alight: { name: "역삼", stop: "seoul-subway:1002000221" },
 	board: { name: "강남", stop: "seoul-subway:1002000222" },
@@ -186,7 +195,7 @@ describe("assembleBoards: scheduled bus headway", () => {
 
 	it("gives a bus leg the headway from the route's schedule", () => {
 		const boards = assembleBoards(
-			{ ...raw(), busSchedules: { "100100290": schedule } },
+			{ ...raw(), busSchedules: { "seoul-bus:100100290": schedule } },
 			config
 		);
 		expect(boards.scheduledHeadwayMs?.(busLeg, NOON)).toBe(10 * MINUTE_MS);
@@ -195,7 +204,7 @@ describe("assembleBoards: scheduled bus headway", () => {
 
 	it("returns null for a route without a schedule and for subway legs", () => {
 		const boards = assembleBoards(
-			{ ...raw(), busSchedules: { "100100118": schedule } },
+			{ ...raw(), busSchedules: { "seoul-bus:100100118": schedule } },
 			config
 		);
 		expect(boards.scheduledHeadwayMs?.(busLeg, NOON)).toBeNull();
@@ -211,7 +220,7 @@ describe("assembleBoards: scheduled bus headway", () => {
 		const boards = assembleBoards(
 			{
 				bus: {},
-				busSchedules: { "100100290": schedule },
+				busSchedules: { "seoul-bus:100100290": schedule },
 				subway: {},
 				timetable: { arrivals: {}, rideMs: {} },
 			},
@@ -227,6 +236,69 @@ describe("assembleBoards: scheduled bus headway", () => {
 		expect(leg?.boardEtaAt).toBe(NOON + 5 * MINUTE_MS);
 		expect(leg?.method).toBe("headway");
 		expect(leg?.positionState).toBe("none");
+	});
+});
+
+describe("assembleBoards: GBIS and TAGO legs", () => {
+	/** 현지 12:00 = UTC 03:00. 운행 시간 안이다. */
+	const NOON = Date.UTC(2026, 10, 21, 3, 0);
+	const tenMinutes = {
+		firstBusMinute: 270,
+		headwayMin: 10,
+		lastBusMinute: 1370,
+	};
+	const thirtyMinutes = {
+		firstBusMinute: 270,
+		headwayMin: 30,
+		lastBusMinute: 1370,
+	};
+
+	it("has no board, progress or ride time even when a Seoul route shares the id", () => {
+		const boards = assembleBoards(raw(), config);
+		expect(boards.board(gbisLeg, "board")).toBeNull();
+		expect(boards.board(gbisLeg, "alight")).toBeNull();
+		expect(boards.progress(gbisLeg, "103055116")).toBeNull();
+		expect(boards.rideMs(gbisLeg, null)).toBeNull();
+	});
+
+	it("takes the headway keyed by the full line ref", () => {
+		const boards = assembleBoards(
+			{
+				...raw(),
+				busSchedules: {
+					"gbis:100100290": tenMinutes,
+					"seoul-bus:100100290": thirtyMinutes,
+				},
+			},
+			config
+		);
+		expect(boards.scheduledHeadwayMs?.(gbisLeg, NOON)).toBe(10 * MINUTE_MS);
+		expect(boards.scheduledHeadwayMs?.(busLeg, NOON)).toBe(30 * MINUTE_MS);
+	});
+
+	it("estimates the boarding from half the scheduled headway", () => {
+		const boards = assembleBoards(
+			{
+				bus: {},
+				busSchedules: { "gbis:100100290": tenMinutes },
+				subway: {},
+				timetable: { arrivals: {}, rideMs: {} },
+			},
+			config
+		);
+		const route: Route = { legs: [gbisLeg], rank: 0, walkMinutes: [0, 0] };
+		const [leg] = estimateRoute(
+			route,
+			boards,
+			{ fixed: [], now: NOON, readyAt: NOON, skip: new Set() },
+			config
+		).legs;
+		expect(leg).toMatchObject({
+			boardEtaAt: NOON + 5 * MINUTE_MS,
+			etaState: "estimated",
+			method: "headway",
+			positionState: "none",
+		});
 	});
 });
 
