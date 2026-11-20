@@ -468,6 +468,12 @@ export const ko = {
 			standard: "표준",
 			title: "지도 품질",
 		},
+		/** 개발 빌드에서만 보이는 행. 출시 기준 7.2(뒤로 가거나 순간이동한 위치 갱신 비율)의 오늘 숫자다. */
+		motionMetrics: {
+			subtitle:
+				"오늘 갱신 {updates}건 · 뒤로 {backward} · 순간이동 {jump} · {percent}%",
+			title: "지도 움직임 지표",
+		},
 		sections: {
 			about: "정보",
 			developer: "개발",

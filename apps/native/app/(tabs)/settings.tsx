@@ -30,6 +30,7 @@ import {
 } from "@/lib/crash/app-crash-reporting";
 import { t } from "@/lib/i18n/t";
 import type { MessageKey } from "@/lib/i18n/translate";
+import { appMotionMetrics } from "@/lib/map/app-motion-metrics";
 import type { ThemePreference } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
 import { ELEVATION } from "@/theme/tokens";
@@ -119,6 +120,20 @@ function ThemeRow() {
 			</View>
 		</View>
 	);
+}
+
+const PERCENT = 100;
+const PERCENT_DIGITS = 2;
+
+/** 개발 빌드 전용: 오늘의 7.2 지표(뒤로 가거나 순간이동한 위치 갱신 비율). 설정을 열 때의 값이다. */
+function motionMetricsSubtitle(): string {
+	const { backward, jump, ratio, updates } = appMotionMetrics.summary();
+	return t("settings.motionMetrics.subtitle", {
+		backward,
+		jump,
+		percent: (ratio * PERCENT).toFixed(PERCENT_DIGITS),
+		updates,
+	});
 }
 
 /** 개발 빌드 전용: Sentry로 테스트 예외를 보내거나 네이티브 크래시를 일으킨다. */
@@ -255,6 +270,17 @@ export default function SettingsTab() {
 								title={t("settings.crashTest.title")}
 								trailing={{ type: "none" }}
 							/>
+						) : null}
+						{__DEV__ ? (
+							<>
+								<ListDivider />
+								<ListRow
+									icon={MapTileIcon}
+									subtitle={motionMetricsSubtitle()}
+									title={t("settings.motionMetrics.title")}
+									trailing={{ type: "none" }}
+								/>
+							</>
 						) : null}
 						{__DEV__ && showLockSamples ? <ListDivider /> : null}
 						{showLockSamples ? (
