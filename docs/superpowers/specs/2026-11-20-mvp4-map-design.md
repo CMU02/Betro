@@ -2,7 +2,7 @@
 
 - 작성일: 2026-11-20
 - 개정: 2026-11-20 builder check와 agy 리뷰(Gemini 4 Neon High) 반영.
-- 상태: 초안 (사용자 검토 전)
+- 상태: 승인 (2026-11-20)
 - 상위 문서: [`2026-11-05-mvp-design.md`](2026-11-05-mvp-design.md)(이하 "MVP 설계"). 승인되면 MVP 설계의 몇 곳을 고칩니다(9장).
 - 함께 읽을 문서: [`2026-11-20-trip-planner-design.md`](2026-11-20-trip-planner-design.md)(길찾기). 지도와 같은 대화에서 정했고, 지도 위에 올라갑니다.
 - 근거: 2026-11-20 브레인스토밍(시안은 저장소에 넣지 않음). 수집기 코드 `packages/realtime/src/schedule.ts`, `apps/server/src/collector/cf-ports.ts`.
