@@ -261,6 +261,12 @@ export const ko = {
 		towards: "{name} 방면",
 	},
 	map: {
+		empty: {
+			body: "집이나 회사를 등록하면 출퇴근 경로의 차량을 지도에서 볼 수 있어요.",
+			register: "집·회사 등록하고 출퇴근 차량 보기",
+			search: "어디로 가세요?",
+			title: "등록한 장소가 없어요",
+		},
 		sheet: {
 			direction: {
 				bus: "{name} 방면",
