@@ -2,6 +2,7 @@ import type { BusLeg, Route, SubwayLeg } from "@Betro/commute/plan";
 import { expect, it } from "bun:test";
 import {
 	allLinesHidden,
+	boardedVehicleId,
 	busVehiclesForLeg,
 	subwayVehiclesForLeg,
 	visibleLegs,
@@ -233,4 +234,20 @@ it("drops loop-line trains more than half a lap behind the boarding station", ()
 		null
 	);
 	expect(result.map((v) => v.rawTrainNo)).toEqual(["near"]);
+});
+
+it("boardedVehicleId narrows only on the followed route's current leg while riding", () => {
+	const base = {
+		currentLegIndex: 1,
+		legIndex: 1,
+		rank: 0,
+		stage: "ride" as const,
+		vehicleId: "v1",
+	};
+	expect(boardedVehicleId(base)).toBe("v1");
+	expect(boardedVehicleId({ ...base, stage: "wait" })).toBeNull();
+	expect(boardedVehicleId({ ...base, stage: "walk" })).toBeNull();
+	expect(boardedVehicleId({ ...base, rank: 1 })).toBeNull();
+	expect(boardedVehicleId({ ...base, legIndex: 2 })).toBeNull();
+	expect(boardedVehicleId({ ...base, vehicleId: null })).toBeNull();
 });

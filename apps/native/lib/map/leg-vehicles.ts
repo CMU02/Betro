@@ -30,20 +30,20 @@ function isCircular(map: BusMap): boolean {
 /**
  * 이 구간에서 보일 버스. 같은 노선이면서 승차 순번보다 앞선 차량만 남긴다.
  * 순환 노선(`map`으로 판단)은 승차 순번 앞의 반 바퀴 안만 남긴다.
- * 탑승한 차량(`boardedVehicleId`)이 있으면 그 차량만, 하차 순번까지 남긴다.
+ * 탑승한 차량(`boardedId`)이 있으면 그 차량만, 하차 순번까지 남긴다.
  */
 export function busVehiclesForLeg(
 	leg: BusLeg,
 	vehicles: readonly BusSnapshotVehicle[],
-	boardedVehicleId: string | null,
+	boardedId: string | null,
 	map: BusMap | null = null
 ): BusSnapshotVehicle[] {
 	const routeId = bareId(leg.line);
 	const onLine = vehicles.filter((vehicle) => vehicle.routeId === routeId);
-	if (boardedVehicleId !== null) {
+	if (boardedId !== null) {
 		return onLine.filter(
 			(vehicle) =>
-				vehicle.vehId === boardedVehicleId && vehicle.sectOrd <= leg.alight.seq
+				vehicle.vehId === boardedId && vehicle.sectOrd <= leg.alight.seq
 		);
 	}
 	const boardSeq = leg.board.seq;
@@ -95,7 +95,7 @@ export function subwayVehiclesForLeg(
 	leg: SubwayLeg,
 	vehicles: readonly SubwaySnapshotVehicle[],
 	map: SubwayMap,
-	boardedVehicleId: string | null
+	boardedId: string | null
 ): SubwaySnapshotVehicle[] {
 	const lineKey = bareId(leg.line);
 	const sameLeg = vehicles.filter(
@@ -104,19 +104,19 @@ export function subwayVehiclesForLeg(
 	);
 	const found = stationOrder(leg, map);
 	if (found === null) {
-		return boardedVehicleId === null
+		return boardedId === null
 			? []
-			: sameLeg.filter((vehicle) => vehicle.rawTrainNo === boardedVehicleId);
+			: sameLeg.filter((vehicle) => vehicle.rawTrainNo === boardedId);
 	}
 	const { loop, order, stationCount } = found;
 	const seqOf = (vehicle: SubwaySnapshotVehicle): number | undefined =>
 		vehicle.statnId === null
 			? undefined
 			: order.get(`seoul-subway:${vehicle.statnId}`);
-	if (boardedVehicleId !== null) {
+	if (boardedId !== null) {
 		const alightSeq = order.get(leg.alight.stop);
 		return sameLeg.filter((vehicle) => {
-			if (vehicle.rawTrainNo !== boardedVehicleId) {
+			if (vehicle.rawTrainNo !== boardedId) {
 				return false;
 			}
 			const seq = seqOf(vehicle);
@@ -161,4 +161,22 @@ export function allLinesHidden(
 		route.legs.length > 0 &&
 		route.legs.every((leg) => hiddenMapLines.includes(leg.line))
 	);
+}
+
+/**
+ * 탑승이 판정된 차량 ID. 세션이 따르는 기본 경로(rank 0)의 지금 구간에서 승차 단계일 때만 그 차량 하나로 좁힌다.
+ * 세션의 `legVehicleIds`는 탑승 전에도 예상이 고른 후보라, 그 밖에는 다가오는 차량을 모두 그린다(지도 설계 2.8).
+ */
+export function boardedVehicleId(args: {
+	currentLegIndex: number;
+	legIndex: number;
+	rank: number;
+	stage: string;
+	vehicleId: string | null;
+}): string | null {
+	const { currentLegIndex, legIndex, rank, stage, vehicleId } = args;
+	if (rank !== 0 || stage !== "ride" || legIndex !== currentLegIndex) {
+		return null;
+	}
+	return vehicleId;
 }

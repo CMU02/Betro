@@ -13,8 +13,10 @@ import { usePreferences } from "@/lib/preferences/use-preferences";
 import { serverClient } from "@/lib/server/app-server";
 
 import { appMotionMetrics } from "./app-motion-metrics";
+import { legSpanM } from "./leg-span";
 import {
 	allLinesHidden,
+	boardedVehicleId,
 	busVehiclesForLeg,
 	subwayVehiclesForLeg,
 	visibleLegs,
@@ -27,6 +29,7 @@ import {
 	fetchBusMap,
 	fetchSnapshot,
 	fetchSubwayMap,
+	loadCachedRef,
 	postRouteView,
 	postWatch,
 	type RouteView,
@@ -67,20 +70,37 @@ const SEOUL_BUS_PREFIX = "seoul-bus:";
 const mapRefCache = createMapRefCache(Storage);
 
 export interface RenderVehicle {
+	/** 1초마다 계산한 표시 위치의 진행 방향. */
 	bearing: number;
 	id: string;
 	kind: "bus" | "subway";
 	lastSeenAt: number;
+	/** 1초마다 계산한 표시 위치. 프레임마다 다시 계산하려면 `motion`과 `MapLeg.track.shape`를 쓴다. */
 	latitude: number;
 	legIndex: number;
 	longitude: number;
+	/** 차량 움직임 상태. `positionAt(motion, now)`와 `pointAlong(track.shape, …)`으로 프레임마다 위치를 낸다. */
+	motion: MotionState;
 	observedAt: number;
+	/** 마지막 관측 위치(움직임 보정 없이). `smoothVehicleMotion`이 꺼졌을 때 여기로 바로 옮긴다. */
+	observedPosition: { bearing: number; latitude: number; longitude: number };
+	/** 버스는 `sectOrd`, 지하철은 역 `statnId`에 해당하는 순번. 모르면 null. */
+	positionSeq: number | null;
+	/** 지하철 역 ID(`statnId`)와 진입·도착 상태. 버스는 null. */
+	statnId: string | null;
+	status: SubwaySnapshotVehicle["status"];
 }
 
 export interface MapLeg {
+	/** 승차·하차 위치(선 시작에서 잰 미터). 선에서 이 사이를 진하게 그린다. 모르면 null. */
+	alightM: number | null;
+	boardM: number | null;
 	leg: Leg;
+	/** 이 구간 노선의 참조 지도와 거리 선. 받기 전이거나 못 받았으면 null. */
+	map: BusMap | SubwayMap | null;
 	shape: [number, number][];
 	showVehicles: boolean;
+	track: BusTrack | SubwayTrack | null;
 	vehicles: RenderVehicle[];
 }
 
@@ -88,13 +108,21 @@ export interface MapData {
 	allHidden: boolean;
 	legs: MapLeg[];
 	route: Route | null;
+	smoothVehicleMotion: boolean;
 	source: "session" | "route-view";
 	view: RouteView | null;
 }
 
+type SubwayBranch = SubwayMap["branches"][number];
+
 type LegTrack =
 	| { kind: "bus"; map: BusMap; track: BusTrack }
-	| { kind: "subway"; map: SubwayMap; track: SubwayTrack };
+	| {
+			branch: SubwayBranch;
+			kind: "subway";
+			map: SubwayMap;
+			track: SubwayTrack;
+	  };
 
 interface Snapshots {
 	bus: BusSnapshot | null;
@@ -107,24 +135,21 @@ function refKey(leg: Leg): string {
 	return `${leg.mode}:${leg.line}`;
 }
 
-/** 서버에서 받고 캐시에 둔다. 받지 못하면 캐시를 쓴다. 둘 다 없으면 null. */
-async function loadRefMap(leg: Leg): Promise<RefMap> {
-	const key = refKey(leg);
+/** 기기 저장본을 먼저 읽고 서버 ETag로 바뀐 때만 다시 받는다. 받지 못하고 저장본도 없으면 던져 다시 시도하게 한다. */
+function loadRefMap(leg: Leg): Promise<BusMap | SubwayMap> {
 	const bareLine = leg.line.slice(leg.line.indexOf(":") + 1);
-	const result =
-		leg.mode === "bus"
-			? await fetchBusMap(serverClient, bareLine)
-			: await fetchSubwayMap(serverClient, bareLine);
-	if (result.ok) {
-		await mapRefCache.set(key, String(result.value.batchId), result.value);
-		return result.value;
+	if (leg.mode === "bus") {
+		return loadCachedRef<BusMap>(mapRefCache, refKey(leg), (etag) =>
+			fetchBusMap(serverClient, bareLine, etag)
+		);
 	}
-	const cached = await mapRefCache.get<BusMap | SubwayMap>(key);
-	return cached?.value ?? null;
+	return loadCachedRef<SubwayMap>(mapRefCache, refKey(leg), (etag) =>
+		fetchSubwayMap(serverClient, bareLine, etag)
+	);
 }
 
 /** 구간 방향의 가지 중 승차역(가능하면 하차역도)을 지나는 것. */
-function subwayBranch(leg: SubwayLeg, map: SubwayMap) {
+function subwayBranch(leg: SubwayLeg, map: SubwayMap): SubwayBranch | null {
 	const candidates = map.branches.filter(
 		(branch) =>
 			branch.direction === leg.direction &&
@@ -151,7 +176,9 @@ function buildLegTrack(leg: Leg, map: RefMap): LegTrack | null {
 	const subwayMap = map as SubwayMap;
 	const branch = subwayBranch(leg, subwayMap);
 	const track = branch === null ? null : createSubwayTrack(branch);
-	return track === null ? null : { kind: "subway", map: subwayMap, track };
+	return track === null || branch === null
+		? null
+		: { branch, kind: "subway", map: subwayMap, track };
 }
 
 function activeSessionFor(
@@ -215,13 +242,13 @@ function legVehicles(
 	leg: Leg,
 	legTrack: LegTrack,
 	snapshots: Snapshots,
-	boardedVehicleId: string | null
+	boardedId: string | null
 ): (BusSnapshotVehicle | SubwaySnapshotVehicle)[] {
 	if (leg.mode === "bus" && legTrack.kind === "bus") {
 		return busVehiclesForLeg(
 			leg as BusLeg,
 			snapshots.bus?.vehicles ?? [],
-			boardedVehicleId,
+			boardedId,
 			legTrack.map
 		);
 	}
@@ -230,10 +257,119 @@ function legVehicles(
 			leg as SubwayLeg,
 			snapshots.subway?.vehicles ?? [],
 			legTrack.map,
-			boardedVehicleId
+			boardedId
 		);
 	}
 	return [];
+}
+
+function positionSeqOf(
+	legTrack: LegTrack,
+	vehicle: BusSnapshotVehicle | SubwaySnapshotVehicle
+): number | null {
+	if (legTrack.kind === "bus") {
+		return (vehicle as BusSnapshotVehicle).sectOrd;
+	}
+	const { statnId } = vehicle as SubwaySnapshotVehicle;
+	if (statnId === null) {
+		return null;
+	}
+	const stop = `seoul-subway:${statnId}`;
+	return (
+		legTrack.branch.stations.find((station) => station.stop === stop)?.seq ??
+		null
+	);
+}
+
+/** 탑승이 판정된 구간만 차량 하나로 좁힌다. 그 밖에는 다가오는 차량을 모두 그린다. */
+function boardedFor(
+	route: Route | null,
+	sessionRoute: SessionRouteView | null,
+	session: ActiveSessionView | null,
+	legIndex: number
+): string | null {
+	if (route === null || sessionRoute === null || session === null) {
+		return null;
+	}
+	return boardedVehicleId({
+		currentLegIndex: session.content.legIndex,
+		legIndex,
+		rank: route.rank,
+		stage: session.content.stage,
+		vehicleId: sessionRoute.legVehicleIds[legIndex] ?? null,
+	});
+}
+
+function renderVehicle(
+	legTrack: LegTrack,
+	vehicle: BusSnapshotVehicle | SubwaySnapshotVehicle,
+	legIndex: number,
+	state: MotionState,
+	nowMs: number
+): RenderVehicle | null {
+	const at = pointAlong(legTrack.track.shape, positionAt(state, nowMs));
+	const observed = pointAlong(legTrack.track.shape, state.observedDistanceM);
+	if (at === null || observed === null) {
+		return null;
+	}
+	const subway = "rawTrainNo" in vehicle ? vehicle : null;
+	return {
+		bearing: at.bearing,
+		id: vehicleIdOf(vehicle),
+		kind: legTrack.kind,
+		lastSeenAt: vehicle.lastSeenAt,
+		latitude: at.latitude,
+		legIndex,
+		longitude: at.longitude,
+		motion: state,
+		observedAt: vehicle.observedAt,
+		observedPosition: observed,
+		positionSeq: positionSeqOf(legTrack, vehicle),
+		statnId: subway?.statnId ?? null,
+		status: subway?.status ?? null,
+	};
+}
+
+function renderLeg(args: {
+	boardedId: string | null;
+	leg: Leg;
+	legIndex: number;
+	legTrack: LegTrack | null;
+	motionStates: ReadonlyMap<string, MotionState>;
+	nowMs: number;
+	showVehicles: boolean;
+	snapshots: Snapshots;
+}): MapLeg {
+	const { boardedId, leg, legIndex, legTrack, nowMs, showVehicles } = args;
+	const vehicles: RenderVehicle[] = [];
+	if (showVehicles && legTrack !== null) {
+		for (const vehicle of legVehicles(
+			leg,
+			legTrack,
+			args.snapshots,
+			boardedId
+		)) {
+			const state = args.motionStates.get(
+				`${legIndex}:${vehicleIdOf(vehicle)}`
+			);
+			const rendered =
+				state === undefined
+					? null
+					: renderVehicle(legTrack, vehicle, legIndex, state, nowMs);
+			if (rendered !== null) {
+				vehicles.push(rendered);
+			}
+		}
+	}
+	return {
+		...legSpanM(leg, legTrack),
+		leg,
+		map: legTrack?.map ?? null,
+		shape: trackShape(legTrack),
+		showVehicles,
+		track: legTrack?.track ?? null,
+		vehicles,
+	};
 }
 
 function trackShape(legTrack: LegTrack | null): [number, number][] {
@@ -416,7 +552,7 @@ export function useMapData(
 			if (!(showVehicles && legTrack)) {
 				return;
 			}
-			const boarded = sessionRoute?.legVehicleIds[legIndex] ?? null;
+			const boarded = boardedFor(route, sessionRoute, session, legIndex);
 			for (const vehicle of legVehicles(leg, legTrack, snapshots, boarded)) {
 				const key = `${legIndex}:${vehicleIdOf(vehicle)}`;
 				seen.add(key);
@@ -439,7 +575,7 @@ export function useMapData(
 			}
 		}
 		setMotionVersion((value) => value + 1);
-	}, [snapshots, legTracks, legsWithFlags, sessionRoute]);
+	}, [snapshots, legTracks, legsWithFlags, route, sessionRoute, session]);
 
 	// 보이는 동안 1초마다 위치를 다시 계산한다.
 	const [nowMs, setNowMs] = useState(Date.now);
@@ -455,41 +591,36 @@ export function useMapData(
 	// biome-ignore lint/correctness/useExhaustiveDependencies: motionVersion이 ref 안 상태의 변경을 알린다.
 	const legs = useMemo<MapLeg[]>(
 		() =>
-			legsWithFlags.map(({ leg, showVehicles }, legIndex) => {
-				const legTrack = legTracks[legIndex] ?? null;
-				const vehicles: RenderVehicle[] = [];
-				if (showVehicles && legTrack !== null) {
-					const boarded = sessionRoute?.legVehicleIds[legIndex] ?? null;
-					for (const vehicle of legVehicles(
-						leg,
-						legTrack,
-						snapshots,
-						boarded
-					)) {
-						const id = vehicleIdOf(vehicle);
-						const state = motion.current.get(`${legIndex}:${id}`);
-						const at =
-							state === undefined
-								? null
-								: pointAlong(legTrack.track.shape, positionAt(state, nowMs));
-						if (at !== null) {
-							vehicles.push({
-								bearing: at.bearing,
-								id,
-								kind: legTrack.kind,
-								lastSeenAt: vehicle.lastSeenAt,
-								latitude: at.latitude,
-								legIndex,
-								longitude: at.longitude,
-								observedAt: vehicle.observedAt,
-							});
-						}
-					}
-				}
-				return { leg, shape: trackShape(legTrack), showVehicles, vehicles };
-			}),
-		[legsWithFlags, legTracks, snapshots, sessionRoute, nowMs, motionVersion]
+			legsWithFlags.map(({ leg, showVehicles }, legIndex) =>
+				renderLeg({
+					boardedId: boardedFor(route, sessionRoute, session, legIndex),
+					leg,
+					legIndex,
+					legTrack: legTracks[legIndex] ?? null,
+					motionStates: motion.current,
+					nowMs,
+					showVehicles,
+					snapshots,
+				})
+			),
+		[
+			legsWithFlags,
+			legTracks,
+			snapshots,
+			route,
+			sessionRoute,
+			session,
+			nowMs,
+			motionVersion,
+		]
 	);
 
-	return { allHidden, legs, route, source, view };
+	return {
+		allHidden,
+		legs,
+		route,
+		smoothVehicleMotion: preferences.smoothVehicleMotion,
+		source,
+		view,
+	};
 }

@@ -156,26 +156,63 @@ function read<S extends z.ZodType>(
 	return { ok: true, value: parsed.data };
 }
 
-export async function fetchBusMap(
-	client: ServerClient,
-	busRouteId: string
-): Promise<RefResult<BusMap>> {
-	const response = await client.request(
-		"GET",
-		`/v1/ref/map/bus/${encodeURIComponent(busRouteId)}`
-	);
-	return read(response, busMapSchema);
+/** 참조 지도 응답. 서버 ETag가 없으면 etag는 null이다. */
+export interface RefMapBody<T> {
+	etag: string | null;
+	value: T;
 }
 
-export async function fetchSubwayMap(
+async function fetchRefMap<S extends z.ZodType>(
 	client: ServerClient,
-	lineKey: string
-): Promise<RefResult<SubwayMap>> {
+	path: string,
+	etag: string | null,
+	schema: S
+): Promise<RefResult<RefMapBody<z.infer<S>> | "not-modified">> {
 	const response = await client.request(
 		"GET",
-		`/v1/ref/map/subway/${encodeURIComponent(lineKey)}`
+		path,
+		undefined,
+		etag === null ? undefined : { headers: { "If-None-Match": etag } }
 	);
-	return read(response, subwayMapSchema);
+	if (response.status === HTTP_NOT_MODIFIED) {
+		return { ok: true, value: "not-modified" };
+	}
+	const result = read(response, schema);
+	if (!result.ok) {
+		return result;
+	}
+	return {
+		ok: true,
+		value: { etag: response.etag ?? null, value: result.value },
+	};
+}
+
+/** 버스 노선 지도. 저장해 둔 ETag를 `If-None-Match`로 보내고 304는 `"not-modified"`다. */
+export function fetchBusMap(
+	client: ServerClient,
+	busRouteId: string,
+	etag: string | null
+): Promise<RefResult<RefMapBody<BusMap> | "not-modified">> {
+	return fetchRefMap(
+		client,
+		`/v1/ref/map/bus/${encodeURIComponent(busRouteId)}`,
+		etag,
+		busMapSchema
+	);
+}
+
+/** 지하철 노선 지도. 저장해 둔 ETag를 `If-None-Match`로 보내고 304는 `"not-modified"`다. */
+export function fetchSubwayMap(
+	client: ServerClient,
+	lineKey: string,
+	etag: string | null
+): Promise<RefResult<RefMapBody<SubwayMap> | "not-modified">> {
+	return fetchRefMap(
+		client,
+		`/v1/ref/map/subway/${encodeURIComponent(lineKey)}`,
+		etag,
+		subwayMapSchema
+	);
 }
 
 export async function fetchSubwayStations(
@@ -295,4 +332,34 @@ export function createMapRefCache(store: MapKvStore): MapRefCache {
 			}
 		},
 	};
+}
+
+/**
+ * 참조 지도를 기기 저장본 먼저 읽고, 서버 ETag로 바뀐 때만 다시 받는다(지도 설계 4.2).
+ * 받지 못하면 저장본을 쓴다. 저장본도 없으면 던져서 호출한 쪽(react-query)이 다시 시도하게 한다.
+ */
+export async function loadCachedRef<T>(
+	cache: MapRefCache,
+	key: string,
+	fetcher: (
+		etag: string | null
+	) => Promise<RefResult<RefMapBody<T> | "not-modified">>
+): Promise<T> {
+	const cached = await cache.get<T>(key);
+	const knownEtag = cached === null || cached.etag === "" ? null : cached.etag;
+	const result = await fetcher(knownEtag);
+	if (result.ok) {
+		if (result.value === "not-modified") {
+			if (cached !== null) {
+				return cached.value;
+			}
+			throw new Error(`map ref ${key}: got 304 without a cached copy`);
+		}
+		await cache.set(key, result.value.etag ?? "", result.value.value);
+		return result.value.value;
+	}
+	if (cached !== null) {
+		return cached.value;
+	}
+	throw new Error(`map ref ${key} unavailable: ${result.reason}`);
 }

@@ -83,16 +83,45 @@ const SUBWAY_MAP = {
 describe("map ref fetchers", () => {
 	it("fetchBusMap reads the shape and stops", async () => {
 		const { client, calls } = fakeClient({ json: BUS_MAP, status: 200 });
-		const result = await fetchBusMap(client, "seoul-bus:100100124");
-		expect(result).toEqual({ ok: true, value: BUS_MAP });
+		const result = await fetchBusMap(client, "seoul-bus:100100124", null);
+		expect(result).toEqual({
+			ok: true,
+			value: { etag: null, value: BUS_MAP },
+		});
 		expect(calls[0]?.path).toBe("/v1/ref/map/bus/seoul-bus%3A100100124");
 	});
 
 	it("fetchSubwayMap reads branches", async () => {
-		const { client, calls } = fakeClient({ json: SUBWAY_MAP, status: 200 });
-		const result = await fetchSubwayMap(client, "seoul-subway:2");
-		expect(result).toEqual({ ok: true, value: SUBWAY_MAP });
+		const { client, calls } = fakeClient({
+			etag: '"submap-1-2-3"',
+			json: SUBWAY_MAP,
+			status: 200,
+		});
+		const result = await fetchSubwayMap(client, "seoul-subway:2", null);
+		expect(result).toEqual({
+			ok: true,
+			value: { etag: '"submap-1-2-3"', value: SUBWAY_MAP },
+		});
 		expect(calls[0]?.path).toBe("/v1/ref/map/subway/seoul-subway%3A2");
+	});
+
+	it("sends If-None-Match for ref maps and maps 304 to not-modified", async () => {
+		const bus = fakeClient({ json: null, status: 304 });
+		expect(await fetchBusMap(bus.client, "1", '"busmap-3"')).toEqual({
+			ok: true,
+			value: "not-modified",
+		});
+		expect(bus.calls[0]?.options?.headers).toEqual({
+			"If-None-Match": '"busmap-3"',
+		});
+		const subway = fakeClient({ json: null, status: 304 });
+		expect(await fetchSubwayMap(subway.client, "2", '"submap-1"')).toEqual({
+			ok: true,
+			value: "not-modified",
+		});
+		expect(subway.calls[0]?.options?.headers).toEqual({
+			"If-None-Match": '"submap-1"',
+		});
 	});
 
 	it("fetchSubwayStations unwraps the stations list", async () => {
@@ -115,16 +144,28 @@ describe("map ref fetchers", () => {
 
 	it("maps failures to reasons and rejects a bad body", async () => {
 		expect(
-			await fetchBusMap(fakeClient({ json: null, status: 0 }).client, "1")
+			await fetchBusMap(fakeClient({ json: null, status: 0 }).client, "1", null)
 		).toEqual({ ok: false, reason: "offline" });
 		expect(
-			await fetchBusMap(fakeClient({ json: null, status: 503 }).client, "1")
+			await fetchBusMap(
+				fakeClient({ json: null, status: 503 }).client,
+				"1",
+				null
+			)
 		).toEqual({ ok: false, reason: "unavailable" });
 		expect(
-			await fetchBusMap(fakeClient({ json: null, status: 404 }).client, "1")
+			await fetchBusMap(
+				fakeClient({ json: null, status: 404 }).client,
+				"1",
+				null
+			)
 		).toEqual({ ok: false, reason: "not-found" });
 		expect(
-			await fetchBusMap(fakeClient({ json: { x: 1 }, status: 200 }).client, "1")
+			await fetchBusMap(
+				fakeClient({ json: { x: 1 }, status: 200 }).client,
+				"1",
+				null
+			)
 		).toEqual({ ok: false, reason: "invalid" });
 	});
 });
