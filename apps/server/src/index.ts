@@ -20,6 +20,12 @@ export { Collector } from "./collector/durable-object";
 export { CommuteRunner } from "./commute/runner-do";
 export type { Env } from "./worker-env";
 
+/** 양의 정수 설정값. 없거나 잘못되면 undefined(기본값을 쓴다). */
+function positiveInt(value: string | undefined): number | undefined {
+	const parsed = Number(value);
+	return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 let cachedApp: Hono | undefined;
 
 /** isolate당 한 번만 DB·인증·앱을 만든다. 수집기 스텁은 요청마다 새로 얻는다. */
@@ -34,6 +40,8 @@ function getApp(env: Env): Hono {
 			commute: commuteClient(env),
 			corsOrigins: parseOrigins(env.CORS_ORIGIN),
 			db,
+			mapWatchMaxPerInstall: positiveInt(env.MAP_WATCH_MAX_PER_INSTALL),
+			mapWatchTtlMs: positiveInt(env.MAP_WATCH_TTL_MS),
 			statusHost: env.STATUS_HOST,
 		});
 	}

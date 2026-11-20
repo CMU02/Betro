@@ -48,6 +48,8 @@ export interface Env {
 	MAP_WATCH_MAX_PER_INSTALL?: string;
 	/** 수집기가 관측 요청으로 부르는 버스 노선 수 상한(모든 설치 합). 기본 40. */
 	MAP_WATCH_MAX_TOTAL?: string;
+	/** 지도 관측 요청이 살아 있는 시간(ms). 앱이 60초마다 다시 보낸다. 기본 90000. */
+	MAP_WATCH_TTL_MS?: string;
 	OPERATING_END_KST?: string;
 	OPERATING_START_KST?: string;
 	/** `send`면 APNs·FCM에 보내고, `log`(기본)면 로그만 남긴다. */
