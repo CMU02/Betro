@@ -1480,6 +1480,42 @@ describe("RunnerCore 도착판", () => {
 		expect(await h.store.get(`budget:${SERVICE_DATE}`)).toBeUndefined();
 	});
 
+	test("기본 경로의 GBIS 구간이 가까워도 노선 ID가 같은 서울 대안 노선을 짧은 간격으로 부르지 않는다", async () => {
+		const h = harness({ busNearWindowMs: 60 * MINUTE });
+		const plan = makePlan(PLAN_ANDROID);
+		const seoulRoute = plan.routes[0] as Route;
+		plan.routes = [
+			{ legs: [regionalLeg()], rank: 0, walkMinutes: [5, 3] },
+			{ ...seoulRoute, rank: 1 },
+		];
+		h.db.addPlan(ANDROID_INSTALL, plan);
+		h.db.addToken(ANDROID_INSTALL, "fcm", FCM_TOKEN, { env: "production" });
+		h.busSchedules.handler = tenMinuteHeadway([`gbis:${ROUTE_ID}`]);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [, entry] = await onlySession(h);
+		expect(entry.state.estimates[0]?.legs[0]?.boardEtaAt).toBe(
+			T0 + 20 * MINUTE
+		);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID]);
+		// 가까운 차량의 간격(busNearPollMs)은 지났지만 보통 간격(busPollMs)은 아직이다.
+		await tickAt(h, core, T0 + h.config.busNearPollMs);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID]);
+	});
+
+	test("제안을 따라가는 GBIS 구간은 서울 도착 정보를 부르지 않는다", async () => {
+		const h = harness();
+		await h.store.put("follow:cccccccc-0000-4000-8000-000000000001", {
+			items: [{ done: false, leg: regionalLeg(), vehicleId: "V1" }],
+			serviceDate: SERVICE_DATE,
+			until: null,
+		});
+		await tickAt(h, h.core(), T0);
+		expect(h.boards.busCalls).toEqual([]);
+		expect(await h.store.get(`budget:${SERVICE_DATE}`)).toBeUndefined();
+		expect(h.busSchedules.calls.at(-1)).toEqual([`gbis:${ROUTE_ID}`]);
+	});
+
 	test("서울 구간과 GBIS 구간이 섞이면 서울 노선만 부르고 두 노선의 일정을 전체 노선 ID로 읽는다", async () => {
 		const h = harness();
 		const plan = makePlan(PLAN_ANDROID);
