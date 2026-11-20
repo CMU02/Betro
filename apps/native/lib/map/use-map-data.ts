@@ -479,7 +479,7 @@ export function useMapData(
 				wanted.add(leg.mode);
 			}
 		}
-		return [...wanted].sort();
+		return [...wanted].sort((a, b) => a.localeCompare(b));
 	}, [legsWithFlags]);
 	useVisiblePoll(
 		visible && kinds.length > 0,

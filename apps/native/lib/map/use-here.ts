@@ -40,7 +40,8 @@ export function useHere(enabled = true): Coordinate | null {
 				}
 			}
 		}
-		load();
+		// load가 실패를 직접 처리하므로 여기로 오는 거부는 없다.
+		load().catch(() => undefined);
 		return () => {
 			active = false;
 		};
