@@ -1,0 +1,1024 @@
+{
+  "response": {
+    "header": { "resultCode": "00", "resultMsg": "NORMAL SERVICE." },
+    "body": {
+      "items": {
+        "item": [
+          {
+            "gpslati": "37.399930",
+            "gpslong": 126.669507,
+            "nodeid": "ICB364000795",
+            "nodenm": "기점(미정차)_동춘동차고지",
+            "nodeno": 38793,
+            "nodeord": 1,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.400594,
+            "gpslong": 126.669696,
+            "nodeid": "ICB364000042",
+            "nodenm": "무지개아파트(동남아파트)",
+            "nodeno": 38042,
+            "nodeord": 2,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.403321,
+            "gpslong": 126.669917,
+            "nodeid": "ICB364000047",
+            "nodenm": "아주아파트",
+            "nodeno": 38047,
+            "nodeord": 3,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.404718,
+            "gpslong": 126.670067,
+            "nodeid": "ICB364000055",
+            "nodenm": "한양2차아파트",
+            "nodeno": 38055,
+            "nodeord": 4,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.407645,
+            "gpslong": 126.670313,
+            "nodeid": "ICB364000068",
+            "nodenm": "나사렛국제병원앞",
+            "nodeno": 38068,
+            "nodeord": 5,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.410929,
+            "gpslong": 126.668427,
+            "nodeid": "ICB364000082",
+            "nodenm": "동춘마을아파트",
+            "nodeno": 38082,
+            "nodeord": 6,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.412251,
+            "gpslong": "126.665440",
+            "nodeid": "ICB364000085",
+            "nodenm": "여성의광장",
+            "nodeno": 38085,
+            "nodeord": 7,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.413038,
+            "gpslong": 126.660735,
+            "nodeid": "ICB364000080",
+            "nodenm": "복지회관",
+            "nodeno": 38080,
+            "nodeord": 8,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.411576,
+            "gpslong": 126.657616,
+            "nodeid": "ICB364000679",
+            "nodenm": "송도파크자이아파트정문",
+            "nodeno": 38677,
+            "nodeord": 9,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.409105,
+            "gpslong": 126.657287,
+            "nodeid": "ICB364000681",
+            "nodenm": "새봄초등학교",
+            "nodeno": 38679,
+            "nodeord": 10,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.410467,
+            "gpslong": 126.655198,
+            "nodeid": "ICB364000629",
+            "nodenm": "송도파크자이",
+            "nodeno": 38627,
+            "nodeord": 11,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.412617,
+            "gpslong": "126.654030",
+            "nodeid": "ICB364000067",
+            "nodenm": "송도라마다호텔앞",
+            "nodeno": 38067,
+            "nodeord": 12,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": "37.417320",
+            "gpslong": "126.650540",
+            "nodeid": "ICB364000088",
+            "nodenm": "송도유원지(한국도로교통공단)",
+            "nodeno": 38088,
+            "nodeord": 13,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.421676,
+            "gpslong": 126.646354,
+            "nodeid": "ICB364000330",
+            "nodenm": "옥련동성당",
+            "nodeno": 38330,
+            "nodeord": 14,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.422497,
+            "gpslong": "126.649820",
+            "nodeid": "ICB364000357",
+            "nodenm": "우성아파트",
+            "nodeno": 38357,
+            "nodeord": 15,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.422988,
+            "gpslong": 126.654008,
+            "nodeid": "ICB364000151",
+            "nodenm": "축현초등학교.인천시립박물관",
+            "nodeno": 38151,
+            "nodeord": 16,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.424393,
+            "gpslong": 126.655742,
+            "nodeid": "ICB364000182",
+            "nodenm": "호불사입구",
+            "nodeno": 38182,
+            "nodeord": 17,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.425883,
+            "gpslong": 126.653375,
+            "nodeid": "ICB364000470",
+            "nodenm": "옥련중학교",
+            "nodeno": 38470,
+            "nodeord": 18,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": "37.425510",
+            "gpslong": 126.652419,
+            "nodeid": "ICB364000184",
+            "nodenm": "쌍용아파트",
+            "nodeno": 38184,
+            "nodeord": 19,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.424576,
+            "gpslong": 126.650684,
+            "nodeid": "ICB364000158",
+            "nodenm": "현대4차아파트",
+            "nodeno": 38158,
+            "nodeord": 20,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.424501,
+            "gpslong": 126.648289,
+            "nodeid": "ICB364000146",
+            "nodenm": "옥련초등학교",
+            "nodeno": 38146,
+            "nodeord": 21,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": "37.424650",
+            "gpslong": 126.644831,
+            "nodeid": "ICB364000336",
+            "nodenm": "원흥아파트.옥련시장",
+            "nodeno": 38336,
+            "nodeord": 22,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.426526,
+            "gpslong": 126.645032,
+            "nodeid": "ICB364000168",
+            "nodenm": "현대3차아파트",
+            "nodeno": 38168,
+            "nodeord": 23,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.430716,
+            "gpslong": "126.646930",
+            "nodeid": "ICB364000215",
+            "nodenm": "송도고입구",
+            "nodeno": 38215,
+            "nodeord": 24,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.429919,
+            "gpslong": 126.649041,
+            "nodeid": "ICB364000585",
+            "nodenm": "서해그랑블.옹암체육센터",
+            "nodeno": 38585,
+            "nodeord": 25,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.428683,
+            "gpslong": 126.652854,
+            "nodeid": "ICB364000212",
+            "nodenm": "옥련고개",
+            "nodeno": 38212,
+            "nodeord": 26,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": "37.428280",
+            "gpslong": 126.654132,
+            "nodeid": "ICB364000213",
+            "nodenm": "송도역",
+            "nodeno": 38213,
+            "nodeord": 27,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.427937,
+            "gpslong": 126.655789,
+            "nodeid": "ICB364000217",
+            "nodenm": "옥련1동행정복지센터",
+            "nodeno": 38217,
+            "nodeord": 28,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": "37.427470",
+            "gpslong": 126.658144,
+            "nodeid": "ICB364000220",
+            "nodenm": "송도역전시장",
+            "nodeno": 38220,
+            "nodeord": 29,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.426962,
+            "gpslong": 126.660902,
+            "nodeid": "ICB364000224",
+            "nodenm": "송도영남아파트",
+            "nodeno": 38224,
+            "nodeord": 30,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.426571,
+            "gpslong": 126.665042,
+            "nodeid": "ICB364000236",
+            "nodenm": "청학아파트",
+            "nodeno": 38236,
+            "nodeord": 31,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.425737,
+            "gpslong": "126.667540",
+            "nodeid": "ICB364000230",
+            "nodenm": "청학동.한국전력남인천지사",
+            "nodeno": 38230,
+            "nodeord": 32,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.424128,
+            "gpslong": 126.668637,
+            "nodeid": "ICB364000825",
+            "nodenm": "삼용아파트",
+            "nodeno": 38823,
+            "nodeord": 33,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.420392,
+            "gpslong": 126.671205,
+            "nodeid": "ICB364000191",
+            "nodenm": "용담마을",
+            "nodeno": 38191,
+            "nodeord": 34,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.422884,
+            "gpslong": 126.675524,
+            "nodeid": "ICB364000226",
+            "nodenm": "동남스포피아",
+            "nodeno": 38226,
+            "nodeord": 35,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.422435,
+            "gpslong": 126.679517,
+            "nodeid": "ICB364000250",
+            "nodenm": "문남마을",
+            "nodeno": 38250,
+            "nodeord": 36,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.422032,
+            "gpslong": 126.680606,
+            "nodeid": "ICB364000248",
+            "nodenm": "연수1동행정복지센터",
+            "nodeno": 38248,
+            "nodeord": 37,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.420431,
+            "gpslong": 126.680347,
+            "nodeid": "ICB364000216",
+            "nodenm": "문남초등학교",
+            "nodeno": 38216,
+            "nodeord": 38,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.418531,
+            "gpslong": 126.679685,
+            "nodeid": "ICB364000507",
+            "nodenm": "연수역",
+            "nodeno": 38507,
+            "nodeord": 39,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.418401,
+            "gpslong": 126.682016,
+            "nodeid": "ICB364000203",
+            "nodenm": "영남아파트",
+            "nodeno": 38203,
+            "nodeord": 40,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.416392,
+            "gpslong": 126.685411,
+            "nodeid": "ICB364000196",
+            "nodenm": "연수중학교",
+            "nodeno": 38196,
+            "nodeord": 41,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.415865,
+            "gpslong": 126.687088,
+            "nodeid": "ICB364000195",
+            "nodenm": "연수2차아파트",
+            "nodeno": 38195,
+            "nodeord": 42,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.416742,
+            "gpslong": 126.688762,
+            "nodeid": "ICB364000208",
+            "nodenm": "대우아파트.솔밭마을아파트",
+            "nodeno": 38208,
+            "nodeord": 43,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.418188,
+            "gpslong": 126.691616,
+            "nodeid": "ICB364000240",
+            "nodenm": "인천적십자병원(풍림아파트)",
+            "nodeno": 38240,
+            "nodeord": 44,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.421079,
+            "gpslong": 126.693778,
+            "nodeid": "ICB364000281",
+            "nodenm": "경남아파트",
+            "nodeno": 38281,
+            "nodeord": 45,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.423039,
+            "gpslong": 126.696047,
+            "nodeid": "ICB364000295",
+            "nodenm": "선학사거리",
+            "nodeno": 38295,
+            "nodeord": 46,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.427263,
+            "gpslong": 126.699256,
+            "nodeid": "ICB364000306",
+            "nodenm": "선학역(1번출구)",
+            "nodeno": 38306,
+            "nodeord": 47,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.431526,
+            "gpslong": 126.698983,
+            "nodeid": "ICB364000308",
+            "nodenm": "선학체육관(하키경기장)",
+            "nodeno": 38308,
+            "nodeord": 48,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.435207,
+            "gpslong": 126.697525,
+            "nodeid": "ICB364000310",
+            "nodenm": "문학경기장(박태환수영장)",
+            "nodeno": 38310,
+            "nodeord": 49,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.439799,
+            "gpslong": 126.694565,
+            "nodeid": "ICB363000171",
+            "nodenm": "신비마을아파트(112동)",
+            "nodeno": 37171,
+            "nodeord": 50,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.442767,
+            "gpslong": 126.692118,
+            "nodeid": "ICB363000200",
+            "nodenm": "관교중학교",
+            "nodeno": 37200,
+            "nodeord": 51,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.444838,
+            "gpslong": 126.694332,
+            "nodeid": "ICB363000248",
+            "nodenm": "동아아파트",
+            "nodeno": 37248,
+            "nodeord": 52,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.445169,
+            "gpslong": 126.695196,
+            "nodeid": "ICB363000252",
+            "nodenm": "삼환1단지아파트",
+            "nodeno": 37252,
+            "nodeord": 53,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": "37.444020",
+            "gpslong": 126.698167,
+            "nodeid": "ICB363000253",
+            "nodenm": "순복음교회",
+            "nodeno": 37253,
+            "nodeord": 54,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.443286,
+            "gpslong": 126.698586,
+            "nodeid": "ICB363000245",
+            "nodenm": "풍림아파트",
+            "nodeno": 37245,
+            "nodeord": 55,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.440633,
+            "gpslong": 126.698186,
+            "nodeid": "ICB363000199",
+            "nodenm": "인명여자고등학교",
+            "nodeno": 37199,
+            "nodeord": 56,
+            "routeid": "ICB365000085",
+            "updowncd": 0
+          },
+          {
+            "gpslati": 37.435524,
+            "gpslong": "126.698110",
+            "nodeid": "ICB364000329",
+            "nodenm": "문학경기장(박태환수영장)",
+            "nodeno": 38329,
+            "nodeord": 57,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.431698,
+            "gpslong": 126.698383,
+            "nodeid": "ICB364000309",
+            "nodenm": "선학체육관(하키경기장)",
+            "nodeno": 38309,
+            "nodeord": 58,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": "37.429260",
+            "gpslong": 126.698794,
+            "nodeid": "ICB364000307",
+            "nodenm": "윤성아파트",
+            "nodeno": 38307,
+            "nodeord": 59,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.427336,
+            "gpslong": 126.698694,
+            "nodeid": "ICB364000305",
+            "nodenm": "선학역",
+            "nodeno": 38305,
+            "nodeord": 60,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.423471,
+            "gpslong": 126.696252,
+            "nodeid": "ICB364000296",
+            "nodenm": "연수병원",
+            "nodeno": 38296,
+            "nodeord": 61,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.422218,
+            "gpslong": 126.693373,
+            "nodeid": "ICB364000290",
+            "nodenm": "연수초등학교",
+            "nodeno": 38290,
+            "nodeord": 62,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": "37.418180",
+            "gpslong": 126.691244,
+            "nodeid": "ICB364000339",
+            "nodenm": "인천적십자병원(풍림아파트)",
+            "nodeno": 38339,
+            "nodeord": 63,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.416675,
+            "gpslong": "126.687970",
+            "nodeid": "ICB364000206",
+            "nodenm": "대우아파트",
+            "nodeno": 38206,
+            "nodeord": 64,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.416018,
+            "gpslong": "126.686360",
+            "nodeid": "ICB364000194",
+            "nodenm": "연수중학교",
+            "nodeno": 38194,
+            "nodeord": 65,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.418642,
+            "gpslong": 126.681763,
+            "nodeid": "ICB364000205",
+            "nodenm": "영남아파트",
+            "nodeno": 38205,
+            "nodeord": 66,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.418689,
+            "gpslong": 126.679767,
+            "nodeid": "ICB364000506",
+            "nodenm": "연수역",
+            "nodeno": 38506,
+            "nodeord": 67,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.420375,
+            "gpslong": 126.680587,
+            "nodeid": "ICB364000214",
+            "nodenm": "문남초등학교",
+            "nodeno": 38214,
+            "nodeord": 68,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.422103,
+            "gpslong": 126.681132,
+            "nodeid": "ICB364000251",
+            "nodenm": "연수1동행정복지센터",
+            "nodeno": 38251,
+            "nodeord": 69,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.422623,
+            "gpslong": 126.679579,
+            "nodeid": "ICB364000252",
+            "nodenm": "우주아파트.인천생활과학고등학교",
+            "nodeno": 38252,
+            "nodeord": 70,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.423101,
+            "gpslong": 126.675443,
+            "nodeid": "ICB364000227",
+            "nodenm": "동남스포피아",
+            "nodeno": 38227,
+            "nodeord": 71,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.420491,
+            "gpslong": 126.671308,
+            "nodeid": "ICB364000192",
+            "nodenm": "용담마을",
+            "nodeno": 38192,
+            "nodeord": 72,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.422245,
+            "gpslong": 126.668511,
+            "nodeid": "ICB364000340",
+            "nodenm": "시대아파트",
+            "nodeno": 38340,
+            "nodeord": 73,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.426185,
+            "gpslong": 126.667621,
+            "nodeid": "ICB364000239",
+            "nodenm": "청학문화센터",
+            "nodeno": 38239,
+            "nodeord": 74,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.426887,
+            "gpslong": 126.665149,
+            "nodeid": "ICB364000341",
+            "nodenm": "청학아파트",
+            "nodeno": 38341,
+            "nodeord": 75,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.427296,
+            "gpslong": 126.661086,
+            "nodeid": "ICB364000225",
+            "nodenm": "안골마을입구",
+            "nodeno": 38225,
+            "nodeord": 76,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.427824,
+            "gpslong": "126.658160",
+            "nodeid": "ICB364000223",
+            "nodenm": "옥련지구대",
+            "nodeno": 38223,
+            "nodeord": 77,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": "37.428400",
+            "gpslong": 126.655208,
+            "nodeid": "ICB364000505",
+            "nodenm": "송도역",
+            "nodeno": 38505,
+            "nodeord": 78,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.429069,
+            "gpslong": 126.652694,
+            "nodeid": "ICB364000219",
+            "nodenm": "옥련고개",
+            "nodeno": 38219,
+            "nodeord": 79,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.430016,
+            "gpslong": "126.649960",
+            "nodeid": "ICB364000584",
+            "nodenm": "서해그랑블.옹암체육센터",
+            "nodeno": 38584,
+            "nodeord": 80,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.426194,
+            "gpslong": 126.644596,
+            "nodeid": "ICB364000342",
+            "nodenm": "현대3차아파트",
+            "nodeno": 38342,
+            "nodeord": 81,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.424269,
+            "gpslong": 126.645185,
+            "nodeid": "ICB364000125",
+            "nodenm": "삼성아파트.남인천농협",
+            "nodeno": 38125,
+            "nodeord": 82,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.424352,
+            "gpslong": 126.647618,
+            "nodeid": "ICB364000143",
+            "nodenm": "우성아파트",
+            "nodeno": 38143,
+            "nodeord": 83,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.424399,
+            "gpslong": 126.650019,
+            "nodeid": "ICB364000154",
+            "nodenm": "한국아파트",
+            "nodeno": 38154,
+            "nodeord": 84,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.425129,
+            "gpslong": 126.652445,
+            "nodeid": "ICB364000178",
+            "nodenm": "쌍용아파트",
+            "nodeno": 38178,
+            "nodeord": 85,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.425645,
+            "gpslong": 126.653461,
+            "nodeid": "ICB364000469",
+            "nodenm": "쌍용아파트",
+            "nodeno": 38469,
+            "nodeord": 86,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.424349,
+            "gpslong": 126.655278,
+            "nodeid": "ICB364000180",
+            "nodenm": "호불사입구",
+            "nodeno": 38180,
+            "nodeord": 87,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.423175,
+            "gpslong": 126.653824,
+            "nodeid": "ICB364000152",
+            "nodenm": "축현초등학교.인천시립박물관",
+            "nodeno": 38152,
+            "nodeord": 88,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.422738,
+            "gpslong": 126.649744,
+            "nodeid": "ICB364000356",
+            "nodenm": "우성2차아파트(옥련동)",
+            "nodeno": 38356,
+            "nodeord": 89,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.421817,
+            "gpslong": 126.646248,
+            "nodeid": "ICB364000328",
+            "nodenm": "백산아파트",
+            "nodeno": 38328,
+            "nodeord": 90,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.417241,
+            "gpslong": 126.650141,
+            "nodeid": "ICB364000081",
+            "nodenm": "송도유원지(한국도로교통공단)",
+            "nodeno": 38081,
+            "nodeord": 91,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.412392,
+            "gpslong": 126.653829,
+            "nodeid": "ICB364000065",
+            "nodenm": "송도라마다호텔앞",
+            "nodeno": 38065,
+            "nodeord": 92,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.408895,
+            "gpslong": 126.657375,
+            "nodeid": "ICB364000680",
+            "nodenm": "새봄초등학교.송도파크레인(후문)",
+            "nodeno": 38678,
+            "nodeord": 93,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.411841,
+            "gpslong": 126.657784,
+            "nodeid": "ICB364000682",
+            "nodenm": "송도동일하이빌파크포레아파트",
+            "nodeno": 38680,
+            "nodeord": 94,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.412761,
+            "gpslong": 126.660637,
+            "nodeid": "ICB364000079",
+            "nodenm": "복지회관",
+            "nodeno": 38079,
+            "nodeord": 95,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.412132,
+            "gpslong": 126.664449,
+            "nodeid": "ICB364000084",
+            "nodenm": "여성의광장",
+            "nodeno": 38084,
+            "nodeord": 96,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.411055,
+            "gpslong": 126.667622,
+            "nodeid": "ICB364000083",
+            "nodenm": "태평아파트",
+            "nodeno": 38083,
+            "nodeord": 97,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.407686,
+            "gpslong": 126.669995,
+            "nodeid": "ICB364000069",
+            "nodenm": "건영아파트.나사렛국제병원",
+            "nodeno": 38069,
+            "nodeord": 98,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": "37.404970",
+            "gpslong": 126.669755,
+            "nodeid": "ICB364000345",
+            "nodenm": "동춘대동아파트",
+            "nodeno": 38345,
+            "nodeord": 99,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.403564,
+            "gpslong": 126.669669,
+            "nodeid": "ICB364000051",
+            "nodenm": "아주아파트",
+            "nodeno": 38051,
+            "nodeord": 100,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          },
+          {
+            "gpslati": 37.400505,
+            "gpslong": 126.669386,
+            "nodeid": "ICB364000337",
+            "nodenm": "동남아파트(무지개아파트)",
+            "nodeno": 38337,
+            "nodeord": 101,
+            "routeid": "ICB365000085",
+            "updowncd": 1
+          }
+        ]
+      },
+      "numOfRows": 500,
+      "pageNo": 1,
+      "totalCount": 101
+    }
+  }
+}

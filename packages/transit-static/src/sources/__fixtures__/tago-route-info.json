@@ -1,0 +1,19 @@
+{
+  "response": {
+    "header": { "resultCode": "00", "resultMsg": "NORMAL SERVICE." },
+    "body": {
+      "items": {
+        "item": {
+          "endnodenm": "인명여자고등학교",
+          "endvehicletime": 2300,
+          "intervaltime": 15,
+          "routeid": "ICB365000085",
+          "routeno": 523,
+          "routetp": "지선버스",
+          "startnodenm": "기점(미정차)_동춘동차고지",
+          "startvehicletime": "0440"
+        }
+      }
+    }
+  }
+}

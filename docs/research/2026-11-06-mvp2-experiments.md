@@ -160,6 +160,65 @@ TAGO는 서울 API와 같은 차량 좌표를 조금 늦게, 일부는 건너뛰
 - **"몇 정거장 전"**: 두 출처 모두 정류장 순번(서울 `sectOrd`, TAGO `nodeord`)과 좌표가 있어 지금 서울 버스와 같은 방식으로 계산할 수 있다. 위치가 약 1분 간격이므로, 지도 보간은 1분 간격을 전제로 맞춘다.
 - **도착 예측**: 서울 정류장은 서울 API로만 받을 수 있다. TAGO는 서울 정류장에서 0건이다.
 
+### 5-A 확인(2026-11-20)
+
+경기 GBIS와 인천 TAGO의 정적 응답을 개발 계정 키로 받아 `packages/transit-static/src/sources/__fixtures__/`에 남겼다. 호출은 모두 30건이다(GBIS 20, TAGO 10. 인증 실패 확인 2건 포함). 스크립트는 `packages/transit-static/scripts/probe-regional-bus.ts`다. 응답 원문에는 키가 없다. 자료는 값을 바꾸지 않고 biome 서식(들여쓰기)만 맞췄다.
+
+**오퍼레이션과 필드**
+
+| 출처 | 오퍼레이션 | 비고 |
+|---|---|---|
+| GBIS | `busrouteservice/v2/getBusRouteListv2?keyword=` | `response.msgBody.busRouteList[]`: `routeId`(정수), `routeName`, `routeTypeCd`, `routeTypeName`, `regionName`, `adminName`, `districtCd`, `startStationId/Name`, `endStationId/Name`. 페이지 나누기 없이 한 번에 온다(검색어 `1`이 586건) |
+| GBIS | `getBusRouteInfoItemv2?routeId=` | `response.msgBody.busRouteInfoItem`(객체 하나). 위 필드에 `peekAlloc`, `nPeekAlloc`, `upFirstTime`, `upLastTime`, `downFirstTime`, `downLastTime`, `turnStID/turnStNm`, `companyName` |
+| GBIS | `getBusRouteStationListv2?routeId=` | `response.msgBody.busRouteStationList[]`: `stationId`, `stationSeq`, `stationName`, `x`(경도), `y`(위도), `mobileNo`, `turnSeq`, `turnYn`, `regionName` |
+| TAGO | `BusRouteInfoInqireService/getRouteNoList?cityCode=23&numOfRows=3000` | `response.body.items.item[]`: `routeid`, `routeno`, `routetp`, `startnodenm`, `endnodenm`, `startvehicletime`, `endvehicletime`. 인천 363건이 한 번에 온다(`totalCount` 363) |
+| TAGO | `getRouteInfoIem?routeId=` | `response.body.items.item`(객체 하나). 목록 필드에 `intervaltime`(분)이 더해진다 |
+| TAGO | `getRouteAcctoThrghSttnList?routeId=&numOfRows=500` | `item[]`: `nodeid`, `nodeno`, `nodenm`, `nodeord`, `gpslati`, `gpslong`, `updowncd`, `routeid` |
+
+- 서비스키 인자는 둘 다 `serviceKey`다. GBIS는 `format=json`, TAGO는 `_type=json`과 `cityCode`를 붙인다. GBIS 정상 응답은 `msgHeader.resultCode`가 0, TAGO는 `header.resultCode`가 `"00"`이다.
+- 값의 모양이 섞여 있다. GBIS 목록의 `routeName`은 숫자(`11`)와 문자열(`"11-1"`, `"11(학통등교)"`)이 섞여 오고, 노선 정보의 `routeName`은 `"011"`처럼 앞의 0이 남는다. 목록 값은 문자열로 바꿔 쓰되 노선 정보 값이 있으면 그쪽이 낫다. GBIS `mobileNo`는 앞에 공백이 붙는다(`" 19012"`). TAGO `gpslati`/`gpslong`/`routeno`/`endvehicletime`은 숫자와 문자열이 섞인다(`"0440"`과 `2300`). TAGO 응답은 항목이 하나여도 목록이 아닐 수 있으므로(노선 정보는 객체) 배열로 감싸는 처리가 필요하다.
+- GBIS `x`는 경도, `y`는 위도다.
+
+**GBIS 노선유형 코드**(매뉴얼 `mBusRoute`와 응답 일치)
+
+| 코드 | 이름 | 5-A 범위 |
+|---|---|---|
+| 11 | 직행좌석형시내버스 | 포함 |
+| 12 | 좌석형시내버스 | 포함 |
+| 13 | 일반형시내버스 | 포함 |
+| 14 | 광역급행형시내버스 | 포함 |
+| 15 | 따복형시내버스 | 포함(응답에서는 못 봄) |
+| 16 | 경기순환버스 | 포함(응답에서는 못 봄) |
+| 21 | 직행좌석형농어촌버스 | 포함 |
+| 22 | 좌석형농어촌버스 | 포함(응답에서는 못 봄) |
+| 23 | 일반형농어촌버스 | 포함 |
+| 30 | 마을버스 | 포함 |
+| 41 | 고속형시외버스 | 제외 |
+| 42 | 좌석형시외버스 | 제외 |
+| 43 | 일반형시외버스 | 제외(응답에서 봄, 34건 겹침 포함) |
+| 51 | 리무진형 공항버스 | 제외 |
+| 52 | 좌석형 공항버스 | 제외 |
+| 53 | 일반형 공항버스 | 제외 |
+
+**`regionName`**: 쉼표로 이어 붙인 시·군 이름이다(`구리,남양주,서울,포천`, `고양,서울`, `안양,의왕`). 공백 없이 쉼표 하나다. 서울이 들어 있을 수 있다. 계획 판단 5대로 첫 시·군을 지역 이름으로 쓴다. 표본에서는 서울이 항상 뒤에 있었으나 첫 항목이 `서울`인 노선이 없다는 보장은 못 얻었다. 노선 정보와 정류소 응답의 `regionName`은 단일 시·군(`고양`, `용인`)이다. `adminName`(`경기도 고양시`)이 따로 있다.
+
+**배차간격·첫차·막차**(노선 정보, 단위는 분과 `HH:MM`)
+- GBIS: 평일 `peekAlloc`(출퇴근 시간대), `nPeekAlloc`(그 밖), 토요일 `satPeekAlloc`/`satNPeekAlloc`, 일요일 `sunPeekAlloc`/`sunNPeekAlloc`. 첫차·막차는 `upFirstTime`/`upLastTime`(기점→종점), `downFirstTime`/`downLastTime`, 토 `sat…`, 일 `sun…`. 011번은 평일 10분과 25분, 첫차 06:00, 막차 22:40이었다. `nightAlloc`은 0이었다.
+- TAGO: 배차간격은 노선 정보의 `intervaltime`(분) 하나뿐이고 요일 구분이 없다. 첫차·막차는 목록과 노선 정보의 `startvehicletime`, `endvehicletime`(`"0440"`, `2300`, `"0000"`; 막차 `0000`은 자정이다). 방향별 구분은 없다.
+
+**에러 봉투**
+- 인증 실패는 실제로 받았다(TAGO, GBIS 같음). HTTP 403, 본문은 `{"OpenAPI_ServiceResponse":{"cmmMsgHeader":{"errMsg":"SERVICE_KEY_IS_NOT_REGISTERED_ERROR","returnAuthMsg":"등록되지 않은 서비스키","returnReasonCode":"30"}}}`다(`_type=json`/`format=json`을 줘도 이 봉투다). 자료는 `tago-error-auth.json`.
+- 한도 초과는 일으키지 않았다. `gbis-error-quota.json`은 data.go.kr 게이트웨이의 같은 봉투에 `returnAuthMsg` `LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR`, `returnReasonCode` `22`를 넣어 **만든 것**이다. HTTP 상태는 확인하지 못했다(자료에는 200으로 적었다).
+- GBIS 앱 수준 오류는 `msgHeader.resultCode`로 온다(매뉴얼: 0 정상, 1 시스템 에러, 2 필수 파라미터 없음, 4 결과 없음). 없는 `routeId`에 대한 실제 응답은 받지 못했다(확인 호출이 셸 오류로 출력되지 못했고 호출 한도에 이르렀다).
+
+**노선 목록 검색어**: GBIS 검색은 노선 이름에 키워드가 들어 있으면 나온다(부분 일치. `11`이 `1100`도 찾는다). `0`–`9`, `M`, `G`, `N`, `P` 열네 개로 호출하면 겹침을 뺀 노선이 **3,036개**다(계획이 본 약 2,200개보다 많다). 검색어별 건수는 0:196, 1:586, 2:417, 3:420, 4:103, 5:293, 6:174, 7:250, 8:273, 9:321, M:61, G:40, N:37, P:56이다. 숫자가 없는 노선은 이 검색어로 안 잡힌다. 겹침을 뺀 유형별 건수는 남기지 못했다(검색어별 건수 합으로만 봄). 시외·공항(43, 51, 52, 53)이 들어 있어 제외 뒤 수는 이보다 적다. 하루 한도 950건이면 노선 정보와 경유 정류소를 각각 받는 데 나흘이 걸린다.
+
+**TAGO 인천 중 서울에 들어오는 노선을 가려내는 규칙**
+- 서울 `busRouteId`와 같은 노선이다: TAGO `routeid`가 `ICB` + 숫자라면, 첫 자리에서 2를 빼고 나머지를 붙인 값(`ICB365000215` → `165000215`)이 서울 노선 목록에 있으면 서울 노선이다. 인천 363개 중 38개가 맞았다(광역 1000·1100·9100번대, `M6450` 같은 `M` 노선, `60-5`, `86`, `78`, `117`, `931`, `3000` 등). 서울 쪽 이름은 `M6450인천`처럼 `인천`이 붙는다.
+- 계획이 제안한 정류장 열 규칙(경유 `nodeid`를 `ICB` 역변환한 열이 서울 노선의 `stId` 열과 같다)은 완전히 같지 않았다. 표본 5개 서울행 노선은 정류장이 전부 맞았지만(46/46, 45/45, 29/29, 31/31), `M6458`은 33개 중 31개만 맞았다(인천 쪽에만 있는 정류장). 서울에 없는 급행91은 80개 중 24개가 다른 서울 노선의 정류장과 겹쳤다. 열이 완전히 같은 것만 서울 노선으로 보면 `M6458`을 놓친다.
+- 그래서 5-A는 노선 ID 규칙으로 버린다. 정류장 역변환은 `ICB` 뒤 첫 자리가 2 이상일 때만 한다(`ICB1…`로 시작하는 인천 노선이 있어 뺀 값이 음수가 된다).
+- 같은 이름의 서울 노선이 없는데 인천 정류장만 서울 정류장과 겹치는 노선(급행91)은 서울 노선이 아니므로 그대로 TAGO로 둔다.
+
 ## 2. APNs 발송 경로
 
 실험일: 2026-11-09(월) 18:10~18:50 KST. 실험 코드는 로컬 브랜치 `spike/mvp2-apns`(병합·push 안 함)에 있다.
