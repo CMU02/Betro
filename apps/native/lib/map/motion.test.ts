@@ -420,6 +420,45 @@ describe("bus", () => {
 	});
 });
 
+it("holds instead of re-anchoring when an observation slips back less than two intervals", () => {
+	const start = first(
+		point({ distanceM: 1000, intervalM: 300, nextStopDistanceM: 1300 })
+	);
+	const slipped = observe(
+		start,
+		point({
+			distanceM: 750,
+			intervalM: 300,
+			nextStopDistanceM: 1000,
+			observedAt: sec(30),
+		})
+	);
+	expect(slipped.violation).toBeNull();
+	expect(positionAt(slipped.state, sec(30))).toBeCloseTo(1000);
+	expect(positionAt(slipped.state, sec(120))).toBeCloseTo(1000);
+});
+
+it("stays continuous when an update arrives in the middle of a catch-up", () => {
+	const start = first(point({ distanceM: 0, nextStopDistanceM: 2000 }));
+	const catching = observe(
+		start,
+		point({ distanceM: 1000, nextStopDistanceM: 2000, observedAt: sec(100) })
+	);
+	const midway = sec(100 + CATCH_UP_SEC / 2);
+	const shownMidway = positionAt(catching.state, midway);
+	expect(shownMidway).toBeGreaterThan(0);
+	expect(shownMidway).toBeLessThan(1000);
+	const again = observe(
+		catching.state,
+		// 4초에 40m(10m/s)라 실제로 갈 수 있는 거리다.
+		point({ distanceM: 1040, nextStopDistanceM: 2000, observedAt: sec(104) }),
+		midway
+	);
+	expect(again.violation).toBeNull();
+	expect(positionAt(again.state, midway)).toBeCloseTo(shownMidway);
+	expect(positionAt(again.state, midway + 60_000)).toBeGreaterThanOrEqual(1040);
+});
+
 it("re-anchors a short route's new run instead of freezing at the terminus", () => {
 	// 4km 남짓한 마을버스가 종점(4000m)에 있다가 같은 차량 번호로 처음(50m)부터 다시 돈다.
 	const atTerminus = first(
