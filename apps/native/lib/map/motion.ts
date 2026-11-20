@@ -9,6 +9,8 @@ import type {
  * 차량을 노선 선을 따라 앞으로만 움직인다(지도 설계 4.4).
  * - 관측 하나를 노선 위 거리(`TrackPoint`)로 바꾸고, 관측 사이를 속도로 보간한다.
  * - 외삽은 아직 도착이 관측되지 않은 다음 정류장(역)을 넘지 않는다.
+ * - 앞선 관측을 받으면 표시를 그 자리로 옮기지 않고 `CATCH_UP_SEC` 동안 따라잡는다. dev의 느린 갱신(서울 버스 160초)은
+ *   갱신마다 두세 구간씩 앞서 있어서, 그대로 옮기면 거의 모든 갱신이 순간이동이 된다.
  * - 새 관측을 받은 순간 표시 위치가 뒤로 가거나 정류장 한 구간 이상 앞으로 뛰면 7.2 위반이다.
  */
 
@@ -23,11 +25,22 @@ const MS_PER_SEC = 1000;
 /** 버스 속도 추정의 상한(m/s, 약 90km/h). GPS가 튄 두 관측으로 터무니없는 속도를 내지 않게 한다. */
 const MAX_ESTIMATED_SPEED_MPS = 25;
 /**
- * 관측이 표시 위치보다 이만큼 넘게 뒤면 새 운행(같은 차량 번호로 처음부터 다시 도는 버스)이나
- * 2호선 순환 이음매로 보고 그 자리에서 다시 시작한다. 외삽이 앞서간 거리는 한 구간을 넘지 않으므로
- * 그보다 넉넉히 크게 둔다.
+ * 관측이 직전 관측보다 크게 뒤면 새 운행(같은 차량 번호로 처음부터 다시 도는 버스)이나
+ * 2호선 순환 이음매로 보고 그 자리에서 다시 시작한다. 직전 관측과 견주므로 외삽이 앞서간 거리는 들지 않는다.
+ * 기준은 구간 길이의 `REANCHOR_BEHIND_INTERVALS`배다. 짧은 마을버스 노선에서도 새 운행을 알아보도록
+ * `REANCHOR_BEHIND_MAX_M`을 넘지 않고, 붙어 있는 정류장에서 위치가 조금 흔들린 것으로 다시 시작하지 않도록
+ * `REANCHOR_BEHIND_MIN_M`보다 작지 않다. 구간 길이를 모르면 `REANCHOR_BEHIND_MAX_M`이다.
  */
-const REANCHOR_BEHIND_M = 5000;
+const REANCHOR_BEHIND_INTERVALS = 2;
+const REANCHOR_BEHIND_MIN_M = 500;
+const REANCHOR_BEHIND_MAX_M = 5000;
+/** 앞선 관측을 따라잡는 시간(초). 이 시간에 걸쳐 고르게 앞당겨서 받은 순간 표시가 뛰지 않는다. */
+export const CATCH_UP_SEC = 10;
+/**
+ * 직전 관측에서 이 속도(m/s)로 갈 수 있는 거리까지만 따라잡는다. 그보다 먼 관측은 실제 이동으로 설명되지 않는
+ * 자료 이상이라 그 자리로 옮기고, 한 구간 이상이면 순간이동으로 센다.
+ */
+const MAX_CATCH_UP_SPEED_MPS = MAX_ESTIMATED_SPEED_MPS;
 /** 정류장(역) 좌표를 선에 투영할 때, 이 거리 안에 처음 닿는 곳을 그 정류장 자리로 본다. */
 const STOP_SNAP_M = 80;
 /** 두 상한(다음 정류장 거리)이 이만큼 안이면 같은 정류장으로 본다. */
@@ -48,6 +61,8 @@ export interface TrackPoint {
 export interface MotionState {
 	/** `shownDistanceM`을 정한 시각. 보간의 경과 시간은 여기서 잰다. */
 	anchorAt: number;
+	/** 앵커 시점에 표시가 관측(외삽 포함)보다 뒤처진 거리. `CATCH_UP_SEC` 동안 고르게 따라잡는다. 보통은 0. */
+	catchUpM: number;
 	ceilingM: number | null;
 	lastObservedAt: number;
 	/** 마지막 관측의 노선 위 거리. 다음 관측과 함께 속도를 낸다. */
@@ -59,10 +74,15 @@ export interface MotionState {
 
 export type MotionViolation = "backward" | "jump";
 
-/** 표시 위치. 앵커에서 속도로 나아가되 상한(다음 정류장)을 넘지 않고, 절대 줄지 않는다. */
+/**
+ * 표시 위치. 앵커에서 속도로 나아가며 뒤처진 거리를 `CATCH_UP_SEC` 동안 따라잡되,
+ * 상한(다음 정류장)을 넘지 않고 절대 줄지 않는다.
+ */
 export function positionAt(state: MotionState, nowMs: number): number {
 	const elapsedSec = Math.max(0, nowMs - state.anchorAt) / MS_PER_SEC;
-	const extrapolated = state.shownDistanceM + state.speedMps * elapsedSec;
+	const caughtUp = state.catchUpM * Math.min(1, elapsedSec / CATCH_UP_SEC);
+	const extrapolated =
+		state.shownDistanceM + state.speedMps * elapsedSec + caughtUp;
 	return Math.max(
 		state.shownDistanceM,
 		Math.min(extrapolated, state.ceilingM ?? Number.POSITIVE_INFINITY)
@@ -76,6 +96,7 @@ function startAt(
 ): MotionState {
 	const fresh: MotionState = {
 		anchorAt: point.observedAt,
+		catchUpM: 0,
 		ceilingM: point.nextStopDistanceM,
 		lastObservedAt: point.observedAt,
 		observedDistanceM: point.distanceM,
@@ -101,12 +122,33 @@ function speedFor(state: MotionState | null, point: TrackPoint): number {
 	return Math.min(Math.max(0, estimate), MAX_ESTIMATED_SPEED_MPS);
 }
 
+function reanchorBehindM(point: TrackPoint): number {
+	if (point.intervalM === null || point.intervalM <= 0) {
+		return REANCHOR_BEHIND_MAX_M;
+	}
+	return Math.min(
+		REANCHOR_BEHIND_MAX_M,
+		Math.max(REANCHOR_BEHIND_MIN_M, REANCHOR_BEHIND_INTERVALS * point.intervalM)
+	);
+}
+
+/** 직전 관측에서 이번 관측까지 실제로 달려서 갈 수 있는 거리인가. */
+function reachableSinceLast(state: MotionState, point: TrackPoint): boolean {
+	const dtSec = (point.observedAt - state.lastObservedAt) / MS_PER_SEC;
+	return (
+		point.distanceM - state.observedDistanceM <= MAX_CATCH_UP_SPEED_MPS * dtSec
+	);
+}
+
 /**
  * 새 관측을 반영한다. `nowMs`는 관측을 받은 시각이고, 위반은 그 순간 표시 위치가 바뀐 결과로 판단한다.
  * - 같거나 더 오래된 관측(수집기가 못 본 차량을 남겨 둔 것)은 갱신이 아니다. 같은 `state`를 그대로 돌려준다.
  *   호출부는 `state`가 바뀐 경우만 지표에 센다.
+ * - 직전 관측보다 크게 뒤면(`reanchorBehindM`) 새 운행으로 보고 그 자리에서 다시 시작한다. 위반으로 세지 않는다.
  * - 뒤에 있는 관측이면 표시 위치를 두고 멈춘다. 표시는 그대로라 위반이 아니다.
- * - 정류장 한 구간 이상 앞으로 뛰면 `jump`. 표시 위치는 앞으로만 가므로 `backward`는 이 함수에서 나오지 않는다.
+ * - 앞선 관측은 받은 순간 표시를 그대로 두고 `CATCH_UP_SEC` 동안 따라잡는다. 상한은 새 다음 정류장으로 올린다.
+ * - 직전 관측에서 갈 수 없는 거리면 그 자리로 옮기고, 정류장 한 구간 이상 앞으로 뛰었으면 `jump`.
+ *   표시 위치는 앞으로만 가므로 `backward`는 이 함수에서 나오지 않는다.
  */
 export function observe(
 	state: MotionState | null,
@@ -121,10 +163,10 @@ export function observe(
 	if (state === null) {
 		return { state: next, violation: null };
 	}
-	const before = positionAt(state, atMs);
-	if (before - next.shownDistanceM > REANCHOR_BEHIND_M) {
+	if (state.observedDistanceM - point.distanceM > reanchorBehindM(point)) {
 		return { state: next, violation: null };
 	}
+	const before = positionAt(state, atMs);
 	if (next.shownDistanceM < before) {
 		// 시간표 속도가 있는 관측(지하철 역 단위 위치)은 같은 구간에서 하한일 뿐이라 진행을 이어 간다.
 		// 그 밖에는 표시를 두고 멈춰서 다음 관측을 기다린다.
@@ -136,11 +178,22 @@ export function observe(
 		return {
 			state: {
 				anchorAt: atMs,
+				catchUpM: 0,
 				ceilingM: state.ceilingM,
 				lastObservedAt: point.observedAt,
 				observedDistanceM: point.distanceM,
 				shownDistanceM: before,
 				speedMps: sameScheduledInterval ? next.speedMps : 0,
+			},
+			violation: null,
+		};
+	}
+	if (reachableSinceLast(state, point)) {
+		return {
+			state: {
+				...next,
+				catchUpM: next.shownDistanceM - before,
+				shownDistanceM: before,
 			},
 			violation: null,
 		};

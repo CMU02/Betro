@@ -7,6 +7,7 @@ import type {
 } from "./map-client";
 import {
 	busTrackPoint,
+	CATCH_UP_SEC,
 	createBusTrack,
 	createSubwayTrack,
 	type MotionState,
@@ -66,7 +67,13 @@ it("never moves backward when a new observation is behind the shown position", (
 		point({ distanceM: 650, nextStopDistanceM: 1000, observedAt: sec(80) })
 	);
 	expect(ahead.violation).toBeNull();
-	expect(positionAt(ahead.state, sec(80))).toBeCloseTo(650);
+	// 받은 순간에는 그대로이고, CATCH_UP_SEC 동안 관측 자리(그 뒤 외삽 포함)까지 따라잡는다.
+	expect(positionAt(ahead.state, sec(80))).toBeCloseTo(500);
+	// 속도는 직전 두 관측(300m → 650m, 30초)으로 낸다.
+	const speedMps = 350 / 30;
+	expect(positionAt(ahead.state, sec(80 + CATCH_UP_SEC))).toBeCloseTo(
+		650 + speedMps * CATCH_UP_SEC
+	);
 });
 
 it("does not extrapolate past the next unobserved stop", () => {
@@ -341,6 +348,105 @@ describe("bus", () => {
 	it("has no track without a shape", () => {
 		expect(createBusTrack({ ...map, shape: [] })).toBeNull();
 	});
+
+	it("catches up smoothly when a slow dev update lands stops ahead", () => {
+		// dev 서울 버스: 160초마다, 20초 늦게 받는다. 5m/s로 400m 간격 정류장을 지나므로 갱신마다 두 구간쯤 앞선다.
+		const spacing = 400;
+		const stopCount = 30;
+		const speedMps = 5;
+		const cadenceSec = 160;
+		const latencySec = 20;
+		const sampleSec = 5;
+		const settleSec = 30;
+		const routeM = spacing * stopCount;
+		const route: BusMap = {
+			batchId: 1,
+			line: "seoul-bus:R2",
+			shape: Array.from({ length: stopCount * 4 + 1 }, (_, i) =>
+				east((i * routeM) / (stopCount * 4))
+			),
+			stops: Array.from({ length: stopCount + 1 }, (_, i) => ({
+				arsId: null,
+				lat: LAT + 0.0001,
+				lng: east(i * spacing)[0],
+				name: `${i}`,
+				seq: i + 1,
+				stop: `seoul-bus:S${i}`,
+			})),
+		};
+		const track = createBusTrack(route);
+		expect(track).not.toBeNull();
+		if (!track) {
+			return;
+		}
+		let state: MotionState | null = null;
+		let shown = 0;
+		let updates = 0;
+		for (let t = 0; speedMps * t < routeM - spacing; t += cadenceSec) {
+			const meters = speedMps * t;
+			const p = busTrackPoint(track, {
+				...bus(Math.floor(meters / spacing) + 1, meters),
+				observedAt: sec(t),
+			});
+			expect(p).not.toBeNull();
+			if (!p) {
+				return;
+			}
+			const receivedAt = sec(t + latencySec);
+			const result = observe(state, p, receivedAt);
+			expect(result.violation).toBeNull();
+			if (state !== null) {
+				updates += 1;
+				// 받은 순간 표시 위치는 그대로다. 그 뒤로 따라잡는다.
+				expect(positionAt(result.state, receivedAt)).toBeCloseTo(
+					positionAt(state, receivedAt)
+				);
+			}
+			({ state } = result);
+			for (let s = 0; s <= cadenceSec; s += sampleSec) {
+				const at = positionAt(state, receivedAt + s * 1000);
+				expect(at).toBeGreaterThanOrEqual(shown - 1e-6);
+				expect(at).toBeLessThanOrEqual(
+					(state.ceilingM ?? Number.POSITIVE_INFINITY) + 1e-6
+				);
+				shown = at;
+			}
+			// 멈춰 있지 않고 관측 자리까지 따라잡는다.
+			expect(
+				positionAt(state, receivedAt + settleSec * 1000)
+			).toBeGreaterThanOrEqual(p.distanceM - 1e-6);
+		}
+		expect(updates).toBeGreaterThan(10);
+	});
+});
+
+it("re-anchors a short route's new run instead of freezing at the terminus", () => {
+	// 4km 남짓한 마을버스가 종점(4000m)에 있다가 같은 차량 번호로 처음(50m)부터 다시 돈다.
+	const atTerminus = first(
+		point({ distanceM: 4000, intervalM: 300, nextStopDistanceM: 4100 })
+	);
+	const restarted = observe(
+		atTerminus,
+		point({
+			distanceM: 50,
+			intervalM: 300,
+			nextStopDistanceM: 300,
+			observedAt: sec(60),
+		})
+	);
+	expect(restarted.violation).toBeNull();
+	expect(positionAt(restarted.state, sec(60))).toBeCloseTo(50);
+	const moving = observe(
+		restarted.state,
+		point({
+			distanceM: 400,
+			intervalM: 300,
+			nextStopDistanceM: 600,
+			observedAt: sec(120),
+		})
+	);
+	expect(moving.violation).toBeNull();
+	expect(positionAt(moving.state, sec(180))).toBeGreaterThanOrEqual(400);
 });
 
 it("pointAlong walks the shape in metres with an east bearing and clamps both ends", () => {
