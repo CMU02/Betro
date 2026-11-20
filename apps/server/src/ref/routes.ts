@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { currentBusBatch, findBusRouteStops, searchBusRoutes } from "./bus";
 import { stripBusPrefix, stripSubwayPrefix } from "./ids";
 import { ifNoneMatchMatches } from "./if-none-match";
+import { createMapRefRoutes } from "./map";
 import {
 	currentTrackBatch,
 	findDirection,
@@ -129,6 +130,8 @@ export function createRefRoutes(db: Database): Hono {
 		}
 		return c.json(found.result, 200, subwayHeaders(found.batchId));
 	});
+
+	routes.route("/map", createMapRefRoutes(db));
 
 	return routes;
 }
