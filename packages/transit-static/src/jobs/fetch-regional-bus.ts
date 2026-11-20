@@ -315,7 +315,7 @@ async function loadRouteList(
 	options: FetchRegionalOptions,
 	today: string,
 	now: Date
-): Promise<RegionalRouteRow[] | undefined> {
+): Promise<{ complete: boolean; routes: RegionalRouteRow[] } | undefined> {
 	const { dataDir, source } = options;
 	const listSource = STEP_SOURCE(source, "list");
 	const terms =
@@ -323,6 +323,7 @@ async function loadRouteList(
 		(source === "gbis" ? GBIS_TERMS : [TAGO_INCHEON_CITY_CODE]);
 	const parse = listParser(source);
 	const byId = new Map<string, RegionalRouteRow>();
+	let complete = true;
 	for (const term of terms) {
 		// biome-ignore lint/performance/noAwaitInLoops: 호출 사이에 쉬며 순서대로 부른다
 		let text = await findFreshListRaw(dataDir, listSource, term, now);
@@ -333,6 +334,7 @@ async function loadRouteList(
 			}
 			if (!outcome.ok) {
 				if (fetcher.handleFailure(outcome.reason)) {
+					complete = false;
 					continue;
 				}
 				return undefined;
@@ -347,7 +349,7 @@ async function loadRouteList(
 			}
 		}
 	}
-	return [...byId.values()];
+	return { complete, routes: [...byId.values()] };
 }
 
 function inScope(source: RegionalSource, row: RegionalRouteRow): boolean {
@@ -430,18 +432,23 @@ export async function fetchRegionalRoutes(
 	const now = (options.now ?? (() => new Date()))();
 	const today = utcDate(now);
 	const fetcher = new RegionalFetcher(options);
-	const routes = await loadRouteList(fetcher, options, today, now);
-	if (routes === undefined) {
+	const list = await loadRouteList(fetcher, options, today, now);
+	if (list === undefined) {
 		return fetcher.finish();
 	}
+	const { complete, routes } = list;
 	fetcher.result.routes = routes.length;
-	const merged = rawPath(
-		options.dataDir,
-		STEP_SOURCE(options.source, "list"),
-		`${today}/${REGIONAL_ROUTES_FILE}`
-	);
-	await mkdir(dirname(merged), { recursive: true });
-	await writeFile(merged, `${JSON.stringify(routes)}\n`);
+	// 검색어가 하나라도 빠진 목록을 합친 목록으로 남기면, build가 그 검색어의 노선을 모른 채
+	// 적재 비율을 재서 빠진 노선이 숨는다. 빠졌으면 이전의 온전한 목록을 그대로 둔다.
+	if (complete) {
+		const merged = rawPath(
+			options.dataDir,
+			STEP_SOURCE(options.source, "list"),
+			`${today}/${REGIONAL_ROUTES_FILE}`
+		);
+		await mkdir(dirname(merged), { recursive: true });
+		await writeFile(merged, `${JSON.stringify(routes)}\n`);
+	}
 	await fetchRouteDetails(fetcher, options, routes);
 	return fetcher.finish();
 }

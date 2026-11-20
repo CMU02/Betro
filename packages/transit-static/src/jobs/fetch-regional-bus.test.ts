@@ -116,6 +116,28 @@ describe("fetchRegionalRoutes (gbis)", () => {
 		});
 	});
 
+	it("검색어 하나라도 일시 오류면 합친 목록을 쓰지 않아 빠진 노선이 적재 비율에 숨지 않는다", async () => {
+		await withTempDir(async (dataDir) => {
+			const routes = gbisList([{ id: 1, type: 13 }]);
+			const fake = fakeFetch((url) =>
+				url.searchParams.get("keyword") === "3"
+					? "<html>temporary</html>"
+					: gbisResponder(url, routes)
+			);
+			const result = await fetchRegionalRoutes({
+				dataDir,
+				fetchImpl: fake.fetchImpl,
+				key: TEST_KEY,
+				now: () => NOW,
+				sleep: noSleep,
+				source: "gbis",
+			});
+			expect(result.ok).toBe(false);
+			const listDir = join(dataDir, "raw", "gbis-route-list", "2026-11-21");
+			expect(await readdir(listDir)).not.toContain("routes.json");
+		});
+	});
+
 	it("이미 원본이 있는 노선과 목록은 다시 부르지 않는다", async () => {
 		await withTempDir(async (dataDir) => {
 			const routes = gbisList([{ id: 1, type: 13 }]);
