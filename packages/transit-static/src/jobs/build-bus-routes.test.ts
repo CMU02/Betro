@@ -322,6 +322,45 @@ describe("buildBusRoutes", () => {
 			]);
 		});
 
+		it("서울 목록에 있지만 서울 조립에서 빠진 노선도 GBIS 쪽을 버린다", async () => {
+			const excluded = {
+				maxSeq: 10,
+				routeId: "234000016",
+				routeName: "7007-1",
+				stopCount: 10,
+			};
+			const notFound = JSON.stringify({
+				msgBody: { itemList: null },
+				msgHeader: { headerCd: "4", headerMsg: "결과가 없습니다." },
+			});
+			await putRegional(
+				"bus-route-stations",
+				`${excluded.routeId}.json`,
+				notFound
+			);
+			await putRegional("bus-route-path", `${excluded.routeId}.json`, notFound);
+			await putGbisList([gbisRow(excluded.routeId)]);
+			await putGbisRoute(excluded.routeId);
+			const result = await buildBusRoutes({
+				dataDir,
+				db: await createTestDb(),
+				dryRun: true,
+				routes: [ROUTE, excluded],
+			});
+			const summary = JSON.parse(await readFile(result.jsonPath, "utf8"));
+			expect(
+				summary.excluded.map((route: { routeId: string }) => route.routeId)
+			).toEqual([excluded.routeId]);
+			expect(summary.regional.gbis).toMatchObject({
+				duplicates: 1,
+				inScope: 0,
+				loadable: 0,
+			});
+			expect(
+				summary.routes.map((route: { source: string }) => route.source)
+			).toEqual(["seoul"]);
+		});
+
 		it("적재 가능 비율이 90% 미만이면 적재하지 않는다", async () => {
 			await putGbisList([gbisRow(GBIS_ID), gbisRow("241308702")]);
 			await putGbisRoute(GBIS_ID);

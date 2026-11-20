@@ -347,6 +347,7 @@ export function assembleRegionalSource({
 }: {
 	raws: ReadonlyMap<string, RegionalRouteRaw>;
 	routes: readonly RegionalRouteRow[];
+	/** 서울 노선 목록(엑셀 ∪ 7·8)의 ID. 서울 조립에서 빠진 노선도 넣는다. */
 	seoulRouteIds: ReadonlySet<string>;
 	source: RegionalBusSource;
 }): RegionalSourceResult {

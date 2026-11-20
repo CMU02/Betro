@@ -358,10 +358,12 @@ export async function buildBusRoutes({
 			readRegionalSource(dataDir, regionalSource)
 		)
 	);
-	// 서울 bus_route.route_id에 있는 노선(서울에 들어오는 7·8)은 서울 쪽이 이긴다(계획 설계 판단 2).
+	// 서울 노선 목록(엑셀 ∪ 7·8)에 있는 노선은 서울 쪽이 이긴다(계획 설계 판단 2, 실험 1절 5-A 확인).
+	// 서울 조립에서 빠진 노선(route-not-found, shape-too-short)도 목록에 있으면 서울 노선이다.
+	// 적재된 서울 행으로만 보면 배치마다 출처가 바뀌어 저장된 `gbis:`·`tago:` 참조가 끊긴다.
 	const regional = assembleRegional(
 		reads,
-		new Set(result.routes.map((route) => route.routeId))
+		new Set(source.routes.map((entry) => entry.routeId))
 	);
 	const routes = [
 		...result.routes,
