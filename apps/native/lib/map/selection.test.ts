@@ -10,6 +10,7 @@ import {
 	resetUserSelection,
 	routeOptions,
 	setUserSelection,
+	validSelection,
 } from "./selection";
 
 const KST = "Asia/Seoul";
@@ -165,6 +166,28 @@ describe("placeChips", () => {
 			{ id: "b", label: "장소-b", selected: true },
 		]);
 		expect(placeChips(places, null).every((chip) => !chip.selected)).toBe(true);
+	});
+
+	it("labels home, work and school places by their kind like the place cards", () => {
+		const home = { ...place("h", 480), kind: "home" as const, name: "" };
+		expect(placeChips([home], null)[0]?.label).toBe("집");
+	});
+});
+
+describe("validSelection", () => {
+	it("keeps a choice that still points at a place and route", () => {
+		const work = place("work", 480, [[busLeg("470")], [busLeg("273")]]);
+		expect(validSelection([work], { placeId: "work", rank: 1 })).toEqual({
+			placeId: "work",
+			rank: 1,
+		});
+	});
+
+	it("drops a choice whose place or route rank is gone", () => {
+		const work = place("work", 480);
+		expect(validSelection([work], { placeId: "gone", rank: 0 })).toBeNull();
+		expect(validSelection([work], { placeId: "work", rank: 3 })).toBeNull();
+		expect(validSelection([work], null)).toBeNull();
 	});
 });
 

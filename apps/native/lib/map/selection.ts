@@ -1,6 +1,8 @@
 import type { Leg } from "@Betro/commute/plan";
 import type { ActiveSessionView } from "../commute/session-client";
+import { t } from "../i18n/t";
 import type { Place } from "../places/places";
+import { placeNameOf } from "../places/plan-headers";
 
 /** 지도에서 보고 있는 장소와 그 장소의 경로 rank. */
 export interface MapSelection {
@@ -129,13 +131,31 @@ export function initialSelection(
 	return closest === null ? null : { placeId: closest.id, rank: BASE_RANK };
 }
 
+/**
+ * 사용자가 고른 선택이 아직 있는 장소와 경로를 가리키면 그대로, 아니면 null이다.
+ * 장소나 대안 경로를 지운 뒤 빈 지도를 보이지 않게 한다.
+ */
+export function validSelection(
+	places: readonly Place[],
+	selection: MapSelection | null
+): MapSelection | null {
+	if (selection === null) {
+		return null;
+	}
+	const place = places.find((candidate) => candidate.id === selection.placeId);
+	const hasRoute =
+		place?.plan.routes.some((route) => route.rank === selection.rank) ?? false;
+	return hasRoute ? selection : null;
+}
+
+/** 장소 칩. 이름은 카드와 같이 종류 이름(집·회사·학교)이나 기타 장소의 이름이다. */
 export function placeChips(
 	places: readonly Place[],
 	selection: MapSelection | null
 ): PlaceChip[] {
 	return places.map((place) => ({
 		id: place.id,
-		label: place.name,
+		label: placeNameOf(place, t),
 		selected: selection?.placeId === place.id,
 	}));
 }

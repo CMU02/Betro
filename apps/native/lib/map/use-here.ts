@@ -15,11 +15,16 @@ async function readDevicePosition(): Promise<Coordinate> {
 /**
  * 기기의 현재 위치를 한 번 읽는다. 위치 권한이 `granted`일 때만 읽고, 아니면 `null`이다.
  * 결과는 이 화면의 상태에만 둔다. 저장하거나 서버로 보내지 않는다(지도 설계 2.5).
+ * `enabled`가 false면(장소가 있어 근처 지하철을 보이지 않을 때) 권한도 위치도 읽지 않는다.
  */
-export function useHere(): Coordinate | null {
+export function useHere(enabled = true): Coordinate | null {
 	const [here, setHere] = useState<Coordinate | null>(null);
 
 	useEffect(() => {
+		if (!enabled) {
+			setHere(null);
+			return;
+		}
 		let active = true;
 		async function load(): Promise<void> {
 			try {
@@ -39,7 +44,7 @@ export function useHere(): Coordinate | null {
 		return () => {
 			active = false;
 		};
-	}, []);
+	}, [enabled]);
 
 	return here;
 }

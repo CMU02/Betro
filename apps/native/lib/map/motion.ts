@@ -250,6 +250,11 @@ function geometryOf(shape: Shape): Geometry {
 	return geometry;
 }
 
+/** 각 꼭짓점까지 선을 따라 잰 거리(미터). `pointAlong`과 같은 잣대라 선을 거리로 자를 때 쓴다. */
+export function cumulativeM(shape: Shape): readonly number[] {
+	return geometryOf(shape).cum;
+}
+
 function totalLength(geometry: Geometry): number {
 	return geometry.cum.at(-1) ?? 0;
 }

@@ -13,7 +13,7 @@ export interface Coordinate {
 }
 
 /** 두 좌표 사이의 큰원 거리(미터). 기기 안에서만 계산한다. */
-function distanceM(a: Coordinate, b: Coordinate): number {
+export function distanceM(a: Coordinate, b: Coordinate): number {
 	const dLat = (b.latitude - a.latitude) * DEG_TO_RAD;
 	const dLng = (b.longitude - a.longitude) * DEG_TO_RAD;
 	const h =

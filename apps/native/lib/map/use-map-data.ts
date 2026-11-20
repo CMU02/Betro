@@ -52,19 +52,19 @@ import {
 } from "./motion";
 import { createPoller } from "./polling";
 import type { MapSelection } from "./selection";
+import { viewFromSession } from "./session-view";
 import { useMapVisible } from "./use-map-visible";
 
 /** 스냅샷 폴링 간격. 서버 `max-age=10`과 맞춘다. */
-const SNAPSHOT_INTERVAL_MS = 10_000;
+export const SNAPSHOT_INTERVAL_MS = 10_000;
 /** 관측 요청 하트비트 간격. 서버 TTL(90초)보다 짧게 둔다. */
 const HEARTBEAT_INTERVAL_MS = 60_000;
 /** 경로 보기 간격. */
 const ROUTE_VIEW_INTERVAL_MS = 15_000;
 /** 마커 위치를 다시 계산하는 간격. */
-const RENDER_TICK_MS = 1000;
+export const RENDER_TICK_MS = 1000;
 /** 참조 데이터(노선 선, 정류장)는 하루 단위로 바뀐다. */
-const MAP_REF_STALE_MS = 10 * 60 * 1000;
-const MS_PER_SECOND = 1000;
+export const MAP_REF_STALE_MS = 10 * 60 * 1000;
 const SEOUL_BUS_PREFIX = "seoul-bus:";
 
 const mapRefCache = createMapRefCache(Storage);
@@ -131,12 +131,18 @@ interface Snapshots {
 
 type RefMap = BusMap | SubwayMap | null;
 
-function refKey(leg: Leg): string {
+/** 참조 지도를 고르는 값. 노선 ref(`seoul-subway:line2`)와 종류다. */
+export interface MapLineRef {
+	line: string;
+	mode: Leg["mode"];
+}
+
+export function refKey(leg: MapLineRef): string {
 	return `${leg.mode}:${leg.line}`;
 }
 
 /** 기기 저장본을 먼저 읽고 서버 ETag로 바뀐 때만 다시 받는다. 받지 못하고 저장본도 없으면 던져 다시 시도하게 한다. */
-function loadRefMap(leg: Leg): Promise<BusMap | SubwayMap> {
+export function loadRefMap(leg: MapLineRef): Promise<BusMap | SubwayMap> {
 	const bareLine = leg.line.slice(leg.line.indexOf(":") + 1);
 	if (leg.mode === "bus") {
 		return loadCachedRef<BusMap>(mapRefCache, refKey(leg), (etag) =>
@@ -193,35 +199,6 @@ function activeSessionFor(
 		return null;
 	}
 	return session.routes.find((entry) => entry.rank === route.rank) ?? null;
-}
-
-/** 세션 응답의 경로 예상을 경로 보기와 같은 모양으로 바꾼다. 세션은 지금 구간(기본 경로) 또는 첫 구간(대안)만 안다. */
-function viewFromSession(
-	route: Route,
-	sessionRoute: SessionRouteView,
-	currentLegIndex: number
-): RouteView {
-	const knownIndex = route.rank === 0 ? currentLegIndex : 0;
-	return {
-		destinationEtaAt:
-			sessionRoute.destinationEtaEpoch === null
-				? null
-				: sessionRoute.destinationEtaEpoch * MS_PER_SECOND,
-		legs: route.legs.map((_, index) => {
-			const known = index === knownIndex;
-			return {
-				approaching: [],
-				boardEtaAt:
-					known && sessionRoute.boardEtaEpoch !== null
-						? sessionRoute.boardEtaEpoch * MS_PER_SECOND
-						: null,
-				etaState: known ? sessionRoute.etaState : "estimated",
-				method: null,
-				positionState: known ? sessionRoute.positionState : "none",
-				vehicleId: sessionRoute.legVehicleIds[index] ?? null,
-			};
-		}),
-	};
 }
 
 function trackPointFor(
@@ -377,7 +354,7 @@ function trackShape(legTrack: LegTrack | null): [number, number][] {
 }
 
 /** 보일 때만 폴링하는 하트비트·스냅샷·경로 보기를 묶는다. 위치는 서버에 보내지 않고 노선 ref만 보낸다. */
-function useVisiblePoll(
+export function useVisiblePoll(
 	visible: boolean,
 	key: string,
 	intervalMs: number,
@@ -470,7 +447,7 @@ export function useMapData(
 			return null;
 		}
 		if (sessionRoute !== null && session !== null) {
-			return viewFromSession(route, sessionRoute, session.content.legIndex);
+			return viewFromSession(route, sessionRoute, session.content);
 		}
 		return routeView;
 	}, [route, sessionRoute, session, routeView]);
