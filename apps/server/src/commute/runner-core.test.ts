@@ -1860,6 +1860,61 @@ describe("RunnerCore 경로 보기", () => {
 	});
 });
 
+describe("RunnerCore 경로 보기의 캐시와 이상한 응답", () => {
+	function busRoute(): Route {
+		return makePlan(PLAN_ANDROID).routes[0] as Route;
+	}
+
+	test("세션이 없는 tick이 끼어도 경로 보기 캐시는 busPollMs 동안 남는다", async () => {
+		const h = harness();
+		const core = h.core();
+		await core.routeView(busRoute(), T0);
+		await tickAt(h, core, T0 + 10 * SECOND);
+		h.clock.now = T0 + 20 * SECOND;
+		await core.routeView(busRoute(), h.clock.now);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID]);
+
+		// 간격이 지난 캐시는 세션이 없는 tick이 지운다.
+		await tickAt(h, core, T0 + h.config.busPollMs);
+		expect(await h.store.get(`busRoute:${ROUTE_ID}`)).toBeUndefined();
+	});
+
+	test("상류가 빈 목록(운행 끝)을 주면 던지지 않고 시각 없는 추정이다", async () => {
+		const h = harness();
+		h.boards.handler = () => [];
+		const view = await h.core().routeView(busRoute(), T0);
+		expect(view.destinationEtaAt).toBeNull();
+		expect(view.legs[0]).toMatchObject({
+			approaching: [],
+			boardEtaAt: null,
+			etaState: "estimated",
+		});
+	});
+
+	test("정류장 순번이 노선에 없으면(배치가 바뀜) 던지지 않고 시각 없는 추정이다", async () => {
+		const h = harness();
+		const base = busRoute();
+		const leg = base.legs[0] as BusLeg;
+		const route: Route = {
+			...base,
+			legs: [
+				{
+					...leg,
+					alight: { ...leg.alight, seq: LAST_SEQ + 20 },
+					board: { ...leg.board, seq: LAST_SEQ + 10 },
+				},
+			],
+		};
+		const view = await h.core().routeView(route, T0);
+		expect(view.destinationEtaAt).toBeNull();
+		expect(view.legs[0]).toMatchObject({
+			approaching: [],
+			boardEtaAt: null,
+			etaState: "estimated",
+		});
+	});
+});
+
 describe("RunnerCore 정확도 기록", () => {
 	test("세션이 끝나면 R2에 기록과 요약이 생기고 기록 표가 빈다. 실행기를 새로 만들어도 그 전 tick의 기록이 들어 있다", async () => {
 		const h = harness();

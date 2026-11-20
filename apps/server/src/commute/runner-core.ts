@@ -1936,8 +1936,8 @@ export class RunnerCore {
 			store.list<EndedMark>(ENDED_PREFIX),
 			store.list(BUDGET_PREFIX),
 			store.list(STOPPED_PREFIX),
-			store.list(BUS_PREFIX),
-			store.list(STATION_PREFIX),
+			store.list<BusRouteSaved>(BUS_PREFIX),
+			store.list<StationSaved>(STATION_PREFIX),
 		]);
 		const stale: string[] = [];
 		for (const [key, mark] of ended) {
@@ -1956,8 +1956,19 @@ export class RunnerCore {
 			}
 		}
 		if (open === 0) {
-			// 세션이 없으면 도착판을 들고 있을 이유가 없다.
-			stale.push(...buses.keys(), ...stations.keys());
+			// 세션이 없으면 도착판을 들고 있을 이유가 없다. 다만 지도의 경로 보기가 막 채운 캐시는
+			// 다음 경로 보기가 다시 부르지 않도록 간격(busPollMs)이나 묵음 기준 동안 둔다.
+			const { config } = this.#ports;
+			for (const [key, saved] of buses) {
+				if (now - saved.polledAt >= config.busPollMs) {
+					stale.push(key);
+				}
+			}
+			for (const [key, saved] of stations) {
+				if (now - saved.cur.fetchedAt >= config.staleAfterMs) {
+					stale.push(key);
+				}
+			}
 		}
 		await Promise.all(stale.map((key) => store.delete(key)));
 	}
