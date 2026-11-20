@@ -1682,6 +1682,37 @@ describe("RunnerCore 진행 중 세션의 경로별 예상", () => {
 		});
 	});
 
+	test("active session exposes legVehicleIds per route, using fixed for boarded legs", async () => {
+		const h = suggestHarness();
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [sessionId, entry] = await onlySession(h);
+		const estimateOf = (rank: number) =>
+			entry.state.estimates.find((estimate) => estimate.rank === rank);
+		const before = await core.activeSession(ANDROID_INSTALL);
+		expect(before?.routes[0]?.legVehicleIds).toEqual(
+			estimateOf(0)?.legs.map((leg) => leg.vehicleId)
+		);
+		expect(before?.routes[1]?.legVehicleIds).toEqual(
+			estimateOf(1)?.legs.map((leg) => leg.vehicleId)
+		);
+		expect(before?.routes[1]?.legVehicleIds[0]).toBe("A1");
+		await h.store.put(`session:${sessionId}`, {
+			...entry,
+			state: {
+				...entry.state,
+				fixed: entry.state.fixed.map(() => "BOARDED"),
+			},
+		});
+		const after = await core.activeSession(ANDROID_INSTALL);
+		expect(after?.routes[0]?.legVehicleIds).toEqual(
+			entry.state.fixed.map(() => "BOARDED")
+		);
+		expect(after?.routes[1]?.legVehicleIds).toEqual(
+			before?.routes[1]?.legVehicleIds
+		);
+	});
+
 	test("추정이 아직 없으면 시각은 null이고 etaState는 estimated, positionState는 none이다", async () => {
 		const h = suggestHarness();
 		const core = h.core();
@@ -1697,6 +1728,7 @@ describe("RunnerCore 진행 중 세션의 경로별 예상", () => {
 				boardEtaEpoch: null,
 				destinationEtaEpoch: null,
 				etaState: "estimated",
+				legVehicleIds: [],
 				positionState: "none",
 				rank,
 				stopsAway: null,

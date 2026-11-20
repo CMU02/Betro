@@ -210,6 +210,8 @@ export interface SessionRouteView {
 	boardEtaEpoch: number | null;
 	destinationEtaEpoch: number | null;
 	etaState: "live" | "estimated";
+	/** 경로의 구간별 차량 ID. 기본 경로에서 차량을 잡았거나 탄 구간은 `fixed` 값이다. */
+	legVehicleIds: (string | null)[];
 	positionState: "live" | "stale" | "none";
 	rank: number;
 	stopsAway: number | null;
@@ -236,6 +238,10 @@ function sessionRouteView(
 		boardEtaEpoch: toEpochSeconds(leg?.boardEtaAt),
 		destinationEtaEpoch: toEpochSeconds(estimate?.destinationEtaAt),
 		etaState: leg?.etaState ?? "estimated",
+		legVehicleIds: (estimate?.legs ?? []).map(
+			(entry, index) =>
+				(rank === 0 ? state.fixed[index] : null) ?? entry.vehicleId ?? null
+		),
 		positionState: leg?.positionState ?? "none",
 		rank,
 		stopsAway: leg?.stopsAway ?? null,
