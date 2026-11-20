@@ -67,6 +67,7 @@ vars는 `wrangler.jsonc`, secret은 `wrangler secret put <NAME>`(로컬은 `.dev
 | `COLLECTOR_MODE` | `dev` | `dev`는 지하철 ALL과 버스 2개 노선, `prod`는 전체 |
 | `UPSTREAM_MODE` | `fixture` | `live`일 때만 상류 호출 |
 | `DAILY_BUDGET_SUBWAY`, `DAILY_BUDGET_BUS` | 900 | 소스별 하루 호출 예산 |
+| `MAP_WATCH_MAX_PER_INSTALL`, `MAP_WATCH_MAX_TOTAL` | 6, 40 | 지도 버스 관측 요청 상한(설치 하나, 모든 설치 합). 요청 노선은 설정 노선보다 먼저 부르고 같은 버스 예산을 쓴다 |
 | `OPERATING_START_KST`, `OPERATING_END_KST` | `05:00`, `01:00` | 운행 시간 |
 | `HISTORY_IDLE_FLUSH_MS` | 5000 | 다음 alarm까지 이 시간 이상 남으면 이력을 미리 R2에 쓴다 |
 | `PUSH_MODE` | `send` | 출퇴근 푸시. `send`일 때만 APNs·FCM에 보내고, 그 밖의 값은 로그만 남긴다 |

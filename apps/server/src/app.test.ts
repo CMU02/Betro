@@ -68,6 +68,7 @@ const fakeCollector: CollectorClient = {
 		collectorCalls.status += 1;
 		return Promise.resolve(fakeStatus);
 	},
+	watchBusRoutes: () => Promise.resolve(),
 };
 
 beforeAll(async () => {

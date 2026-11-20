@@ -25,6 +25,7 @@ import type { ArrivalRow } from "@Betro/realtime/upstream/subway-arrival";
 import { redactKeys } from "@Betro/realtime/upstream/urls";
 import { SERVICE_ENDED_RECHECK_MS } from "./apply-call";
 import {
+	type BusWatchSaved,
 	type CoreSaved,
 	currentOperatingWindow,
 	emptyStationBoards,
@@ -94,6 +95,8 @@ export class CollectorState {
 	alerts: AlertState;
 	/** 출퇴근 세션이 보는 역과 그 역의 최근 ALL 행. */
 	boards: StationBoardsSaved;
+	/** 설치별 지도 버스 관측 요청. */
+	busWatch: BusWatchSaved;
 	readonly history: HistoryWriter;
 	/** 저장소에서 되살린 시각. 상태를 아직 바꾸지 않은 스냅샷의 `generatedAt`. */
 	readonly loadedAt: number;
@@ -109,6 +112,7 @@ export class CollectorState {
 		boards: StationBoardsSaved;
 		budget: BudgetState;
 		buckets: readonly MetricsBucket[];
+		busWatch: BusWatchSaved;
 		core: CoreSaved;
 		latest: LatestState;
 		loadedAt: number;
@@ -118,6 +122,7 @@ export class CollectorState {
 		this.alerts = init.alerts;
 		this.boards = init.boards;
 		this.budget = init.budget;
+		this.busWatch = init.busWatch;
 		this.core = init.core;
 		this.latest = init.latest;
 		this.loadedAt = init.loadedAt;
@@ -140,7 +145,7 @@ export class CollectorState {
 		config: CollectorConfig,
 		secrets: readonly string[]
 	): Promise<CollectorState> {
-		const [budget, schedule, latest, core, alerts, boards, buckets] =
+		const [budget, schedule, latest, core, alerts, boards, busWatch, buckets] =
 			await Promise.all([
 				store.get<BudgetState>(STATE_KEYS.budget),
 				store.get<ScheduleState>(STATE_KEYS.schedule),
@@ -148,6 +153,7 @@ export class CollectorState {
 				store.get<CoreSaved>(STATE_KEYS.core),
 				store.get<AlertState>(STATE_KEYS.alerts),
 				store.get<StationBoardsSaved>(STATE_KEYS.boards),
+				store.get<BusWatchSaved>(STATE_KEYS.busWatch),
 				store.metricsSince(
 					bucketStartOf(now) - KEPT_BUCKETS_BEFORE * METRICS_BUCKET_MS
 				),
@@ -161,6 +167,7 @@ export class CollectorState {
 			boards: boards ?? emptyStationBoards(),
 			buckets,
 			budget: budget ?? emptyBudget(now),
+			busWatch: busWatch ?? {},
 			core: restored,
 			latest: new LatestState(latest),
 			loadedAt: now,
@@ -187,6 +194,56 @@ export class CollectorState {
 				delete this.boards.stations[statnId];
 			}
 		}
+	}
+
+	/** 설치 하나의 관측 요청을 통째로 바꾼다. 빈 배열이면 그 설치의 요청을 지운다. */
+	watchBusRoutes(
+		installId: string,
+		routeIds: readonly string[],
+		until: number
+	): void {
+		const unique = [...new Set(routeIds)];
+		if (unique.length === 0) {
+			delete this.busWatch[installId];
+			return;
+		}
+		this.busWatch[installId] = { routeIds: unique, until };
+	}
+
+	/** 만료 시각이 지난 설치의 관측 요청을 지운다. */
+	expireBusWatches(now: number): void {
+		for (const [installId, entry] of Object.entries(this.busWatch)) {
+			if (entry.until < now) {
+				delete this.busWatch[installId];
+			}
+		}
+	}
+
+	/**
+	 * 아직 유효한 관측 요청 노선(설치 사이 중복 제거). 합이 `maxTotal`을 넘으면 `until`이 늦은
+	 * 설치부터 채운다(같으면 설치 ID 순). 순서가 매번 같아야 상한에서 노선이 오락가락하지 않는다.
+	 */
+	watchedBusRouteIds(now: number, maxTotal: number): string[] {
+		const entries = Object.entries(this.busWatch)
+			.filter(([, entry]) => entry.until >= now)
+			.sort(
+				([aId, a], [bId, b]) =>
+					b.until - a.until || (aId < bId ? -1 : Number(aId > bId))
+			);
+		const routes = new Set<string>();
+		for (const [, entry] of entries) {
+			for (const routeId of entry.routeIds) {
+				if (routes.size >= maxTotal) {
+					return [...routes];
+				}
+				routes.add(routeId);
+			}
+		}
+		return [...routes];
+	}
+
+	async saveBusWatch(store: StateStore): Promise<void> {
+		await store.put(STATE_KEYS.busWatch, this.busWatch);
 	}
 
 	/** ALL 응답의 행 중 보고 있는 역의 행만 남긴다. 행이 없는 역도 받은 시각은 남긴다. */
@@ -395,6 +452,7 @@ export class CollectorState {
 			store.put(STATE_KEYS.schedule, this.schedule),
 			store.put(STATE_KEYS.latest, this.latest.save()),
 			this.saveBoards(store),
+			this.saveBusWatch(store),
 			this.saveCore(store),
 			...buckets.map((bucket) => store.putMetrics(bucket)),
 		]);

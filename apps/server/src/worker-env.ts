@@ -44,6 +44,10 @@ export interface Env {
 	FCM_SERVICE_ACCOUNT_JSON?: string;
 	/** 다음 alarm까지 이 시간(ms) 이상 남으면 이력을 미리 R2에 쓴다. 기본 5000(10000 미만으로 둔다). */
 	HISTORY_IDLE_FLUSH_MS?: string;
+	/** 설치 하나가 동시에 관측을 요청할 수 있는 버스 노선 수. 기본 6. */
+	MAP_WATCH_MAX_PER_INSTALL?: string;
+	/** 수집기가 관측 요청으로 부르는 버스 노선 수 상한(모든 설치 합). 기본 40. */
+	MAP_WATCH_MAX_TOTAL?: string;
 	OPERATING_END_KST?: string;
 	OPERATING_START_KST?: string;
 	/** `send`면 APNs·FCM에 보내고, `log`(기본)면 로그만 남긴다. */

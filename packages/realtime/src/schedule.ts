@@ -12,6 +12,8 @@ const MAX_MINUTE = 59;
 const DEFAULT_OPERATING_START = "05:00";
 const DEFAULT_OPERATING_END = "01:00";
 const DEFAULT_DAILY_BUDGET = 900;
+const DEFAULT_MAP_WATCH_MAX_PER_INSTALL = 6;
+const DEFAULT_MAP_WATCH_MAX_TOTAL = 40;
 const DEV_SUBWAY_MIN_INTERVAL_MS = 80_000;
 const DEV_BUS_MIN_INTERVAL_MS = 160_000;
 const PROD_SUBWAY_MIN_INTERVAL_MS = 20_000;
@@ -27,6 +29,10 @@ export interface CollectorConfig {
 	busRequestsPerSecond?: number;
 	busRouteIds: string[];
 	dailyBudget: { subway: number; bus: number };
+	/** 설치 하나가 동시에 관측을 요청할 수 있는 버스 노선 수. */
+	mapWatchMaxPerInstall: number;
+	/** 모든 설치의 관측 요청을 합쳐 실제로 부르는 버스 노선 수 상한. */
+	mapWatchMaxTotal: number;
 	mode: "dev" | "prod";
 	operatingEnd: string;
 	operatingStart: string;
@@ -61,12 +67,29 @@ function readCount(env: EnvLike, name: string, fallback: number): number {
 
 function baseConfig(
 	env: EnvLike
-): Pick<CollectorConfig, "operatingStart" | "operatingEnd" | "dailyBudget"> {
+): Pick<
+	CollectorConfig,
+	| "operatingStart"
+	| "operatingEnd"
+	| "dailyBudget"
+	| "mapWatchMaxPerInstall"
+	| "mapWatchMaxTotal"
+> {
 	return {
 		dailyBudget: {
 			bus: readCount(env, "DAILY_BUDGET_BUS", DEFAULT_DAILY_BUDGET),
 			subway: readCount(env, "DAILY_BUDGET_SUBWAY", DEFAULT_DAILY_BUDGET),
 		},
+		mapWatchMaxPerInstall: readCount(
+			env,
+			"MAP_WATCH_MAX_PER_INSTALL",
+			DEFAULT_MAP_WATCH_MAX_PER_INSTALL
+		),
+		mapWatchMaxTotal: readCount(
+			env,
+			"MAP_WATCH_MAX_TOTAL",
+			DEFAULT_MAP_WATCH_MAX_TOTAL
+		),
 		operatingEnd: readHhmm(env, "OPERATING_END_KST", DEFAULT_OPERATING_END),
 		operatingStart: readHhmm(
 			env,
@@ -169,9 +192,24 @@ export function remainingOperatingMs(
 	return total;
 }
 
-function sourcesFor(kind: BudgetKind, config: CollectorConfig): CallPlan[] {
+/** 버스 소스 노선: 관측 요청 노선을 먼저, 그 뒤에 설정 노선(중복 제거). */
+function busRoutesFor(
+	config: CollectorConfig,
+	extraBusRouteIds: readonly string[]
+): string[] {
+	return [...new Set([...extraBusRouteIds, ...config.busRouteIds])];
+}
+
+function sourcesFor(
+	kind: BudgetKind,
+	config: CollectorConfig,
+	extraBusRouteIds: readonly string[]
+): CallPlan[] {
 	if (kind === "bus") {
-		return config.busRouteIds.map((routeId) => ({ kind: "bus", routeId }));
+		return busRoutesFor(config, extraBusRouteIds).map((routeId) => ({
+			kind: "bus",
+			routeId,
+		}));
 	}
 	if (config.mode === "dev") {
 		return [{ kind: "subway-all" }];
@@ -184,17 +222,22 @@ function sourcesFor(kind: BudgetKind, config: CollectorConfig): CallPlan[] {
 
 /**
  * 소스 하나(지하철 ALL 또는 노선 하나, 버스 노선 하나)의 호출 간격.
- * 남은 예산을 같은 종류의 소스 수로 나눠 남은 운행 시간에 고르게 편다.
+ * 남은 예산을 같은 종류의 소스 수(버스는 관측 요청 노선까지 합친 수)로 나눠
+ * 남은 운행 시간에 고르게 편다.
  */
 export function interval(
 	kind: BudgetKind,
 	now: number,
 	budget: BudgetState,
-	config: CollectorConfig
+	config: CollectorConfig,
+	extraBusRouteIds: readonly string[] = []
 ): number {
 	const minMs =
 		kind === "bus" ? config.busMinIntervalMs : config.subwayMinIntervalMs;
-	const sources = Math.max(1, sourcesFor(kind, config).length);
+	const sources = Math.max(
+		1,
+		sourcesFor(kind, config, extraBusRouteIds).length
+	);
 	const left = Math.max(1, remaining(budget, kind, config, now));
 	return Math.max(minMs, (remainingOperatingMs(now, config) * sources) / left);
 }
@@ -204,14 +247,35 @@ interface KindPlan {
 	wakeAt: number;
 }
 
+/**
+ * 이제 부르지 않는 버스 노선(관측 요청이 끝난 노선)의 지난 시각을 지운다. 지난 시각은 없는 것과
+ * 같으므로 동작은 그대로이고, 요청이 오갈 때마다 스케줄이 커지지 않게 한다.
+ */
+function forgetStaleBusKeys(
+	nextAt: Record<string, number>,
+	sources: readonly CallPlan[],
+	now: number
+): void {
+	const live = new Set(sources.map(planKey));
+	for (const [key, at] of Object.entries(nextAt)) {
+		if (key.startsWith("bus:") && !live.has(key) && at <= now) {
+			delete nextAt[key];
+		}
+	}
+}
+
 function planKind(
 	kind: BudgetKind,
 	now: number,
 	nextAt: Record<string, number>,
 	budget: BudgetState,
-	config: CollectorConfig
+	config: CollectorConfig,
+	extraBusRouteIds: readonly string[]
 ): KindPlan {
-	const sources = sourcesFor(kind, config);
+	const sources = sourcesFor(kind, config, extraBusRouteIds);
+	if (kind === "bus") {
+		forgetStaleBusKeys(nextAt, sources, now);
+	}
 	if (sources.length === 0) {
 		return { due: [], wakeAt: Number.POSITIVE_INFINITY };
 	}
@@ -219,12 +283,16 @@ function planKind(
 	if (left <= 0) {
 		return { due: [], wakeAt: kstDayStart(now) + DAY_MS };
 	}
-	const every = interval(kind, now, budget, config);
+	const every = interval(kind, now, budget, config, extraBusRouteIds);
 	const when = (plan: CallPlan): number =>
 		nextAt[planKey(plan)] ?? Number.NEGATIVE_INFINITY;
+	// 관측 요청 노선이 설정 노선(시험 노선, 지도용 상시 관측)보다 먼저다(지도 설계 4.3).
+	const extras = new Set(extraBusRouteIds);
+	const rank = (plan: CallPlan): number =>
+		plan.kind === "bus" && extras.has(plan.routeId) ? 0 : 1;
 	const overdue = sources
 		.filter((plan) => when(plan) <= now)
-		.sort((a, b) => when(a) - when(b));
+		.sort((a, b) => rank(a) - rank(b) || when(a) - when(b));
 	// dev 버스는 한 번에 한 노선씩 번갈아 부른다.
 	const limit = kind === "bus" && config.mode === "dev" ? 1 : left;
 	const due = overdue.slice(0, limit);
@@ -242,12 +310,14 @@ function planKind(
 /**
  * 지금 부를 소스와 다음 alarm 시각.
  * 운행 시간 밖이면 다음 운행 시작까지 잔다. 예산이 0인 소스는 KST 0시까지 쉰다.
+ * `extraBusRouteIds`는 지도 관측 요청 노선이다. 설정 노선보다 먼저 두고 같은 예산을 나눠 쓴다.
  */
 export function planTick(
 	now: number,
 	schedule: ScheduleState,
 	budget: BudgetState,
-	config: CollectorConfig
+	config: CollectorConfig,
+	extraBusRouteIds: readonly string[] = []
 ): TickPlan {
 	if (!isOperatingTime(now, config.operatingStart, config.operatingEnd)) {
 		return {
@@ -257,8 +327,8 @@ export function planTick(
 		};
 	}
 	const nextAt = { ...schedule.nextAt };
-	const subway = planKind("subway", now, nextAt, budget, config);
-	const bus = planKind("bus", now, nextAt, budget, config);
+	const subway = planKind("subway", now, nextAt, budget, config, []);
+	const bus = planKind("bus", now, nextAt, budget, config, extraBusRouteIds);
 	const wakeAt = Math.min(subway.wakeAt, bus.wakeAt);
 	const nextAlarmAt = Number.isFinite(wakeAt)
 		? Math.max(now + MIN_ALARM_DELAY_MS, wakeAt)
