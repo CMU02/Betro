@@ -1056,6 +1056,43 @@ describe("CollectorCore bus watches", () => {
 		expect(await h.core.refreshReferences()).toBe(false);
 	});
 
+	it("places a watched route's buses on its shape and reloads it after a lapse", async () => {
+		const h = watchHarness({ ...devConfig({}), busRouteIds: [ROUTE_6411] });
+		// 이 테스트의 D1은 요청한 노선만 돌려준다.
+		h.ports.reference.loadBus = (routeIds) => {
+			h.busLoads.push([...routeIds]);
+			const all = busReference();
+			return Promise.resolve({
+				batchId: all.batchId,
+				routes: new Map(
+					[...all.routes].filter(([routeId]) => routeIds.includes(routeId))
+				),
+			});
+		};
+		await h.core.watchBusRoutes("install-1", [ROUTE_150], T0 + 5 * MINUTE);
+		await h.core.tick();
+		expect(busCalls(h, ROUTE_150)).toHaveLength(1);
+		const vehicles = (
+			JSON.parse((await h.core.snapshot("bus")).body) as {
+				vehicles: { routeId: string; shapeDistanceM: number | null }[];
+			}
+		).vehicles.filter((vehicle) => vehicle.routeId === ROUTE_150);
+		expect(vehicles.length).toBeGreaterThan(0);
+		expect(vehicles.every((vehicle) => vehicle.shapeDistanceM !== null)).toBe(
+			true
+		);
+		expect(h.logs.filter((line) => line.includes("failed"))).toEqual([]);
+
+		// 요청이 풀리면 참조에서 빼고, 다시 요청하면 다시 읽는다.
+		h.clock.now = T0 + 6 * MINUTE;
+		await h.core.tick();
+		const loadsBefore = h.busLoads.length;
+		await h.core.watchBusRoutes("install-1", [ROUTE_150], T0 + 10 * MINUTE);
+		h.clock.now += STEP;
+		await h.core.tick();
+		expect(h.busLoads.slice(loadsBefore)).toEqual([[ROUTE_150]]);
+	});
+
 	it("keeps watches across a restart", async () => {
 		const first = watchHarness();
 		await first.core.watchBusRoutes("install-1", [A], T0 + 10 * MINUTE);
