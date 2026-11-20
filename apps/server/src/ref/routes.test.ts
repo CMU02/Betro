@@ -39,6 +39,19 @@ beforeAll(async () => {
 const get = (path: string, headers: Record<string, string> = {}) =>
 	app.request(`${API}/v1/ref${path}`, { headers });
 
+describe("GET /v1/ref/bus/routes (regional)", () => {
+	test("serves a GBIS route with prefixed stop refs", async () => {
+		const res = await get("/bus/routes/gbis:224000011/stops");
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			areaName: string | null;
+			stops: { stop: string }[];
+		};
+		expect(body.areaName).toBe("성남");
+		expect(body.stops.map((stop) => stop.stop)).toEqual(["gbis:S1", "gbis:G2"]);
+	});
+});
+
 describe("GET /v1/ref/bus/routes", () => {
 	test("returns matches with cache headers and no auth", async () => {
 		const res = await get("/bus/routes?q=1000");
