@@ -56,20 +56,32 @@ export function busVehiclesForLeg(
 	);
 }
 
+interface StationOrder {
+	/** 순환 가지(2호선 본선)면 true. seq가 끝에서 처음으로 이어진다. */
+	loop: boolean;
+	order: Map<string, number>;
+	stationCount: number;
+}
+
+/** 서버 `LOOP_BRANCHES`(line2|main)와 같다. 응답에 순환 표시가 없어 노선·가지로 정한다. */
+const LOOP_LINE_KEY = "2";
+const LOOP_BRANCH_KEY = "main";
+
 /** 구간 방향의 가지 중 승차역(가능하면 하차역도)을 지나는 것의 역 순서. 없으면 null. */
-function stationOrder(
-	leg: SubwayLeg,
-	map: SubwayMap
-): Map<string, number> | null {
+function stationOrder(leg: SubwayLeg, map: SubwayMap): StationOrder | null {
+	const lineKey = bareId(leg.line);
 	const candidates = map.branches
 		.filter((branch) => branch.direction === leg.direction)
-		.map(
-			(branch) =>
-				new Map(branch.stations.map((station) => [station.stop, station.seq]))
-		)
-		.filter((order) => order.has(leg.board.stop));
+		.map((branch) => ({
+			loop: lineKey === LOOP_LINE_KEY && branch.branchKey === LOOP_BRANCH_KEY,
+			order: new Map(
+				branch.stations.map((station) => [station.stop, station.seq])
+			),
+			stationCount: branch.stations.length,
+		}))
+		.filter((candidate) => candidate.order.has(leg.board.stop));
 	return (
-		candidates.find((order) => order.has(leg.alight.stop)) ??
+		candidates.find((candidate) => candidate.order.has(leg.alight.stop)) ??
 		candidates[0] ??
 		null
 	);
@@ -90,12 +102,13 @@ export function subwayVehiclesForLeg(
 		(vehicle) =>
 			vehicle.lineKey === lineKey && vehicle.direction === leg.direction
 	);
-	const order = stationOrder(leg, map);
-	if (order === null) {
+	const found = stationOrder(leg, map);
+	if (found === null) {
 		return boardedVehicleId === null
 			? []
 			: sameLeg.filter((vehicle) => vehicle.rawTrainNo === boardedVehicleId);
 	}
+	const { loop, order, stationCount } = found;
 	const seqOf = (vehicle: SubwaySnapshotVehicle): number | undefined =>
 		vehicle.statnId === null
 			? undefined
@@ -107,13 +120,24 @@ export function subwayVehiclesForLeg(
 				return false;
 			}
 			const seq = seqOf(vehicle);
-			return seq === undefined || alightSeq === undefined || seq <= alightSeq;
+			// 순환 가지는 하차역이 승차역보다 앞 순번일 수 있어 선형 비교를 하지 않는다.
+			return (
+				loop || seq === undefined || alightSeq === undefined || seq <= alightSeq
+			);
 		});
 	}
 	const boardSeq = order.get(leg.board.stop);
 	return sameLeg.filter((vehicle) => {
 		const seq = seqOf(vehicle);
-		return seq !== undefined && boardSeq !== undefined && seq < boardSeq;
+		if (seq === undefined || boardSeq === undefined) {
+			return false;
+		}
+		if (loop) {
+			// 이음매를 넘어 승차역 뒤로 이어지는 반 바퀴 안의 열차만 남긴다.
+			const behind = (boardSeq - seq + stationCount) % stationCount;
+			return behind > 0 && behind <= Math.floor(stationCount / HALF_DIVISOR);
+		}
+		return seq < boardSeq;
 	});
 }
 

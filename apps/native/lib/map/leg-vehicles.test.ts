@@ -182,3 +182,55 @@ it("hidden lines keep the line but hide vehicles; allLinesHidden true when every
 	expect(allLinesHidden(route, ["seoul-bus:R1", "seoul-subway:2"])).toBe(true);
 	expect(allLinesHidden({ ...route, legs: [] }, ["x"])).toBe(false);
 });
+
+function loopMapOf(stationCount: number): SubwayMap {
+	const stations = Array.from({ length: stationCount }, (_, index) => ({
+		lat: 37,
+		lng: 127,
+		name: `L${index}`,
+		nextRunSec: null,
+		offsetM: index * 1000,
+		seq: index,
+		stop: `seoul-subway:L${index}`,
+	}));
+	return {
+		batchId: 1,
+		branches: [{ branchKey: "main", direction: "up", shape: [], stations }],
+		line: "seoul-subway:2",
+	};
+}
+
+function loopLegAt(boardIndex: number): SubwayLeg {
+	return {
+		...subwayLeg,
+		alight: { name: "a", stop: "seoul-subway:L10" },
+		board: { name: "b", stop: `seoul-subway:L${boardIndex}` },
+	};
+}
+
+it("keeps loop-line trains just behind the boarding station across the seam", () => {
+	const map = loopMapOf(43);
+	const result = subwayVehiclesForLeg(
+		loopLegAt(0),
+		[
+			train("n1", "L42"),
+			train("n3", "L40"),
+			train("n13", "L30"),
+			train("far", "L5"),
+		],
+		map,
+		null
+	);
+	expect(result.map((v) => v.rawTrainNo)).toEqual(["n1", "n3", "n13"]);
+});
+
+it("drops loop-line trains more than half a lap behind the boarding station", () => {
+	const map = loopMapOf(43);
+	const result = subwayVehiclesForLeg(
+		loopLegAt(42),
+		[train("near", "L41"), train("seam", "L0"), train("seam2", "L1")],
+		map,
+		null
+	);
+	expect(result.map((v) => v.rawTrainNo)).toEqual(["near"]);
+});
