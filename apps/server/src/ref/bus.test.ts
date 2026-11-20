@@ -59,13 +59,14 @@ describe("parseBusRef", () => {
 });
 
 describe("searchBusRoutes", () => {
-	test("lists same-numbered GBIS village buses apart by area name", async () => {
+	test("lists same-numbered GBIS village buses apart by area name, then a Seoul route containing the query", async () => {
 		const result = await searchBusRoutes(db, { limit: 20, q: "11" });
 		expect(
 			result?.routes.map(({ areaName, line }) => ({ areaName, line }))
 		).toEqual([
 			{ areaName: "성남", line: `gbis:${GBIS_ROUTE_ID}` },
 			{ areaName: "수원", line: `gbis:${GBIS_OTHER_ROUTE_ID}` },
+			{ areaName: null, line: "seoul-bus:100100004" },
 		]);
 	});
 

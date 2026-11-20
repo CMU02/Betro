@@ -59,6 +59,13 @@ const CURRENT_ROUTES: SeedRoute[] = [
 		shortName: "100",
 	},
 	{
+		region: "seoul",
+		routeId: "100100004",
+		routeName: "110A",
+		routeType: "3",
+		shortName: "110A",
+	},
+	{
 		areaName: "성남",
 		region: "gyeonggi",
 		routeId: GBIS_ROUTE_ID,
