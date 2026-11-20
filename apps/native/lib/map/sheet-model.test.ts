@@ -249,3 +249,69 @@ it("a boarded train on a loop ends its stop rows at the alight station", () => {
 	expect(waiting.at(-1)).toEqual({ name: "이", state: "mine" });
 	expect(waiting).toHaveLength(10);
 });
+
+it("a split line uses the branch that holds the alight station, like the map", () => {
+	// 5호선 하행: 본선(S0~S2)에서 하남 가지와 마천 가지로 갈린다. 하남 가지가 먼저 온다.
+	// 가지마다 순번이 0부터라 갈린 뒤의 순번(3, 4)이 두 가지에서 겹친다.
+	const branchStation = (seq: number, name: string, stop: string) => ({
+		...station(seq, name),
+		stop: `seoul-subway:${stop}`,
+	});
+	const trunk = [
+		branchStation(0, "본0", "S0"),
+		branchStation(1, "본1", "S1"),
+		branchStation(2, "본2", "S2"),
+	];
+	const map: SubwayMap = {
+		batchId: 1,
+		branches: [
+			{
+				branchKey: "hanam",
+				direction: "down",
+				shape: [],
+				stations: [
+					...trunk,
+					branchStation(3, "하1", "H1"),
+					branchStation(4, "하2", "H2"),
+				],
+			},
+			{
+				branchKey: "macheon",
+				direction: "down",
+				shape: [],
+				stations: [
+					...trunk,
+					branchStation(3, "마1", "M1"),
+					branchStation(4, "마2", "M2"),
+					branchStation(5, "마3", "M3"),
+				],
+			},
+		],
+		line: "seoul-subway:line5",
+	};
+	const leg: SubwayLeg = {
+		alight: { name: "마2", stop: "seoul-subway:M2" },
+		board: { name: "본1", stop: "seoul-subway:S1" },
+		direction: "down",
+		line: "seoul-subway:line5",
+		lineName: "5호선",
+		mode: "subway",
+	};
+	// 지도는 마천 가지에서 순번을 낸다. 탑승한 열차가 마1에 있다.
+	const model = sheetModel({
+		boarded: true,
+		leg,
+		map,
+		nowMs: NOW,
+		observedAt: NOW,
+		positionSeq: 3,
+		vehicleId: "5123",
+		view: null,
+	});
+	expect(model.stops).toEqual([
+		{ name: "본2", state: "past" },
+		{ name: "마1", state: "now" },
+		{ name: "마2", state: "mine" },
+	]);
+	expect(model.directionParams).toEqual({ name: "마3" });
+});

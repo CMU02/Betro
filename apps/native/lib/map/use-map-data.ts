@@ -18,6 +18,7 @@ import {
 	allLinesHidden,
 	boardedVehicleId,
 	busVehiclesForLeg,
+	subwayBranchForLeg,
 	subwayVehiclesForLeg,
 	visibleLegs,
 } from "./leg-vehicles";
@@ -154,22 +155,6 @@ export function loadRefMap(leg: MapLineRef): Promise<BusMap | SubwayMap> {
 	);
 }
 
-/** 구간 방향의 가지 중 승차역(가능하면 하차역도)을 지나는 것. */
-function subwayBranch(leg: SubwayLeg, map: SubwayMap): SubwayBranch | null {
-	const candidates = map.branches.filter(
-		(branch) =>
-			branch.direction === leg.direction &&
-			branch.stations.some((station) => station.stop === leg.board.stop)
-	);
-	return (
-		candidates.find((branch) =>
-			branch.stations.some((station) => station.stop === leg.alight.stop)
-		) ??
-		candidates[0] ??
-		null
-	);
-}
-
 function buildLegTrack(leg: Leg, map: RefMap): LegTrack | null {
 	if (map === null) {
 		return null;
@@ -180,7 +165,7 @@ function buildLegTrack(leg: Leg, map: RefMap): LegTrack | null {
 		return track === null ? null : { kind: "bus", map: busMap, track };
 	}
 	const subwayMap = map as SubwayMap;
-	const branch = subwayBranch(leg, subwayMap);
+	const branch = subwayBranchForLeg(leg, subwayMap);
 	const track = branch === null ? null : createSubwayTrack(branch);
 	return track === null || branch === null
 		? null

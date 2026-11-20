@@ -75,24 +75,43 @@ export function isLoopBranch(lineKey: string, branchKey: string): boolean {
 	return lineKey === LOOP_LINE_KEY && branchKey === LOOP_BRANCH_KEY;
 }
 
-/** 구간 방향의 가지 중 승차역(가능하면 하차역도)을 지나는 것의 역 순서. 없으면 null. */
-function stationOrder(leg: SubwayLeg, map: SubwayMap): StationOrder | null {
-	const lineKey = bareId(leg.line);
-	const candidates = map.branches
-		.filter((branch) => branch.direction === leg.direction)
-		.map((branch) => ({
-			loop: isLoopBranch(lineKey, branch.branchKey),
-			order: new Map(
-				branch.stations.map((station) => [station.stop, station.seq])
-			),
-			stationCount: branch.stations.length,
-		}))
-		.filter((candidate) => candidate.order.has(leg.board.stop));
+type SubwayBranch = SubwayMap["branches"][number];
+
+/**
+ * 구간 방향의 가지 중 승차역(가능하면 하차역도)을 지나는 것. 없으면 null.
+ * 가지마다 순번이 0부터라 갈린 뒤의 순번이 겹치므로, 지도·차량·시트가 모두 이 가지를 같이 쓴다.
+ */
+export function subwayBranchForLeg(
+	leg: Pick<SubwayLeg, "alight" | "board" | "direction">,
+	map: SubwayMap
+): SubwayBranch | null {
+	const candidates = map.branches.filter(
+		(branch) =>
+			branch.direction === leg.direction &&
+			branch.stations.some((station) => station.stop === leg.board.stop)
+	);
 	return (
-		candidates.find((candidate) => candidate.order.has(leg.alight.stop)) ??
+		candidates.find((branch) =>
+			branch.stations.some((station) => station.stop === leg.alight.stop)
+		) ??
 		candidates[0] ??
 		null
 	);
+}
+
+/** 구간이 지나는 가지의 역 순서. 없으면 null. */
+function stationOrder(leg: SubwayLeg, map: SubwayMap): StationOrder | null {
+	const branch = subwayBranchForLeg(leg, map);
+	if (branch === null) {
+		return null;
+	}
+	return {
+		loop: isLoopBranch(bareId(leg.line), branch.branchKey),
+		order: new Map(
+			branch.stations.map((station) => [station.stop, station.seq])
+		),
+		stationCount: branch.stations.length,
+	};
 }
 
 /**

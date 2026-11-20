@@ -2,7 +2,7 @@ import type { Leg } from "@Betro/commute/plan";
 
 import { t } from "@/lib/i18n/t";
 import type { MessageKey, MessageParams } from "@/lib/i18n/translate";
-import { isLoopBranch } from "./leg-vehicles";
+import { isLoopBranch, subwayBranchForLeg } from "./leg-vehicles";
 import type { BusMap, RouteViewLeg, SubwayMap } from "./map-client";
 
 const MS_PER_SEC = 1000;
@@ -77,12 +77,9 @@ function subwayTrack(leg: Leg, map: SubwayMap): Track | null {
 	if (leg.mode !== "subway") {
 		return null;
 	}
-	const branch = map.branches.find(
-		(candidate) =>
-			candidate.direction === leg.direction &&
-			candidate.stations.some((station) => station.stop === leg.board.stop)
-	);
-	if (!branch) {
+	// 지도가 차량 순번을 잰 가지와 같은 가지를 써야 갈린 뒤 겹치는 순번을 맞게 읽는다.
+	const branch = subwayBranchForLeg(leg, map);
+	if (branch === null) {
 		return null;
 	}
 	const stops = [...branch.stations].sort(bySeq);
