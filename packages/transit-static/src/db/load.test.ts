@@ -338,10 +338,9 @@ describe("loadBusRoutes", () => {
 		});
 		const rows = await db.select().from(busRoute);
 		expect(rows).toHaveLength(2);
-		const bySource = new Map(rows.map((row) => [row.source, row]));
+		const bySource = new Map(rows.map((busRow) => [busRow.source, busRow]));
 		expect(bySource.get("seoul")?.areaName).toBeNull();
 		expect(bySource.get("gbis")?.areaName).toBe("수원시");
 		expect(bySource.get("gbis")?.sourceCity).toBe("31");
 	});
-
 });
