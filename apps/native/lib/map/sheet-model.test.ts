@@ -46,6 +46,7 @@ const emptyView = (approaching: RouteViewLeg["approaching"]): RouteViewLeg => ({
 
 it("bus sheet lists one past stop, now, next stops and ends at my stop with minutes from approaching", () => {
 	const model = sheetModel({
+		boarded: false,
 		leg: busLeg,
 		map: busMap,
 		nowMs: NOW,
@@ -78,6 +79,7 @@ it("bus sheet lists one past stop, now, next stops and ends at my stop with minu
 
 it("no minutes when the vehicle is not on the boarding board", () => {
 	const model = sheetModel({
+		boarded: false,
 		leg: busLeg,
 		map: busMap,
 		nowMs: NOW,
@@ -100,6 +102,7 @@ it("no minutes when the vehicle is not on the boarding board", () => {
 
 it("marks estimated when method is headway", () => {
 	const model = sheetModel({
+		boarded: false,
 		leg: busLeg,
 		map: busMap,
 		nowMs: NOW,
@@ -121,6 +124,7 @@ it("marks estimated when method is headway", () => {
 
 it("has no minutes without a route view", () => {
 	const model = sheetModel({
+		boarded: false,
 		leg: busLeg,
 		map: busMap,
 		nowMs: NOW,
@@ -159,20 +163,21 @@ const loopMap: SubwayMap = {
 			],
 		},
 	],
-	line: "seoul-subway:2",
+	line: "seoul-subway:line2",
 };
 
 const loopLeg: SubwayLeg = {
 	alight: { name: "마", stop: "seoul-subway:S5" },
 	board: { name: "나", stop: "seoul-subway:S2" },
 	direction: "up",
-	line: "seoul-subway:2",
+	line: "seoul-subway:line2",
 	lineName: "2호선",
 	mode: "subway",
 };
 
 it("subway sheet includes train number and loop direction", () => {
 	const model = sheetModel({
+		boarded: false,
 		leg: loopLeg,
 		map: loopMap,
 		nowMs: NOW,
@@ -203,4 +208,44 @@ it("subway sheet includes train number and loop direction", () => {
 		{ name: "나", state: "mine" },
 	]);
 	expect(model.minutesToMine).toBe(2);
+});
+
+it("a boarded train on a loop ends its stop rows at the alight station", () => {
+	// 2호선 본선 10역, 승차 S2, 하차 S6, 지금 S4. 승차역으로 한 바퀴 돌아가지 않는다.
+	const names = ["영", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"];
+	const map: SubwayMap = {
+		...loopMap,
+		branches: [
+			{
+				branchKey: "main",
+				direction: "up",
+				shape: [],
+				stations: names.map((name, seq) => station(seq, name)),
+			},
+		],
+	};
+	const leg: SubwayLeg = {
+		...loopLeg,
+		alight: { name: "육", stop: "seoul-subway:S6" },
+		board: { name: "이", stop: "seoul-subway:S2" },
+	};
+	const input = {
+		leg,
+		map,
+		nowMs: NOW,
+		observedAt: NOW,
+		positionSeq: 4,
+		vehicleId: "2231",
+		view: null,
+	};
+	expect(sheetModel({ ...input, boarded: true }).stops).toEqual([
+		{ name: "삼", state: "past" },
+		{ name: "사", state: "now" },
+		{ name: "오", state: "next" },
+		{ name: "육", state: "mine" },
+	]);
+	// 타기 전이면 이음매를 넘어 승차역까지 이어진다.
+	const waiting = sheetModel({ ...input, boarded: false }).stops;
+	expect(waiting.at(-1)).toEqual({ name: "이", state: "mine" });
+	expect(waiting).toHaveLength(10);
 });

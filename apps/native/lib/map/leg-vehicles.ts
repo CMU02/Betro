@@ -63,8 +63,11 @@ interface StationOrder {
 	stationCount: number;
 }
 
-/** 서버 `LOOP_BRANCHES`(line2|main)와 같다. 응답에 순환 표시가 없어 노선·가지로 정한다. */
-const LOOP_LINE_KEY = "2";
+/**
+ * 서버 `LOOP_BRANCHES`(line2|main)와 같다. 응답에 순환 표시가 없어 노선·가지로 정한다.
+ * 노선 키는 transit-static `LINES`의 `lineKey`(`seoul-subway:line2`의 `line2`)다.
+ */
+const LOOP_LINE_KEY = "line2";
 const LOOP_BRANCH_KEY = "main";
 
 /** 순환 가지(2호선 본선)인지. */

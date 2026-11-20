@@ -164,6 +164,7 @@ export function VehicleSheet({
 	const nowMs = useNowMs();
 	const { handlers, translateY } = useDragToClose(onClose);
 	const model = sheetModel({
+		boarded: toAlight,
 		leg,
 		map,
 		nowMs,

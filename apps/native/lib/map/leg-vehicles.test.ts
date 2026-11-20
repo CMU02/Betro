@@ -26,7 +26,7 @@ const subwayLeg: SubwayLeg = {
 	alight: { name: "삼성", stop: "seoul-subway:1002000223" },
 	board: { name: "강남", stop: "seoul-subway:1002000222" },
 	direction: "up",
-	line: "seoul-subway:2",
+	line: "seoul-subway:line2",
 	lineName: "2호선",
 	mode: "subway",
 };
@@ -51,7 +51,7 @@ function train(
 	rawTrainNo: string,
 	statnId: string | null,
 	direction: "up" | "down" = "up",
-	lineKey = "2"
+	lineKey = "line2"
 ): SubwaySnapshotVehicle {
 	return {
 		direction,
@@ -109,7 +109,7 @@ const subwayMap: SubwayMap = {
 			})),
 		},
 	],
-	line: "seoul-subway:2",
+	line: "seoul-subway:line2",
 };
 
 it("keeps buses with sectOrd before the boarding seq and drops those past it", () => {
@@ -161,7 +161,7 @@ it("keeps subway trains in the leg direction before the boarding station", () =>
 			train("at", "1002000222"),
 			train("past", "1002000223"),
 			train("wrong-dir", "1002000221", "down"),
-			train("other-line", "1002000221", "up", "3"),
+			train("other-line", "1002000221", "up", "line3"),
 			train("unknown", null),
 		],
 		subwayMap,
@@ -180,7 +180,9 @@ it("hidden lines keep the line but hide vehicles; allLinesHidden true when every
 	expect(some.map((entry) => entry.showVehicles)).toEqual([false, true]);
 	expect(some).toHaveLength(2);
 	expect(allLinesHidden(route, ["seoul-bus:R1"])).toBe(false);
-	expect(allLinesHidden(route, ["seoul-bus:R1", "seoul-subway:2"])).toBe(true);
+	expect(allLinesHidden(route, ["seoul-bus:R1", "seoul-subway:line2"])).toBe(
+		true
+	);
 	expect(allLinesHidden({ ...route, legs: [] }, ["x"])).toBe(false);
 });
 
@@ -197,7 +199,7 @@ function loopMapOf(stationCount: number): SubwayMap {
 	return {
 		batchId: 1,
 		branches: [{ branchKey: "main", direction: "up", shape: [], stations }],
-		line: "seoul-subway:2",
+		line: "seoul-subway:line2",
 	};
 }
 

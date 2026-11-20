@@ -95,10 +95,14 @@ function subwayTrack(leg: Leg, map: SubwayMap): Track | null {
 	};
 }
 
-/** 지난 정류장 1개, 현재, 다음 정류장들을 거쳐 내 정류장에서 끝나는 줄. 순환 가지는 이음매를 넘어 이어진다. */
+/**
+ * 지난 정류장 1개, 현재, 다음 정류장들을 거쳐 내 정류장에서 끝나는 줄. 순환 가지는 이음매를 넘어 이어진다.
+ * 내 정류장은 타기 전이면 승차 정류장, 탑승한 차량(`boarded`)이면 하차 정류장이다.
+ */
 function stopRows(
 	track: Track,
-	positionSeq: number
+	positionSeq: number,
+	boarded: boolean
 ): { name: string; state: SheetStopState }[] {
 	const { stops, loop } = track;
 	const count = stops.length;
@@ -112,9 +116,10 @@ function stopRows(
 		rows.push({ name: stops[past]?.name ?? "", state: "past" });
 	}
 	rows.push({ name: stops[here]?.name ?? "", state: "now" });
-	// 이미 승차 정류장을 지났으면(탑승 중) 하차 정류장에서 끝낸다.
+	// 탑승한 차량이거나 직선 노선에서 이미 승차 정류장을 지났으면 하차 정류장에서 끝낸다.
+	// 순환 가지는 위치만으로 지났는지 알 수 없어 탑승 여부(`boarded`)로만 정한다.
 	const passedBoard = !loop && track.boardIndex <= here;
-	const target = passedBoard ? track.alightIndex : track.boardIndex;
+	const target = boarded || passedBoard ? track.alightIndex : track.boardIndex;
 	if (target < 0 || (!loop && target <= here)) {
 		return rows;
 	}
@@ -171,6 +176,8 @@ function directionOf(
  * 도착 계산이 시각을 못 내는 차량은 정류장 줄만 보여 준다.
  */
 export function sheetModel(input: {
+	/** 사용자가 이미 탄 차량이면 true. 줄이 하차 정류장에서 끝난다. */
+	boarded: boolean;
 	leg: Leg;
 	map: BusMap | SubwayMap;
 	nowMs: number;
@@ -179,7 +186,8 @@ export function sheetModel(input: {
 	vehicleId: string;
 	view: RouteViewLeg | null;
 }): SheetModel {
-	const { leg, map, nowMs, observedAt, positionSeq, vehicleId, view } = input;
+	const { boarded, leg, map, nowMs, observedAt, positionSeq, vehicleId, view } =
+		input;
 	const track = "stops" in map ? busTrack(leg, map) : subwayTrack(leg, map);
 	const direction = directionOf(leg, track, positionSeq);
 	const secondsAgo = Math.max(0, Math.floor((nowMs - observedAt) / MS_PER_SEC));
@@ -195,7 +203,7 @@ export function sheetModel(input: {
 		freshness: { live: secondsAgo <= LIVE_MAX_AGE_SEC, secondsAgo },
 		lineLabel: leg.lineName,
 		minutesToMine,
-		stops: track === null ? [] : stopRows(track, positionSeq),
+		stops: track === null ? [] : stopRows(track, positionSeq, boarded),
 		trainNo: leg.mode === "subway" ? vehicleId : null,
 	};
 }
