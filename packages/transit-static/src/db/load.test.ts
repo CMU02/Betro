@@ -323,4 +323,25 @@ describe("loadBusRoutes", () => {
 		expect(current(first.batchId)).toBe(false);
 		expect(current(second.batchId)).toBe(true);
 	});
+
+	it("같은 배치에 route_id가 같고 출처가 다른 노선을 함께 넣는다", async () => {
+		const db = await createTestDb();
+		const seoul = assembled();
+		const gbis = {
+			...seoul,
+			areaName: "수원시",
+			source: "gbis" as const,
+			sourceCity: "31",
+		};
+		await loadBusRoutes(db, [seoul, gbis], {
+			a: { fileName: "a", sha256: "1" },
+		});
+		const rows = await db.select().from(busRoute);
+		expect(rows).toHaveLength(2);
+		const bySource = new Map(rows.map((row) => [row.source, row]));
+		expect(bySource.get("seoul")?.areaName).toBeNull();
+		expect(bySource.get("gbis")?.areaName).toBe("수원시");
+		expect(bySource.get("gbis")?.sourceCity).toBe("31");
+	});
+
 });

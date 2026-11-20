@@ -195,6 +195,7 @@ export async function loadBusRoutes(
 			const [inserted] = await tx
 				.insert(busRoute)
 				.values({
+					areaName: route.areaName ?? null,
 					batchId,
 					firstBusMinute: route.firstBusMinute,
 					headwayMin: route.headwayMin,
@@ -205,6 +206,8 @@ export async function loadBusRoutes(
 					routeName: route.routeName,
 					routeType: route.routeType,
 					shortName: route.shortName,
+					source: route.source ?? "seoul",
+					sourceCity: route.sourceCity ?? null,
 				})
 				.returning({ id: busRoute.id });
 			if (!inserted) {

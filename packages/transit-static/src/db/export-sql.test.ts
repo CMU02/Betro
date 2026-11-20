@@ -296,6 +296,9 @@ describe("exportBatchSql", () => {
 		);
 		expect(busInsert).toContain('"short_name"');
 		expect(busInsert).toContain('"region"');
+		expect(busInsert).toContain('"source"');
+		expect(busInsert).toContain('"area_name"');
+		expect(busInsert).toContain('"source_city"');
 		expect(busInsert).toContain("'seoul','100100290','6411','3','6411'");
 		const target = await createTestDb();
 		await executeAll(target, statements);

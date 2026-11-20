@@ -72,6 +72,9 @@ export function comparePublishedCount(
 
 export type BusRegion = "seoul" | "gyeonggi" | "incheon";
 
+/** bus_route.source. packages/db schema의 BusSource와 같다. */
+export type BusSource = "seoul" | "gbis" | "tago";
+
 /** routeType으로 노선 면허 지역을 정한다. 7 → incheon, 8 → gyeonggi, 그 밖(마을 2 포함) → seoul. */
 export function regionOf(routeType: string): BusRegion {
 	switch (routeType.trim()) {

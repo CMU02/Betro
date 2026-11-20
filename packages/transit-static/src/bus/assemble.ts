@@ -18,6 +18,7 @@ import {
 import {
 	type BusRegion,
 	type BusRouteEntry,
+	type BusSource,
 	isInScopeRouteId,
 	isInScopeRouteType,
 	regionOf,
@@ -90,6 +91,8 @@ export interface BusIssue {
 }
 
 export interface AssembledBusRoute {
+	/** 같은 번호를 시·군으로 구분하는 지역 이름. 서울 노선은 없다. */
+	areaName?: string | null;
 	coords: [number, number][];
 	/** 첫차 시각(0시부터의 분). 노선 목록에 없으면 null. */
 	firstBusMinute: number | null;
@@ -109,6 +112,10 @@ export interface AssembledBusRoute {
 	segments: BusSegment[];
 	/** 지역을 뗀 이름. 노선 목록에 없으면(서울 노선) routeName과 같다. */
 	shortName: string;
+	/** 노선을 받은 출처. 없으면 seoul. */
+	source?: BusSource;
+	/** 출처의 도시 코드. 없으면 null. */
+	sourceCity?: string | null;
 	stops: (BusRouteStationRow & ProjectedStop)[];
 }
 
