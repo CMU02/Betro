@@ -2,6 +2,12 @@ type RawItem = Record<string, unknown>;
 
 export interface BusRouteListRow {
 	busRouteId: string;
+	/** 첫차 시각. 그 날 0시부터의 분. 형식이 다르면 null. */
+	firstBusMinute: number | null;
+	/** 배차간격(분, `term`). 비었거나 0 이하면 null. */
+	headwayMin: number | null;
+	/** 막차 시각. 그 날 0시부터의 분. 자정을 넘는 막차도 그 값 그대로다. 형식이 다르면 null. */
+	lastBusMinute: number | null;
 	name: string;
 	routeType: string;
 	/** 지역을 뗀 이름(`busRouteAbrv`). 비어 있으면 `name`. */
@@ -32,6 +38,30 @@ function text(value: unknown): string {
 	return value === null || value === undefined ? "" : String(value).trim();
 }
 
+const BUS_TIME_PATTERN = /^\d{8}(\d{2})(\d{2})\d{2}$/;
+const MINUTES_PER_HOUR = 60;
+const MAX_HOUR = 23;
+const MAX_MINUTE = 59;
+
+/** `yyyyMMddHHmmss`의 HHmm을 0시부터의 분으로 바꾼다. 형식이 다르면 null. */
+function busTimeMinute(value: unknown): number | null {
+	const match = BUS_TIME_PATTERN.exec(text(value));
+	if (!match) {
+		return null;
+	}
+	const hour = Number(match[1]);
+	const minute = Number(match[2]);
+	if (hour > MAX_HOUR || minute > MAX_MINUTE) {
+		return null;
+	}
+	return hour * MINUTES_PER_HOUR + minute;
+}
+
+function headwayMinutes(value: unknown): number | null {
+	const parsed = Number(text(value));
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 export function parseBusRouteList(items: RawItem[]): BusRouteListRow[] {
 	const rows: BusRouteListRow[] = [];
 	for (const item of items) {
@@ -43,6 +73,9 @@ export function parseBusRouteList(items: RawItem[]): BusRouteListRow[] {
 		const abrv = text(item.busRouteAbrv);
 		rows.push({
 			busRouteId,
+			firstBusMinute: busTimeMinute(item.firstBusTm),
+			headwayMin: headwayMinutes(item.term),
+			lastBusMinute: busTimeMinute(item.lastBusTm),
 			name,
 			routeType: text(item.routeType),
 			shortName: abrv === "" ? name : abrv,

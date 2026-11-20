@@ -4,6 +4,11 @@ export const DEFAULT_TIMEZONE = "Asia/Seoul";
 export const DEFAULT_LEAD_MINUTES = 10;
 
 export interface CommuteConfig {
+	/**
+	 * 버스 도착정보 하루 예산 중 출퇴근 세션 몫. 지도 용도 호출은 `dailyBudgetBusArrival − 이 값`에
+	 * 닿으면 부르지 않고 캐시만 쓴다(지도 설계 4.3).
+	 */
+	busArrivalSessionReserve: number;
 	busNearPollMs: number;
 	busNearWindowMs: number;
 	busPollMs: number;
@@ -126,6 +131,10 @@ export function commuteConfig(
 	env: Record<string, string | undefined>
 ): CommuteConfig {
 	return {
+		busArrivalSessionReserve: numberFrom(
+			env.COMMUTE_BUS_ARRIVAL_SESSION_RESERVE,
+			300
+		),
 		busNearPollMs: numberFrom(env.COMMUTE_BUS_NEAR_POLL_MS, 30_000),
 		busNearWindowMs: numberFrom(env.COMMUTE_BUS_NEAR_WINDOW_MS, 360_000),
 		busPollMs: numberFrom(env.COMMUTE_BUS_POLL_MS, 60_000),

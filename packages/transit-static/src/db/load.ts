@@ -196,6 +196,9 @@ export async function loadBusRoutes(
 				.insert(busRoute)
 				.values({
 					batchId,
+					firstBusMinute: route.firstBusMinute,
+					headwayMin: route.headwayMin,
+					lastBusMinute: route.lastBusMinute,
 					qualityFlags: route.qualityFlags,
 					region: route.region,
 					routeId: route.routeId,

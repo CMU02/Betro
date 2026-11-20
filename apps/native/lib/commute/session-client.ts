@@ -13,6 +13,8 @@ export interface SessionRouteView {
 	boardEtaEpoch: number | null;
 	destinationEtaEpoch: number | null;
 	etaState: EtaState;
+	/** 경로의 구간별 차량 ID. 키가 없던 옛 서버는 []. */
+	legVehicleIds: (string | null)[];
 	positionState: PositionState;
 	rank: number;
 	stopsAway: number | null;
@@ -63,6 +65,24 @@ function isPositionState(value: unknown): value is PositionState {
 	return typeof value === "string" && POSITION_STATES.includes(value);
 }
 
+/** 키가 없으면 [](옛 서버). 배열이 아니거나 항목이 문자열·null이 아니면 undefined. */
+function parseLegVehicleIds(value: unknown): (string | null)[] | undefined {
+	if (value === undefined) {
+		return [];
+	}
+	if (!Array.isArray(value)) {
+		return;
+	}
+	const ids: (string | null)[] = [];
+	for (const id of value) {
+		if (id !== null && typeof id !== "string") {
+			return;
+		}
+		ids.push(id);
+	}
+	return ids;
+}
+
 function parseRouteView(value: unknown): SessionRouteView | undefined {
 	if (!isRecord(value)) {
 		return;
@@ -75,12 +95,14 @@ function parseRouteView(value: unknown): SessionRouteView | undefined {
 		rank,
 		stopsAway,
 	} = value;
+	const legVehicleIds = parseLegVehicleIds(value.legVehicleIds);
 	if (
 		!(
 			isNumber(rank) &&
 			isNullableNumber(boardEtaEpoch) &&
 			isNullableNumber(destinationEtaEpoch) &&
 			isNullableNumber(stopsAway) &&
+			legVehicleIds !== undefined &&
 			isEtaState(etaState) &&
 			isPositionState(positionState)
 		)
@@ -91,6 +113,7 @@ function parseRouteView(value: unknown): SessionRouteView | undefined {
 		boardEtaEpoch,
 		destinationEtaEpoch,
 		etaState,
+		legVehicleIds,
 		positionState,
 		rank,
 		stopsAway,

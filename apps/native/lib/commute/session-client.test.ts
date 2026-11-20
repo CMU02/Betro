@@ -42,6 +42,7 @@ const MAIN_ROUTE = {
 	boardEtaEpoch: 1_794_265_680,
 	destinationEtaEpoch: 1_794_267_600,
 	etaState: "live",
+	legVehicleIds: ["A1", null],
 	positionState: "live",
 	rank: 0,
 	stopsAway: 1,
@@ -94,7 +95,10 @@ describe("fetchActiveSession", () => {
 				// 옛 푸시 값에는 여유 필드가 없어서 null로 읽는다
 				content: { ...CONTENT, leaveSlack: null, safeLeaveEpoch: null },
 				planId: PLAN_ID,
-				routes: [MAIN_ROUTE, ALT_ROUTE] as ActiveSessionView["routes"],
+				routes: [
+					MAIN_ROUTE,
+					{ ...ALT_ROUTE, legVehicleIds: [] },
+				] as ActiveSessionView["routes"],
 				sessionId: SESSION_ID,
 			},
 		});
@@ -109,6 +113,25 @@ describe("fetchActiveSession", () => {
 		});
 		const result = await fetchActiveSession(client);
 		expect(result.ok && result.session?.routes).toEqual([]);
+	});
+
+	it("session view parses legVehicleIds and tolerates its absence (old server) as []", async () => {
+		const { client } = fakeClient({ json: sessionJson(), status: 200 });
+		const result = await fetchActiveSession(client);
+		expect(
+			result.ok && result.session?.routes.map((r) => r.legVehicleIds)
+		).toEqual([["A1", null], []]);
+	});
+
+	it("rejects a malformed legVehicleIds", async () => {
+		const { client } = fakeClient({
+			json: sessionJson({ routes: [{ ...MAIN_ROUTE, legVehicleIds: [1] }] }),
+			status: 200,
+		});
+		expect(await fetchActiveSession(client)).toEqual({
+			ok: false,
+			reason: "invalid",
+		});
 	});
 
 	it("rejects content that does not parse", async () => {

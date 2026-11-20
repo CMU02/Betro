@@ -3,15 +3,23 @@ import type { InstallIdentity } from "@/lib/device/install-identity";
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
 export interface ServerResponse {
+	/** 응답의 `ETag` 헤더. 없으면 null이거나 비어 있다. */
+	etag?: string | null;
 	json: unknown;
 	status: number;
+}
+
+/** 요청에 더 붙이는 헤더. 인증 헤더는 덮어쓰지 못한다. */
+export interface ServerRequestOptions {
+	headers?: Record<string, string>;
 }
 
 export interface ServerClient {
 	request: (
 		method: HttpMethod,
 		path: string,
-		body?: unknown
+		body?: unknown,
+		options?: ServerRequestOptions
 	) => Promise<ServerResponse>;
 }
 
@@ -46,13 +54,14 @@ async function readJson(response: Response): Promise<unknown> {
  */
 export function createServerClient(deps: ServerClientDeps): ServerClient {
 	return {
-		async request(method, path, body) {
+		async request(method, path, body, options) {
 			const controller = new AbortController();
 			const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 			let sent = false;
 			try {
 				const identity = await deps.identity();
 				const headers: Record<string, string> = {
+					...options?.headers,
 					Authorization: `Bearer ${identity.secret}`,
 					"X-Betro-Install": identity.installId,
 				};
@@ -67,7 +76,11 @@ export function createServerClient(deps: ServerClientDeps): ServerClient {
 					signal: controller.signal,
 				});
 				deps.onReachability?.(true);
-				return { json: await readJson(response), status: response.status };
+				return {
+					etag: response.headers.get("ETag"),
+					json: await readJson(response),
+					status: response.status,
+				};
 			} catch {
 				if (sent) {
 					deps.onReachability?.(false);

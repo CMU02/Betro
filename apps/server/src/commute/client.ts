@@ -1,6 +1,7 @@
+import type { Route } from "@Betro/commute/plan";
 import type { SessionInput } from "@Betro/commute/session/stage";
 import type { Env } from "../worker-env";
-import type { ActiveSession, InputResult } from "./runner-core";
+import type { ActiveSession, InputResult, RouteView } from "./runner-core";
 
 /** 출퇴근 실행기 Durable Object 이름. 이름 하나 = 인스턴스 하나. */
 export const COMMUTE_NAME = "commute-v1";
@@ -20,6 +21,8 @@ export interface CommuteRunnerClient {
 		sessionId: string,
 		input: SessionInput
 	) => Promise<InputResult>;
+	/** 지도에서 고른 경로 하나의 예상(경로 보기). 실행기가 버스 도착정보를 지도 용도로 부른다. */
+	routeView: (route: Route) => Promise<RouteView>;
 	/** cron용: 서비스일 하나의 출퇴근 일일 보고서(`commute/reports/<date>.json`). 이미 썼으면 false. */
 	writeDailyReport: (date: string) => Promise<boolean>;
 }
@@ -39,6 +42,7 @@ export function commuteClient(env: Pick<Env, "COMMUTE">): CommuteRunnerClient {
 		healthCheck: () => stub().healthCheck(),
 		input: (installId, sessionId, input) =>
 			stub().input(installId, sessionId, input),
+		routeView: (route) => stub().routeView(route),
 		writeDailyReport: (date) => stub().writeDailyReport(date),
 	};
 }

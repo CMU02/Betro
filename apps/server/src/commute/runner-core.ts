@@ -17,7 +17,7 @@ import {
 	startMinutesToCheck,
 } from "@Betro/commute/calendar";
 import { DEFAULT_TIMEZONE } from "@Betro/commute/config";
-import type { CommutePlan, Leg, SubwayLeg } from "@Betro/commute/plan";
+import type { CommutePlan, Leg, Route, SubwayLeg } from "@Betro/commute/plan";
 import {
 	type ApnsJwtCache,
 	apnsEndRequest,
@@ -38,6 +38,10 @@ import {
 	nextLeaveBoundaryMs,
 	staleAtFor,
 } from "@Betro/commute/session/content";
+import {
+	estimateRoute,
+	type LegEstimate,
+} from "@Betro/commute/session/estimate";
 import { earlyBoardAfterSend } from "@Betro/commute/session/leave";
 import {
 	advance,
@@ -53,7 +57,11 @@ import {
 } from "@Betro/commute/sources/assemble";
 import type { RouteStopArrival } from "@Betro/commute/sources/seoul-bus";
 import type { StationRow } from "@Betro/commute/sources/seoul-subway";
-import type { TransitBoards } from "@Betro/commute/sources/types";
+import type {
+	ArrivalMethod,
+	StopBoard,
+	TransitBoards,
+} from "@Betro/commute/sources/types";
 import { FCM_PROJECT_ID } from "@Betro/realtime/alerts";
 import { redactKeys } from "@Betro/realtime/upstream/urls";
 import { RETRY_BACKOFF_MS } from "../collector/upstream-call";
@@ -109,6 +117,8 @@ const SUBWAY_KEY_PATH = /(\/api\/subway\/)[^/\s"']+/g;
 const PEM_LINE_BREAK = /\r?\n|\\n/;
 const encoder = new TextEncoder();
 const MIN_SECRET_LINE = 16;
+/** 지도 용도 호출이 세션 몫에 닿아 부르지 않았다. 캐시만 쓰고 폴링 시각도 찍지 않는다. */
+const RESERVED = "reserved";
 
 type Platform = "ios" | "android";
 /**
@@ -200,6 +210,8 @@ export interface SessionRouteView {
 	boardEtaEpoch: number | null;
 	destinationEtaEpoch: number | null;
 	etaState: "live" | "estimated";
+	/** 경로의 구간별 차량 ID. 기본 경로에서 차량을 잡았거나 탄 구간은 `fixed` 값이다. */
+	legVehicleIds: (string | null)[];
 	positionState: "live" | "stale" | "none";
 	rank: number;
 	stopsAway: number | null;
@@ -216,7 +228,7 @@ export interface ActiveSession {
 const toEpochSeconds = (at: number | null | undefined): number | null =>
 	at === null || at === undefined ? null : Math.floor(at / 1000);
 
-function routeView(
+function sessionRouteView(
 	rank: number,
 	state: SessionEntry["state"]
 ): SessionRouteView {
@@ -226,6 +238,10 @@ function routeView(
 		boardEtaEpoch: toEpochSeconds(leg?.boardEtaAt),
 		destinationEtaEpoch: toEpochSeconds(estimate?.destinationEtaAt),
 		etaState: leg?.etaState ?? "estimated",
+		legVehicleIds: (estimate?.legs ?? []).map(
+			(entry, index) =>
+				(rank === 0 ? state.fixed[index] : null) ?? entry.vehicleId ?? null
+		),
 		positionState: leg?.positionState ?? "none",
 		rank,
 		stopsAway: leg?.stopsAway ?? null,
@@ -233,6 +249,55 @@ function routeView(
 }
 
 export type InputResult = "ok" | "not-found" | "ended";
+
+/**
+ * 버스 도착정보 호출의 용도. `map`은 하루 예산이 `dailyBudgetBusArrival − busArrivalSessionReserve`에
+ * 닿으면 부르지 않고 캐시만 쓴다. 출퇴근 세션 몫을 지도가 먹지 않게 한다(지도 설계 4.3).
+ */
+export type BusArrivalPurpose = "session" | "map";
+
+/** 경로 보기의 구간 하나. 시각은 epoch ms. */
+export interface RouteViewLeg {
+	/** 승차 정류장(역) 도착판의 다가오는 차량, 가까운 순서. */
+	approaching: {
+		etaAt: number | null;
+		method: ArrivalMethod | null;
+		stopsAway: number | null;
+		vehicleId: string;
+	}[];
+	boardEtaAt: number | null;
+	etaState: "live" | "estimated";
+	method: ArrivalMethod | null;
+	positionState: "live" | "stale" | "none";
+	vehicleId: string | null;
+}
+
+/** 지도에서 고른 경로 하나의 예상. 잠금화면과 같은 `estimateRoute`로 낸다(지도 설계 4.6). */
+export interface RouteView {
+	destinationEtaAt: number | null;
+	legs: RouteViewLeg[];
+}
+
+function routeViewLeg(
+	estimate: LegEstimate | undefined,
+	board: StopBoard | null
+): RouteViewLeg {
+	return {
+		approaching: (board?.approaching ?? []).map(
+			({ etaAt, method, stopsAway, vehicleId }) => ({
+				etaAt,
+				method,
+				stopsAway,
+				vehicleId,
+			})
+		),
+		boardEtaAt: estimate?.boardEtaAt ?? null,
+		etaState: estimate?.etaState ?? "estimated",
+		method: estimate?.method ?? null,
+		positionState: estimate?.positionState ?? "none",
+		vehicleId: estimate?.vehicleId ?? null,
+	};
+}
 
 const sessionKey = (id: string): string => `${SESSION_PREFIX}${id}`;
 const nextMinute = (now: number): number =>
@@ -378,10 +443,12 @@ function watchedLegs(state: SessionState, plan: CommutePlan): Leg[] {
 	return legs;
 }
 
+function subwayLegsIn(legs: Leg[]): SubwayLeg[] {
+	return legs.filter((leg): leg is SubwayLeg => leg.mode === "subway");
+}
+
 function subwayLegsOf(plan: CommutePlan): SubwayLeg[] {
-	return plan.routes
-		.flatMap((route) => route.legs)
-		.filter((leg): leg is SubwayLeg => leg.mode === "subway");
+	return subwayLegsIn(plan.routes.flatMap((route) => route.legs));
 }
 
 /** 경로를 지웠을 때 보낼 종료 값. 경로가 없으니 마지막으로 보낸 값을 바탕으로 한다. */
@@ -518,8 +585,17 @@ export class RunnerCore {
 				: owned.plan.routes.map((route) => route.rank);
 		const routes = ranks
 			.toSorted((a, b) => a - b)
-			.map((rank) => routeView(rank, entry.state));
+			.map((rank) => sessionRouteView(rank, entry.state));
 		return { content, planId: entry.state.planId, routes, sessionId: id };
+	}
+
+	/**
+	 * 지도에서 고른 경로 하나의 예상. 버스는 세션과 같은 노선별 도착정보 캐시를 지도 용도로 쓰고,
+	 * 지하철은 수집기의 역 도착판과 시간표를 쓴다. `readyAt`은 첫 도보 뒤다. 저장소의 예산·캐시를
+	 * 고치므로 tick과 겹치지 않게 차례로 돈다. 조회가 실패한 구간은 시각 없는 추정으로 둔다.
+	 */
+	routeView(route: Route, now: number): Promise<RouteView> {
+		return this.#exclusive(() => this.#routeView(route, now));
 	}
 
 	/**
@@ -574,6 +650,51 @@ export class RunnerCore {
 			this.#warned.add(tag);
 			this.#log(line);
 		}
+	}
+
+	async #routeView(route: Route, now: number): Promise<RouteView> {
+		const { config } = this.#ports;
+		const busRouteIds = new Set<string>();
+		const stations = new Set<string>();
+		for (const leg of route.legs) {
+			if (leg.mode === "bus") {
+				busRouteIds.add(parseRef(leg.line).id);
+			} else {
+				stations.add(parseRef(leg.board.stop).id);
+				stations.add(parseRef(leg.alight.stop).id);
+			}
+		}
+		const raw: RawBoards = {
+			bus: {},
+			subway: {},
+			timetable: await this.#timetableOf(subwayLegsIn(route.legs), now, now, {
+				arrivals: {},
+				rideMs: {},
+			}),
+		};
+		await this.#collectStations([...stations], raw, now);
+		await runLimited([...busRouteIds], 1, (routeId) =>
+			this.#collectBus(routeId, false, raw, now, true, "map")
+		);
+		await this.#collectBusSchedules([...busRouteIds], raw);
+		const boards = assembleBoards(raw, config);
+		const estimate = estimateRoute(
+			route,
+			boards,
+			{
+				fixed: route.legs.map(() => null),
+				now,
+				readyAt: now + (route.walkMinutes[0] ?? 0) * MINUTE_MS,
+				skip: new Set(),
+			},
+			config
+		);
+		return {
+			destinationEtaAt: estimate.destinationEtaAt,
+			legs: route.legs.map((leg, index) =>
+				routeViewLeg(estimate.legs[index], boards.board(leg, "board"))
+			),
+		};
 	}
 
 	async #tick(): Promise<{ nextAlarmAt: number }> {
@@ -872,9 +993,28 @@ export class RunnerCore {
 		await this.#collectStations([...stations], raw, now);
 		// 노선은 차례로 부른다(하루 예산을 시도마다 센다).
 		await runLimited([...busRoutes], 1, ([routeId, near]) =>
-			this.#collectBus(routeId, near, raw, now, pollBus)
+			this.#collectBus(routeId, near, raw, now, pollBus, "session")
 		);
+		await this.#collectBusSchedules([...busRoutes.keys()], raw);
 		return raw;
+	}
+
+	/**
+	 * 도착판이 없을 때의 추정에 쓰는 버스 노선의 정적 배차간격. 읽지 못하면 로그만 남기고
+	 * 일정 없이 간다(한 tick의 모든 세션이 이 조회 하나에 막히지 않게).
+	 */
+	async #collectBusSchedules(
+		busRouteIds: string[],
+		raw: RawBoards
+	): Promise<void> {
+		if (busRouteIds.length === 0) {
+			return;
+		}
+		try {
+			raw.busSchedules = await this.#ports.busSchedules(busRouteIds);
+		} catch (error) {
+			this.#log(`commute bus schedules failed: ${errorText(error)}`);
+		}
 	}
 
 	/** 기본 경로의 지금 구간이 이 노선이고, 탑승 전이며, 잡은 차량이 가까운가. */
@@ -916,12 +1056,28 @@ export class RunnerCore {
 		if (fresh) {
 			return;
 		}
-		const { timetable } = this.#ports;
-		const arrivals = { ...entry.timetable.arrivals };
-		const rideMs = { ...entry.timetable.rideMs };
 		const rideAt = Math.max(now, entry.state.leaveAt);
+		entry.timetable = await this.#timetableOf(
+			subwayLegsOf(plan),
+			now,
+			rideAt,
+			entry.timetable
+		);
+		entry.timetableAt = now;
+	}
+
+	/** 지하철 구간마다 승차역 시간표 도착과 주행 시간. 읽지 못한 구간은 `base`의 값을 둔다. */
+	async #timetableOf(
+		legs: SubwayLeg[],
+		now: number,
+		rideAt: number,
+		base: RawBoards["timetable"]
+	): Promise<RawBoards["timetable"]> {
+		const { timetable } = this.#ports;
+		const arrivals = { ...base.arrivals };
+		const rideMs = { ...base.rideMs };
 		await Promise.all(
-			subwayLegsOf(plan).map(async (leg) => {
+			legs.map(async (leg) => {
 				const key = legKey(leg);
 				const line = parseRef(leg.line).id;
 				const from = parseRef(leg.board.stop).id;
@@ -944,8 +1100,7 @@ export class RunnerCore {
 				}
 			})
 		);
-		entry.timetable = { arrivals, rideMs };
-		entry.timetableAt = now;
+		return { arrivals, rideMs };
 	}
 
 	async #collectStations(
@@ -996,30 +1151,37 @@ export class RunnerCore {
 
 	/**
 	 * 노선 전 정류장 도착. 그 노선의 탈 차량이 가까운 세션이 있으면 `busNearPollMs`,
-	 * 아니면 `busPollMs`가 지났을 때만 부른다. 같은 노선은 세션이 여럿이어도 한 번이다.
+	 * 아니면 `busPollMs`가 지났을 때만 부른다. 같은 노선은 세션이 여럿이어도, 지도의 경로 보기와
+	 * 겹쳐도 한 번이다(캐시 `busRoute:<id>`를 함께 쓴다). 지도 용도가 세션 몫에 닿아 부르지 않았으면
+	 * 폴링 시각을 찍지 않는다(찍으면 바로 뒤 세션 tick이 간격에 막힌다).
 	 */
 	async #collectBus(
 		routeId: string,
 		near: boolean,
 		raw: RawBoards,
 		now: number,
-		poll: boolean
+		poll: boolean,
+		purpose: BusArrivalPurpose
 	): Promise<void> {
 		const { config, store } = this.#ports;
 		const key = `${BUS_PREFIX}${routeId}`;
 		let saved = (await store.get<BusRouteSaved>(key)) ?? null;
 		const interval = near ? config.busNearPollMs : config.busPollMs;
-		if (poll && (saved === null || now - saved.polledAt >= interval)) {
-			const stops = await this.#pollBus(routeId, now);
-			const data = stops
-				? {
-						fetchedAt: this.#ports.clock(),
-						now: stops,
-						prev: saved?.data?.now ?? null,
-					}
-				: (saved?.data ?? null);
-			saved = { data, polledAt: now };
-			await store.put(key, saved);
+		const isDue = saved === null || now - saved.polledAt >= interval;
+		if (poll && isDue) {
+			const stops = await this.#pollBus(routeId, now, purpose);
+			// 지도 몫에 막혔으면 부르지 않았으니 캐시만 쓴다.
+			if (stops !== RESERVED) {
+				const data = stops
+					? {
+							fetchedAt: this.#ports.clock(),
+							now: stops,
+							prev: saved?.data?.now ?? null,
+						}
+					: (saved?.data ?? null);
+				saved = { data, polledAt: now };
+				await store.put(key, saved);
+			}
 		}
 		if (saved?.data) {
 			raw.bus[routeId] = saved.data;
@@ -1029,26 +1191,37 @@ export class RunnerCore {
 	/** 시도마다 하루 예산 1건. 응답이 없으면 1초·2초 뒤 두 번까지 다시 부른다. */
 	async #pollBus(
 		routeId: string,
-		now: number
-	): Promise<RouteStopArrival[] | null> {
+		now: number,
+		purpose: BusArrivalPurpose
+	): Promise<RouteStopArrival[] | null | typeof RESERVED> {
 		const day = dayOf(now);
 		if (
 			(await this.#ports.store.get(`${STOPPED_PREFIX}${day}`)) !== undefined
 		) {
 			return null;
 		}
-		return await this.#attemptBus(routeId, day, now, 0);
+		return await this.#attemptBus(routeId, day, now, 0, purpose);
 	}
 
 	async #attemptBus(
 		routeId: string,
 		day: string,
 		now: number,
-		attempt: number
-	): Promise<RouteStopArrival[] | null> {
+		attempt: number,
+		purpose: BusArrivalPurpose
+	): Promise<RouteStopArrival[] | null | typeof RESERVED> {
 		const { boards, config, store } = this.#ports;
 		const budgetKey = `${BUDGET_PREFIX}${day}`;
 		const used = (await store.get<number>(budgetKey)) ?? 0;
+		const mapLimit =
+			config.dailyBudgetBusArrival - config.busArrivalSessionReserve;
+		if (purpose === "map" && used >= mapLimit) {
+			this.#warnOnce(
+				`map-share:${day}`,
+				`commute bus arrival map share exhausted day=${day} used=${used}`
+			);
+			return RESERVED;
+		}
 		if (used >= config.dailyBudgetBusArrival) {
 			this.#warnOnce(
 				`budget:${day}`,
@@ -1080,7 +1253,7 @@ export class RunnerCore {
 			return null;
 		}
 		await this.#sleep(backoff);
-		return await this.#attemptBus(routeId, day, now, attempt + 1);
+		return await this.#attemptBus(routeId, day, now, attempt + 1, purpose);
 	}
 
 	// -------------------------------------------------------------------------
@@ -1769,8 +1942,8 @@ export class RunnerCore {
 			store.list<EndedMark>(ENDED_PREFIX),
 			store.list(BUDGET_PREFIX),
 			store.list(STOPPED_PREFIX),
-			store.list(BUS_PREFIX),
-			store.list(STATION_PREFIX),
+			store.list<BusRouteSaved>(BUS_PREFIX),
+			store.list<StationSaved>(STATION_PREFIX),
 		]);
 		const stale: string[] = [];
 		for (const [key, mark] of ended) {
@@ -1789,8 +1962,19 @@ export class RunnerCore {
 			}
 		}
 		if (open === 0) {
-			// 세션이 없으면 도착판을 들고 있을 이유가 없다.
-			stale.push(...buses.keys(), ...stations.keys());
+			// 세션이 없으면 도착판을 들고 있을 이유가 없다. 다만 지도의 경로 보기가 막 채운 캐시는
+			// 다음 경로 보기가 다시 부르지 않도록 간격(busPollMs)이나 묵음 기준 동안 둔다.
+			const { config } = this.#ports;
+			for (const [key, saved] of buses) {
+				if (now - saved.polledAt >= config.busPollMs) {
+					stale.push(key);
+				}
+			}
+			for (const [key, saved] of stations) {
+				if (now - saved.cur.fetchedAt >= config.staleAfterMs) {
+					stale.push(key);
+				}
+			}
 		}
 		await Promise.all(stale.map((key) => store.delete(key)));
 	}

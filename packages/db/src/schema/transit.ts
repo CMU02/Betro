@@ -198,7 +198,13 @@ export const busRoute = sqliteTable(
 		batchId: integer("batch_id")
 			.notNull()
 			.references(() => referenceBatch.id, { onDelete: "cascade" }),
+		/** 첫차 시각. 그 날 0시부터의 분. 노선 목록에 없으면 null */
+		firstBusMinute: integer("first_bus_minute"),
+		/** 배차간격(분). 노선 목록의 term. 없으면 null */
+		headwayMin: integer("headway_min"),
 		id: integer("id").primaryKey({ autoIncrement: true }),
+		/** 막차 시각. 그 날 0시부터의 분. 자정을 넘으면 24시간을 더하지 않고 그대로 둔다. 없으면 null */
+		lastBusMinute: integer("last_bus_minute"),
 		qualityFlags: text("quality_flags", { mode: "json" })
 			.$type<string[]>()
 			.notNull(),

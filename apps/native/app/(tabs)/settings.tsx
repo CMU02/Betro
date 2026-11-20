@@ -13,10 +13,11 @@ import {
 	ShieldCheckIcon,
 	ZapIcon,
 } from "lucide-react-native";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { Alert, Pressable, View } from "react-native";
 import { withUniwind } from "uniwind";
 
+import { LineBadge } from "@/components/transit/line-badge";
 import { AppText } from "@/components/ui/app-text";
 import { ListDivider, ListRow } from "@/components/ui/list-row";
 import { Screen } from "@/components/ui/screen";
@@ -30,6 +31,10 @@ import {
 } from "@/lib/crash/app-crash-reporting";
 import { t } from "@/lib/i18n/t";
 import type { MessageKey } from "@/lib/i18n/translate";
+import { appMotionMetrics } from "@/lib/map/app-motion-metrics";
+import { type MyLine, myLines } from "@/lib/map/my-lines";
+import { appPlaces } from "@/lib/places/app-places";
+import { usePlaces } from "@/lib/places/use-places";
 import type { ThemePreference } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
 import { ELEVATION } from "@/theme/tokens";
@@ -119,6 +124,78 @@ function ThemeRow() {
 			</View>
 		</View>
 	);
+}
+
+/** 등록한 경로의 노선 하나. 켜면 지도에 차량이 보이고, 끄면 선만 남는다. */
+function MapLineRow({
+	hidden,
+	line,
+	onToggle,
+}: {
+	hidden: boolean;
+	line: MyLine;
+	onToggle: (line: string, visible: boolean) => void;
+}) {
+	const handleChange = useCallback(
+		(visible: boolean) => onToggle(line.line, visible),
+		[line.line, onToggle]
+	);
+	return (
+		<ListRow
+			leading={<LineBadge {...line.badge} />}
+			title={line.lineName}
+			trailing={{ onChange: handleChange, type: "toggle", value: !hidden }}
+		/>
+	);
+}
+
+function MapLinesSection() {
+	const { places } = usePlaces(appPlaces);
+	const [preferences, update] = usePreferences();
+	const lines = useMemo(() => myLines(places), [places]);
+	const { hiddenMapLines } = preferences;
+	const toggleLine = useCallback(
+		(line: string, visible: boolean) => {
+			const rest = hiddenMapLines.filter((hidden) => hidden !== line);
+			update({ hiddenMapLines: visible ? rest : [...rest, line] });
+		},
+		[hiddenMapLines, update]
+	);
+	return (
+		<Section title={t("settings.sections.mapLines")}>
+			{lines.length === 0 ? (
+				<ListRow
+					title={t("settings.mapLines.empty")}
+					trailing={{ type: "none" }}
+				/>
+			) : (
+				lines.map((line, index) => (
+					<View key={line.line}>
+						{index > 0 ? <ListDivider inset="edge" /> : null}
+						<MapLineRow
+							hidden={hiddenMapLines.includes(line.line)}
+							line={line}
+							onToggle={toggleLine}
+						/>
+					</View>
+				))
+			)}
+		</Section>
+	);
+}
+
+const PERCENT = 100;
+const PERCENT_DIGITS = 2;
+
+/** 개발 빌드 전용: 오늘의 7.2 지표(뒤로 가거나 순간이동한 위치 갱신 비율). 설정을 열 때의 값이다. */
+function motionMetricsSubtitle(): string {
+	const { backward, jump, ratio, updates } = appMotionMetrics.summary();
+	return t("settings.motionMetrics.subtitle", {
+		backward,
+		jump,
+		percent: (ratio * PERCENT).toFixed(PERCENT_DIGITS),
+		updates,
+	});
 }
 
 /** 개발 빌드 전용: Sentry로 테스트 예외를 보내거나 네이티브 크래시를 일으킨다. */
@@ -217,6 +294,7 @@ export default function SettingsTab() {
 						}}
 					/>
 				</Section>
+				<MapLinesSection />
 				<Section title={t("settings.sections.notifications")}>
 					<ListRow
 						icon={BellTileIcon}
@@ -255,6 +333,17 @@ export default function SettingsTab() {
 								title={t("settings.crashTest.title")}
 								trailing={{ type: "none" }}
 							/>
+						) : null}
+						{__DEV__ ? (
+							<>
+								<ListDivider />
+								<ListRow
+									icon={MapTileIcon}
+									subtitle={motionMetricsSubtitle()}
+									title={t("settings.motionMetrics.title")}
+									trailing={{ type: "none" }}
+								/>
+							</>
 						) : null}
 						{__DEV__ && showLockSamples ? <ListDivider /> : null}
 						{showLockSamples ? (

@@ -46,6 +46,9 @@ function fakeFetch(responder: (term: string, index: number) => Response) {
 
 const OLD_ROW = {
 	busRouteId: "old-complete",
+	firstBusMinute: null,
+	headwayMin: null,
+	lastBusMinute: null,
 	name: "old-complete",
 	routeType: "8",
 	shortName: "old-complete",

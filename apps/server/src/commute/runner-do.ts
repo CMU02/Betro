@@ -1,3 +1,4 @@
+import { parseRoute } from "@Betro/commute/plan";
 import type { SessionInput } from "@Betro/commute/session/stage";
 import { redactKeys } from "@Betro/realtime/upstream/urls";
 import { DurableObject } from "cloudflare:workers";
@@ -8,6 +9,7 @@ import { runnerPorts, SqlRecordStore, SqlRunnerStore } from "./cf-ports";
 import {
 	type ActiveSession,
 	type InputResult,
+	type RouteView,
 	RunnerCore,
 } from "./runner-core";
 
@@ -96,6 +98,17 @@ export class CommuteRunner extends DurableObject<Env> {
 			throw new Error("ack needs an install id, a session id and a time");
 		}
 		return await this.#getCore().ack(installId, sessionId, at);
+	}
+
+	/** 지도에서 고른 경로 하나의 예상(경로 보기). 경로 모양이 틀리면 던진다. */
+	async routeView(route: unknown): Promise<RouteView> {
+		const parsed = parseRoute(route);
+		if (!parsed.ok) {
+			throw new Error(
+				`routeView needs a valid route: ${parsed.issues.join("; ")}`
+			);
+		}
+		return await this.#getCore().routeView(parsed.route, Date.now());
 	}
 
 	/** cron용: 서비스일 하나의 일일 보고서를 쓴다(이미 썼으면 false). */

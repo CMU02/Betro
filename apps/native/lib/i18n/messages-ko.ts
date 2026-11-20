@@ -260,6 +260,50 @@ export const ko = {
 		},
 		towards: "{name} 방면",
 	},
+	map: {
+		allHidden: "이 경로의 노선이 모두 꺼져 있어요",
+		chips: {
+			label: "지도에서 볼 장소",
+			open: "{name} ▴",
+			selected: "{name} ▾",
+		},
+		empty: {
+			body: "집이나 회사를 등록하면 출퇴근 경로의 차량을 지도에서 볼 수 있어요.",
+			register: "집·회사 등록하고 출퇴근 차량 보기",
+			search: "어디로 가세요?",
+			title: "등록한 장소가 없어요",
+		},
+		/** 실시간 버스가 아직 없을 때 승차 정류장 도착 예상(지도 설계 2.6). 단정하지 않는다. */
+		estimatedBoard: "{line} · 시간표 추정 · 약 {minutes}분 뒤",
+		nearby: "근처 지하철",
+		routeMenu: {
+			alternative: "대안 {n}",
+			base: "기본",
+			row: "{name} · {lines}",
+			separator: " → ",
+		},
+		sheet: {
+			close: "차량 정보 닫기",
+			direction: {
+				bus: "{name} 방면",
+				subway: "{loop} · {name} 방면",
+			},
+			estimated: "시간표 추정",
+			live: "실시간 · {seconds}초 전 위치",
+			loop: {
+				inner: "내선순환",
+				outer: "외선순환",
+			},
+			mine: "내 정류장",
+			mineEta: "{label} · {eta}",
+			mineStation: "내가 탈 역",
+			minutes: "{minutes}분",
+			minutesEstimated: "시간표 추정 · 약 {minutes}분",
+			/** 실시간으로 볼 수 없을 만큼 오래된 위치. "실시간"이라고 쓰지 않는다(지도 설계 7장). */
+			stale: "{minutes}분 전 위치",
+			trainNo: "열차 {no}",
+		},
+	},
 	/** 서버에 닿지 않을 때 화면 위 안내(비행기 모드, Wi-Fi·데이터 꺼짐, 서버 장애) */
 	network: {
 		offline: {
@@ -463,15 +507,26 @@ export const ko = {
 			subtitle: "표본 값으로 잠금화면 안내를 띄워요",
 			title: "잠금화면 표본",
 		},
+		mapLines: {
+			empty: "등록한 경로가 없어요",
+			title: "노선별 지도 표시",
+		},
 		mapQuality: {
 			high3d: "고화질 3D",
 			standard: "표준",
 			title: "지도 품질",
 		},
+		/** 개발 빌드에서만 보이는 행. 출시 기준 7.2(뒤로 가거나 순간이동한 위치 갱신 비율)의 오늘 숫자다. */
+		motionMetrics: {
+			subtitle:
+				"오늘 갱신 {updates}건 · 뒤로 {backward} · 순간이동 {jump} · {percent}%",
+			title: "지도 움직임 지표",
+		},
 		sections: {
 			about: "정보",
 			developer: "개발",
 			display: "화면",
+			mapLines: "내 노선",
 			notifications: "알림",
 		},
 		smoothMotion: {

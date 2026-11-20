@@ -9,6 +9,7 @@ import {
 	METRICS_BUCKET_MS,
 	METRICS_RETENTION_DAYS,
 } from "@Betro/realtime/metrics";
+import type { BusReference } from "@Betro/realtime/reference";
 import {
 	type CallPlan,
 	planKey,
@@ -62,6 +63,14 @@ const SUBWAY_REFERENCE_KINDS: readonly ReferenceBatchKind[] = [
 	"timetable",
 ];
 const BUS_REFERENCE_KINDS: readonly ReferenceBatchKind[] = ["bus_route"];
+/** 관측 요청이 받는 노선 ID(`busRouteId`). 상류 URL에 그대로 들어가므로 숫자만 받는다. */
+const BUS_ROUTE_ID = /^\d+$/;
+
+/** 버스 참조와 그 참조를 읽을 때 요청한 노선(D1에 없던 노선도 든다). */
+interface LoadedBus {
+	bus: BusReference;
+	routeIds: ReadonlySet<string>;
+}
 
 export type SnapshotKind = "subway" | "bus";
 
@@ -85,6 +94,8 @@ export class CollectorCore {
 	#queue: Promise<unknown> = Promise.resolve();
 	#refs: References | null = null;
 	#refsCheckedAt: number | null = null;
+	/** `#refs.bus`를 읽을 때 요청한 노선. 관측 요청 노선이 바뀌었는지 이것과 견준다. */
+	#busRouteIds: ReadonlySet<string> = new Set();
 	#busTokens: TokenBucket | null = null;
 	readonly #warned = new Set<string>();
 	readonly #snapshots = new Map<
@@ -143,6 +154,31 @@ export class CollectorCore {
 		await state.saveBoards(this.#ports.state);
 	}
 
+	/**
+	 * 설치 하나의 지도 버스 관측 요청을 `until`까지로 통째로 바꾼다(빈 배열이면 지운다).
+	 * 다음 tick부터 설정 노선보다 먼저 부른다. `watchStations`처럼 진행 중인 tick을 기다리지 않는다.
+	 */
+	async watchBusRoutes(
+		installId: string,
+		routeIds: readonly string[],
+		until: number
+	): Promise<void> {
+		const { clock, config } = this.#ports;
+		if (!routeIds.every((routeId) => BUS_ROUTE_ID.test(routeId))) {
+			throw new Error("bus route ids must be numeric");
+		}
+		const unique = [...new Set(routeIds)];
+		if (unique.length > config.mapWatchMaxPerInstall) {
+			throw new Error(
+				`an install may watch at most ${config.mapWatchMaxPerInstall} bus routes`
+			);
+		}
+		const state = await this.#state();
+		state.watchBusRoutes(installId, unique, until);
+		state.expireBusWatches(clock());
+		await state.saveBusWatch(this.#ports.state);
+	}
+
 	/** 등록한 역 중 행을 받은 역의 최근 행. 받지 못한 역은 키가 없다. */
 	async stationRows(
 		statnIds: string[]
@@ -182,28 +218,100 @@ export class CollectorCore {
 
 	/**
 	 * D1 현재 배치가 바뀌었거나 아직 읽지 않았으면 참조를 다시 읽는다(바뀐 쪽만).
+	 * 버스 배치가 그대로여도 관측 요청 노선이 바뀌었으면 새 노선만 더 읽는다.
 	 * 다시 읽었으면 true. 진행 중인 주기는 시작할 때 잡은 참조를 끝까지 쓴다.
 	 * `tick`이 5분마다 부르고, DO가 배치 교체 직후 바로 부를 수도 있다.
 	 */
 	async refreshReferences(): Promise<boolean> {
-		const { config, reference } = this.#ports;
+		const { reference } = this.#ports;
+		const wanted = await this.#wantedBusRouteIds();
 		const ids = await reference.currentBatchIds();
 		const subwayIds = batchSignature(ids, SUBWAY_REFERENCE_KINDS);
 		const busIds = batchSignature(ids, BUS_REFERENCE_KINDS);
 		const prev = this.#refs;
-		const [subway, bus] = await Promise.all([
+		const [subway, loaded] = await Promise.all([
 			prev?.subwayIds === subwayIds ? prev.subway : reference.loadSubway(),
 			prev?.busIds === busIds
-				? prev.bus
-				: reference.loadBus([...config.busRouteIds], config.mode === "dev"),
+				? this.#syncBus(prev.bus, wanted)
+				: this.#loadBus(wanted),
 		]);
 		this.#refsCheckedAt = this.#ports.clock();
-		const changed = prev?.subway !== subway || prev?.bus !== bus;
-		this.#refs = { bus, busIds, subway, subwayIds };
+		const changed = prev?.subway !== subway || prev?.bus !== loaded.bus;
+		this.#refs = { bus: loaded.bus, busIds, subway, subwayIds };
+		this.#busRouteIds = loaded.routeIds;
 		if (changed) {
 			this.#log(`references loaded subway[${subwayIds}] bus[${busIds}]`);
 		}
 		return changed;
+	}
+
+	/** 버스 참조가 필요한 노선: 설정 노선과 지금 유효한 관측 요청 노선. */
+	async #wantedBusRouteIds(): Promise<string[]> {
+		const { clock, config } = this.#ports;
+		const state = await this.#state();
+		return [
+			...new Set([
+				...config.busRouteIds,
+				...state.watchedBusRouteIds(clock(), config.mapWatchMaxTotal),
+			]),
+		];
+	}
+
+	async #loadBus(routeIds: readonly string[]): Promise<LoadedBus> {
+		const { config, reference } = this.#ports;
+		const bus = await reference.loadBus([...routeIds], config.mode === "dev");
+		return { bus, routeIds: new Set(routeIds) };
+	}
+
+	/**
+	 * 같은 배치의 버스 참조를 `wanted` 노선에 맞춘다. 새 노선만 D1에서 읽고, 더는 요청하지 않는
+	 * 노선은 메모리에서 뺀다. 바뀐 게 없으면 같은 참조를 돌려준다. 읽는 사이 배치가 바뀌었으면
+	 * 전부 다시 읽는다.
+	 */
+	async #syncBus(
+		prev: BusReference,
+		wanted: readonly string[]
+	): Promise<LoadedBus> {
+		const wantedSet = new Set(wanted);
+		const added = wanted.filter((routeId) => !this.#busRouteIds.has(routeId));
+		const removed = [...this.#busRouteIds].some(
+			(routeId) => !wantedSet.has(routeId)
+		);
+		if (added.length === 0 && !removed) {
+			return { bus: prev, routeIds: this.#busRouteIds };
+		}
+		const { config, reference } = this.#ports;
+		const extra =
+			added.length > 0
+				? await reference.loadBus(added, config.mode === "dev")
+				: null;
+		if (extra && extra.batchId !== prev.batchId) {
+			return this.#loadBus(wanted);
+		}
+		const routes = new Map(
+			[...prev.routes].filter(([routeId]) => wantedSet.has(routeId))
+		);
+		for (const [routeId, route] of extra?.routes ?? []) {
+			routes.set(routeId, route);
+		}
+		return { bus: { batchId: prev.batchId, routes }, routeIds: wantedSet };
+	}
+
+	/** 배치 확인 사이에도 관측 요청 노선이 바뀌면 버스 참조를 맞춘다. */
+	async #syncWatchedBus(): Promise<void> {
+		const refs = this.#refs;
+		if (refs === null) {
+			return;
+		}
+		const loaded = await this.#syncBus(
+			refs.bus,
+			await this.#wantedBusRouteIds()
+		);
+		if (loaded.bus !== refs.bus && this.#refs === refs) {
+			this.#refs = { ...refs, bus: loaded.bus };
+			this.#busRouteIds = loaded.routeIds;
+			this.#log(`bus references synced routes=${loaded.routeIds.size}`);
+		}
 	}
 
 	#exclusive<T>(fn: () => Promise<T>): Promise<T> {
@@ -249,6 +357,12 @@ export class CollectorCore {
 				this.#refsCheckedAt = now;
 				this.#log(`references failed: ${errorText(error)}`);
 			}
+			return this.#refs;
+		}
+		try {
+			await this.#syncWatchedBus();
+		} catch (error) {
+			this.#log(`bus references sync failed: ${errorText(error)}`);
 		}
 		return this.#refs;
 	}
@@ -259,6 +373,7 @@ export class CollectorCore {
 		const now = clock();
 		state.rollDay(now);
 		state.expireWatches(now);
+		state.expireBusWatches(now);
 		const refs = await this.#references(now);
 		const planned = refs
 			? await this.#poll(state, refs, now)
@@ -303,11 +418,13 @@ export class CollectorCore {
 		refs: References,
 		now: number
 	): Promise<number> {
+		const { config } = this.#ports;
 		const plan = planTick(
 			now,
 			state.schedule,
 			state.budget,
-			this.#ports.config
+			config,
+			state.watchedBusRouteIds(now, config.mapWatchMaxTotal)
 		);
 		state.schedule = plan.schedule;
 		const due = plan.due.filter(
@@ -324,7 +441,13 @@ export class CollectorCore {
 		if (isOperatingTime(now, config.operatingStart, config.operatingEnd)) {
 			return now + REFERENCE_RETRY_MS;
 		}
-		return planTick(now, state.schedule, state.budget, config).nextAlarmAt;
+		return planTick(
+			now,
+			state.schedule,
+			state.budget,
+			config,
+			state.watchedBusRouteIds(now, config.mapWatchMaxTotal)
+		).nextAlarmAt;
 	}
 
 	async #call(

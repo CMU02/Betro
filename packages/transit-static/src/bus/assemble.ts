@@ -35,8 +35,9 @@ export const BUS_SHAPE_ATTRIBUTION = REPORT_SHAPE_ATTRIBUTION;
  * 3: 자율주행 시범버스 11개를 범위에 넣음(OUT_OF_SCOPE_ROUTE_IDS를 비움).
  * 4: MVP 2-D — 마을(2)·인천(7)·경기(8)를 범위에 넣고, 노선에 지역(region)과 지역을 뗀 이름(shortName)을 붙임.
  *    적재 가능 비율을 서울 면허 노선과 경기·인천 노선으로 나눠 봄.
+ * 5: 노선 목록의 배차간격(term)·첫차·막차 시각을 노선에 싣음.
  */
-export const BUS_ROUTE_LOGIC_VERSION = 4;
+export const BUS_ROUTE_LOGIC_VERSION = 5;
 
 /** 범위 안 서울 면허 노선(마을 포함) 중 적재 가능한 노선이 이 비율 이상이어야 배치를 적재한다. */
 export const MIN_VALID_ROUTE_RATIO = REPORT_MIN_LOADABLE_RATIO.seoul;
@@ -90,7 +91,13 @@ export interface BusIssue {
 
 export interface AssembledBusRoute {
 	coords: [number, number][];
+	/** 첫차 시각(0시부터의 분). 노선 목록에 없으면 null. */
+	firstBusMinute: number | null;
+	/** 배차간격(분). 노선 목록에 없으면 null. */
+	headwayMin: number | null;
 	issues: BusIssue[];
+	/** 막차 시각(0시부터의 분). 노선 목록에 없으면 null. */
+	lastBusMinute: number | null;
 	lengthM: number;
 	qualityFlags: string[];
 	/** routeType으로 정한 면허 지역. */
@@ -416,7 +423,10 @@ export function assembleBusRoute(
 		outOfScope: false,
 		route: {
 			coords,
+			firstBusMinute: entry.firstBusMinute ?? null,
+			headwayMin: entry.headwayMin ?? null,
 			issues,
+			lastBusMinute: entry.lastBusMinute ?? null,
 			lengthM: projection.lengthM,
 			qualityFlags: [...new Set(issues.map((issue) => issue.code))],
 			region: regionOf(routeType),

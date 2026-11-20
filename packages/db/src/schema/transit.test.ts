@@ -193,6 +193,46 @@ describe("transit schema", () => {
 		).rejects.toThrow();
 	});
 
+	it("bus route schedule columns accept values and null", async () => {
+		const db = await createTestDb();
+		const [batch] = await db
+			.insert(referenceBatch)
+			.values({ kind: "bus_route", sourceManifest: {} })
+			.returning();
+		if (!batch) {
+			throw new Error("no batch");
+		}
+		const base = {
+			batchId: batch.id,
+			qualityFlags: [],
+			region: "seoul" as const,
+			routeName: "150",
+			routeType: "3",
+			shortName: "150",
+		};
+		await db.insert(busRoute).values([
+			{
+				...base,
+				firstBusMinute: 270,
+				headwayMin: 13,
+				lastBusMinute: 1370,
+				routeId: "100100118",
+			},
+			{ ...base, routeId: "100100119" },
+		]);
+		const rows = await db.select().from(busRoute).orderBy(busRoute.routeId);
+		expect(rows[0]).toMatchObject({
+			firstBusMinute: 270,
+			headwayMin: 13,
+			lastBusMinute: 1370,
+		});
+		expect(rows[1]).toMatchObject({
+			firstBusMinute: null,
+			headwayMin: null,
+			lastBusMinute: null,
+		});
+	});
+
 	it("bus route rows round-trip and cascade", async () => {
 		const db = await createTestDb();
 		const [batch] = await db

@@ -2,6 +2,7 @@ import type { AccuracyRecord } from "@Betro/commute/accuracy";
 import type { CommuteConfig } from "@Betro/commute/config";
 import type { CommutePlan } from "@Betro/commute/plan";
 import type { EndReason } from "@Betro/commute/session/stage";
+import type { BusSchedule } from "@Betro/commute/sources/bus-schedule";
 import type { RouteStopArrival } from "@Betro/commute/sources/seoul-bus";
 import type {
 	StationRow,
@@ -108,6 +109,11 @@ export interface RunnerSecrets {
 export interface RunnerPorts {
 	blobs: CommuteBlobs;
 	boards: BoardSource;
+	/**
+	 * 버스 노선의 정적 배차간격·첫차·막차(D1 현재 `bus_route` 배치). 키와 인자는 접두사 없는
+	 * `busRouteId`이고, 일정이 없는 노선은 빠진다. 도착판이 없을 때의 추정에 쓴다.
+	 */
+	busSchedules: (busRouteIds: string[]) => Promise<Record<string, BusSchedule>>;
 	clock: () => number;
 	config: CommuteConfig;
 	log: (line: string) => void;

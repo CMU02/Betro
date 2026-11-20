@@ -173,6 +173,8 @@ function busReference(): BusReference {
 interface Harness {
 	batchIds: Record<ReferenceBatchKind, number>;
 	blobs: MemoryBlobs;
+	/** `loadBus`에 넘어온 노선 ID 목록(부를 때마다 하나). */
+	busLoads: string[][];
 	calls: { at: number; url: string }[];
 	clock: { now: number };
 	core: CollectorCore;
@@ -201,6 +203,7 @@ function makeHarness(options: HarnessOptions = {}): Harness {
 	const logs: string[] = [];
 	const sent: Harness["sent"] = [];
 	const loads = { bus: 0, subway: 0 };
+	const busLoads: string[][] = [];
 	const batchIds: Record<ReferenceBatchKind, number> = {
 		bus_route: 2,
 		station_crosswalk: 8,
@@ -226,8 +229,9 @@ function makeHarness(options: HarnessOptions = {}): Harness {
 		},
 		reference: {
 			currentBatchIds: () => Promise.resolve({ ...batchIds }),
-			loadBus: () => {
+			loadBus: (routeIds) => {
 				loads.bus += 1;
+				busLoads.push([...routeIds]);
 				return Promise.resolve(busReference());
 			},
 			loadSubway: () => {
@@ -250,6 +254,7 @@ function makeHarness(options: HarnessOptions = {}): Harness {
 	return {
 		batchIds,
 		blobs,
+		busLoads,
 		calls,
 		clock,
 		core: new CollectorCore(ports),
@@ -973,5 +978,148 @@ describe("CollectorCore station boards", () => {
 			expect(stored).not.toContain(secret);
 			expect(stored).not.toContain(encodeURIComponent(secret));
 		}
+	});
+});
+
+describe("CollectorCore bus watches", () => {
+	const A = "100100118";
+	const B = "100100119";
+	const C = "100100120";
+	/** 지하철 없이 관측 요청 노선만 부르는 설정(호출마다 그 시각에 밀린 노선을 모두 부른다). */
+	const watchOnly: CollectorConfig = {
+		...prodConfig({}, []),
+		subwayLines: [],
+	};
+	/** 표본에 없는 노선도 정상 응답(150 본문)을 준다. */
+	const watchResponder: Responder = (url) =>
+		ok(BUS_BODIES[routeOf(url) ?? ""] ?? JSON.stringify(bus150));
+
+	const watchHarness = (config: CollectorConfig = watchOnly): Harness =>
+		makeHarness({ config, respond: watchResponder });
+
+	/** tick 한 번에 부른 버스 노선(정렬). */
+	async function busRoutesOfTick(h: Harness): Promise<string[]> {
+		h.calls.splice(0);
+		await h.core.tick();
+		return busCalls(h)
+			.map((call) => routeOf(call.url) ?? "")
+			.sort();
+	}
+
+	it("replaces an install's watch set and drops it after until", async () => {
+		const h = watchHarness();
+		await h.core.watchBusRoutes("install-1", [A, B], T0 + 5 * MINUTE);
+		await h.core.watchBusRoutes("install-1", [B], T0 + 5 * MINUTE);
+		await h.core.watchBusRoutes("install-2", [C], T0 + 5 * MINUTE);
+		await h.core.watchBusRoutes("install-2", [], T0 + 5 * MINUTE);
+		expect(await busRoutesOfTick(h)).toEqual([B]);
+		h.clock.now = T0 + 6 * MINUTE;
+		expect(await busRoutesOfTick(h)).toEqual([]);
+		expect(h.state.kv.get(STATE_KEYS.busWatch)).toBe("{}");
+	});
+
+	it("keeps a route watched by another install when one install expires", async () => {
+		const h = watchHarness();
+		await h.core.watchBusRoutes("install-1", [A], T0 + 5 * MINUTE);
+		await h.core.watchBusRoutes("install-2", [A], T0 + 20 * MINUTE);
+		// 같은 노선을 둘이 봐도 한 번만 부른다.
+		expect(await busRoutesOfTick(h)).toEqual([A]);
+		h.clock.now = T0 + 6 * MINUTE;
+		expect(await busRoutesOfTick(h)).toEqual([A]);
+		h.clock.now = T0 + 21 * MINUTE;
+		expect(await busRoutesOfTick(h)).toEqual([]);
+	});
+
+	it("caps the union at maxTotal, preferring later until", async () => {
+		const h = watchHarness({ ...watchOnly, mapWatchMaxTotal: 2 });
+		await h.core.watchBusRoutes("install-1", [A, B], T0 + 5 * MINUTE);
+		await h.core.watchBusRoutes("install-2", [C], T0 + 10 * MINUTE);
+		expect(await busRoutesOfTick(h)).toEqual([A, C]);
+	});
+
+	it("loads bus references for newly watched routes", async () => {
+		const h = watchHarness(devConfig({}));
+		await h.core.tick();
+		expect(h.busLoads).toHaveLength(1);
+		expect(h.busLoads[0]).not.toContain(A);
+		await h.core.watchBusRoutes("install-1", [A], T0 + 10 * MINUTE);
+		h.clock.now += STEP;
+		await h.core.tick();
+		expect(h.busLoads).toHaveLength(2);
+		expect(h.busLoads[1]).toContain(A);
+		// 요청 노선이 그대로면(하트비트) 다시 읽지 않는다.
+		await h.core.watchBusRoutes("install-1", [A], T0 + 12 * MINUTE);
+		h.clock.now += STEP;
+		await h.core.tick();
+		expect(h.busLoads).toHaveLength(2);
+		// 다시 읽어도 표본 참조에 든 설정 노선(6411)은 남는다.
+		expect(await h.core.refreshReferences()).toBe(false);
+	});
+
+	it("places a watched route's buses on its shape and reloads it after a lapse", async () => {
+		const h = watchHarness({ ...devConfig({}), busRouteIds: [ROUTE_6411] });
+		// 이 테스트의 D1은 요청한 노선만 돌려준다.
+		h.ports.reference.loadBus = (routeIds) => {
+			h.busLoads.push([...routeIds]);
+			const all = busReference();
+			return Promise.resolve({
+				batchId: all.batchId,
+				routes: new Map(
+					[...all.routes].filter(([routeId]) => routeIds.includes(routeId))
+				),
+			});
+		};
+		await h.core.watchBusRoutes("install-1", [ROUTE_150], T0 + 5 * MINUTE);
+		await h.core.tick();
+		expect(busCalls(h, ROUTE_150)).toHaveLength(1);
+		const vehicles = (
+			JSON.parse((await h.core.snapshot("bus")).body) as {
+				vehicles: { routeId: string; shapeDistanceM: number | null }[];
+			}
+		).vehicles.filter((vehicle) => vehicle.routeId === ROUTE_150);
+		expect(vehicles.length).toBeGreaterThan(0);
+		expect(vehicles.every((vehicle) => vehicle.shapeDistanceM !== null)).toBe(
+			true
+		);
+		expect(h.logs.filter((line) => line.includes("failed"))).toEqual([]);
+
+		// 요청이 풀리면 참조에서 빼고, 다시 요청하면 다시 읽는다.
+		h.clock.now = T0 + 6 * MINUTE;
+		await h.core.tick();
+		const loadsBefore = h.busLoads.length;
+		await h.core.watchBusRoutes("install-1", [ROUTE_150], T0 + 10 * MINUTE);
+		h.clock.now += STEP;
+		await h.core.tick();
+		expect(h.busLoads.slice(loadsBefore)).toEqual([[ROUTE_150]]);
+	});
+
+	it("keeps watches across a restart", async () => {
+		const first = watchHarness();
+		await first.core.watchBusRoutes("install-1", [A], T0 + 10 * MINUTE);
+		const second = makeHarness({
+			clock: first.clock,
+			config: watchOnly,
+			respond: watchResponder,
+			state: first.state,
+		});
+		expect(await busRoutesOfTick(second)).toEqual([A]);
+	});
+
+	it("rejects non-numeric route ids and more routes than one install may watch", async () => {
+		const h = watchHarness();
+		await expect(
+			h.core.watchBusRoutes("install-1", ["seoul-bus:1"], T0 + MINUTE)
+		).rejects.toThrow();
+		const seven = ["1", "2", "3", "4", "5", "6", "7"];
+		await expect(
+			h.core.watchBusRoutes("install-1", seven, T0 + MINUTE)
+		).rejects.toThrow();
+		// 같은 노선을 두 번 보내도 한 노선으로 센다.
+		await h.core.watchBusRoutes(
+			"install-1",
+			["1", "2", "3", "4", "5", "6", "6"],
+			T0 + MINUTE
+		);
+		expect(await busRoutesOfTick(h)).toEqual(["1", "2", "3", "4", "5", "6"]);
 	});
 });

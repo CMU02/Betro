@@ -62,6 +62,7 @@ const fakeRunner: CommuteRunnerClient = {
 		}
 		return Promise.resolve(sessionId === SESSION_ID ? "ok" : "not-found");
 	},
+	routeView: () => Promise.resolve({ destinationEtaAt: null, legs: [] }),
 	writeDailyReport: () => Promise.resolve(false),
 };
 

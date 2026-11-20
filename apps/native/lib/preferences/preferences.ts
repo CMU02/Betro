@@ -5,6 +5,7 @@ export type ThemePreference = "system" | "dark" | "light";
 export interface Preferences {
 	commuteLiveActivityEnabled: boolean;
 	dataSaver: boolean;
+	hiddenMapLines: string[];
 	mapQuality: "high3d" | "standard";
 	onboardingCompleted: boolean;
 	show3dBuildings: boolean;
@@ -18,6 +19,7 @@ export const PREFERENCES_KEY = "betro.preferences";
 export const DEFAULT_PREFERENCES: Preferences = {
 	commuteLiveActivityEnabled: true,
 	dataSaver: false,
+	hiddenMapLines: [],
 	mapQuality: "high3d",
 	onboardingCompleted: false,
 	show3dBuildings: true,
@@ -29,6 +31,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
 const FIELD_SCHEMAS = {
 	commuteLiveActivityEnabled: z.boolean(),
 	dataSaver: z.boolean(),
+	hiddenMapLines: z.array(z.string()),
 	mapQuality: z.enum(["high3d", "standard"]),
 	onboardingCompleted: z.boolean(),
 	show3dBuildings: z.boolean(),
@@ -55,13 +58,16 @@ function parseJson(raw: string | null): unknown {
 export function parsePreferences(raw: string | null): Preferences {
 	const data = parseJson(raw);
 	if (typeof data !== "object" || data === null || Array.isArray(data)) {
-		return { ...DEFAULT_PREFERENCES };
+		return { ...DEFAULT_PREFERENCES, hiddenMapLines: [] };
 	}
 	const record = data as Record<string, unknown>;
 	if (record.version !== 1) {
-		return { ...DEFAULT_PREFERENCES };
+		return { ...DEFAULT_PREFERENCES, hiddenMapLines: [] };
 	}
-	const result: Record<string, unknown> = { ...DEFAULT_PREFERENCES };
+	const result: Record<string, unknown> = {
+		...DEFAULT_PREFERENCES,
+		hiddenMapLines: [],
+	};
 	for (const key of FIELD_KEYS) {
 		const parsed = FIELD_SCHEMAS[key].safeParse(record[key]);
 		if (parsed.success) {
