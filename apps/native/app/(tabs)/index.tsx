@@ -34,6 +34,7 @@ import { useAppTheme } from "@/contexts/app-theme-context";
 import type { ActiveSessionView } from "@/lib/commute/session-client";
 import { useActiveSession } from "@/lib/commute/use-active-session";
 import { t } from "@/lib/i18n/t";
+import { nearestApproachingPoint } from "@/lib/map/camera-region";
 import { lineColor } from "@/lib/map/line-color";
 import { estimatedBoardNotice, routeOptionLabel } from "@/lib/map/map-labels";
 import { type MapRegion, regionOf, spanSegments } from "@/lib/map/route-shape";
@@ -218,7 +219,10 @@ function nearbyPathsOf(
 	}));
 }
 
-/** 경로 전체가 들어오는 영역. 승차~하차 구간에 맞추고, 아직 못 자르면 노선 전체에 맞춘다(지도 설계 3장). */
+/**
+ * 경로 전체가 들어오는 영역. 승차~하차 구간에 맞추고, 아직 못 자르면 노선 전체에 맞춘다.
+ * 첫 구간에서 승차 정류장에 가장 가까이 다가오는 차량도 담는다(지도 설계 3장).
+ */
 function routeRegionOf(legs: readonly MapLeg[]): MapRegion | null {
 	const spans = legs.flatMap((mapLeg) =>
 		mapLeg.track === null
@@ -226,7 +230,11 @@ function routeRegionOf(legs: readonly MapLeg[]): MapRegion | null {
 			: spanSegments(mapLeg.track.shape, mapLeg.boardM, mapLeg.alightM).flat()
 	);
 	if (spans.length > 0) {
-		return regionOf(spans, ROUTE_PADDING_RATIO);
+		const approaching = nearestApproachingPoint(legs);
+		return regionOf(
+			approaching === null ? spans : [...spans, approaching],
+			ROUTE_PADDING_RATIO
+		);
 	}
 	const whole: Shape[number][] = legs.flatMap((mapLeg) =>
 		mapLeg.track === null ? [] : [...mapLeg.track.shape]
@@ -234,14 +242,18 @@ function routeRegionOf(legs: readonly MapLeg[]): MapRegion | null {
 	return regionOf(whole, ROUTE_PADDING_RATIO);
 }
 
-/** 선이 바뀔 때만 카메라 영역을 다시 잰다. 차량이 움직일 때마다 바뀌지 않는 값이다. */
+/**
+ * 선이 바뀔 때와 다가오는 차량이 처음 나타날 때만 카메라 영역을 다시 잰다.
+ * 차량이 움직일 때마다 바뀌지 않는 값이다.
+ */
 function fitKeyOf(legs: readonly MapLeg[]): string {
-	return legs
+	const lines = legs
 		.map(
 			(mapLeg) =>
 				`${mapLeg.leg.line}:${mapLeg.track?.shape.length ?? 0}:${mapLeg.boardM}:${mapLeg.alightM}`
 		)
 		.join("|");
+	return `${lines}|approach:${nearestApproachingPoint(legs) !== null}`;
 }
 
 /**
