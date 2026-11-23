@@ -75,6 +75,18 @@ describe("지역 위치 파서", () => {
 		);
 	});
 
+	it("XML 게이트웨이 오류 본문도 returnReasonCode로 분류한다", () => {
+		const xml = (code: string) =>
+			`<OpenAPI_ServiceResponse><cmmMsgHeader><errMsg>SERVICE ERROR</errMsg><returnReasonCode>${code}</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>`;
+		expect(parseRegionalPositions("gbis", 200, xml("22")).outcome).toBe(
+			"quota-exhausted"
+		);
+		expect(parseRegionalPositions("gbis", 200, xml("30")).outcome).toBe("auth");
+		expect(parseRegionalPositions("tago", 200, xml("04")).outcome).toBe(
+			"temporary"
+		);
+	});
+
 	it("HTTP 429는 quota-exhausted, 401은 auth, 5xx는 temporary다", () => {
 		expect(parseRegionalPositions("gbis", 429, "").outcome).toBe(
 			"quota-exhausted"

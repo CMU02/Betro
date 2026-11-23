@@ -33,6 +33,8 @@ const GATEWAY_RATE = "23";
 const GATEWAY_AUTH = new Set(["20", "30", "31", "32", "33"]);
 const TAGO_OK = "00";
 const TAGO_NO_DATA = "03";
+/** 공공데이터포털 게이트웨이의 XML 오류 본문. */
+const XML_REASON = /<returnReasonCode>\s*(\d+)\s*<\/returnReasonCode>/;
 
 export function gbisPositionUrl(key: string, routeId: string): string {
 	return `${GBIS_BASE}/getBusLocationListv2?serviceKey=${encodeURIComponent(key)}&routeId=${routeId}&format=json`;
@@ -195,6 +197,11 @@ export function parseRegionalPositions(
 	const byStatus = statusOutcome(status);
 	if (byStatus) {
 		return failed(byStatus);
+	}
+	// 게이트웨이 오류는 `format=json`·`_type=json`을 줘도 XML로 올 수 있다.
+	const xmlCode = XML_REASON.exec(body)?.[1];
+	if (xmlCode !== undefined) {
+		return failed(gatewayOutcome(xmlCode));
 	}
 	let json: unknown;
 	try {

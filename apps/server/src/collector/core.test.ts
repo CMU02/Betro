@@ -1296,6 +1296,24 @@ describe("CollectorCore regional bus watches", () => {
 		expect(callsTo(h, GBIS_URL)).toHaveLength(1);
 	});
 
+	it("GBIS XML 게이트웨이 한도 초과(22)도 그날 GBIS를 멈춘다", async () => {
+		const quota = {
+			body: "<OpenAPI_ServiceResponse><cmmMsgHeader><errMsg>SERVICE ERROR</errMsg><returnReasonCode>22</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>",
+			status: 200,
+		};
+		const h = regionalHarness({
+			respond: regionalResponder({ gbis: quota }),
+		});
+		await h.core.watchBusRoutes("install-1", [GBIS_6411], T0 + 30 * MINUTE);
+		await h.core.tick();
+		expect(callsTo(h, GBIS_URL)).toHaveLength(1);
+		expect((await busSnapshot(h)).stoppedSources).toEqual(["gbis"]);
+		h.calls.splice(0);
+		h.clock.now += 10 * MINUTE;
+		await h.core.tick();
+		expect(callsTo(h, GBIS_URL)).toHaveLength(0);
+	});
+
 	it("TAGO 게이트웨이 04는 한 번만 다시 부르고 출처를 멈추지 않는다", async () => {
 		const gateway = { body: tagoGateway04.body, status: tagoGateway04.status };
 		const h = regionalHarness({
