@@ -603,6 +603,22 @@ function ridingLeg(state: SessionState, plan: CommutePlan): Leg | null {
 	return primary?.legs[state.legIndex] ?? null;
 }
 
+/**
+ * 위치 목록을 못 읽은 poll이 이어 쓸 직전 위치와 그 위치를 받은 시각. 받은 지 묵음 기준보다 오래됐으면
+ * null이다. `positionsAt`이 없는 원자료(이전 형식)는 `fetchedAt`으로 본다.
+ */
+function carriedPositions(
+	prev: RegionalData | null,
+	now: number,
+	staleAfterMs: number
+): { at: number; positions: Record<string, number> } | null {
+	if (prev === null) {
+		return null;
+	}
+	const at = prev.positionsAt ?? prev.fetchedAt;
+	return now - at <= staleAfterMs ? { at, positions: prev.positions } : null;
+}
+
 /** 직전 도착에 있던 차량이 같은 정류장의 지금 도착에서 빠졌는가(그 정류장을 지났을 수 있다). */
 function vehicleLeft(
 	prev: RegionalData | null,
@@ -1663,7 +1679,7 @@ export class RunnerCore {
 		now: number,
 		purpose: BusArrivalPurpose
 	): Promise<RegionalData | null | typeof RESERVED> {
-		const { boards, clock, store } = this.#ports;
+		const { boards, clock, config, store } = this.#ports;
 		const base = { day: dayOf(now), now, purpose, source: route.source };
 		const fetched: RouteStopArrival[] = [];
 		let reserved = false;
@@ -1687,6 +1703,7 @@ export class RunnerCore {
 			(fetched.length > 0 &&
 				(route.source === "tago" || vehicleLeft(prev, fetched)));
 		let positions: RegionalPosition[] | null = null;
+		let positionsAt = now;
 		if (needsLocations) {
 			const found = await this.#attemptRegional({
 				...base,
@@ -1694,6 +1711,7 @@ export class RunnerCore {
 				op: "location",
 			});
 			positions = found === RESERVED ? null : found;
+			positionsAt = clock();
 		}
 		if (fetched.length === 0 && positions === null) {
 			return null;
@@ -1709,7 +1727,11 @@ export class RunnerCore {
 				positions.map((position) => [position.vehicleId, position.seq])
 			);
 		} else if (needsLocations) {
-			bySeq = prev?.positions ?? {};
+			// 직전 위치는 받은 시각을 그대로 지니고 묵음 기준까지만 잇는다. 그래야 받은 지 오래된 순번으로
+			// 외삽한 하차 ETA가 새 값처럼 보이지 않는다.
+			const carried = carriedPositions(prev, now, config.staleAfterMs);
+			bySeq = carried?.positions ?? {};
+			positionsAt = carried?.at ?? positionsAt;
 		}
 		const unsettled =
 			route.source === "gbis"
@@ -1746,6 +1768,7 @@ export class RunnerCore {
 			positions: Object.fromEntries(
 				Object.entries(bySeq).filter(([vehicleId]) => !frozen.has(vehicleId))
 			),
+			positionsAt,
 			prev: prev?.now ?? null,
 		};
 	}

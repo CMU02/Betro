@@ -367,6 +367,24 @@ describe("assembleBoards: 지역 버스 실시간", () => {
 		expect(boards.progress(gbisLeg, "G1")?.stopsAway).toBe(4);
 	});
 
+	it("positions의 외삽은 fetchedAt이 아니라 위치 목록을 받은 positionsAt부터 잰다", () => {
+		const entry = (positionsAt?: number) => ({
+			fetchedAt: T,
+			now: [stopAt(2, [veh("G1", 1, 60)]), stopAt(9, [veh("G2", 7, 200)])],
+			positions: { G1: 5, G2: 7 },
+			...(positionsAt === undefined ? {} : { positionsAt }),
+			prev: null,
+		});
+		const etaOf = (positionsAt?: number) =>
+			assembleBoards(
+				{ ...raw(), regionalBus: { "gbis:100100290": entry(positionsAt) } },
+				config
+			).progress(gbisLeg, "G1")?.etaAt ?? null;
+		const fresh = etaOf();
+		expect(fresh).not.toBeNull();
+		expect(etaOf(T - 2 * MINUTE_MS)).toBe((fresh ?? 0) - 2 * MINUTE_MS);
+	});
+
 	it("regionalBus가 없으면 board는 null이고 배차간격 추정만 남는다", () => {
 		const boards = assembleBoards(
 			{

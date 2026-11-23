@@ -1939,6 +1939,71 @@ describe("RunnerCore 지역 버스", () => {
 		expect(entry.state.estimates[0]?.legs[0]?.alightEtaAt).not.toBeNull();
 	});
 
+	/** 하차 정류장 도착에 탄 V1이 나오지 않는다(위치 목록으로만 따라간다). */
+	function hideV1AtAlight(h: Harness): void {
+		const simulated = h.boards.regionalArrivalHandler;
+		h.boards.regionalArrivalHandler = (route, stop) => {
+			const found = simulated?.(route, stop) ?? null;
+			if (!found || found instanceof Error || stop.seq !== ALIGHT_SEQ) {
+				return found;
+			}
+			return {
+				...found,
+				vehicles: found.vehicles.filter(
+					(vehicle) => vehicle.vehicleId !== "V1"
+				),
+			};
+		};
+	}
+
+	const savedRegional = (h: Harness) =>
+		h.store.get<{
+			data: {
+				positions: Record<string, number>;
+				positionsAt?: number;
+			} | null;
+		}>(`regionalBus:gbis:${ROUTE_ID}`);
+
+	test("위치 목록을 못 읽으면 직전 위치는 받은 시각을 지닌 채 묵음 기준까지만 쓴다", async () => {
+		const h = harness();
+		addRegional(h, makeRegionalPlan(PLAN_ANDROID));
+		simulateRegional(h);
+		hideV1AtAlight(h);
+		const core = h.core();
+		await tickRange(h, core, T0, T0 + 18 * MINUTE);
+		let [, entry] = await onlySession(h);
+		expect(entry.state.stage).toBe("ride");
+		const fresh = await savedRegional(h);
+		const positionsAt = fresh?.data?.positionsAt;
+		expect(positionsAt).toBeNumber();
+		expect(fresh?.data?.positions.V1).toBeDefined();
+		const alightAt = entry.state.estimates[0]?.legs[0]?.alightEtaAt;
+		expect(alightAt).toBeNumber();
+
+		// 다음 poll(1분 뒤)에 위치 목록이 응답하지 않는다. 직전 위치는 받은 시각 그대로 두고, 하차
+		// ETA는 1분만큼 늦춰지지 않는다(정거장당 시간이 poll마다 조금 흔들리는 만큼만 다르다).
+		h.boards.regionalLocationsHandler = () => null;
+		await tickAt(h, core, T0 + 19 * MINUTE);
+		const carried = await savedRegional(h);
+		expect(carried?.data?.positionsAt).toBe(positionsAt as number);
+		expect(carried?.data?.positions.V1).toBe(
+			fresh?.data?.positions.V1 as number
+		);
+		[, entry] = await onlySession(h);
+		const drift =
+			(entry.state.estimates[0]?.legs[0]?.alightEtaAt ?? 0) -
+			(alightAt as number);
+		expect(Math.abs(drift)).toBeLessThan(20 * SECOND);
+
+		// 묵음 기준이 지나면 직전 위치를 더 쓰지 않는다.
+		await tickAt(
+			h,
+			core,
+			(positionsAt as number) + h.config.staleAfterMs + MINUTE
+		);
+		expect((await savedRegional(h))?.data?.positions).toEqual({});
+	});
+
 	test("순번이 5분 넘게 그대로인 GBIS 차량은 저장 전에 빠지고, 다른 차량이 없으면 배차간격 추정으로 간다", async () => {
 		const h = harness();
 		addRegional(h, makeRegionalPlan(PLAN_ANDROID));

@@ -302,6 +302,25 @@ describe("busBoards.progress 위치 목록", () => {
 		});
 	});
 
+	it("위치 목록의 순번은 그 목록을 받은 시각부터 외삽한다", () => {
+		const positionsAt = MADE_6411 - 2 * MINUTE_MS;
+		const boards = busBoards(
+			null,
+			boarding,
+			MADE_6411,
+			new Map([
+				["A", 20],
+				["B", 30],
+			]),
+			positionsAt
+		);
+		expect(boards.progress("A", 35)).toEqual({
+			etaAt: positionsAt + 15 * MINUTE_MS,
+			method: "extrapolated",
+			stopsAway: 15,
+		});
+	});
+
 	it("위치 목록의 순번이 도착의 순번보다 우선한다", () => {
 		const boards = busBoards(null, boarding, MADE_6411, new Map([["A", 40]]));
 		expect(boards.progress("A", 35)).toEqual({

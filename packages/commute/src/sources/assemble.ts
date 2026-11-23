@@ -33,6 +33,8 @@ export interface RawBoards {
 	/**
 	 * 지역(GBIS·TAGO) 버스 원자료. 키는 전체 노선 ID(`gbis:200000037`)라 서울 `bus`와 섞이지 않는다.
 	 * `positions`는 차량 ID → 위치 목록의 지금 순번이다. 멈춘 차량은 실행기가 저장 전에 걸러 둔다.
+	 * `positionsAt`은 그 위치 목록을 받은 시각이다. 위치 목록을 못 읽은 poll은 직전 위치를 묵음 기준까지
+	 * 이어 쓰므로 `fetchedAt`보다 이를 수 있다. 없으면(이전에 저장한 원자료) `fetchedAt`으로 본다.
 	 */
 	regionalBus?: Record<
 		LineRef,
@@ -40,6 +42,7 @@ export interface RawBoards {
 			fetchedAt: number;
 			now: RouteStopArrival[];
 			positions: Record<string, number>;
+			positionsAt?: number;
 			prev: RouteStopArrival[] | null;
 		}
 	>;
@@ -122,7 +125,8 @@ export function assembleBoards(
 					entry.prev,
 					entry.now,
 					entry.fetchedAt,
-					new Map(Object.entries(entry.positions))
+					new Map(Object.entries(entry.positions)),
+					entry.positionsAt ?? entry.fetchedAt
 				)
 			: null;
 		regionalCache.set(leg.line, boards);
