@@ -6,8 +6,22 @@ import {
 	DEFAULT_TIMEZONE,
 } from "@Betro/commute/config";
 import type { CommutePlan } from "@Betro/commute/plan";
+import type { LineRef } from "@Betro/commute/refs";
 import type { EndReason } from "@Betro/commute/session/stage";
 import type { BusSchedule } from "@Betro/commute/sources/bus-schedule";
+import {
+	gbisArrivalUrl,
+	gbisLocationUrl,
+	parseGbisArrival,
+	parseGbisLocations,
+	parseTagoArrival,
+	parseTagoLocations,
+	type RegionalResult,
+	type RegionalSource,
+	type RegionalStop,
+	tagoArrivalUrl,
+	tagoLocationUrl,
+} from "@Betro/commute/sources/regional-bus";
 import {
 	parseRouteArrivals,
 	type RouteStopArrival,
@@ -38,7 +52,11 @@ import type {
 import { and, eq, gt, inArray } from "drizzle-orm";
 import arrAll150Sample from "../../../../packages/commute/src/__fixtures__/arr-all-150.json";
 import arrAll6411Sample from "../../../../packages/commute/src/__fixtures__/arr-all-6411.json";
-import { liveUpstream } from "../collector/cf-ports";
+import gbisArrivalSample from "../../../../packages/commute/src/sources/__fixtures__/regional/gbis-arrival-board.json";
+import gbisLocationSample from "../../../../packages/commute/src/sources/__fixtures__/regional/gbis-location.json";
+import tagoArrivalSample from "../../../../packages/commute/src/sources/__fixtures__/regional/tago-arrival-board.json";
+import tagoLocationSample from "../../../../packages/commute/src/sources/__fixtures__/regional/tago-location.json";
+import { liveUpstream, liveUpstreamWithin } from "../collector/cf-ports";
 import { collectorClient } from "../collector/client";
 import type { Upstream } from "../collector/ports";
 import { safeFetch } from "../collector/upstream-call";
@@ -53,6 +71,7 @@ import {
 	type PushResult,
 	type PushSender,
 	type RecordStore,
+	type RegionalRouteRef,
 	type RunnerPorts,
 	type RunnerStore,
 	type TokenStore,
@@ -74,6 +93,12 @@ const GATEWAY_RATE_LIMITED = "23";
 const GATEWAY_QUOTA = "22";
 const GATEWAY_REASON = /<returnReasonCode>\s*(\d+)\s*<\/returnReasonCode>/;
 const SECOND_MS = 1000;
+/**
+ * 지역(GBIS·TAGO) 호출 하나의 제한 시간. TAGO 게이트웨이 오류(`04`)가 6~9초 뒤에 오므로 한 tick이
+ * 늘어지지 않게 끊는다(5-B 설계 결정 5).
+ */
+export const REGIONAL_FETCH_TIMEOUT_MS = 8000;
+const GATEWAY_AUTH = new Set(["20", "30", "31", "32", "33"]);
 
 function attempt<T>(fn: () => T): Promise<T> {
 	try {
@@ -417,6 +442,48 @@ export async function readBusSchedules(
 }
 
 /**
+ * 현재 `bus_route` 배치에서 지역 노선의 도시 코드(`source_city`)를 읽는다. 인자와 키는 전체 노선 ID
+ * (`gbis:…`, `tago:…`)이고, 서울 노선은 묻지 않는다. 배치에 없거나 도시 코드가 없으면 null이다.
+ */
+export async function readRegionalRouteCities(
+	db: Database,
+	lines: LineRef[]
+): Promise<Record<LineRef, string | null>> {
+	const regional = lines.filter((line) => parseBusRef(line).source !== "seoul");
+	const cities: Record<LineRef, string | null> = {};
+	for (const line of regional) {
+		cities[line] = null;
+	}
+	const found = await Promise.all(
+		busScheduleQueries(regional).map(({ routeIds, source }) =>
+			db
+				.select({
+					routeId: busRoute.routeId,
+					source: busRoute.source,
+					sourceCity: busRoute.sourceCity,
+				})
+				.from(busRoute)
+				.innerJoin(referenceBatch, eq(referenceBatch.id, busRoute.batchId))
+				.where(
+					and(
+						eq(referenceBatch.kind, "bus_route"),
+						eq(referenceBatch.isCurrent, true),
+						eq(busRoute.source, source),
+						inArray(busRoute.routeId, routeIds)
+					)
+				)
+		)
+	);
+	for (const row of found.flat()) {
+		const line = busLine(row.source, row.routeId) as LineRef;
+		if (line in cities) {
+			cities[line] = row.sourceCity;
+		}
+	}
+	return cities;
+}
+
+/**
  * D1 지하철 시간표(`timetable_trip` ⋈ `timetable_stop_time`, 현재 배치). 정차 시각은 서비스일
  * 0시 기준 초이고, 서비스일과 요일 구분은 `serviceDayAt`(새벽 3시에 날이 바뀜)으로 정한다.
  */
@@ -584,7 +651,11 @@ export function busArrivalsOf(response: {
 }
 
 /** 버스는 상류를 직접(한 번만), 지하철은 수집기 RPC로. */
-function boardSource(env: Env, upstream: Upstream): BoardSource {
+function boardSource(
+	env: Env,
+	upstream: Upstream,
+	regionalUpstream: Upstream
+): BoardSource {
 	const collector = collectorClient(env);
 	const key = env.DATA_GO_KR_API_KEY ?? "";
 	return {
@@ -592,10 +663,159 @@ function boardSource(env: Env, upstream: Upstream): BoardSource {
 			busArrivalsOf(
 				await safeFetch(upstream, routeArrivalsUrl(key, busRouteId))
 			),
+		...regionalBoardSource(regionalUpstream, key, () => Date.now()),
 		stations: (statnIds) => collector.stationRows(statnIds),
 		watch: (statnIds, until) => collector.watchStations(statnIds, until),
 	};
 }
+
+// ---------------------------------------------------------------------------
+// 상류: 경기(GBIS)·인천(TAGO) 버스 도착과 위치 목록
+
+/** XML 게이트웨이 오류(JSON을 청해도 키 오류는 XML로 올 수 있다)의 실패 종류. 아니면 null. */
+function xmlGatewayFailure(
+	body: string
+): "quota" | "auth" | "temporary" | null {
+	const code = GATEWAY_REASON.exec(body)?.[1];
+	if (code === undefined) {
+		return null;
+	}
+	if (code === GATEWAY_QUOTA) {
+		return "quota";
+	}
+	return GATEWAY_AUTH.has(code) ? "auth" : "temporary";
+}
+
+/**
+ * 지역 응답 하나 → 값. 응답 없음·5xx·일시 오류(게이트웨이 `04` 포함)는 null, 401·429·한도·인증
+ * 오류는 그 출처의 `UpstreamStoppedError`, 결과 없음은 `empty`(차량 없음), 모양이 다르면 던진다.
+ * 오류 문구에 URL을 넣지 않는다(키가 들어 있다).
+ */
+function regionalValueOf<T>(
+	source: RegionalSource,
+	response: { body: string; status: number | null },
+	parse: (json: unknown) => RegionalResult<T>,
+	empty: T
+): T | null {
+	const { body, status } = response;
+	if (status === null || status >= HTTP_SERVER_ERROR) {
+		return null;
+	}
+	if (status === HTTP_UNAUTHORIZED) {
+		throw new UpstreamStoppedError("auth", source);
+	}
+	if (status === HTTP_TOO_MANY) {
+		throw new UpstreamStoppedError("quota-exhausted", source);
+	}
+	const json = parseJson(body);
+	const parsed: RegionalResult<T> =
+		json === undefined
+			? { ok: false, reason: xmlGatewayFailure(body) ?? "malformed" }
+			: parse(json);
+	if (parsed.ok) {
+		return parsed.value;
+	}
+	switch (parsed.reason) {
+		case "no-data":
+			return empty;
+		case "temporary":
+			return null;
+		case "quota":
+			throw new UpstreamStoppedError("quota-exhausted", source);
+		case "auth":
+			throw new UpstreamStoppedError("auth", source);
+		default:
+			throw new Error(`${source} response malformed status=${status}`);
+	}
+}
+
+/**
+ * GBIS·TAGO 도착과 위치 목록. 상류를 한 번만 부른다(재시도와 예산은 실행기가 센다).
+ * 도시 코드가 없는 TAGO 노선은 부르지 않고 null이다.
+ */
+export function regionalBoardSource(
+	upstream: Upstream,
+	key: string,
+	clock: () => number
+): Pick<BoardSource, "regionalArrival" | "regionalLocations"> {
+	return {
+		regionalArrival: async (route: RegionalRouteRef, stop: RegionalStop) => {
+			const { cityCode, routeId, source } = route;
+			if (source === "tago" && cityCode === null) {
+				return null;
+			}
+			const url =
+				source === "gbis"
+					? gbisArrivalUrl(key, routeId, stop)
+					: tagoArrivalUrl(key, cityCode ?? "", routeId, stop);
+			const response = await safeFetch(upstream, url);
+			const fetchedAt = clock();
+			const parse = (json: unknown) =>
+				source === "gbis"
+					? parseGbisArrival(json, stop, fetchedAt)
+					: parseTagoArrival(json, stop, fetchedAt);
+			return regionalValueOf(source, response, parse, {
+				headwayMin: null,
+				madeAt: fetchedAt,
+				seq: stop.seq,
+				stopId: stop.stopId,
+				vehicles: [],
+			});
+		},
+		regionalLocations: async (route: RegionalRouteRef) => {
+			const { cityCode, routeId, source } = route;
+			if (source === "tago" && cityCode === null) {
+				return null;
+			}
+			const url =
+				source === "gbis"
+					? gbisLocationUrl(key, routeId)
+					: tagoLocationUrl(key, cityCode ?? "", routeId);
+			const response = await safeFetch(upstream, url);
+			return regionalValueOf(
+				source,
+				response,
+				source === "gbis" ? parseGbisLocations : parseTagoLocations,
+				[]
+			);
+		},
+	};
+}
+
+const REGIONAL_FIXTURE_ROUTES = new Map<string, { body: string }>([
+	["getBusArrivalItemv2|200000037", gbisArrivalSample],
+	["getBusLocationListv2|200000037", gbisLocationSample],
+	[
+		"getSttnAcctoSpcifyRouteBusArvlPrearngeInfoList|ICB361000005",
+		tagoArrivalSample,
+	],
+	["getRouteAcctoBusLcList|ICB361000005", tagoLocationSample],
+]);
+const REGIONAL_OPERATION = /\/([A-Za-z0-9]+)\?/;
+const ROUTE_PARAM = /[?&]routeId=([^&]+)/;
+const NO_GBIS_DATA = JSON.stringify({
+	response: { msgHeader: { resultCode: 4, resultMessage: "결과가 없습니다." } },
+});
+const NO_TAGO_DATA = JSON.stringify({
+	response: {
+		body: { items: "", numOfRows: 0, pageNo: 1, totalCount: 0 },
+		header: { resultCode: "00", resultMsg: "NORMAL SERVICE." },
+	},
+});
+
+/**
+ * `UPSTREAM_MODE=fixture`: 지역 상류를 부르지 않고 5-B 프로브 표본(수원 13번 `200000037`,
+ * 인천 82번 `ICB361000005`)을 돌려준다. 표본이 없는 노선은 결과 없음이다.
+ */
+export const regionalFixtureUpstream: Upstream = {
+	fetch(url: string) {
+		const operation = REGIONAL_OPERATION.exec(url)?.[1] ?? "";
+		const routeId = ROUTE_PARAM.exec(url)?.[1] ?? "";
+		const sample = REGIONAL_FIXTURE_ROUTES.get(`${operation}|${routeId}`);
+		const empty = url.includes("/6410000/") ? NO_GBIS_DATA : NO_TAGO_DATA;
+		return Promise.resolve({ body: sample?.body ?? empty, status: 200 });
+	},
+};
 
 // ---------------------------------------------------------------------------
 // 푸시
@@ -675,11 +895,21 @@ function fetchPushSender(serviceAccountJson: string): PushSender {
 // ---------------------------------------------------------------------------
 // 설정
 
-/** `COMMUTE_*` 문자열 변수만 고른다. */
+/** 실행기 설정이 읽는 `COMMUTE_*`가 아닌 변수: 지역 버스 출처별 실행기 예산. */
+const RUNNER_BUDGET_VARS: ReadonlySet<string> = new Set([
+	"DAILY_BUDGET_GBIS_ARRIVAL",
+	"DAILY_BUDGET_GBIS_LOCATION_RUNNER",
+	"DAILY_BUDGET_TAGO_ARRIVAL",
+	"DAILY_BUDGET_TAGO_LOCATION_RUNNER",
+]);
+
+/** `COMMUTE_*`와 지역 버스 예산 문자열 변수만 고른다. */
 function commuteEnv(env: Env): Record<string, string | undefined> {
 	const picked: Record<string, string | undefined> = {};
 	for (const [name, value] of Object.entries(env)) {
-		if (name.startsWith("COMMUTE_") && typeof value === "string") {
+		const isRunnerVar =
+			name.startsWith("COMMUTE_") || RUNNER_BUDGET_VARS.has(name);
+		if (isRunnerVar && typeof value === "string") {
 			picked[name] = value;
 		}
 	}
@@ -716,7 +946,10 @@ export function runnerPorts(
 			blobs: new R2CommuteBlobs(env.DATA),
 			boards: boardSource(
 				env,
-				upstreamMode === "live" ? liveUpstream : arrivalFixtureUpstream
+				upstreamMode === "live" ? liveUpstream : arrivalFixtureUpstream,
+				upstreamMode === "live"
+					? liveUpstreamWithin(REGIONAL_FETCH_TIMEOUT_MS)
+					: regionalFixtureUpstream
 			),
 			busSchedules: (lines) => readBusSchedules(db, lines),
 			clock: () => Date.now(),
@@ -728,6 +961,7 @@ export function runnerPorts(
 					? fetchPushSender(serviceAccountJson)
 					: logPushSender(log),
 			records,
+			regionalRouteCities: (lines) => readRegionalRouteCities(db, lines),
 			secrets: {
 				apnsKeyId: env.APNS_KEY_ID ?? "",
 				apnsP8: env.APNS_KEY_P8 ?? "",

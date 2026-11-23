@@ -9,7 +9,8 @@ import type { CommuteRunner } from "./commute/runner-do";
 /**
  * Worker 바인딩·변수·secret. vars는 wrangler.jsonc, secret은 `wrangler secret`/`.dev.vars`.
  * 키(`*_API_KEY`, `BETTER_AUTH_SECRET`, `FCM_SERVICE_ACCOUNT_JSON`, `ALERT_FCM_TOKEN`,
- * `APNS_KEY_P8`)는 로그·응답에 내보내지 않는다. 출퇴근 실행기 설정은 `COMMUTE_*`(없으면 기본값).
+ * `APNS_KEY_P8`)는 로그·응답에 내보내지 않는다. 출퇴근 실행기 설정은 `COMMUTE_*`와 지역 버스 예산
+ * `DAILY_BUDGET_{GBIS,TAGO}_*`(없으면 기본값).
  */
 export interface Env {
 	/** 알림을 받을 개발자 기기의 FCM 토큰(secret). 없으면 알림은 로그로만 남긴다. */
@@ -35,7 +36,15 @@ export interface Env {
 	COMMUTE_TIMEZONES?: string;
 	CORS_ORIGIN: string;
 	DAILY_BUDGET_BUS?: string;
+	/** 출퇴근 실행기의 GBIS 도착(`getBusArrivalItemv2`) 하루 예산. 기본 900. */
+	DAILY_BUDGET_GBIS_ARRIVAL?: string;
+	/** 출퇴근 실행기 몫의 GBIS 위치 목록(`getBusLocationListv2`) 하루 예산. 기본 600. */
+	DAILY_BUDGET_GBIS_LOCATION_RUNNER?: string;
 	DAILY_BUDGET_SUBWAY?: string;
+	/** 출퇴근 실행기의 TAGO 도착 하루 예산. 기본 9000. */
+	DAILY_BUDGET_TAGO_ARRIVAL?: string;
+	/** 출퇴근 실행기 몫의 TAGO 위치 목록 하루 예산. 기본 6000. */
+	DAILY_BUDGET_TAGO_LOCATION_RUNNER?: string;
 	DATA: R2Bucket;
 	/** 공공데이터포털 키(버스, secret). */
 	DATA_GO_KR_API_KEY?: string;

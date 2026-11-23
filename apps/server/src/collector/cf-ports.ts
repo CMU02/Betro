@@ -399,24 +399,32 @@ function assembleBusRoutes(
 // ---------------------------------------------------------------------------
 // 상류
 
-/** 실제 상류. HTTP 오류도 응답으로 돌려주고, 연결 실패·시간 초과는 `status: null`. 던지지 않는다. */
-export const liveUpstream: Upstream = {
-	async fetch(url: string): Promise<UpstreamResponse> {
-		let response: Response;
-		try {
-			response = await globalThis.fetch(url, {
-				signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-			});
-		} catch (error) {
-			return { body: "", error: errorText(error), status: null };
-		}
-		try {
-			return { body: await response.text(), status: response.status };
-		} catch (error) {
-			return { body: "", error: errorText(error), status: response.status };
-		}
-	},
-};
+/**
+ * 실제 상류(호출마다 `timeoutMs`로 끊는다). HTTP 오류도 응답으로 돌려주고, 연결 실패·시간 초과는
+ * `status: null`. 던지지 않는다.
+ */
+export function liveUpstreamWithin(timeoutMs: number): Upstream {
+	return {
+		async fetch(url: string): Promise<UpstreamResponse> {
+			let response: Response;
+			try {
+				response = await globalThis.fetch(url, {
+					signal: AbortSignal.timeout(timeoutMs),
+				});
+			} catch (error) {
+				return { body: "", error: errorText(error), status: null };
+			}
+			try {
+				return { body: await response.text(), status: response.status };
+			} catch (error) {
+				return { body: "", error: errorText(error), status: response.status };
+			}
+		},
+	};
+}
+
+/** 실제 상류(10초 제한). */
+export const liveUpstream: Upstream = liveUpstreamWithin(UPSTREAM_TIMEOUT_MS);
 
 const ALL_URL = /\/realtimeStationArrival\/ALL(?:$|[/?])/;
 const POSITION_URL = /\/realtimePosition\/\d+\/\d+\/([^/?]+)/;

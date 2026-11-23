@@ -1,7 +1,18 @@
 import { busRoute, referenceBatch } from "@Betro/db/schema/transit";
 import { createTestDb } from "@Betro/db/test-db";
 import { beforeAll, describe, expect, it } from "bun:test";
-import { readBusSchedules } from "./cf-ports";
+import gbisArrivalBoard from "../../../../packages/commute/src/sources/__fixtures__/regional/gbis-arrival-board.json";
+import gbisLocation from "../../../../packages/commute/src/sources/__fixtures__/regional/gbis-location.json";
+import tagoGateway04 from "../../../../packages/commute/src/sources/__fixtures__/regional/tago-gateway-04.json";
+import type { Upstream } from "../collector/ports";
+import type { Env } from "../worker-env";
+import {
+	readBusSchedules,
+	readRegionalRouteCities,
+	regionalBoardSource,
+	runnerConfig,
+} from "./cf-ports";
+import { UpstreamStoppedError } from "./ports";
 
 type TestDb = Awaited<ReturnType<typeof createTestDb>>;
 let db: TestDb;
@@ -137,5 +148,168 @@ describe("readBusSchedules", () => {
 
 	it("does not query for an empty list", async () => {
 		expect(await readBusSchedules(db, [])).toEqual({});
+	});
+});
+
+describe("readRegionalRouteCities", () => {
+	it("regionalRouteCities는 tago 노선의 source_city를 읽는다", async () => {
+		expect(
+			await readRegionalRouteCities(db, [
+				"tago:ICB165000012",
+				"gbis:100100290",
+				"tago:ICB000000000",
+			])
+		).toEqual({
+			"gbis:100100290": null,
+			"tago:ICB000000000": null,
+			"tago:ICB165000012": "23",
+		});
+	});
+});
+
+describe("regionalBoardSource", () => {
+	const AT = 1_800_000_000_000;
+	const KEY = "TEST-REGIONAL-KEY-0123456789";
+	const GBIS = {
+		cityCode: null,
+		routeId: "200000037",
+		source: "gbis" as const,
+	};
+	const TAGO = {
+		cityCode: "23",
+		routeId: "ICB361000005",
+		source: "tago" as const,
+	};
+	const STOP = { seq: 15, stopId: "202000224" };
+
+	function upstreamOf(response: {
+		body: string;
+		status: number | null;
+	}): Upstream & { urls: string[] } {
+		const urls: string[] = [];
+		return {
+			fetch: (url) => {
+				urls.push(url);
+				return Promise.resolve(response);
+			},
+			urls,
+		};
+	}
+
+	const gatewayBody = (code: string) =>
+		JSON.stringify({
+			OpenAPI_ServiceResponse: { cmmMsgHeader: { returnReasonCode: code } },
+		});
+
+	it("GBIS 도착과 위치 목록을 https 주소로 한 번씩 불러 읽는다", async () => {
+		const arrivalUpstream = upstreamOf(gbisArrivalBoard);
+		const arrival = await regionalBoardSource(
+			arrivalUpstream,
+			KEY,
+			() => AT
+		).regionalArrival(GBIS, STOP);
+		expect(arrival?.madeAt).toBe(AT);
+		expect(arrival?.vehicles.map((v) => [v.vehicleId, v.seqNow])).toEqual([
+			["200011170", 12],
+			["200010795", 8],
+		]);
+		expect(arrivalUpstream.urls).toHaveLength(1);
+		expect(
+			arrivalUpstream.urls[0]?.startsWith("https://apis.data.go.kr/")
+		).toBe(true);
+		const positions = await regionalBoardSource(
+			upstreamOf(gbisLocation),
+			KEY,
+			() => AT
+		).regionalLocations(GBIS);
+		expect(positions?.find((p) => p.vehicleId === "200011170")?.seq).toBe(12);
+	});
+
+	it("TAGO 게이트웨이 04와 응답 없음은 null, 22는 그 출처의 quota 멈춤, 30은 auth 멈춤이다", async () => {
+		const sourceOf = (response: { body: string; status: number | null }) =>
+			regionalBoardSource(upstreamOf(response), KEY, () => AT);
+		expect(await sourceOf(tagoGateway04).regionalLocations(TAGO)).toBeNull();
+		expect(
+			await sourceOf(tagoGateway04).regionalArrival(TAGO, STOP)
+		).toBeNull();
+		expect(
+			await sourceOf({ body: "", status: null }).regionalArrival(TAGO, STOP)
+		).toBeNull();
+		const quota = await sourceOf({ body: gatewayBody("22"), status: 200 })
+			.regionalArrival(TAGO, STOP)
+			.catch((error: unknown) => error);
+		expect(quota).toBeInstanceOf(UpstreamStoppedError);
+		expect(quota).toMatchObject({ outcome: "quota-exhausted", source: "tago" });
+		const auth = await sourceOf({ body: gatewayBody("30"), status: 200 })
+			.regionalLocations(GBIS)
+			.catch((error: unknown) => error);
+		expect(auth).toMatchObject({ outcome: "auth", source: "gbis" });
+	});
+
+	it("XML 게이트웨이 오류도 같은 표로 나눈다", async () => {
+		const xml = (code: string) =>
+			`<OpenAPI_ServiceResponse><cmmMsgHeader><returnReasonCode>${code}</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>`;
+		const source = (code: string) =>
+			regionalBoardSource(
+				upstreamOf({ body: xml(code), status: 200 }),
+				KEY,
+				() => AT
+			);
+		expect(await source("04").regionalLocations(TAGO)).toBeNull();
+		const stopped = await source("22")
+			.regionalLocations(TAGO)
+			.catch((error: unknown) => error);
+		expect(stopped).toMatchObject({
+			outcome: "quota-exhausted",
+			source: "tago",
+		});
+	});
+
+	it("차량이 없는 응답은 null이 아니라 빈 도착·빈 목록이다", async () => {
+		const empty = JSON.stringify({
+			response: {
+				body: { items: "", numOfRows: 20, pageNo: 1, totalCount: 0 },
+				header: { resultCode: "00", resultMsg: "NORMAL SERVICE." },
+			},
+		});
+		const source = regionalBoardSource(
+			upstreamOf({ body: empty, status: 200 }),
+			KEY,
+			() => AT
+		);
+		expect(await source.regionalArrival(TAGO, STOP)).toEqual({
+			headwayMin: null,
+			madeAt: AT,
+			seq: STOP.seq,
+			stopId: STOP.stopId,
+			vehicles: [],
+		});
+		expect(await source.regionalLocations(TAGO)).toEqual([]);
+	});
+
+	it("도시 코드가 없는 TAGO 노선은 부르지 않는다", async () => {
+		const upstream = upstreamOf({ body: "", status: 200 });
+		const source = regionalBoardSource(upstream, KEY, () => AT);
+		expect(
+			await source.regionalArrival({ ...TAGO, cityCode: null }, STOP)
+		).toBeNull();
+		expect(upstream.urls).toEqual([]);
+	});
+});
+
+describe("runnerConfig", () => {
+	it("지역 버스 예산 환경 변수(DAILY_BUDGET_*)를 실행기 설정에 넘긴다", () => {
+		const config = runnerConfig({
+			COMMUTE_TICK_MS: "5000",
+			DAILY_BUDGET_GBIS_ARRIVAL: "11",
+			DAILY_BUDGET_GBIS_LOCATION_RUNNER: "12",
+			DAILY_BUDGET_TAGO_ARRIVAL: "13",
+			DAILY_BUDGET_TAGO_LOCATION_RUNNER: "14",
+		} as unknown as Env);
+		expect(config.tickMs).toBe(5000);
+		expect(config.dailyBudgetGbisArrival).toBe(11);
+		expect(config.dailyBudgetGbisLocation).toBe(12);
+		expect(config.dailyBudgetTagoArrival).toBe(13);
+		expect(config.dailyBudgetTagoLocation).toBe(14);
 	});
 });

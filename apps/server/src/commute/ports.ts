@@ -1,8 +1,14 @@
 import type { AccuracyRecord } from "@Betro/commute/accuracy";
 import type { CommuteConfig } from "@Betro/commute/config";
 import type { CommutePlan } from "@Betro/commute/plan";
+import type { LineRef } from "@Betro/commute/refs";
 import type { EndReason } from "@Betro/commute/session/stage";
 import type { BusSchedule } from "@Betro/commute/sources/bus-schedule";
+import type {
+	RegionalPosition,
+	RegionalSource,
+	RegionalStop,
+} from "@Betro/commute/sources/regional-bus";
 import type { RouteStopArrival } from "@Betro/commute/sources/seoul-bus";
 import type {
 	StationRow,
@@ -70,13 +76,28 @@ export interface RunnerStore {
 	put: (key: string, value: unknown) => Promise<void>;
 }
 
+/** 지역(GBIS·TAGO) 노선 하나. `routeId`는 맨 노선 ID, `cityCode`는 TAGO 도시 코드(GBIS는 null). */
+export interface RegionalRouteRef {
+	cityCode: string | null;
+	routeId: string;
+	source: RegionalSource;
+}
+
 /**
- * 도착판 원자료. `busRoute`는 상류를 한 번만 부른다(재시도와 예산은 실행기가 센다).
- * 응답을 받지 못했거나 잠깐의 오류면 null, 그날 멈춰야 하는 오류(인증, 한도)는
- * `UpstreamStoppedError`를 던진다.
+ * 도착판 원자료. `busRoute`·`regionalArrival`·`regionalLocations`는 상류를 한 번만 부른다(재시도와
+ * 예산은 실행기가 센다). 응답을 받지 못했거나 잠깐의 오류(TAGO 게이트웨이 `04` 포함)면 null, 그날
+ * 멈춰야 하는 오류(인증, 한도)는 `UpstreamStoppedError`를 던진다. 지역 도착에 차량이 없으면 null이
+ * 아니라 빈 도착이다. TAGO 도착의 차량 ID는 비어 있다(실행기가 위치 목록으로 붙인다).
  */
 export interface BoardSource {
 	busRoute: (busRouteId: string) => Promise<RouteStopArrival[] | null>;
+	regionalArrival: (
+		route: RegionalRouteRef,
+		stop: RegionalStop
+	) => Promise<RouteStopArrival | null>;
+	regionalLocations: (
+		route: RegionalRouteRef
+	) => Promise<RegionalPosition[] | null>;
 	stations: (
 		statnIds: string[]
 	) => Promise<Record<string, { fetchedAt: number; rows: StationRow[] }>>;
@@ -111,8 +132,8 @@ export interface RunnerPorts {
 	boards: BoardSource;
 	/**
 	 * 버스 노선의 정적 배차간격·첫차·막차(D1 현재 `bus_route` 배치). 키와 인자는 전체 노선 ID
-	 * (`leg.line`)이고, 일정이 없는 노선은 빠진다. 도착판이 없을 때의 추정과 실시간 연결이 없는
-	 * 노선(GBIS·TAGO)의 추정에 쓴다.
+	 * (`leg.line`)이고, 일정이 없는 노선은 빠진다. 도착판이 없을 때의 추정과, 응답에 배차간격이 없는
+	 * GBIS·TAGO 도착판(또는 그 출처가 멈췄을 때)의 추정에 쓴다.
 	 */
 	busSchedules: (lines: string[]) => Promise<Record<string, BusSchedule>>;
 	clock: () => number;
@@ -121,6 +142,13 @@ export interface RunnerPorts {
 	plans: PlanStore;
 	push: PushSender;
 	records: RecordStore;
+	/**
+	 * 지역 노선(전체 노선 ID)의 TAGO 도시 코드(D1 현재 배치 `bus_route.source_city`). 배치에 없거나
+	 * 도시 코드가 없으면 null이다. 도시 코드가 없는 TAGO 노선은 부르지 않는다.
+	 */
+	regionalRouteCities: (
+		lines: LineRef[]
+	) => Promise<Record<LineRef, string | null>>;
 	secrets: RunnerSecrets;
 	/** 상류 재시도 백오프. 테스트는 기다리지 않는다. 없으면 `setTimeout`. */
 	sleep?: (ms: number) => Promise<void>;
@@ -131,14 +159,22 @@ export interface RunnerPorts {
 	tokens: TokenStore;
 }
 
-/** 그 출처를 그날 멈춰야 하는 상류 오류(401, 게이트웨이 인증·한도 오류). */
+/**
+ * 그 출처를 그날 멈춰야 하는 상류 오류(401, 게이트웨이 인증·한도 오류). `source`는 멈출 출처다.
+ * 출처마다 따로 멈춘다(GBIS 한도 초과가 서울 버스와 TAGO를 멈추지 않는다).
+ */
 export class UpstreamStoppedError extends Error {
 	readonly outcome: "auth" | "quota-exhausted";
+	readonly source: "seoul-bus" | RegionalSource;
 
-	constructor(outcome: "auth" | "quota-exhausted") {
-		super(`upstream stopped: ${outcome}`);
+	constructor(
+		outcome: "auth" | "quota-exhausted",
+		source: "seoul-bus" | RegionalSource = "seoul-bus"
+	) {
+		super(`upstream stopped: ${source} ${outcome}`);
 		this.name = "UpstreamStoppedError";
 		this.outcome = outcome;
+		this.source = source;
 	}
 }
 
