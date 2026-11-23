@@ -276,6 +276,72 @@ describe("busBoards.progress", () => {
 	});
 });
 
+describe("busBoards.progress 위치 목록", () => {
+	// 승차 정류장(15) 도착에는 차량 A가 순번 12, 3정거장 전 180초로 나온다(정거장당 60초).
+	// 하차 정류장(35) 도착에는 A가 없다. B는 순번 30에서 5정거장 300초(정거장당 60초)라
+	// 노선 정거장당 시간(중앙값)은 60초다. 위치 목록에서 A는 순번 20이다.
+	const boarding = [
+		stop(15, [vehicle("A", 12, 180)]),
+		stop(35, [vehicle("B", 30, 300)]),
+	];
+
+	it("도착판에 없는 차량도 위치 목록의 순번으로 하차까지 남은 정거장과 외삽 ETA를 낸다", () => {
+		const boards = busBoards(
+			null,
+			boarding,
+			MADE_6411,
+			new Map([
+				["A", 20],
+				["B", 30],
+			])
+		);
+		expect(boards.progress("A", 35)).toEqual({
+			etaAt: MADE_6411 + 15 * MINUTE_MS,
+			method: "extrapolated",
+			stopsAway: 15,
+		});
+	});
+
+	it("위치 목록의 순번이 도착의 순번보다 우선한다", () => {
+		const boards = busBoards(null, boarding, MADE_6411, new Map([["A", 40]]));
+		expect(boards.progress("A", 35)).toEqual({
+			etaAt: null,
+			method: null,
+			stopsAway: 0,
+		});
+	});
+
+	it("어느 정류장에서도 첫 차량이 아니면 노선 정거장당 시간으로 외삽한다", () => {
+		const stops = [
+			stop(5, [vehicle("U", 4, 60), vehicle("V", 2, 240)]),
+			stop(8, [vehicle("U", 4, 300)]),
+		];
+		// 정거장당 중앙값: U 60초, V 80초, U 75초 → 75초
+		expect(busBoards(null, stops, MADE_6411).progress("V", 8)).toEqual({
+			etaAt: MADE_6411 + 6 * 75 * SECOND_MS,
+			method: "extrapolated",
+			stopsAway: 6,
+		});
+	});
+
+	it("positions가 없으면 지금과 같다", () => {
+		const stops = [
+			stop(2, [vehicle("V", 1, 60)]),
+			stop(3, [vehicle("V", 1, 120)]),
+			stop(4, [vehicle("W", 3, 30), vehicle("V", 1, 200)]),
+			stop(5, [vehicle("U", 4, 40), vehicle("W", 3, 100)]),
+		];
+		expect(busBoards(null, stops, MADE_6411).progress("V", 5)).toEqual({
+			etaAt: MADE_6411 + (120 + 2 * 60) * SECOND_MS,
+			method: "extrapolated",
+			stopsAway: 5 - 1,
+		});
+		expect(busBoards(null, boarding, MADE_6411).progress("A", 35)).toEqual(
+			busBoards(null, boarding, MADE_6411, new Map()).progress("A", 35)
+		);
+	});
+});
+
 describe("busBoards.rideMs", () => {
 	it("measures the ride of a given vehicle between the two stops", () => {
 		expect(

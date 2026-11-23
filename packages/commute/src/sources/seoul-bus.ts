@@ -210,7 +210,8 @@ const nonNegative = (ms: number): number | null => (ms >= 0 ? ms : null);
 export function busBoards(
 	prev: RouteStopArrival[] | null,
 	now: RouteStopArrival[],
-	fetchedAt: number
+	fetchedAt: number,
+	positions?: ReadonlyMap<string, number>
 ): BusBoards {
 	const bySeq = new Map(now.map((stop) => [stop.seq, stop]));
 	const prevBySeq = new Map((prev ?? []).map((stop) => [stop.seq, stop]));
@@ -222,6 +223,10 @@ export function busBoards(
 				seqNowOf.set(vehicle.vehicleId, vehicle.seqNow);
 			}
 		}
+	}
+	// 위치 목록(차량 ID → 지금 순번)은 도착에서 얻은 순번보다 우선한다.
+	for (const [vehicleId, seq] of positions ?? []) {
+		seqNowOf.set(vehicleId, seq);
 	}
 	const latestMadeAt =
 		now.length === 0 ? fetchedAt : Math.max(...now.map((stop) => stop.madeAt));
@@ -280,6 +285,8 @@ export function busBoards(
 		return found;
 	};
 
+	const pacePerStopMs = routePacePerStopMs(now);
+
 	const progress = (vehicleId: string, alightSeq: number): Progress | null => {
 		const alight = bySeq.get(alightSeq);
 		const listed = alight?.vehicles.find((v) => v.vehicleId === vehicleId);
@@ -298,7 +305,22 @@ export function busBoards(
 			// 하차 정류장을 이미 지났다.
 			return { etaAt: null, method: null, stopsAway: 0 };
 		}
+		if (positions?.has(vehicleId) && pacePerStopMs !== null) {
+			// 위치 목록의 순번이 도착의 순번보다 새롭다. 노선 정거장당 시간으로 외삽한다.
+			return {
+				etaAt: fetchedAt + Math.round((alightSeq - seqNow) * pacePerStopMs),
+				method: "extrapolated",
+				stopsAway: alightSeq - seqNow,
+			};
+		}
 		const far = farthestFirst(vehicleId, alightSeq);
+		if (far === null && pacePerStopMs !== null) {
+			return {
+				etaAt: fetchedAt + Math.round((alightSeq - seqNow) * pacePerStopMs),
+				method: "extrapolated",
+				stopsAway: alightSeq - seqNow,
+			};
+		}
 		const travelled = far ? far.stop.seq - far.vehicle.seqNow : 0;
 		if (far === null || travelled <= 0) {
 			return null;
@@ -325,8 +347,6 @@ export function busBoards(
 		}
 		return nonNegative(alightAt - etaAtOf(boardStop, listed));
 	};
-
-	const pacePerStopMs = routePacePerStopMs(now);
 
 	/**
 	 * 같은 응답의 차량들로 잰 정류장당 시간 × 정류장 수. 승차·하차 정류장에 차량이 없을 때(기점 근처의
