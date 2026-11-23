@@ -21,6 +21,8 @@ export interface RegionalStopRow {
 	seq: number;
 	stationId: string;
 	turnSeq: number | null;
+	/** TAGO `updowncd`. 방향이 바뀌는 지점을 알려 준다. GBIS는 null이다. */
+	upDown: number | null;
 }
 
 export type RegionalFailReason =

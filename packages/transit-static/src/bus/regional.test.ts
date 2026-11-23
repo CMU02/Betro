@@ -10,6 +10,7 @@ import {
 	assembleRegionalRoute,
 	assembleRegionalSource,
 	dropSeoulDuplicates,
+	regionalDirectionNames,
 	regionalMinLoadableRatio,
 } from "./regional";
 
@@ -57,6 +58,7 @@ function gbisStops(routeId: string): RegionalStopRow[] {
 		seq: Number(row.stationSeq),
 		stationId: String(row.stationId),
 		turnSeq: null,
+		upDown: null,
 	}));
 }
 
@@ -78,6 +80,7 @@ const stop = (seq: number, lng: number, lat: number): RegionalStopRow => ({
 	seq,
 	stationId: `s${seq}`,
 	turnSeq: null,
+	upDown: null,
 });
 
 describe("assembleRegionalRoute", () => {
@@ -386,5 +389,61 @@ describe("assembleRegionalSource", () => {
 				source: "gbis",
 			})
 		).toThrow();
+	});
+});
+
+describe("regionalDirectionNames", () => {
+	it("GBIS는 회차 순번 앞은 회차 정류장, 뒤는 마지막 정류장 이름이다", () => {
+		const stops = [1, 2, 3, 4].map((seq) => ({
+			name: `s${seq}`,
+			seq,
+			upDown: null,
+		}));
+		expect(regionalDirectionNames(stops, 3)).toEqual(["s3", "s3", "s4", "s4"]);
+	});
+
+	it("TAGO는 updowncd 구간마다 그 구간의 마지막 정류장 이름이다", () => {
+		const stops = [
+			{ name: "s1", seq: 1, upDown: 0 },
+			{ name: "s2", seq: 2, upDown: 0 },
+			{ name: "s3", seq: 3, upDown: 1 },
+			{ name: "s4", seq: 4, upDown: 1 },
+		];
+		expect(regionalDirectionNames(stops, null)).toEqual([
+			"s2",
+			"s2",
+			"s4",
+			"s4",
+		]);
+	});
+
+	it("회차 순번도 updowncd도 없으면 null이다", () => {
+		const stops = [1, 2].map((seq) => ({
+			name: `s${seq}`,
+			seq,
+			upDown: null,
+		}));
+		expect(regionalDirectionNames(stops, null)).toEqual([null, null]);
+	});
+});
+
+describe("assembleRegionalRoute 방향 이름", () => {
+	it("GBIS 경유 정류장의 turnSeq로 정류장 방향 이름을 채운다", () => {
+		const stops = [1, 2, 3, 4].map((seq) => ({
+			...stop(seq, 127 + seq / 100, 37.5),
+			turnSeq: 3,
+		}));
+		const route = assembleOk({
+			info: null,
+			route: GBIS_ROUTE,
+			source: "gbis",
+			stops,
+		});
+		expect(route.stops.map((s) => s.directionName)).toEqual([
+			"정류장3",
+			"정류장3",
+			"정류장4",
+			"정류장4",
+		]);
 	});
 });

@@ -102,6 +102,29 @@ describe("parseTagoRouteStations", () => {
 		expect(result.items[0]?.lat).toBe(37.399_93);
 		expect(result.items[0]?.stationId).toBe("ICB364000795");
 		expect(result.items[0]?.arsId).toBe("38793");
+		// updowncd를 방향 구분으로 읽는다.
+		expect(result.items[0]?.upDown).toBe(0);
+	});
+
+	it("updowncd가 없으면 upDown은 null이다", () => {
+		const json = {
+			response: {
+				body: {
+					items: {
+						item: {
+							gpslati: 37.5,
+							gpslong: 126.7,
+							nodeid: "ICB1",
+							nodenm: "가",
+							nodeord: 1,
+						},
+					},
+				},
+				header: { resultCode: "00" },
+			},
+		};
+		const result = parseTagoRouteStations(json, CITY_CODE);
+		expect(result.ok && result.items[0]?.upDown).toBeNull();
 	});
 
 	it("gpslong이 문자열인 항목도 숫자로 읽는다", () => {

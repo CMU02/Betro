@@ -188,6 +188,7 @@ function toStopRow(raw: RawRecord): RegionalStopRow | null {
 		seq,
 		stationId,
 		turnSeq: turnSeq !== null && turnSeq > 0 ? turnSeq : null,
+		upDown: null,
 	};
 }
 

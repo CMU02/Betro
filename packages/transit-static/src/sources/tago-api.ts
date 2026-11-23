@@ -177,6 +177,7 @@ export function parseTagoRouteStations(
 			seq,
 			stationId,
 			turnSeq: null,
+			upDown: readNumber(raw.updowncd),
 		};
 	});
 	if (!result.ok) {

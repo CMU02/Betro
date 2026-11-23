@@ -128,6 +128,41 @@ function cumulativeDistances(coords: readonly [number, number][]): number[] {
 }
 
 /**
+ * 정류장마다 가는 방향 이름(종점 이름)을 구한다. 입력은 seq 순이고 결과도 같은 순서다.
+ * GBIS는 회차 순번 앞이면 회차 정류장, 그 뒤면 마지막 정류장이다.
+ * TAGO는 updowncd가 같은 연속 구간의 마지막 정류장이다. 둘 다 없으면 null이다.
+ */
+export function regionalDirectionNames(
+	stops: readonly { seq: number; name: string; upDown: number | null }[],
+	turnSeq: number | null
+): (string | null)[] {
+	const last = stops.at(-1);
+	if (turnSeq !== null) {
+		const turnName = stops.find((stop) => stop.seq === turnSeq)?.name ?? null;
+		return stops.map((stop) =>
+			stop.seq < turnSeq ? turnName : (last?.name ?? null)
+		);
+	}
+	const names: (string | null)[] = stops.map(() => null);
+	let runStart = 0;
+	for (let i = 1; i <= stops.length; i += 1) {
+		const runEnded =
+			i === stops.length || stops[i]?.upDown !== stops[runStart]?.upDown;
+		if (!runEnded) {
+			continue;
+		}
+		if (stops[runStart]?.upDown !== null) {
+			const endName = stops[i - 1]?.name ?? null;
+			for (let j = runStart; j < i; j += 1) {
+				names[j] = endName;
+			}
+		}
+		runStart = i;
+	}
+	return names;
+}
+
+/**
  * 노선 하나를 조립한다. 정류장이 2개 미만이거나, 좌표가 0인 정류장이 있거나, seq가 겹치면 뺀다.
  * 정류장 ID와 노선 ID는 원본 그대로 둔다. 출처 접두사(`gbis:`, `tago:`)는 참조 API에서 붙인다.
  */
@@ -143,11 +178,14 @@ export function assembleRegionalRoute({
 		return { issue, ok: false };
 	}
 	const coords = stops.map((stop): [number, number] => [stop.lng, stop.lat]);
+	// GBIS 회차 순번은 경유 정류장 행에 실려 온다. 노선 정보에는 없다.
+	const turnSeq = stops.find((stop) => stop.turnSeq !== null)?.turnSeq ?? null;
+	const directionNames = regionalDirectionNames(stops, turnSeq);
 	const distances = cumulativeDistances(coords);
 	const assembledStops = stops.map((stop, i) => ({
 		apiSectDistM: 0,
 		arsId: stop.arsId,
-		directionName: null,
+		directionName: directionNames[i] ?? null,
 		distanceM: distances[i] ?? 0,
 		flags: [],
 		lat: stop.lat,
