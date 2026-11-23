@@ -162,6 +162,17 @@ export function assembleBoards(
 
 	const board = (leg: Leg, at: "board" | "alight"): StopBoard | null => {
 		const adapter = adapterOf(leg);
+		if (adapter?.kind === "regional-bus") {
+			const regional = regionalFor(adapter.leg)?.board(adapter.leg[at].seq);
+			if (!regional || regional.headwayMs !== null) {
+				return regional ?? null;
+			}
+			// GBIS·TAGO 도착 응답에는 배차간격이 없어 정적 배차간격으로 채운다.
+			// 그래야 차량이 없거나 모두 지난 뒤에도 배차간격 추정이 나온다.
+			const entry = raw.regionalBus?.[adapter.leg.line];
+			const headwayMs = scheduled(adapter.leg, entry?.fetchedAt ?? 0);
+			return headwayMs === null ? regional : { ...regional, headwayMs };
+		}
 		if (adapter && adapter.kind !== "seoul-subway") {
 			return busBoardsOf(adapter)?.board(adapter.leg[at].seq) ?? null;
 		}
