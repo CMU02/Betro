@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { dropFrozen, FROZEN_VEHICLE_MS, updateSeen } from "./frozen";
+import {
+	dropFrozen,
+	dropFrozenPositions,
+	FROZEN_VEHICLE_MS,
+	updateSeen,
+} from "./frozen";
 import type { RouteStopArrival } from "./seoul-bus";
 
 const T0 = Date.UTC(2026, 10, 23, 3, 0);
@@ -89,6 +94,30 @@ describe("멈춘 차량", () => {
 			seqNow: 12,
 			since: T0,
 		});
+	});
+
+	it("위치 목록에서만 보이는 차량도 순번이 5분 넘게 그대로면 위치에서 뺀다", () => {
+		let seen = updateSeen({}, [], T0, { A: 12, B: 8 });
+		const at = T0 + FROZEN_VEHICLE_MS + 1000;
+		seen = updateSeen(seen, [], at, { A: 12, B: 9 });
+		expect(dropFrozenPositions({ A: 12, B: 9 }, seen, at)).toEqual({ B: 9 });
+	});
+
+	it("이어 쓴 위치(이번에 받지 않은 위치)는 기록을 새로 하지 않는다", () => {
+		let seen = updateSeen({}, [], T0, { A: 12 });
+		// 위치 목록을 못 읽은 poll은 위치를 관측으로 넘기지 않는다.
+		seen = updateSeen(seen, [], T0 + 120_000);
+		expect(seen["pos:A"]).toEqual({ lastSeen: T0, seqNow: 12, since: T0 });
+	});
+
+	it("도착의 순번과 위치 목록의 순번은 따로 센다", () => {
+		let seen = updateSeen({}, [stop15([veh("A", 12, 491)])], T0, { A: 13 });
+		const at = T0 + FROZEN_VEHICLE_MS + 1000;
+		const later = [stop15([veh("A", 12, 500)])];
+		seen = updateSeen(seen, later, at, { A: 13 });
+		// 서로 한 정거장 달라도 매 poll 변화로 보지 않는다.
+		expect(dropFrozen(later, seen, at)[0]?.vehicles).toEqual([]);
+		expect(dropFrozenPositions({ A: 13 }, seen, at)).toEqual({});
 	});
 
 	it("tago-pos: 차량은 poll마다 다른 차량일 수 있어 빠지면 바로 버린다", () => {

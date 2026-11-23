@@ -2004,6 +2004,37 @@ describe("RunnerCore 지역 버스", () => {
 		expect((await savedRegional(h))?.data?.positions).toEqual({});
 	});
 
+	test("위치 목록에서만 보이는 탄 GBIS 차량도 순번이 5분 넘게 그대로면 저장한 위치에서 뺀다", async () => {
+		const h = harness();
+		addRegional(h, makeRegionalPlan(PLAN_ANDROID));
+		simulateRegional(h);
+		hideV1AtAlight(h);
+		const simulated = h.boards.regionalLocationsHandler;
+		const core = h.core();
+		await tickRange(h, core, T0, T0 + 17 * MINUTE);
+		const [, entry] = await onlySession(h);
+		expect(entry.state.stage).toBe("ride");
+		// 17분부터 위치 목록의 V1만 그 자리에 멈춘다. V2는 달린다.
+		const stuckSeq = Math.floor(
+			simPosition({ arriveBoardAt: V1_AT_BOARD, id: "V1" }, T0 + 17 * MINUTE)
+		);
+		h.boards.regionalLocationsHandler = (route) => {
+			const found = simulated?.(route) ?? null;
+			if (!Array.isArray(found)) {
+				return found;
+			}
+			return found.map((position) =>
+				position.vehicleId === "V1" ? { ...position, seq: stuckSeq } : position
+			);
+		};
+		await tickRange(h, core, T0 + 17.5 * MINUTE, T0 + 21.5 * MINUTE);
+		expect((await savedRegional(h))?.data?.positions.V1).toBeDefined();
+		await tickRange(h, core, T0 + 22 * MINUTE, T0 + 23 * MINUTE);
+		const positions = (await savedRegional(h))?.data?.positions ?? {};
+		expect(positions.V1).toBeUndefined();
+		expect(positions.V2).toBeDefined();
+	});
+
 	test("순번이 5분 넘게 그대로인 GBIS 차량은 저장 전에 빠지고, 다른 차량이 없으면 배차간격 추정으로 간다", async () => {
 		const h = harness();
 		addRegional(h, makeRegionalPlan(PLAN_ANDROID));

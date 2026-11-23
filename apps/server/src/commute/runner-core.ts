@@ -63,6 +63,7 @@ import {
 } from "@Betro/commute/sources/assemble";
 import {
 	dropFrozen,
+	dropFrozenPositions,
 	updateSeen,
 	type VehicleSeen,
 } from "@Betro/commute/sources/frozen";
@@ -1759,12 +1760,14 @@ export class RunnerCore {
 			(stop) => target.stops.has(stop.seq) && !fresh.has(stop.seq)
 		);
 		const merged = [...kept, ...settled].sort((a, b) => a.seq - b.seq);
-		// 순번이 5분 넘게 그대로인 차량은 도착과 위치 목록에서 뺀다(예측 초는 보지 않는다).
+		// 순번이 5분 넘게 그대로인 차량은 도착과 위치 목록에서 뺀다(예측 초는 보지 않는다). 위치 목록은
+		// 이번에 받은 것만 관측으로 센다.
 		const seenKey = `${SEEN_PREFIX}${target.line}`;
 		const seen = updateSeen(
 			(await store.get<Record<string, VehicleSeen>>(seenKey)) ?? {},
 			merged,
-			now
+			now,
+			positions === null ? undefined : bySeq
 		);
 		await store.put(seenKey, seen);
 		const live = dropFrozen(merged, seen, now);
@@ -1779,8 +1782,12 @@ export class RunnerCore {
 		return {
 			fetchedAt: clock(),
 			now: live,
-			positions: Object.fromEntries(
-				Object.entries(bySeq).filter(([vehicleId]) => !frozen.has(vehicleId))
+			positions: dropFrozenPositions(
+				Object.fromEntries(
+					Object.entries(bySeq).filter(([vehicleId]) => !frozen.has(vehicleId))
+				),
+				seen,
+				now
 			),
 			positionsAt,
 			prev: prev?.now ?? null,
