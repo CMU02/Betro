@@ -302,6 +302,90 @@ describe("assembleBoards: GBIS and TAGO legs", () => {
 	});
 });
 
+describe("assembleBoards: 지역 버스 실시간", () => {
+	const veh = (vehicleId: string, seqNow: number, etaSec: number) => ({
+		etaSec,
+		isArrived: false,
+		lastOfDay: false,
+		plate: "",
+		seqNow,
+		vehicleId,
+	});
+	const stopAt = (seq: number, vehicles: ReturnType<typeof veh>[]) => ({
+		headwayMin: null,
+		madeAt: T,
+		seq,
+		stopId: `gbis:s${seq}`,
+		vehicles,
+	});
+	const NOON = Date.UTC(2026, 10, 21, 3, 0);
+
+	it("gbis 구간은 서울 원자료에 같은 ID가 있어도 regionalBus만 본다", () => {
+		const boards = assembleBoards(
+			{
+				...raw(),
+				regionalBus: {
+					"gbis:100100290": {
+						fetchedAt: T,
+						now: [
+							stopAt(2, [veh("G1", 1, 120)]),
+							stopAt(9, [veh("G2", 7, 200)]),
+						],
+						positions: { G1: 1, G2: 7 },
+						prev: null,
+					},
+				},
+			},
+			config
+		);
+		expect(boards.board(gbisLeg, "board")?.approaching[0]?.vehicleId).toBe(
+			"G1"
+		);
+		expect(boards.board(busLeg, "board")?.approaching[0]?.vehicleId).not.toBe(
+			"G1"
+		);
+	});
+
+	it("도착판에 없는 차량도 positions로 하차까지 진행을 낸다", () => {
+		const boards = assembleBoards(
+			{
+				...raw(),
+				regionalBus: {
+					"gbis:100100290": {
+						fetchedAt: T,
+						now: [
+							stopAt(2, [veh("G1", 1, 60)]),
+							stopAt(9, [veh("G2", 7, 200)]),
+						],
+						positions: { G1: 5, G2: 7 },
+						prev: null,
+					},
+				},
+			},
+			config
+		);
+		expect(boards.progress(gbisLeg, "G1")?.stopsAway).toBe(4);
+	});
+
+	it("regionalBus가 없으면 board는 null이고 배차간격 추정만 남는다", () => {
+		const boards = assembleBoards(
+			{
+				...raw(),
+				busSchedules: {
+					"gbis:100100290": {
+						firstBusMinute: 270,
+						headwayMin: 10,
+						lastBusMinute: 1370,
+					},
+				},
+			},
+			config
+		);
+		expect(boards.board(gbisLeg, "board")).toBeNull();
+		expect(boards.scheduledHeadwayMs?.(gbisLeg, NOON)).toBe(10 * MINUTE_MS);
+	});
+});
+
 describe("estimate at a route's origin stop", () => {
 	// 2026-11-12 운영: 6411 기점(정랑고개.양천벤처타운, 1번)은 "출발대기"(vehId 0)뿐이라
 	// 승차 정류장에 차량이 없어 주행 시간을 몰랐고, 하차·목적지 시각이 모두 null이었다.
