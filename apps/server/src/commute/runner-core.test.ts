@@ -2002,6 +2002,12 @@ describe("RunnerCore 지역 버스", () => {
 			(positionsAt as number) + h.config.staleAfterMs + MINUTE
 		);
 		expect((await savedRegional(h))?.data?.positions).toEqual({});
+		// 탄 차량의 하차 ETA는 실시간으로 약속하지 않고 추정으로 물러선다.
+		[, entry] = await onlySession(h);
+		expect(entry.state.estimates[0]?.legs[0]).toMatchObject({
+			etaState: "estimated",
+			method: "timetable",
+		});
 	});
 
 	test("위치 목록에서만 보이는 탄 GBIS 차량도 순번이 5분 넘게 그대로면 저장한 위치에서 뺀다", async () => {
@@ -2033,6 +2039,12 @@ describe("RunnerCore 지역 버스", () => {
 		const positions = (await savedRegional(h))?.data?.positions ?? {};
 		expect(positions.V1).toBeUndefined();
 		expect(positions.V2).toBeDefined();
+		// 탄 차량의 하차 ETA는 실시간으로 약속하지 않고 추정으로 물러선다.
+		const [, after] = await onlySession(h);
+		expect(after.state.estimates[0]?.legs[0]).toMatchObject({
+			etaState: "estimated",
+			method: "timetable",
+		});
 	});
 
 	test("순번이 5분 넘게 그대로인 GBIS 차량은 저장 전에 빠지고, 다른 차량이 없으면 배차간격 추정으로 간다", async () => {
