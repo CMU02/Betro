@@ -1847,7 +1847,7 @@ describe("RunnerCore 지역 버스", () => {
 		expect(entry.state.estimates[0]?.legs[0]?.alightEtaAt).not.toBeNull();
 	});
 
-	test("순번이 5분 넘게 그대로인 GBIS 차량은 저장 전에 도착과 위치 목록에서 빠져 그 ETA를 더 약속하지 않는다", async () => {
+	test("순번이 5분 넘게 그대로인 GBIS 차량은 저장 전에 빠지고, 다른 차량이 없으면 배차간격 추정으로 간다", async () => {
 		const h = harness();
 		addRegional(h, makeRegionalPlan(PLAN_ANDROID));
 		h.busSchedules.handler = tenMinuteHeadway([`gbis:${ROUTE_ID}`]);
@@ -1868,9 +1868,75 @@ describe("RunnerCore 지역 버스", () => {
 		expect(saved?.data?.now.flatMap((stop) => stop.vehicles)).toEqual([]);
 		expect(saved?.data?.positions).toEqual({});
 		[, entry] = await onlySession(h);
-		const leg = entry.state.estimates[0]?.legs[0];
-		expect(leg?.method).not.toBe("official");
-		expect(leg).toMatchObject({ boardEtaAt: null, etaState: "estimated" });
+		// 잡아 둔 V1이 빠졌으니 놓고 다시 고른다. 건너뛴 차량으로 보지는 않는다.
+		expect(entry.state.fixed[0]).toBeNull();
+		expect(entry.state.skip).toEqual([]);
+		expect(entry.state.estimates[0]?.legs[0]).toMatchObject({
+			etaState: "estimated",
+			method: "headway",
+		});
+	});
+
+	test("잡아 둔 GBIS 차량만 멈췄으면 다음 차량의 공식 ETA로 넘어간다", async () => {
+		const h = harness();
+		addRegional(h, makeRegionalPlan(PLAN_ANDROID));
+		h.busSchedules.handler = tenMinuteHeadway([`gbis:${ROUTE_ID}`]);
+		simulateRegional(h);
+		const simulated = h.boards.regionalArrivalHandler;
+		// V1은 07:55 자리에 멈춰 있고 V2는 달린다.
+		h.boards.regionalArrivalHandler = (route, stop) => {
+			const moving = simulated?.(route, stop);
+			if (!moving || moving instanceof Error) {
+				return moving ?? null;
+			}
+			const frozen = routeStops(
+				[{ arriveBoardAt: V1_AT_BOARD + (h.clock.now - T0), id: "V1" }],
+				h.clock.now,
+				h.clock.now
+			).find((found) => found.seq === stop.seq);
+			return {
+				...moving,
+				vehicles: [
+					...(frozen?.vehicles ?? []),
+					...moving.vehicles.filter((vehicle) => vehicle.vehicleId !== "V1"),
+				],
+			};
+		};
+		const core = h.core();
+		await tickRange(h, core, T0, T0 + 5 * MINUTE);
+		let [, entry] = await onlySession(h);
+		expect(entry.state.fixed[0]).toBe("V1");
+
+		await tickAt(h, core, T0 + 6 * MINUTE);
+		[, entry] = await onlySession(h);
+		expect(entry.state.fixed[0]).toBe("V2");
+		expect(entry.state.estimates[0]?.legs[0]).toMatchObject({
+			boardEtaAt: V2_AT_BOARD,
+			method: "official",
+			vehicleId: "V2",
+		});
+	});
+
+	test("TAGO 위치 목록이 일시 오류여도 승차 ETA는 공식 값이다(차량 번호 대신 tago-pos)", async () => {
+		const h = harness();
+		addRegional(h, makeTagoPlan(PLAN_ANDROID));
+		h.regionalCities[TAGO_LINE] = TAGO_CITY;
+		simulateRegional(h);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		let [, entry] = await onlySession(h);
+		expect(entry.state.fixed[0]).toBe("V1");
+
+		h.boards.regionalLocationsHandler = () => null;
+		await tickAt(h, core, T0 + h.config.busPollMs);
+		[, entry] = await onlySession(h);
+		expect(entry.state.estimates[0]?.legs[0]).toMatchObject({
+			boardEtaAt: V1_AT_BOARD,
+			method: "official",
+		});
+		expect(entry.state.estimates[0]?.legs[0]?.vehicleId).toStartWith(
+			"tago-pos:"
+		);
 	});
 
 	test("도시 코드가 없는 TAGO 노선은 부르지 않고 배차간격 추정으로 둔다", async () => {

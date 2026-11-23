@@ -558,6 +558,42 @@ function addRegionalTarget(
 	targets.set(leg.line, target);
 }
 
+/**
+ * 탑승 전 기본 경로의 지금 구간이 지역 버스이고, 잡아 둔 차량이 새 승차 정류장 도착판에 없고 지나지도
+ * 않았으면 그 차량을 놓는다(건너뛴 차량으로 보지 않는다). 다음 걸음이 다음 차량이나 배차간격 추정을
+ * 고른다. 멈춘 차량을 뺐거나(5-B 설계 결정 6), TAGO 차량 ID가 위치 목록 없이 `tago-pos:`로
+ * 바뀐 경우다(결정 7). 서울 구간은 그대로 둔다.
+ */
+function releaseVanishedRegional(
+	state: SessionState,
+	plan: CommutePlan,
+	boards: TransitBoards
+): SessionState {
+	const index = state.legIndex;
+	const fixedId = state.fixed[index] ?? null;
+	const leg = plan.routes.find((route) => route.rank === 0)?.legs[index];
+	const isPinnedRegional =
+		isBeforeBoarding(state) &&
+		fixedId !== null &&
+		leg !== undefined &&
+		regionalSourceOf(leg) !== null;
+	if (!isPinnedRegional) {
+		return state;
+	}
+	const board = boards.board(leg, "board");
+	const isListed =
+		board === null ||
+		board.approaching.some((vehicle) => vehicle.vehicleId === fixedId) ||
+		board.passed.some((entry) => entry.vehicleId === fixedId);
+	if (isListed) {
+		return state;
+	}
+	return {
+		...state,
+		fixed: state.fixed.map((id, at) => (at === index ? null : id)),
+	};
+}
+
 /** 기본 경로에서 지금 타고 있는 구간. 탑승 전이거나 끝났으면 null. */
 function ridingLeg(state: SessionState, plan: CommutePlan): Leg | null {
 	if (state.stage !== "ride") {
@@ -1767,7 +1803,14 @@ export class RunnerCore {
 		const plan = owned ? record.plan : null;
 		const prev = entry.state;
 		entry.state = plan
-			? advance(entry.state, plan, boards, now, config, input)
+			? advance(
+					releaseVanishedRegional(entry.state, plan, boards),
+					plan,
+					boards,
+					now,
+					config,
+					input
+				)
 			: endedState(entry.state, "plan-removed");
 		if (plan) {
 			const { timezone } = plan.schedule;
