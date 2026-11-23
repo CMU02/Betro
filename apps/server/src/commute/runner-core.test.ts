@@ -1826,6 +1826,98 @@ describe("RunnerCore 지역 버스", () => {
 		]);
 	});
 
+	test("잡은 GBIS 차량이 승차 정류장 도착에서 빠진 poll에 위치 목록을 못 읽어도 그 차량을 두고, 탔어요를 누르면 그 차량을 탄다", async () => {
+		const h = harness();
+		addRegional(h, makeRegionalPlan(PLAN_ANDROID));
+		simulateRegional(h);
+		const simulatedLocations = h.boards.regionalLocationsHandler;
+		const core = h.core();
+		await tickRange(h, core, T0, T0 + 16 * MINUTE);
+		let [sessionId, entry] = await onlySession(h);
+		expect(entry.state.fixed[0]).toBe("V1");
+
+		// 08:11:30 poll: V1이 승차 정류장 도착에서 빠졌는데 위치 목록이 응답하지 않는다.
+		h.boards.regionalLocationsHandler = () => null;
+		await tickAt(h, core, T0 + 16.5 * MINUTE);
+		expect(h.boards.locationCalls.length).toBeGreaterThan(0);
+		[sessionId, entry] = await onlySession(h);
+		// 지났는지 모르니 그 정류장은 직전 도착을 두고, 잡은 V1을 놓지 않는다.
+		expect(entry.state.fixed[0]).toBe("V1");
+		expect(entry.state.estimates[0]?.legs[0]?.vehicleId).toBe("V1");
+
+		h.clock.now = T0 + 16.5 * MINUTE + 10 * SECOND;
+		expect(
+			await core.input(ANDROID_INSTALL, sessionId, { kind: "boarded" })
+		).toBe("ok");
+		[, entry] = await onlySession(h);
+		expect(entry.state.stage).toBe("ride");
+		expect(entry.state.fixed[0]).toBe("V1");
+
+		// 다음 poll에 위치 목록이 돌아오면 V1을 계속 따라간다.
+		h.boards.regionalLocationsHandler = simulatedLocations;
+		await tickAt(h, core, T0 + 17 * MINUTE);
+		[, entry] = await onlySession(h);
+		expect(entry.state.fixed[0]).toBe("V1");
+		expect(entry.state.estimates[0]?.legs[0]?.vehicleId).toBe("V1");
+	});
+
+	test("위치 목록을 못 읽은 다음 poll에 다시 부르면 GBIS 차량이 지난 것을 알고 탄 것으로 본다", async () => {
+		const h = harness();
+		addRegional(h, makeRegionalPlan(PLAN_ANDROID));
+		simulateRegional(h);
+		const simulatedLocations = h.boards.regionalLocationsHandler;
+		const core = h.core();
+		await tickRange(h, core, T0, T0 + 16 * MINUTE);
+		h.boards.regionalLocationsHandler = () => null;
+		await tickAt(h, core, T0 + 16.5 * MINUTE);
+		let [, entry] = await onlySession(h);
+		expect(entry.state.fixed[0]).toBe("V1");
+
+		h.boards.regionalLocationsHandler = simulatedLocations;
+		await tickAt(h, core, T0 + 17 * MINUTE);
+		[, entry] = await onlySession(h);
+		expect(entry.state.stage).toBe("ride");
+		expect(entry.state.fixed[0]).toBe("V1");
+	});
+
+	test("GBIS 도착에서 한 poll만 빠진 차량이 위치 목록에서 아직 승차 정류장 앞이면 잡은 채로 둔다", async () => {
+		const h = harness();
+		addRegional(h, makeRegionalPlan(PLAN_ANDROID));
+		simulateRegional(h);
+		const simulated = h.boards.regionalArrivalHandler;
+		const core = h.core();
+		await tickRange(h, core, T0, T0 + 9 * MINUTE);
+		let [, entry] = await onlySession(h);
+		expect(entry.state.fixed[0]).toBe("V1");
+
+		// 한 poll 동안 도착 응답에서 V1만 빠진다(위치 목록에는 순번 23쯤에 있다).
+		h.boards.regionalArrivalHandler = (route, stop) => {
+			const found = simulated?.(route, stop) ?? null;
+			if (!found || found instanceof Error) {
+				return found;
+			}
+			return {
+				...found,
+				vehicles: found.vehicles.filter(
+					(vehicle) => vehicle.vehicleId !== "V1"
+				),
+			};
+		};
+		await tickAt(h, core, T0 + 10 * MINUTE);
+		[, entry] = await onlySession(h);
+		expect(entry.state.fixed[0]).toBe("V1");
+
+		h.boards.regionalArrivalHandler = simulated;
+		await tickAt(h, core, T0 + 11 * MINUTE);
+		[, entry] = await onlySession(h);
+		expect(entry.state.fixed[0]).toBe("V1");
+		expect(entry.state.estimates[0]?.legs[0]).toMatchObject({
+			boardEtaAt: V1_AT_BOARD,
+			method: "official",
+			vehicleId: "V1",
+		});
+	});
+
 	test("탄 뒤에는 하차 정류장 도착과 위치 목록을 부른다", async () => {
 		const h = harness();
 		const core = h.core();

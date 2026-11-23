@@ -620,6 +620,38 @@ function vehicleLeft(
 }
 
 /**
+ * GBIS 직전 도착의 차량이 지금 도착에서 빠졌는데 그 정류장을 지났는지 모르는 정류장 순번. 위치 목록을
+ * 읽지 못했고 직전 위치로도 지난 것을 모르거나, 위치 목록에서 아직 그 정류장 앞에 있으면 그렇다. 이런
+ * 정류장은 이번에 부르지 않은 것으로 보고 직전 도착을 둔다. 그래야 잡아 둔 차량을 놓지 않고 다음 poll이
+ * 다시 지났는지 본다. 위치 목록을 읽었는데 없는 차량(운행을 마쳤다)은 기다리지 않는다. 둔 정류장의 차량은
+ * 순번이 그대로라 5분 넘게 이어지면 멈춘 차량으로 빠진다.
+ */
+function unsettledStops(
+	prev: RegionalData | null,
+	fetched: readonly RouteStopArrival[],
+	positions: Readonly<Record<string, number>>,
+	isFresh: boolean
+): Set<number> {
+	const before = new Map((prev?.now ?? []).map((stop) => [stop.seq, stop]));
+	const unsettled = new Set<number>();
+	for (const stop of fetched) {
+		const listed = new Set(stop.vehicles.map((vehicle) => vehicle.vehicleId));
+		const isUnknown =
+			before.get(stop.seq)?.vehicles.some((vehicle) => {
+				if (listed.has(vehicle.vehicleId)) {
+					return false;
+				}
+				const seq = positions[vehicle.vehicleId];
+				return seq === undefined ? !isFresh : seq < stop.seq;
+			}) ?? false;
+		if (isUnknown) {
+			unsettled.add(stop.seq);
+		}
+	}
+	return unsettled;
+}
+
+/**
  * 버스 구간 하나를 대상에 더한다. 서울 노선은 노선 전체를 부르고(가까운 차량 여부만 OR), 지역 노선은
  * `at` 정류장을 부른다. 정적 일정은 출처와 상관없이 읽는다.
  */
@@ -1621,7 +1653,8 @@ export class RunnerCore {
 	/**
 	 * 정류장마다 도착 1건, 필요하면 위치 목록 1건을 부른다. 위치 목록은 탄 구간·따라가는 구간, TAGO
 	 * 차량 번호 붙이기, 그리고 GBIS에서 직전 도착의 차량이 빠졌을 때(지났는지 보려고) 부른다.
-	 * 저장 전에 멈춘 차량을 뺀다. 부른 것이 모두 실패하면 null(직전 원자료를 둔다).
+	 * GBIS에서 빠진 차량이 지났는지 모르는 정류장은 직전 도착을 둔다(`unsettledStops`). 저장 전에
+	 * 멈춘 차량을 뺀다. 부른 것이 모두 실패하면 null(직전 원자료를 둔다).
 	 */
 	async #pollRegional(
 		route: RegionalRouteRef,
@@ -1670,12 +1703,6 @@ export class RunnerCore {
 			route.source === "tago"
 				? fetched.map((arrival) => matchTagoVehicles(arrival, positions ?? []))
 				: fetched;
-		// 이번에 부르지 못한 정류장은 직전 값을 둔다(묵음 기준은 그 정류장의 madeAt으로 잰다).
-		const fresh = new Set(arrivals.map((stop) => stop.seq));
-		const kept = (prev?.now ?? []).filter(
-			(stop) => target.stops.has(stop.seq) && !fresh.has(stop.seq)
-		);
-		const merged = [...kept, ...arrivals].sort((a, b) => a.seq - b.seq);
 		let bySeq: Record<string, number> = {};
 		if (positions !== null) {
 			bySeq = Object.fromEntries(
@@ -1684,6 +1711,18 @@ export class RunnerCore {
 		} else if (needsLocations) {
 			bySeq = prev?.positions ?? {};
 		}
+		const unsettled =
+			route.source === "gbis"
+				? unsettledStops(prev, arrivals, bySeq, positions !== null)
+				: new Set<number>();
+		const settled = arrivals.filter((stop) => !unsettled.has(stop.seq));
+		// 이번에 부르지 못한 정류장과 빠진 차량이 지났는지 모르는 정류장은 직전 값을 둔다(묵음 기준은
+		// 그 정류장의 madeAt으로 잰다).
+		const fresh = new Set(settled.map((stop) => stop.seq));
+		const kept = (prev?.now ?? []).filter(
+			(stop) => target.stops.has(stop.seq) && !fresh.has(stop.seq)
+		);
+		const merged = [...kept, ...settled].sort((a, b) => a.seq - b.seq);
 		// 순번이 5분 넘게 그대로인 차량은 도착과 위치 목록에서 뺀다(예측 초는 보지 않는다).
 		const seenKey = `${SEEN_PREFIX}${target.line}`;
 		const seen = updateSeen(
