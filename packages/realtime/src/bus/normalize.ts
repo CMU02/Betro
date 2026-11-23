@@ -34,7 +34,7 @@ const haversineM = (a: LngLat, b: LngLat): number => {
 const cumulativeCache = new WeakMap<LngLat[], number[]>();
 
 /** 각 좌표까지 선을 따라 잰 누적 거리(미터). 같은 좌표 배열은 캐시한다. */
-function cumulativeLengths(coords: LngLat[]): number[] {
+export function cumulativeLengths(coords: LngLat[]): number[] {
 	const cached = cumulativeCache.get(coords);
 	if (cached) {
 		return cached;
@@ -50,7 +50,7 @@ function cumulativeLengths(coords: LngLat[]): number[] {
 }
 
 /** 누적 거리 `m` 지점의 좌표(구간 안에서 선형 보간). */
-function pointAt(coords: LngLat[], cum: number[], m: number): LngLat {
+export function pointAt(coords: LngLat[], cum: number[], m: number): LngLat {
 	let i = 1;
 	while (i < cum.length - 1 && (cum[i] as number) < m) {
 		i += 1;

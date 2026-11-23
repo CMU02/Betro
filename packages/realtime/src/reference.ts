@@ -5,6 +5,7 @@ import type {
 } from "@Betro/db/schema/transit";
 import { isLineKey, type LineKey } from "@Betro/transit-static/lines";
 import { timetableTrainNoKey } from "@Betro/transit-static/realtime/train-no-rules";
+import { cumulativeLengths, pointAt } from "./bus/normalize";
 
 export interface StationOnTrack {
 	branchKey: string;
@@ -218,4 +219,23 @@ export interface BusRouteRef {
 export interface BusReference {
 	batchId: number;
 	routes: Map<string, BusRouteRef>;
+}
+
+/** 노선 모양을 따라 시작점에서 `distanceM` 미터 떨어진 좌표. 모양이 없거나 짧으면 null. */
+export function pointAlong(
+	coords: readonly [number, number][],
+	distanceM: number
+): { lat: number; lng: number } | null {
+	if (coords.length < 2 || !Number.isFinite(distanceM)) {
+		return null;
+	}
+	const line = coords as [number, number][];
+	const cum = cumulativeLengths(line);
+	const total = cum.at(-1) ?? 0;
+	const [lng, lat] = pointAt(
+		line,
+		cum,
+		Math.min(Math.max(0, distanceM), total)
+	);
+	return { lat, lng };
 }
