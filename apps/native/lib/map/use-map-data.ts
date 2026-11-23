@@ -131,6 +131,9 @@ interface Snapshots {
 	subway: SubwaySnapshot | null;
 }
 
+/** 스냅샷 전의 빈 값. 렌더마다 새 배열이 되지 않게 모듈에 둔다. */
+const NO_STOPPED_SOURCES: BusSnapshot["stoppedSources"] = [];
+
 type RefMap = BusMap | SubwayMap | null;
 
 /** 참조 지도를 고르는 값. 노선 ref(`seoul-subway:line2`)와 종류다. */
@@ -387,9 +390,17 @@ export function useMapData(
 	const source = sessionRoute === null ? "route-view" : "session";
 	const hiddenLines = preferences.hiddenMapLines;
 
+	// 스냅샷. 차량을 보일 구간이 있는 종류만 받는다.
+	const [snapshots, setSnapshots] = useState<Snapshots>({
+		bus: null,
+		subway: null,
+	});
+	const stoppedSources = snapshots.bus?.stoppedSources ?? NO_STOPPED_SOURCES;
+
 	const legsWithFlags = useMemo(
-		() => (route === null ? [] : mapLegFlags(route, hiddenLines)),
-		[route, hiddenLines]
+		() =>
+			route === null ? [] : mapLegFlags(route, hiddenLines, stoppedSources),
+		[route, hiddenLines, stoppedSources]
 	);
 	const allHidden = route !== null && allLinesHidden(route, hiddenLines);
 
@@ -456,11 +467,6 @@ export function useMapData(
 		}
 	);
 
-	// 스냅샷. 차량을 보일 구간이 있는 종류만 받는다.
-	const [snapshots, setSnapshots] = useState<Snapshots>({
-		bus: null,
-		subway: null,
-	});
 	const etags = useRef<{ bus: string | null; subway: string | null }>({
 		bus: null,
 		subway: null,

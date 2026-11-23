@@ -5,6 +5,7 @@ import {
 	boardedVehicleId,
 	busVehiclesForLeg,
 	subwayVehiclesForLeg,
+	vehicleRouteKey,
 	visibleLegs,
 } from "./leg-vehicles";
 import type {
@@ -252,4 +253,25 @@ it("boardedVehicleId narrows only on the followed route's current leg while ridi
 	expect(boardedVehicleId({ ...base, rank: 1 })).toBeNull();
 	expect(boardedVehicleId({ ...base, legIndex: 2 })).toBeNull();
 	expect(boardedVehicleId({ ...base, vehicleId: null })).toBeNull();
+});
+
+it("gbis 구간에는 같은 숫자의 서울 차량이 붙지 않는다", () => {
+	const gbisLeg: BusLeg = { ...busLeg, line: "gbis:100100290" };
+	const seoulLeg: BusLeg = { ...busLeg, line: "seoul-bus:100100290" };
+	const vehicles = [
+		bus("seoul", 5, "100100290"),
+		bus("gbis", 5, "gbis:100100290"),
+	];
+	expect(
+		busVehiclesForLeg(gbisLeg, vehicles, null).map((v) => v.vehId)
+	).toEqual(["gbis"]);
+	expect(
+		busVehiclesForLeg(seoulLeg, vehicles, null).map((v) => v.vehId)
+	).toEqual(["seoul"]);
+});
+
+it("차량 키는 서울이면 맨 ID, 지역이면 전체 참조다", () => {
+	expect(vehicleRouteKey("seoul-bus:100100290")).toBe("100100290");
+	expect(vehicleRouteKey("gbis:200000037")).toBe("gbis:200000037");
+	expect(vehicleRouteKey("tago:ICB361000005")).toBe("tago:ICB361000005");
 });
