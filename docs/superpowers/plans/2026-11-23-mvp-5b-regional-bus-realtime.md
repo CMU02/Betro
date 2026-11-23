@@ -398,7 +398,7 @@ constructor(outcome: "auth" | "quota-exhausted", source: "seoul-bus" | RegionalS
 - 예산 키는 `budget:<source>-<op>:<day>`입니다(`op` = `arrival` | `location`). 멈춤 키는 `stopped:<source>:<day>`입니다. 서울의 `budget:<day>`, `stopped:<day>`는 그대로 둡니다.
 - poll마다 승차 전 구간은 승차 정류장 도착을, 탄 구간(따라가는 차량이 있는 구간)은 하차 정류장 도착과 위치 목록을 부릅니다. 간격과 near 판단은 서울과 같습니다(`busPollMs`, `busNearPollMs`, `busNearWindowMs`).
 - 같은 노선·정류장은 tick 안에서 한 번만 부릅니다.
-- TAGO는 도착을 저장하기 전에 같은 poll의 위치로 `matchTagoVehicles`를 거칩니다. 위치 호출이 실패하면 모두 `tago-pos:`가 됩니다.
+- TAGO는 도착을 저장하기 전에 같은 poll의 위치로 `matchTagoVehicles`를 거칩니다. 위치 호출이 실패하면 직전 위치(`positionsAt`이 `staleAfterMs` 안일 때만)로 붙이고, 그것도 없으면 `tago-pos:`가 됩니다(최종 검토 뒤 바꿈, 커밋 0b134d4).
 - 저장 전에 `dropFrozen`을 거칩니다. `VehicleSeen`은 `regionalSeen:<line>`에 둡니다.
 - 일시 오류(null)면 직전 원자료를 그대로 둡니다. 호출마다 `REGIONAL_FETCH_TIMEOUT_MS = 8_000`으로 끊습니다(`AbortSignal.timeout`).
 - `cityCode`가 null인 TAGO 노선은 부르지 않고 배차간격 추정으로 둡니다.
