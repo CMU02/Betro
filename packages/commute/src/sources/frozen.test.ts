@@ -46,11 +46,57 @@ describe("멈춘 차량", () => {
 			[stop15([veh("A", 13, 400)])],
 			T0 + 400_000
 		);
-		expect(seen.A).toEqual({ seqNow: 13, since: T0 + 400_000 });
+		expect(seen.A).toEqual({
+			lastSeen: T0 + 400_000,
+			seqNow: 13,
+			since: T0 + 400_000,
+		});
 	});
 
 	it("처음 보는 차량은 지금 시각부터 센다", () => {
 		const seen = updateSeen({}, [stop15([veh("A", 12, 491)])], T0);
-		expect(seen.A).toEqual({ seqNow: 12, since: T0 });
+		expect(seen.A).toEqual({ lastSeen: T0, seqNow: 12, since: T0 });
+	});
+
+	it("한 poll 빠졌다가 같은 순번으로 다시 나온 차량은 처음 본 시각을 이어 센다", () => {
+		let seen = updateSeen({}, [stop15([veh("A", 12, 491)])], T0);
+		// 이미 걸러진 직전 도착을 둔 poll처럼, A가 한 번 빠진다.
+		seen = updateSeen(seen, [stop15([])], T0 + 120_000);
+		const later = [stop15([veh("A", 12, 500)])];
+		const at = T0 + FROZEN_VEHICLE_MS + 1000;
+		seen = updateSeen(seen, later, at);
+		expect(seen.A).toMatchObject({ since: T0 });
+		expect(dropFrozen(later, seen, at)[0]?.vehicles).toEqual([]);
+	});
+
+	it("마지막으로 본 지 FROZEN_VEHICLE_MS가 지난 기록은 버린다", () => {
+		const seen = updateSeen(
+			{ A: { lastSeen: T0, seqNow: 12, since: T0 } },
+			[stop15([])],
+			T0 + FROZEN_VEHICLE_MS + 1000
+		);
+		expect(seen.A).toBeUndefined();
+	});
+
+	it("lastSeen이 없는 이전 기록은 지금 본 것으로 보고 이어 둔다", () => {
+		const seen = updateSeen(
+			{ A: { seqNow: 12, since: T0 } },
+			[stop15([])],
+			T0 + FROZEN_VEHICLE_MS + 1000
+		);
+		expect(seen.A).toEqual({
+			lastSeen: T0 + FROZEN_VEHICLE_MS + 1000,
+			seqNow: 12,
+			since: T0,
+		});
+	});
+
+	it("tago-pos: 차량은 poll마다 다른 차량일 수 있어 빠지면 바로 버린다", () => {
+		const seen = updateSeen(
+			{ "tago-pos:12": { lastSeen: T0, seqNow: 12, since: T0 } },
+			[stop15([])],
+			T0 + 60_000
+		);
+		expect(seen["tago-pos:12"]).toBeUndefined();
 	});
 });

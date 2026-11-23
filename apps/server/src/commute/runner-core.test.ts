@@ -2074,7 +2074,7 @@ describe("RunnerCore 지역 버스", () => {
 		});
 	});
 
-	test("TAGO 위치 목록이 일시 오류여도 승차 ETA는 공식 값이다(차량 번호 대신 tago-pos)", async () => {
+	test("TAGO 위치 목록을 한 번 못 읽어도 직전 위치로 차량 번호를 붙여 잡은 차량을 놓지 않는다", async () => {
 		const h = harness();
 		addRegional(h, makeTagoPlan(PLAN_ANDROID));
 		h.regionalCities[TAGO_LINE] = TAGO_CITY;
@@ -2086,6 +2086,28 @@ describe("RunnerCore 지역 버스", () => {
 
 		h.boards.regionalLocationsHandler = () => null;
 		await tickAt(h, core, T0 + h.config.busPollMs);
+		[, entry] = await onlySession(h);
+		expect(entry.state.fixed[0]).toBe("V1");
+		expect(entry.state.estimates[0]?.legs[0]).toMatchObject({
+			boardEtaAt: V1_AT_BOARD,
+			method: "official",
+			vehicleId: "V1",
+		});
+	});
+
+	test("TAGO 위치 목록을 묵음 기준보다 오래 못 읽어도 승차 ETA는 공식 값이다(차량 번호 대신 tago-pos)", async () => {
+		const h = harness();
+		addRegional(h, makeTagoPlan(PLAN_ANDROID));
+		h.regionalCities[TAGO_LINE] = TAGO_CITY;
+		simulateRegional(h);
+		const core = h.core();
+		await tickAt(h, core, T0);
+		let [, entry] = await onlySession(h);
+		expect(entry.state.fixed[0]).toBe("V1");
+
+		// 직전 위치를 받은 지 묵음 기준이 지나 더 쓰지 않는다.
+		h.boards.regionalLocationsHandler = () => null;
+		await tickAt(h, core, T0 + h.config.staleAfterMs + h.config.busPollMs);
 		[, entry] = await onlySession(h);
 		expect(entry.state.estimates[0]?.legs[0]).toMatchObject({
 			boardEtaAt: V1_AT_BOARD,

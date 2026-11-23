@@ -36,7 +36,7 @@ const TAGO_OK_CODE = "00";
 const TAGO_NO_DATA_CODE = "03";
 const GATEWAY_QUOTA = "22";
 const GATEWAY_AUTH = new Set(["20", "30", "31", "32", "33"]);
-const UNKNOWN_POSITION_PREFIX = "tago-pos:";
+export const UNKNOWN_POSITION_PREFIX = "tago-pos:";
 
 const fail = (reason: RegionalFail): { ok: false; reason: RegionalFail } => ({
 	ok: false,

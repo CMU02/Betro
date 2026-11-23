@@ -619,6 +619,17 @@ function carriedPositions(
 	return now - at <= staleAfterMs ? { at, positions: prev.positions } : null;
 }
 
+/** 저장한 위치(차량 ID → 순번) → TAGO 차량 맞추기 입력. TAGO 위치의 차량 ID는 차량 번호다. */
+function tagoPositionsOf(
+	bySeq: Readonly<Record<string, number>>
+): RegionalPosition[] {
+	return Object.entries(bySeq).map(([vehicleId, seq]) => ({
+		plate: vehicleId,
+		seq,
+		vehicleId,
+	}));
+}
+
 /** 직전 도착에 있던 차량이 같은 정류장의 지금 도착에서 빠졌는가(그 정류장을 지났을 수 있다). */
 function vehicleLeft(
 	prev: RegionalData | null,
@@ -1716,11 +1727,6 @@ export class RunnerCore {
 		if (fetched.length === 0 && positions === null) {
 			return null;
 		}
-		// TAGO 도착에는 차량 ID가 없다. 같은 poll의 위치 목록으로 붙이고, 없으면 모두 `tago-pos:`다.
-		const arrivals =
-			route.source === "tago"
-				? fetched.map((arrival) => matchTagoVehicles(arrival, positions ?? []))
-				: fetched;
 		let bySeq: Record<string, number> = {};
 		if (positions !== null) {
 			bySeq = Object.fromEntries(
@@ -1733,6 +1739,14 @@ export class RunnerCore {
 			bySeq = carried?.positions ?? {};
 			positionsAt = carried?.at ?? positionsAt;
 		}
+		// TAGO 도착에는 차량 ID가 없다. 위치 목록으로 붙이고, 없으면 `tago-pos:`다. 이번 위치 목록을 못
+		// 읽었으면 묵음 기준 안의 직전 위치로 붙인다. 그래야 잡은 차량의 ID가 한 번 실패로 바뀌지 않는다.
+		const arrivals =
+			route.source === "tago"
+				? fetched.map((arrival) =>
+						matchTagoVehicles(arrival, positions ?? tagoPositionsOf(bySeq))
+					)
+				: fetched;
 		const unsettled =
 			route.source === "gbis"
 				? unsettledStops(prev, arrivals, bySeq, positions !== null)
