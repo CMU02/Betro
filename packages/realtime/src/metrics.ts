@@ -32,8 +32,11 @@ const MINUTE_MS = 60_000;
 const OPERATING_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM = /^(\d{1,2}):(\d{2})$/;
 
-/** 지표·상태를 따로 보는 소스. 예산 단위와 같다. */
-export type MetricsSource = BudgetKind;
+/**
+ * 지표·상태를 따로 보는 소스(서울 지하철·서울 버스). 예산 단위 중 이 둘만 지표에 든다.
+ * 지역 버스(GBIS·TAGO)는 지도에서 볼 때만 부르므로 지표와 알림에 넣지 않는다(5-B).
+ */
+export type MetricsSource = Extract<BudgetKind, "subway" | "bus">;
 const SOURCES: readonly MetricsSource[] = ["subway", "bus"];
 
 /** 상류가 응답을 돌려준 결과. 차량이 없다는 응답(`no-data`, `service-ended`)도 수집은 된 것으로 본다. */

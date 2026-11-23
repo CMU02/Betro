@@ -210,8 +210,11 @@ export interface BusSegmentRef {
 }
 
 export interface BusRouteRef {
+	/** TAGO 노선의 도시 코드(`bus_route.source_city`). 서울·GBIS 노선에는 없다. */
+	cityCode?: string;
 	coords?: [number, number][];
 	lengthM: number;
+	/** 서울 노선은 맨 ID, GBIS·TAGO 노선은 출처를 붙인 키(`gbis:<id>`, `tago:<id>`). */
 	routeId: string;
 	segmentsBySeq: Map<number, BusSegmentRef>;
 }

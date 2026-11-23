@@ -12,6 +12,11 @@ const MAX_MINUTE = 59;
 const DEFAULT_OPERATING_START = "05:00";
 const DEFAULT_OPERATING_END = "01:00";
 const DEFAULT_DAILY_BUDGET = 900;
+/** 수집기 몫의 GBIS·TAGO 위치 목록 하루 예산(개발 계정, 5-B 설계 결정 1). */
+const DEFAULT_DAILY_BUDGET_GBIS_POSITION = 300;
+const DEFAULT_DAILY_BUDGET_TAGO_POSITION = 3000;
+/** 출처를 붙인 지역 노선 키(`gbis:<routeId>`, `tago:<routeId>`). */
+const REGIONAL_ROUTE_KEY = /^(gbis|tago):(.+)$/;
 const DEFAULT_MAP_WATCH_MAX_PER_INSTALL = 6;
 const DEFAULT_MAP_WATCH_MAX_TOTAL = 40;
 const DEV_SUBWAY_MIN_INTERVAL_MS = 80_000;
@@ -27,8 +32,16 @@ export interface CollectorConfig {
 	busMinIntervalMs: number;
 	/** `prod` 버스 초당 호출 상한(토큰 버킷). `dev`에는 없다. */
 	busRequestsPerSecond?: number;
+	/** 서울 노선 ID(맨 ID). 지역 노선은 관측 요청(`extraBusRouteIds`)으로만 들어온다. */
 	busRouteIds: string[];
-	dailyBudget: { subway: number; bus: number };
+	dailyBudget: {
+		bus: number;
+		/** 수집기 몫의 GBIS 위치 목록(`getBusLocationListv2`). */
+		gbisPosition: number;
+		subway: number;
+		/** 수집기 몫의 TAGO 위치 목록(`getRouteAcctoBusLcList`). */
+		tagoPosition: number;
+	};
 	/** 설치 하나가 동시에 관측을 요청할 수 있는 버스 노선 수. */
 	mapWatchMaxPerInstall: number;
 	/** 모든 설치의 관측 요청을 합쳐 실제로 부르는 버스 노선 수 상한. */
@@ -78,7 +91,17 @@ function baseConfig(
 	return {
 		dailyBudget: {
 			bus: readCount(env, "DAILY_BUDGET_BUS", DEFAULT_DAILY_BUDGET),
+			gbisPosition: readCount(
+				env,
+				"DAILY_BUDGET_GBIS_LOCATION_COLLECTOR",
+				DEFAULT_DAILY_BUDGET_GBIS_POSITION
+			),
 			subway: readCount(env, "DAILY_BUDGET_SUBWAY", DEFAULT_DAILY_BUDGET),
+			tagoPosition: readCount(
+				env,
+				"DAILY_BUDGET_TAGO_LOCATION_COLLECTOR",
+				DEFAULT_DAILY_BUDGET_TAGO_POSITION
+			),
 		},
 		mapWatchMaxPerInstall: readCount(
 			env,
@@ -131,12 +154,27 @@ export function prodConfig(
 	};
 }
 
+export type RegionalSource = "gbis" | "tago";
+
 export type CallPlan =
 	| { kind: "subway-all" }
 	| { kind: "subway-position"; lineNameKo: string }
-	| { kind: "bus"; routeId: string };
+	| { kind: "bus"; routeId: string }
+	/**
+	 * GBIS·TAGO 위치 목록. `routeId`는 맨 노선 ID다. `cityCode`(TAGO 도시 코드)는 스케줄이
+	 * 모르므로 null로 내고, 수집기가 부르기 전에 참조에서 채운다.
+	 */
+	| {
+			kind: "regional-bus";
+			source: RegionalSource;
+			routeId: string;
+			cityCode: string | null;
+	  };
 
-/** 소스별 다음 호출 시각. 키 `subway`, `subway:<lineNameKo>`, `bus:<routeId>`. */
+/**
+ * 소스별 다음 호출 시각. 키 `subway`, `subway:<lineNameKo>`, `bus:<routeId>`,
+ * `bus:gbis:<routeId>`, `bus:tago:<routeId>`.
+ */
 export interface ScheduleState {
 	nextAt: Record<string, number>;
 }
@@ -154,9 +192,27 @@ export function planKey(plan: CallPlan): string {
 			return "subway";
 		case "subway-position":
 			return `subway:${plan.lineNameKo}`;
+		case "regional-bus":
+			return `bus:${plan.source}:${plan.routeId}`;
 		default:
 			return `bus:${plan.routeId}`;
 	}
+}
+
+/** 지역 노선 키(`gbis:…`, `tago:…`)의 출처와 맨 노선 ID. 서울 노선(맨 ID)이면 null. */
+export function parseRegionalRouteKey(
+	key: string
+): { source: RegionalSource; routeId: string } | null {
+	const m = REGIONAL_ROUTE_KEY.exec(key);
+	if (!(m?.[1] && m[2])) {
+		return null;
+	}
+	return { routeId: m[2], source: m[1] as RegionalSource };
+}
+
+/** 지역 버스 호출의 예산 종류. */
+export function regionalBudgetKind(source: RegionalSource): BudgetKind {
+	return source === "gbis" ? "gbis-position" : "tago-position";
 }
 
 function hhmmMs(s: string): number {
@@ -192,12 +248,34 @@ export function remainingOperatingMs(
 	return total;
 }
 
-/** 버스 소스 노선: 관측 요청 노선을 먼저, 그 뒤에 설정 노선(중복 제거). */
+/** 서울 버스 소스 노선: 관측 요청 노선을 먼저, 그 뒤에 설정 노선(중복 제거, 지역 키는 뺀다). */
 function busRoutesFor(
 	config: CollectorConfig,
 	extraBusRouteIds: readonly string[]
 ): string[] {
-	return [...new Set([...extraBusRouteIds, ...config.busRouteIds])];
+	return [...new Set([...extraBusRouteIds, ...config.busRouteIds])].filter(
+		(routeId) => parseRegionalRouteKey(routeId) === null
+	);
+}
+
+/** 지역 버스 소스: 관측 요청 노선 중 그 출처의 키만(중복 제거). */
+function regionalSourcesFor(
+	source: RegionalSource,
+	extraBusRouteIds: readonly string[]
+): CallPlan[] {
+	const plans: CallPlan[] = [];
+	for (const key of new Set(extraBusRouteIds)) {
+		const parsed = parseRegionalRouteKey(key);
+		if (parsed?.source === source) {
+			plans.push({
+				cityCode: null,
+				kind: "regional-bus",
+				routeId: parsed.routeId,
+				source,
+			});
+		}
+	}
+	return plans;
 }
 
 function sourcesFor(
@@ -210,6 +288,12 @@ function sourcesFor(
 			kind: "bus",
 			routeId,
 		}));
+	}
+	if (kind === "gbis-position") {
+		return regionalSourcesFor("gbis", extraBusRouteIds);
+	}
+	if (kind === "tago-position") {
+		return regionalSourcesFor("tago", extraBusRouteIds);
 	}
 	if (config.mode === "dev") {
 		return [{ kind: "subway-all" }];
@@ -233,7 +317,7 @@ export function interval(
 	extraBusRouteIds: readonly string[] = []
 ): number {
 	const minMs =
-		kind === "bus" ? config.busMinIntervalMs : config.subwayMinIntervalMs;
+		kind === "subway" ? config.subwayMinIntervalMs : config.busMinIntervalMs;
 	const sources = Math.max(
 		1,
 		sourcesFor(kind, config, extraBusRouteIds).length
@@ -242,6 +326,13 @@ export function interval(
 	return Math.max(minMs, (remainingOperatingMs(now, config) * sources) / left);
 }
 
+/** 버스 소스 종류. 서울 버스와 지역 출처마다 예산·간격을 따로 편다(5-B 설계 결정 3). */
+const BUS_KINDS: readonly BudgetKind[] = [
+	"bus",
+	"gbis-position",
+	"tago-position",
+];
+
 interface KindPlan {
 	due: CallPlan[];
 	wakeAt: number;
@@ -249,7 +340,8 @@ interface KindPlan {
 
 /**
  * 이제 부르지 않는 버스 노선(관측 요청이 끝난 노선)의 지난 시각을 지운다. 지난 시각은 없는 것과
- * 같으므로 동작은 그대로이고, 요청이 오갈 때마다 스케줄이 커지지 않게 한다.
+ * 같으므로 동작은 그대로이고, 요청이 오갈 때마다 스케줄이 커지지 않게 한다. `sources`는 서울과
+ * 지역 버스 소스를 모두 담는다(키가 모두 `bus:`로 시작한다).
  */
 function forgetStaleBusKeys(
 	nextAt: Record<string, number>,
@@ -273,9 +365,6 @@ function planKind(
 	extraBusRouteIds: readonly string[]
 ): KindPlan {
 	const sources = sourcesFor(kind, config, extraBusRouteIds);
-	if (kind === "bus") {
-		forgetStaleBusKeys(nextAt, sources, now);
-	}
 	if (sources.length === 0) {
 		return { due: [], wakeAt: Number.POSITIVE_INFINITY };
 	}
@@ -289,7 +378,7 @@ function planKind(
 	// 관측 요청 노선이 설정 노선(시험 노선, 지도용 상시 관측)보다 먼저다(지도 설계 4.3).
 	const extras = new Set(extraBusRouteIds);
 	const rank = (plan: CallPlan): number =>
-		plan.kind === "bus" && extras.has(plan.routeId) ? 0 : 1;
+		plan.kind === "bus" && !extras.has(plan.routeId) ? 1 : 0;
 	const overdue = sources
 		.filter((plan) => when(plan) <= now)
 		.sort((a, b) => rank(a) - rank(b) || when(a) - when(b));
@@ -327,14 +416,21 @@ export function planTick(
 		};
 	}
 	const nextAt = { ...schedule.nextAt };
+	forgetStaleBusKeys(
+		nextAt,
+		BUS_KINDS.flatMap((kind) => sourcesFor(kind, config, extraBusRouteIds)),
+		now
+	);
 	const subway = planKind("subway", now, nextAt, budget, config, []);
-	const bus = planKind("bus", now, nextAt, budget, config, extraBusRouteIds);
-	const wakeAt = Math.min(subway.wakeAt, bus.wakeAt);
+	const buses = BUS_KINDS.map((kind) =>
+		planKind(kind, now, nextAt, budget, config, extraBusRouteIds)
+	);
+	const wakeAt = Math.min(subway.wakeAt, ...buses.map((plan) => plan.wakeAt));
 	const nextAlarmAt = Number.isFinite(wakeAt)
 		? Math.max(now + MIN_ALARM_DELAY_MS, wakeAt)
 		: nextOperatingStart(now, config.operatingStart);
 	return {
-		due: [...subway.due, ...bus.due],
+		due: [...subway.due, ...buses.flatMap((plan) => plan.due)],
 		nextAlarmAt,
 		schedule: { nextAt },
 	};

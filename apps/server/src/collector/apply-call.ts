@@ -1,4 +1,5 @@
 import { normalizeBusPositions } from "@Betro/realtime/bus/normalize";
+import { normalizeRegionalPositions } from "@Betro/realtime/bus/regional-normalize";
 import {
 	type AnyObservation,
 	isSuccessfulOutcome,
@@ -31,6 +32,9 @@ export function applyCall(
 ): AnyObservation[] {
 	if (parsed.kind === "bus") {
 		return applyBus(state, refs, parsed, at);
+	}
+	if (parsed.kind === "regional-bus") {
+		return applyRegionalBus(state, refs, parsed, at);
 	}
 	if (parsed.kind === "subway-position") {
 		warnOnce(
@@ -85,4 +89,43 @@ function applyBus(
 	}
 	state.setResting(routeId, ended, at);
 	return obs;
+}
+
+/**
+ * GBIS·TAGO 위치. 실패한 호출은 직전 관측과 멈춤 판단 기록을 그대로 둔다(5-B 설계 결정 5).
+ * 순번이 5분 넘게 그대로인 차량은 정규화가 빼고, 최신 상태에서도 TTL을 기다리지 않고 뺀다.
+ */
+function applyRegionalBus(
+	state: CollectorState,
+	refs: References,
+	parsed: Extract<ParsedCall, { kind: "regional-bus" }>,
+	at: number
+): AnyObservation[] {
+	const { outcome, routeKey, rows, source } = parsed;
+	if (outcome === "no-data") {
+		state.latest.applyBus(routeKey, [], at);
+		state.touch("bus", at);
+		return [];
+	}
+	const ref = refs.bus.routes.get(routeKey);
+	if (outcome !== "ok" || !ref) {
+		return [];
+	}
+	const { observations, prev } = normalizeRegionalPositions(
+		routeKey,
+		source,
+		rows,
+		ref,
+		state.regionalPrev(routeKey),
+		at
+	);
+	state.setRegionalPrev(routeKey, prev);
+	const placed = new Set(observations.map((obs) => obs.vehId));
+	state.latest.forgetBusVehicles(
+		routeKey,
+		rows.map((row) => row.vehId).filter((vehId) => !placed.has(vehId))
+	);
+	state.addEvents("bus", at, state.latest.applyBus(routeKey, observations, at));
+	state.touch("bus", at);
+	return observations;
 }

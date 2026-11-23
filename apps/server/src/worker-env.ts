@@ -38,11 +38,15 @@ export interface Env {
 	DAILY_BUDGET_BUS?: string;
 	/** 출퇴근 실행기의 GBIS 도착(`getBusArrivalItemv2`) 하루 예산. 기본 900. */
 	DAILY_BUDGET_GBIS_ARRIVAL?: string;
+	/** 수집기(지도) 몫의 GBIS 위치 목록 하루 예산. 기본 300. */
+	DAILY_BUDGET_GBIS_LOCATION_COLLECTOR?: string;
 	/** 출퇴근 실행기 몫의 GBIS 위치 목록(`getBusLocationListv2`) 하루 예산. 기본 600. */
 	DAILY_BUDGET_GBIS_LOCATION_RUNNER?: string;
 	DAILY_BUDGET_SUBWAY?: string;
 	/** 출퇴근 실행기의 TAGO 도착 하루 예산. 기본 9000. */
 	DAILY_BUDGET_TAGO_ARRIVAL?: string;
+	/** 수집기(지도) 몫의 TAGO 위치 목록 하루 예산. 기본 3000. */
+	DAILY_BUDGET_TAGO_LOCATION_COLLECTOR?: string;
 	/** 출퇴근 실행기 몫의 TAGO 위치 목록 하루 예산. 기본 6000. */
 	DAILY_BUDGET_TAGO_LOCATION_RUNNER?: string;
 	DATA: R2Bucket;

@@ -1,4 +1,6 @@
 import type { StationRow } from "@Betro/commute/sources/seoul-subway";
+import type { BudgetKind } from "@Betro/realtime/budget";
+import type { RegionalPrev } from "@Betro/realtime/bus/regional-normalize";
 import type { HistoryLineCounts } from "@Betro/realtime/history";
 import type { MetricsSource, SourceProgress } from "@Betro/realtime/metrics";
 import { operatingWindow } from "@Betro/realtime/metrics";
@@ -43,7 +45,7 @@ export const emptyStationBoards = (): StationBoardsSaved => ({
 
 /** 설치 하나의 버스 관측 요청. 하트비트마다 통째로 바뀐다. */
 export interface BusWatchEntry {
-	/** 접두사 없는 노선 ID(`busRouteId`). 중복이 없다. */
+	/** 서울은 접두사 없는 노선 ID(`busRouteId`), 지역은 `gbis:<id>`·`tago:<id>`. 중복이 없다. */
 	routeIds: string[];
 	/** 이 시각이 지나면 요청이 풀린다. */
 	until: number;
@@ -57,8 +59,8 @@ export type StopReason = "auth" | "quota-exhausted";
 
 /** `CollectorCore`가 저장하는 나머지 값(`STATE_KEYS.core`). JSON 그대로. */
 export interface CoreSaved {
-	/** 소스별 마지막 401(auth) 시각. 알림 판단 입력. */
-	authFailedAt: Partial<Record<MetricsSource, number>>;
+	/** 소스별 마지막 401(auth) 시각. 알림 판단 입력(지표 소스만 알림을 낸다). */
+	authFailedAt: Partial<Record<BudgetKind, number>>;
 	/** 소스별 최신 상태를 마지막으로 바꾼 호출 시각. 스냅샷 `generatedAt`(ETag를 고정). */
 	changedAt: Partial<Record<MetricsSource, number>>;
 	/** 이력 시간 파일별로 버퍼에 넣은 줄 수와 R2에 쓴 줄 수(오늘·어제). 예전 저장값에는 없다. */
@@ -73,13 +75,19 @@ export interface CoreSaved {
 	/** 원본 스트림별 직전 응답 본문 해시. 재시작 때 비운다(본문이 버퍼와 함께 사라질 수 있으므로). */
 	rawHashes: Record<string, string>;
 	/**
+	 * 지역 노선 키(`gbis:…`, `tago:…`) → 차량 ID → 마지막 순번과 그 순번이 된 시각(멈춘 차량 판단,
+	 * 5-B 설계 결정 6). DO가 잠들어도 이어지게 저장한다. 예전 저장값에는 없다.
+	 */
+	regionalPrev?: Record<string, Record<string, RegionalPrev>>;
+	/**
 	 * 운행 종료(headerCd 8)로 쉬는 버스 노선 → 마지막으로 운행 종료를 받은 시각.
 	 * 지금 운행 시간 안에 받은 것만 "쉬는 중"으로 본다.
 	 */
 	restingRoutes: Record<string, number>;
 	sources: Record<MetricsSource, SourceProgress>;
+	/** 예산 종류별 멈춤. 지역 출처는 그 출처만 멈춘다(5-B 설계 결정 3). */
 	stopped: Partial<
-		Record<MetricsSource, { at: number; day: string; reason: StopReason }>
+		Record<BudgetKind, { at: number; day: string; reason: StopReason }>
 	>;
 	version: typeof CORE_STATE_VERSION;
 }

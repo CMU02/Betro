@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { consume, emptyBudget, remaining } from "./budget";
+import { type BudgetState, consume, emptyBudget, remaining } from "./budget";
 import { devConfig } from "./schedule";
 import { kstToEpochMs } from "./time";
 
@@ -15,7 +15,7 @@ describe("budget", () => {
 		state = consume(state, "bus", now);
 		expect(state).toEqual({
 			kstDay: "2026-11-04",
-			used: { bus: 1, subway: 3 },
+			used: { bus: 1, "gbis-position": 0, subway: 3, "tago-position": 0 },
 		});
 		expect(remaining(state, "subway", config, now)).toBe(897);
 		expect(remaining(state, "bus", config, now)).toBe(899);
@@ -29,7 +29,34 @@ describe("budget", () => {
 		expect(remaining(full, "subway", config, after)).toBe(900);
 		expect(consume(full, "bus", after)).toEqual({
 			kstDay: "2026-11-05",
-			used: { bus: 1, subway: 0 },
+			used: { bus: 1, "gbis-position": 0, subway: 0, "tago-position": 0 },
+		});
+	});
+
+	it("GBIS·TAGO 위치는 서울 버스와 따로 센다", () => {
+		const now = at("2026-11-04 12:00:00");
+		let state = emptyBudget(now);
+		state = consume(state, "gbis-position", now, 2);
+		state = consume(state, "tago-position", now);
+		expect(remaining(state, "gbis-position", config, now)).toBe(298);
+		expect(remaining(state, "tago-position", config, now)).toBe(2999);
+		expect(remaining(state, "bus", config, now)).toBe(900);
+	});
+
+	it("옛 예산 상태(gbis-position 없음)를 읽어도 0으로 시작한다", () => {
+		const now = at("2026-11-04 12:00:00");
+		const old = {
+			kstDay: "2026-11-04",
+			used: { bus: 5, subway: 7 },
+		} as unknown as BudgetState;
+		expect(remaining(old, "gbis-position", config, now)).toBe(300);
+		expect(remaining(old, "tago-position", config, now)).toBe(3000);
+		const next = consume(old, "gbis-position", now);
+		expect(next.used).toEqual({
+			bus: 5,
+			"gbis-position": 1,
+			subway: 7,
+			"tago-position": 0,
 		});
 	});
 
