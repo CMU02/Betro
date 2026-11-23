@@ -1,0 +1,5 @@
+{
+  "at": "2026-11-23T08:32:45.602Z",
+  "status": 200,
+  "body": "{\"response\":{\"comMsgHeader\":\"\",\"msgHeader\":{\"queryTime\":\"2026-11-23 17:33:21.770\",\"resultCode\":0,\"resultMessage\":\"정상적으로 처리되었습니다.\"},\"msgBody\":{\"busArrivalItem\":{\"crowded1\":1,\"crowded2\":2,\"flag\":\"PASS\",\"locationNo1\":6,\"locationNo2\":14,\"lowPlate1\":1,\"lowPlate2\":1,\"plateNo1\":\"경기70바1254\",\"plateNo2\":\"경기70바2332\",\"predictTime1\":4,\"predictTime2\":14,\"remainSeatCnt1\":0,\"remainSeatCnt2\":0,\"routeDestId\":200000171,\"routeDestName\":\"광교산종점\",\"routeId\":200000037,\"routeName\":13,\"routeTypeCd\":13,\"staOrder\":35,\"stationId\":200000175,\"stationNm1\":\"광교산입구.경기대수원캠퍼스\",\"stationNm2\":\"장안문.수원전통문화관\",\"taglessCd1\":0,\"taglessCd2\":0,\"turnSeq\":39,\"vehId1\":200000381,\"vehId2\":200011168,\"predictTimeSec1\":291,\"predictTimeSec2\":882}}}}"
+}

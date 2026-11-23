@@ -1,0 +1,24 @@
+{
+  "gbis": {
+    "routeId": "200000037",
+    "board": {
+      "seq": 15,
+      "stationId": "202000224"
+    },
+    "alight": {
+      "seq": 35,
+      "stationId": "200000175"
+    }
+  },
+  "tago": {
+    "routeId": "ICB361000005",
+    "board": {
+      "seq": 15,
+      "nodeId": "ICB364000528"
+    },
+    "alight": {
+      "seq": 35,
+      "nodeId": "ICB365000192"
+    }
+  }
+}
