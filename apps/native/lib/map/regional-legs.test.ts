@@ -2,7 +2,12 @@ import type { Leg, Route } from "@Betro/commute/plan";
 import type { LineRef, StopRef } from "@Betro/commute/refs";
 import { expect, it } from "bun:test";
 
-import { hasLiveData, mapLegFlags, watchRefsOf } from "./regional-legs";
+import {
+	hasLiveData,
+	mapLegFlags,
+	snapshotKinds,
+	watchRefsOf,
+} from "./regional-legs";
 
 function busLeg(line: string): Leg {
 	return {
@@ -76,4 +81,20 @@ it("관측 요청(하트비트)에는 서울·경기·인천 버스 노선을 �
 		"tago:ICB165000012",
 		"seoul-bus:100100341",
 	]);
+});
+
+it("gbis만 있는 경로는 gbis가 멈춰도 버스 스냅샷을 계속 받는다(멈춤이 풀리는 걸 봐야 한다)", () => {
+	const route = routeOf(busLeg("gbis:1"));
+	expect(snapshotKinds(route, [])).toEqual(["bus"]);
+	expect(mapLegFlags(route, [], ["gbis"])[0]?.showVehicles).toBe(false);
+});
+
+it("숨긴 노선만 있는 종류는 스냅샷을 받지 않는다", () => {
+	const route = routeOf(busLeg("gbis:1"), SUBWAY);
+	expect(snapshotKinds(route, ["gbis:1"])).toEqual(["subway"]);
+});
+
+it("버스와 지하철이 섞이면 이름순으로 둘 다 받는다", () => {
+	const route = routeOf(SUBWAY, busLeg("tago:1"));
+	expect(snapshotKinds(route, [])).toEqual(["bus", "subway"]);
 });

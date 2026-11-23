@@ -45,3 +45,20 @@ export function watchRefsOf(route: Route): string[] {
 		.map((leg) => leg.line);
 	return [...new Set(refs)];
 }
+
+/**
+ * 스냅샷을 받을 종류. 멈춘 출처와 무관하게 숨기지 않은 구간이 있으면 받는다.
+ * 멈춘 출처의 구간만 남은 경로도 버스 스냅샷을 계속 받아야, 자정에 멈춤이 풀린 걸 앱이 안다.
+ */
+export function snapshotKinds(
+	route: Route,
+	hiddenMapLines: readonly string[]
+): ("bus" | "subway")[] {
+	const wanted = new Set<"bus" | "subway">();
+	for (const { leg, showVehicles } of visibleLegs(route, hiddenMapLines)) {
+		if (showVehicles) {
+			wanted.add(leg.mode);
+		}
+	}
+	return [...wanted].sort((a, b) => a.localeCompare(b));
+}

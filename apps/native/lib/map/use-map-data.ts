@@ -51,7 +51,7 @@ import {
 	type TrackPoint,
 } from "./motion";
 import { createPoller } from "./polling";
-import { mapLegFlags, watchRefsOf } from "./regional-legs";
+import { mapLegFlags, snapshotKinds, watchRefsOf } from "./regional-legs";
 import type { MapSelection } from "./selection";
 import { viewFromSession } from "./session-view";
 import { useMapVisible } from "./use-map-visible";
@@ -471,15 +471,11 @@ export function useMapData(
 		bus: null,
 		subway: null,
 	});
-	const kinds = useMemo(() => {
-		const wanted = new Set<"bus" | "subway">();
-		for (const { leg, showVehicles } of legsWithFlags) {
-			if (showVehicles) {
-				wanted.add(leg.mode);
-			}
-		}
-		return [...wanted].sort((a, b) => a.localeCompare(b));
-	}, [legsWithFlags]);
+	// 멈춘 출처와 무관하게 구한다. 멈춘 구간만 남아도 스냅샷을 받아야 멈춤이 풀린 걸 안다.
+	const kinds = useMemo(
+		() => (route === null ? [] : snapshotKinds(route, hiddenLines)),
+		[route, hiddenLines]
+	);
 	useVisiblePoll(
 		visible && kinds.length > 0,
 		`snapshot:${kinds.join(",")}`,
