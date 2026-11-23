@@ -314,7 +314,8 @@ export function busBoards(
 			};
 		}
 		const far = farthestFirst(vehicleId, alightSeq);
-		if (far === null && pacePerStopMs !== null) {
+		// 위치 목록을 주는 지역 노선만 외삽한다. 서울(위치 목록 없음)은 전처럼 모른다고 둔다.
+		if (far === null && positions !== undefined && pacePerStopMs !== null) {
 			return {
 				etaAt: fetchedAt + Math.round((alightSeq - seqNow) * pacePerStopMs),
 				method: "extrapolated",

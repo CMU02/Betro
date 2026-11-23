@@ -311,17 +311,25 @@ describe("busBoards.progress 위치 목록", () => {
 		});
 	});
 
-	it("어느 정류장에서도 첫 차량이 아니면 노선 정거장당 시간으로 외삽한다", () => {
-		const stops = [
-			stop(5, [vehicle("U", 4, 60), vehicle("V", 2, 240)]),
-			stop(8, [vehicle("U", 4, 300)]),
-		];
+	// V는 순번 2에 있고 어느 정류장에서도 첫 차량이 아니다.
+	const notFirst = [
+		stop(5, [vehicle("U", 4, 60), vehicle("V", 2, 240)]),
+		stop(8, [vehicle("U", 4, 300)]),
+	];
+
+	it("위치 목록이 있으면 어느 정류장에서도 첫 차량이 아닌 차량도 노선 정거장당 시간으로 외삽한다", () => {
 		// 정거장당 중앙값: U 60초, V 80초, U 75초 → 75초
-		expect(busBoards(null, stops, MADE_6411).progress("V", 8)).toEqual({
+		expect(
+			busBoards(null, notFirst, MADE_6411, new Map()).progress("V", 8)
+		).toEqual({
 			etaAt: MADE_6411 + 6 * 75 * SECOND_MS,
 			method: "extrapolated",
 			stopsAway: 6,
 		});
+	});
+
+	it("서울처럼 위치 목록 없이 부르면 어느 정류장에서도 첫 차량이 아닌 차량은 진행을 모른다", () => {
+		expect(busBoards(null, notFirst, MADE_6411).progress("V", 8)).toBeNull();
 	});
 
 	it("positions가 없으면 지금과 같다", () => {
