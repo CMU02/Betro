@@ -561,7 +561,8 @@ export class D1Timetable implements TimetablePort {
 	}
 }
 
-function serviceDayOf(epochMs: number): {
+/** `epochMs`가 속한 서비스일의 0시(epoch ms)와 요일 구분. */
+export function serviceDayOf(epochMs: number): {
 	dayStart: number;
 	serviceDay: string;
 } {

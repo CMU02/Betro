@@ -1,6 +1,11 @@
 import type { Database } from "@Betro/db";
 import { Hono } from "hono";
-import { currentBusBatch, findBusRouteStops, searchBusRoutes } from "./bus";
+import {
+	currentBusBatch,
+	findBusRouteStops,
+	findStopRoutes,
+	searchBusRoutes,
+} from "./bus";
 import { stripSubwayPrefix } from "./ids";
 import { ifNoneMatchMatches } from "./if-none-match";
 import { createMapRefRoutes } from "./map";
@@ -14,6 +19,7 @@ import {
 	findDirection,
 	findLineKey,
 	findLineStations,
+	findTripStops,
 	listSubwayLines,
 } from "./subway";
 
@@ -82,6 +88,21 @@ export function createRefRoutes(db: Database): Hono {
 		return c.json(result.route, 200, headers);
 	});
 
+	routes.get("/bus/stops/:stop/routes", async (c) => {
+		const found = await findStopRoutes(db, c.req.param("stop"));
+		if (!found) {
+			return c.json({ error: "reference unavailable" }, 503);
+		}
+		if (!found.result) {
+			return c.json({ error: "stop not found" }, 404);
+		}
+		const headers = cacheHeaders(found.batchId);
+		if (ifNoneMatchMatches(c.req.header("if-none-match"), headers.ETag)) {
+			return c.body(null, 304, headers);
+		}
+		return c.json(found.result, 200, headers);
+	});
+
 	const subwayHeaders = (batchId: number) => ({
 		"Cache-Control": CACHE_CONTROL,
 		ETag: `"subway-${batchId}"`,
@@ -133,6 +154,18 @@ export function createRefRoutes(db: Database): Hono {
 			return c.json({ error: "not-direct" }, 404);
 		}
 		return c.json(found.result, 200, subwayHeaders(found.batchId));
+	});
+
+	routes.get("/subway/trips/:tripId", async (c) => {
+		const raw = c.req.param("tripId");
+		if (!DIGITS.test(raw)) {
+			return c.json({ error: "trip not found" }, 404);
+		}
+		const trip = await findTripStops(db, Number(raw), Date.now());
+		if (!trip) {
+			return c.json({ error: "trip not found" }, 404);
+		}
+		return c.json(trip, 200, { "Cache-Control": "public, max-age=300" });
 	});
 
 	routes.get("/search-index", async (c) => {

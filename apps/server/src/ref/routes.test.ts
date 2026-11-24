@@ -155,3 +155,33 @@ describe("GET /v1/ref/bus/routes/:busRouteId/stops", () => {
 		expect(res.status).toBe(304);
 	});
 });
+
+describe("GET /v1/ref/bus/stops/:stop/routes", () => {
+	test("서울 정류장의 노선을 ETag와 함께 주고 맞으면 304다", async () => {
+		const res = await get("/bus/stops/seoul-bus:S2/routes");
+		expect(res.status).toBe(200);
+		expect(res.headers.get("etag")).toBe(`"bus-${batchId}"`);
+		const body = (await res.json()) as {
+			routes: { line: string; nextStopName: string | null }[];
+		};
+		expect(body.routes).toMatchObject([
+			{ line: "seoul-bus:100100001", nextStopName: "셋째" },
+		]);
+		const cached = await get("/bus/stops/seoul-bus:S2/routes", {
+			"If-None-Match": `"bus-${batchId}"`,
+		});
+		expect(cached.status).toBe(304);
+	});
+
+	test("gbis 접두사나 없는 정류장은 404다", async () => {
+		expect((await get("/bus/stops/gbis:S1/routes")).status).toBe(404);
+		expect((await get("/bus/stops/seoul-bus:NOPE/routes")).status).toBe(404);
+	});
+});
+
+describe("GET /v1/ref/subway/trips/:tripId", () => {
+	test("숫자가 아니거나 시간표 배치가 없으면 404다", async () => {
+		expect((await get("/subway/trips/abc")).status).toBe(404);
+		expect((await get("/subway/trips/1")).status).toBe(404);
+	});
+});

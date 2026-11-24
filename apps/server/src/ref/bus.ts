@@ -1,3 +1,4 @@
+import { SOURCE_TIMEZONE } from "@Betro/commute/sources/seoul-bus";
 import type { Database } from "@Betro/db";
 import { and, asc, eq, sql } from "@Betro/db/operators";
 import {
@@ -180,6 +181,99 @@ export async function findBusRouteStops(
 				...rest,
 				stop: busStop(route.source, stationId),
 			})),
+		},
+	};
+}
+
+export interface StopRouteView {
+	directionName: string | null;
+	firstBusMinute: number | null;
+	headwayMin: number | null;
+	lastBusMinute: number | null;
+	line: string;
+	nextStopName: string | null;
+	routeType: string;
+	seq: number;
+	shortName: string;
+}
+
+export interface StopRoutes {
+	arsId: string | null;
+	lat: number;
+	lng: number;
+	name: string;
+	routes: StopRouteView[];
+	stop: string;
+	timezone: string;
+}
+
+/**
+ * 서울 정류장(`seoul-bus:<stationId>`)을 지나는 서울 노선과 각 노선의 다음 정류장 이름.
+ * 서울 출처가 아니거나 서울 노선이 하나도 없으면 `result`가 null이다. 현재 배치가 없으면 null.
+ */
+export async function findStopRoutes(
+	db: Database,
+	stop: string
+): Promise<{ batchId: number; result: StopRoutes | null } | null> {
+	const batchId = await currentBusBatchId(db);
+	if (batchId === null) {
+		return null;
+	}
+	const { id: stationId, source } = parseBusRef(stop);
+	if (source !== "seoul" || !stop.startsWith("seoul-bus:")) {
+		return { batchId, result: null };
+	}
+	const rows = await db
+		.select({
+			arsId: busRouteStop.arsId,
+			directionName: busRouteStop.directionName,
+			firstBusMinute: busRoute.firstBusMinute,
+			headwayMin: busRoute.headwayMin,
+			lastBusMinute: busRoute.lastBusMinute,
+			lat: busRouteStop.lat,
+			lng: busRouteStop.lng,
+			name: busRouteStop.name,
+			nextStopName: sql<
+				string | null
+			>`(select n.name from bus_route_stop n where n.bus_route_id = ${busRouteStop.busRouteId} and n.seq = ${busRouteStop.seq} + 1)`,
+			routeId: busRoute.routeId,
+			routeType: busRoute.routeType,
+			seq: busRouteStop.seq,
+			shortName: busRoute.shortName,
+			source: busRoute.source,
+		})
+		.from(busRouteStop)
+		.innerJoin(busRoute, eq(busRoute.id, busRouteStop.busRouteId))
+		.where(and(seoulRouteWhere(batchId), eq(busRouteStop.stationId, stationId)))
+		.orderBy(
+			asc(busRoute.shortName),
+			asc(busRoute.routeId),
+			asc(busRouteStop.seq)
+		);
+	const [first] = rows;
+	if (!first) {
+		return { batchId, result: null };
+	}
+	return {
+		batchId,
+		result: {
+			arsId: first.arsId,
+			lat: first.lat,
+			lng: first.lng,
+			name: first.name,
+			routes: rows.map((row) => ({
+				directionName: row.directionName,
+				firstBusMinute: row.firstBusMinute,
+				headwayMin: row.headwayMin,
+				lastBusMinute: row.lastBusMinute,
+				line: busLine(row.source, row.routeId),
+				nextStopName: row.nextStopName,
+				routeType: row.routeType,
+				seq: row.seq,
+				shortName: row.shortName,
+			})),
+			stop: busStop("seoul", stationId),
+			timezone: SOURCE_TIMEZONE,
 		},
 	};
 }
