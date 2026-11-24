@@ -53,6 +53,15 @@ export function currentBusBatch(db: Database): Promise<number | null> {
 	return currentBusBatchId(db);
 }
 
+/** 서울 출처 서울 면허 노선(마을버스 포함)만 거르는 조건. 경기·인천 면허 노선은 서울 출처여도 뺀다. */
+export function seoulRouteWhere(batchId: number) {
+	return and(
+		eq(busRoute.batchId, batchId),
+		eq(busRoute.source, "seoul"),
+		eq(busRoute.region, "seoul")
+	);
+}
+
 const MATCH_EXACT = 0;
 const MATCH_PREFIX = 1;
 const MATCH_OTHER = 2;

@@ -28,6 +28,7 @@
    - 색인은 Worker가 D1 현재 배치에서 만들고, ETag는 `"search-<crosswalk 배치>-<bus 배치>"`입니다. 배치가 같으면 isolate 메모리에 캐시합니다.
    - R2 사본과 새 적재 단계는 만들지 않습니다. 배포 절차가 늘지 않게 하려는 것입니다.
    - 서울 정류장은 약 1.1만 개, 색인은 gzip 전 약 1MB로 **추정**합니다(재지 않았습니다. Task 2 Step 5에서 잽니다). 앱은 지도 참조 캐시(`createMapRefCache`)에 그대로 둡니다.
+   - Task 2 Step 5: 로컬 D1에 적재된 자료가 없어(`bus_route_stop` 1행) 재지 못했습니다. 배포 뒤에 잽니다(출시 준비 계획 Task 13).
 2. **검색 범위는 서울입니다. [사용자 결정, 스펙 2장 L70]**
    - 지하철역, 서울 시내버스(간선·지선·순환·광역·심야), 서울 마을버스(`routeType "2"`)만 넣습니다. 공항버스(`routeType "1"`)는 적재 단계에서 빠지므로 D1에 없습니다(`transit-static/src/bus/scope.ts:21-26` `OUT_OF_SCOPE_ROUTE_TYPES`).
    - "서울 노선"은 한 조건으로 셉니다: `source = 'seoul' AND region = 'seoul'`. 서울 출처에도 경기·인천 면허 노선(`routeType` 7·8, `region` gyeonggi·incheon)이 있기 때문입니다(`transit-static/src/bus/scope.ts` `regionOf`).

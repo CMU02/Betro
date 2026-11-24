@@ -4,6 +4,7 @@ import { currentBusBatch, findBusRouteStops, searchBusRoutes } from "./bus";
 import { stripSubwayPrefix } from "./ids";
 import { ifNoneMatchMatches } from "./if-none-match";
 import { createMapRefRoutes } from "./map";
+import { buildSearchIndex } from "./search-index";
 import {
 	currentTrackBatch,
 	findDirection,
@@ -126,6 +127,18 @@ export function createRefRoutes(db: Database): Hono {
 			return c.json({ error: "not-direct" }, 404);
 		}
 		return c.json(found.result, 200, subwayHeaders(found.batchId));
+	});
+
+	routes.get("/search-index", async (c) => {
+		const built = await buildSearchIndex(db);
+		if (!built) {
+			return c.json({ error: "reference unavailable" }, 503);
+		}
+		const headers = { "Cache-Control": CACHE_CONTROL, ETag: built.etag };
+		if (ifNoneMatchMatches(c.req.header("if-none-match"), built.etag)) {
+			return c.body(null, 304, headers);
+		}
+		return c.json(built.index, 200, headers);
 	});
 
 	routes.route("/map", createMapRefRoutes(db));
