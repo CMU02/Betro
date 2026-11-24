@@ -329,6 +329,9 @@ it("암호화 면제, iPad 끔, 개인정보 수집 항목 세 개", async () =>
 Run: `cd apps/native && bun test app-config.test.ts && npx expo config --type introspect 2>/dev/null | rg -o "NSLocation[A-Za-z]*|ITSAppUsesNonExemptEncryption|UIDeviceFamily|SYSTEM_ALERT_WINDOW|EXTERNAL_STORAGE" | sort -u`
 Expected: 테스트 PASS. 출력에 `NSLocationWhenInUseUsageDescription`과 `ITSAppUsesNonExemptEncryption`, `UIDeviceFamily`는 있고, `NSLocationAlways…`, `SYSTEM_ALERT_WINDOW`, `EXTERNAL_STORAGE`는 없습니다(blockedPermissions는 `tools:node="remove"`로 남을 수 있습니다. 그 경우 매니페스트에서 remove인지 봅니다).
 
+Run: `cd apps/native && npx expo prebuild --platform ios --no-install && rg -o "NSPrivacy[A-Za-z]*|CA92.1|C617.1|35F9.1" ios/Betro/PrivacyInfo.xcprivacy | sort -u`
+Expected: 이유 코드 `CA92.1`, `C617.1`, `35F9.1`이 그대로 있고, `NSPrivacyCollectedDataTypeCrashData`, `…OtherDiagnosticData`, `…DeviceID`가 더해졌습니다. `ios/`는 git이 무시하는 생성물입니다.
+
 - [ ] **Step 5: 커밋합니다**
 
 ```bash
@@ -396,7 +399,7 @@ export function notificationContent(model: LockScreenModel, nowMs: number): Noti
 - `countdownEpoch × 1000 − nowMs < MIN_COUNTDOWN_MS`이면 타이머를 걸지 않습니다(`countdownAtMs: null`). 본문은 지금의 "타이머 없음" 규칙입니다.
 - 타이머를 걸면 `afterCountdown`은 남은 분 자리에 `commute.lock.minutes.soon`("곧")을 넣은 본문과 칩입니다.
 - Kotlin:
-  - `CommuteNotifier.show`는 타이머가 있으면 `AlarmManager.set(RTC, countdownAt, …)`로 `CountdownEndReceiver`를 겁니다. 정확한 알람 권한이 필요 없는 비정확 알람이라 몇 초 늦을 수 있습니다.
+  - `CommuteNotifier.show`는 타이머가 있으면 `AlarmManager.setAndAllowWhileIdle(RTC, countdownAt, …)`로 `CountdownEndReceiver`를 겁니다. 정확한 알람 권한이 필요 없고 Doze에서도 울리지만, 늦을 수 있습니다. 얼마나 늦는지는 Task 13에서 화면을 끈 채로 봅니다.
   - 마지막 내용(JSON)은 `SharedPreferences`에 둡니다.
   - 리시버는 같은 세션의 알림이 아직 있을 때만 `afterCountdown`으로 타이머 없이 다시 그립니다.
   - 새 `show`와 세션 끝은 걸린 알람을 지웁니다.
@@ -427,7 +430,7 @@ git commit -m "fix(android): stop the commute countdown at zero instead of count
 
 ### Task 8: 지역 버스 호출 동시성 (남은 일 #6)
 
-Model: sonnet
+Model: opus
 
 **Files:**
 - Modify: `apps/server/src/commute/runner-core.ts:1605`, `:1698`. 동시성 1을 `REGIONAL_CONCURRENCY`로 바꿉니다.
@@ -543,15 +546,18 @@ export async function prunePushTokens(db: Database, now: number): Promise<number
 
 - 지우는 것:
   - `kind = 'apns-activity'`이고 그 `sessionId`의 세션이 `ended`이며, 끝난 지 `ACTIVITY_TOKEN_KEEP_MS`가 지난 행
-  - `updatedAt`이 `IDLE_TOKEN_KEEP_MS`보다 오래된 행
-- 진행 중 세션의 토큰은 지우지 않습니다. 지운 행 수를 돌려주고 로그에는 수만 남깁니다.
+  - 켜진 출퇴근 계획(`commute_plan.enabled = 1`)이 없고, `install.lastSeenAt`이 `IDLE_TOKEN_KEEP_MS`보다 오래된 설치의 모든 토큰
+- `push_token.updatedAt`으로는 판단하지 않습니다. 앱은 서버가 받은 토큰을 다시 보내지 않아서(`lib/commute/handle-commute-action.ts`), 쓰는 시작 토큰도 `updatedAt`이 오래될 수 있습니다.
+- 진행 중 세션의 토큰과 켜진 계획이 있는 설치의 토큰은 지우지 않습니다. 지운 행 수를 돌려주고 로그에는 수만 남깁니다.
+- `install.lastSeenAt`이 언제 갱신되는지(`commute/auth.ts`) 먼저 확인합니다. 갱신되지 않으면 두 번째 규칙은 빼고 그 사실을 이 계획에 적습니다.
 - 정리 기준(60일)은 열린 질문입니다.
 
 - [ ] **Step 1: 실패하는 테스트를 씁니다**
 
 ```ts
 it("끝난 세션의 Live Activity 토큰은 하루 뒤 지우고 진행 중 세션 토큰은 남긴다", async () => {});
-it("60일 넘게 갱신되지 않은 시작 토큰은 지운다", async () => {});
+it("켜진 계획이 없고 60일 넘게 접속하지 않은 설치의 토큰은 지운다", async () => {});
+it("켜진 계획이 있으면 updatedAt이 오래돼도 시작 토큰을 남긴다", async () => {});
 ```
 
 - [ ] **Step 2: 실패를 확인합니다** `cd apps/server && bun test src/commute/push-token-prune.test.ts`. Expected: FAIL.
@@ -600,7 +606,7 @@ Model: opus
   - 7.2 흐름: 온보딩 → 권한 → 지도 → 검색 → 상세 → 즐겨찾기 → 내 장소 등록 → 출퇴근 안내
   - 검색창 자리표시자가 Android에서 가운데에 있는지(남은 일 #4)
   - 지도 위 알약과 검색창이 NAVER 로고를 가리지 않는지(네이버 지도 약관)
-  - Android 출퇴근 알림의 카운트다운이 0에서 "곧"으로 바뀌는지(Task 7)
+  - Android 출퇴근 알림의 카운트다운이 0에서 "곧"으로 바뀌는지(Task 7). 화면을 켠 채로 한 번, 끈 채로 한 번 보고 늦은 초를 적습니다.
   - 경기·인천 노선 출퇴근 카드가 실시간 ETA를 내는지(5-B Task 11 Step 3)
   - 2-E의 Android 18 Live Update 프레임 문구
 - [ ] **Step 3: 릴리스 빌드.**
@@ -630,6 +636,6 @@ Model: opus
 3. iPad 지원. **기본값: 받지 않습니다(`supportsTablet: false`).**
 4. EAS 계정(owner)과 프로젝트. **기본값: 사용자가 `eas init`으로 정합니다.**
 5. 수집기 GBIS 위치 예산(기본 하루 300건)과 간격 상한 120초. **기본값: 예산은 그대로 두고 상한만 둡니다.**
-6. 묵은 푸시 토큰 정리(남은 일 #2)의 원래 의도와 기준. **기본값: 끝난 세션 토큰은 하루 뒤, 갱신 없는 토큰은 60일 뒤 지웁니다.**
+6. 묵은 푸시 토큰 정리(남은 일 #2)의 원래 의도와 기준. **기본값: 끝난 세션의 Live Activity 토큰은 하루 뒤, 켜진 계획 없이 60일 접속하지 않은 설치의 토큰은 그때 지웁니다.**
 7. 2-E 버스 `routeType` 배지 색을 1차 출시에 넣을까요? **기본값: 넣지 않습니다.**
 8. App Privacy에서 설치 ID를 "기기 ID"로 신고할까요? **기본값: 기기 ID, 사용자와 연결 안 됨, 앱 기능 목적으로 신고합니다.**

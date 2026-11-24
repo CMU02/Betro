@@ -27,10 +27,11 @@
 1. **검색은 기기에서 합니다. [설계 판단]** 스펙 5.7이 묶음의 방식을 구현자에게 맡겼습니다. 글자마다 서버를 부르지 않으려고 색인을 한 번 받아 둡니다.
    - 색인은 Worker가 D1 현재 배치에서 만들고, ETag는 `"search-<crosswalk 배치>-<bus 배치>"`입니다. 배치가 같으면 isolate 메모리에 캐시합니다.
    - R2 사본과 새 적재 단계는 만들지 않습니다. 배포 절차가 늘지 않게 하려는 것입니다.
-   - 서울 정류장은 약 1.1만 개이고, 색인은 gzip 전 약 1MB입니다. 앱은 지도 참조 캐시(`createMapRefCache`)에 그대로 둡니다.
+   - 서울 정류장은 약 1.1만 개, 색인은 gzip 전 약 1MB로 **추정**합니다(재지 않았습니다. Task 2 Step 5에서 잽니다). 앱은 지도 참조 캐시(`createMapRefCache`)에 그대로 둡니다.
 2. **검색 범위는 서울입니다. [사용자 결정, 스펙 2장 L70]**
    - 지하철역, 서울 시내버스(간선·지선·순환·광역·공항), 서울 마을버스(`routeType "2"`)만 넣습니다.
-   - 경기·인천 노선과 그 정류장은 색인, 정류장 노선 목록, 즐겨찾기에 들어가지 않습니다.
+   - "서울 노선"은 한 조건으로 셉니다: `source = 'seoul' AND region = 'seoul'`. 서울 출처에도 경기·인천 면허 노선(`routeType` 7·8, `region` gyeonggi·incheon)이 있기 때문입니다(`transit-static/src/bus/scope.ts` `regionOf`).
+   - 경기·인천 노선과, 그 노선만 지나는 정류장은 색인, 정류장 노선 목록, 즐겨찾기에 들어가지 않습니다.
    - 기존 `/v1/ref/bus/routes`(구간 등록용)는 바꾸지 않습니다.
 3. **역 묶기. [설계 판단]** `station_crosswalk`는 노선마다 행이 따로 있습니다.
    - `nameCanonical`이 같고 묶음의 첫 역에서 700m 안이면 한 역으로 봅니다.
@@ -59,10 +60,12 @@
 9. **버스 관측 요청은 한 곳에서 보냅니다. [설계 판단]**
    - `POST /v1/map/watch`는 설치의 감시 목록을 통째로 바꿉니다. 그래서 지도와 07이 따로 보내면 서로 지웁니다.
    - `lib/map/watch-registry.ts`가 화면별 요청을 모아 합집합을 보냅니다. 최대 6개이고, 앞에 보이는 화면이 우선입니다.
+   - 보내는 곳은 registry 하나뿐입니다. heartbeat도 registry가 앱 전체에서 한 번 돕니다(루트 레이아웃의 `useWatchHeartbeat`). 화면은 보일 때 `claim`, 가려지면 `release`만 합니다.
 10. **열차 상세.**
     - 스냅샷 열차(`lineKey`, `rawTrainNo`)로 위치를 보고, `tripId`가 있으면 `GET /v1/ref/subway/trips/:tripId`로 정차 시각을 봅니다.
     - `tripId`가 없거나 열차가 스냅샷에서 빠지면, 노선 지도 참조의 역 목록만 보이고 "시간표 정보 없음"을 띄웁니다.
     - 역 도착판의 `trainNo`(`btrainNo`)는 ALL 출처 스냅샷의 `rawTrainNo`와 같은 값입니다(`normalize.ts:255`). 위치 출처 열차와 이어지지 않는 경우는 위의 물러섬으로 갑니다.
+    - `tripId`는 수집기가 현재 시간표 배치에서 맞춘 `timetable_trip.id`입니다(`packages/realtime/src/reference.ts:73`). 배치가 바뀌면 trip API가 404이고 위의 물러섬으로 갑니다.
 11. **시각은 서버가 시간대와 함께 줍니다. [스펙 5.10 원칙 2]**
     - 정차 시각과 첫차·막차는 epoch ms로 받고, 응답의 `timezone`으로 그립니다.
     - 버스 첫차·막차는 분으로 받아 `scheduledHeadwayMs(schedule, now, timezone)`(`@Betro/commute/sources/bus-schedule`)로 계산합니다.
@@ -169,9 +172,9 @@ export async function buildSearchIndex(db: Database): Promise<{ etag: string; in
 ```
 
 - `GET /v1/ref/search-index`: 200 본문은 `SearchIndex`, `Cache-Control: public, max-age=3600`, `ETag: "search-<crosswalk>-<bus>"`. `If-None-Match`가 맞으면 304입니다. 현재 배치가 없으면 503입니다.
-- 정류장은 `source = 'seoul'` 노선의 `bus_route_stop`을 `stationId`로 묶습니다. `stop = busStop("seoul", stationId)`, 이름·`arsId`·좌표는 그 정류장의 첫 행입니다.
+- 정류장은 서울 노선(`source = 'seoul' AND region = 'seoul'`)의 `bus_route_stop`을 `stationId`로 묶습니다. `stop = busStop("seoul", stationId)`, 이름·`arsId`·좌표는 그 정류장의 첫 행입니다.
 - `towards`는 그 정류장을 지나는 노선들에서 다음 순번 정류장 이름 중 가장 많은 것입니다. 같으면 이름 순으로 앞선 것이고, 모든 노선의 마지막 정류장이면 null입니다.
-- 노선은 `region = 'seoul'`만 넣습니다. 순서는 `shortName`, `routeId`입니다.
+- 노선도 같은 조건입니다. 순서는 `shortName`, `routeId`입니다. 조건은 `bus.ts`에 `seoulRouteWhere`(drizzle 조건) 하나로 두고 Task 3도 씁니다.
 
 - [ ] **Step 1: 실패하는 테스트를 씁니다**
 
@@ -186,7 +189,7 @@ it("같은 이름이 700m 안이면 한 역이고 멀면 따로다", () => {
 	expect(groups.map((g) => [g.name, g.members.length])).toEqual([["강남", 2], ["양평", 1], ["양평", 1]]);
 	expect(groups[0]?.key).toBe("seoul-subway:1002000222,seoul-subway:1077000687");
 });
-it("색인에는 서울 노선과 마을버스만 있고 경기·인천 노선과 그 정류장은 없다", async () => { /* 시드: seoul 간선, seoul routeType "2", gbis 노선 하나(서울 정류장과 stationId를 하나 공유) → routes 2개, stops에 gbis 전용 정류장 없음 */ });
+it("색인에는 서울 노선과 마을버스만 있고 경기·인천 노선과 그 정류장은 없다", async () => { /* 시드: seoul 간선, seoul routeType "2", source seoul·routeType "8"(region gyeonggi) 노선, gbis 노선(서울 정류장과 stationId를 하나 공유) → routes는 앞의 2개, stops에 routeType 8·gbis만 지나는 정류장 없음 */ });
 it("towards는 가장 많은 노선의 다음 정류장 이름이다", async () => {});
 it("ETag가 맞으면 304이고 배치가 없으면 503이다", async () => {});
 ```
@@ -204,10 +207,11 @@ Expected: FAIL. 모듈을 찾지 못한다는 오류가 나옵니다.
 Run: `cd apps/server && bun test src/ref`
 Expected: PASS. 기존 ref 테스트도 통과합니다.
 
-- [ ] **Step 5: 커밋합니다**
+- [ ] **Step 5: 크기를 잽니다.** 로컬 D1에 적재된 배치가 있으면(`cd apps/server && bunx wrangler d1 execute DB --local --command "select count(*) from bus_route_stop"`) 색인을 한 번 만들어 행 수, JSON 바이트, gzip 바이트, 만드는 시간을 이 계획의 설계 결정 1에 적습니다. 로컬에 자료가 없으면 "배포 뒤에 잼"이라고 적고 넘어갑니다(출시 준비 계획 Task 13). gzip 뒤 2MB를 넘으면 정류장 좌표를 소수 5자리로 줄입니다.
+- [ ] **Step 6: 커밋합니다**
 
 ```bash
-git add apps/server/src/ref
+git add apps/server/src/ref docs/superpowers/plans/2026-11-24-mvp-search-detail.md
 git commit -m "feat(ref): serve a Seoul search index for stations, stops and routes"
 ```
 
@@ -235,7 +239,7 @@ export interface TripStops { direction: "up" | "down"; express: boolean; line: s
 export async function findTripStops(db: Database, tripId: number, now: number): Promise<TripStops | null>;
 ```
 
-- `GET /v1/ref/bus/stops/:stop/routes`: `stop`은 `seoul-bus:<stationId>`입니다. 다른 접두사나 없는 정류장은 404입니다. 서울 노선만 `shortName` 순으로 냅니다. `timezone`은 `SOURCE_TIMEZONE`입니다. ETag는 버스 배치(`"bus-<id>"`)입니다.
+- `GET /v1/ref/bus/stops/:stop/routes`: `stop`은 `seoul-bus:<stationId>`입니다. 다른 접두사나 없는 정류장은 404입니다. 서울 노선(Task 2의 `seoulRouteWhere`)만 `shortName` 순으로 냅니다. 서울 노선이 하나도 없으면 404입니다. `timezone`은 `SOURCE_TIMEZONE`입니다. ETag는 버스 배치(`"bus-<id>"`)입니다.
 - `GET /v1/ref/subway/trips/:tripId`: 현재 시간표 배치의 trip이 아니면 404입니다. 정차 시각은 `now`가 속한 서비스일(`serviceDayAt`, 새벽 3시 경계) 0시에 초를 더한 epoch ms입니다. `Cache-Control: public, max-age=300`이고 ETag는 없습니다.
 
 - [ ] **Step 1: 실패하는 테스트를 씁니다**
@@ -423,7 +427,10 @@ Model: sonnet
 export type { SearchIndex, SearchRoute, SearchStation, SearchStop };
 export const SEARCH_INDEX_CACHE_KEY = "search-index";
 export function loadSearchIndex(client: ServerClient, cache: MapRefCache): Promise<SearchIndex>; // 실패하고 캐시도 없으면 throw
-// detail-client.ts
+// detail-client.ts. 서버 응답 타입(StationView, StationViewDirection, BusRouteView, StopRoutes, TripStops)을
+// zod 스키마로 여기서 다시 정의해 export한다. 앱은 apps/server를 import하지 않는다.
+/** 서버 `apps/server/src/map/station-view.ts`의 같은 이름 값과 같다. */
+export const STATION_VIEW_MAX = 6;
 export function fetchStationView(client: ServerClient, stations: { line: string; stop: string }[]): Promise<RefResult<StationView>>;
 export function fetchBusRouteView(client: ServerClient, line: string): Promise<RefResult<BusRouteView>>;
 export function fetchStopRoutes(client: ServerClient, stop: string): Promise<RefResult<StopRoutes>>;
@@ -636,7 +643,8 @@ Model: opus
 **Files:**
 - Create: `apps/native/lib/map/watch-registry.ts`
 - Create: `apps/native/lib/map/app-watch-registry.ts`. `postWatch`와 `serverClient`로 앱 하나를 만듭니다.
-- Modify: `apps/native/lib/map/use-map-data.ts:455-470`. heartbeat가 `postWatch`를 직접 부르지 않고 registry에 `claim("map", refs)`합니다. 지도가 보이지 않으면 `release("map")`입니다. `:456` 주석("경기·인천 노선은 보지 않는다")을 지금 동작대로 고칩니다(남은 일 #8).
+- Modify: `apps/native/lib/map/use-map-data.ts:455-470`. 지도의 heartbeat 폴러를 없앱니다. 지도가 보이면 `claim("map", refs)`, 가려지면 `release("map")`입니다.
+- Modify: `apps/native/app/_layout.tsx`. `useWatchHeartbeat()`를 부릅니다. `:456` 주석("경기·인천 노선은 보지 않는다")을 지금 동작대로 고칩니다(남은 일 #8).
 - Test: `apps/native/lib/map/watch-registry.test.ts`
 
 **Interfaces:**
@@ -645,6 +653,10 @@ Model: opus
 ```ts
 export const WATCH_MAX = 6;
 export const WATCH_HEARTBEAT_MS = 60_000;
+// app-watch-registry.ts
+export const appWatchRegistry: WatchRegistry;
+/** 루트 레이아웃에서 한 번 부른다. 앱이 앞에 있는 동안 WATCH_HEARTBEAT_MS마다 beat한다. */
+export function useWatchHeartbeat(): void;
 export interface WatchRegistry {
 	/** 화면 하나의 요청을 바꾼다. 합집합이 바뀌면 바로 보낸다. 나중에 claim한 화면이 앞이다. */
 	claim: (owner: string, refs: readonly string[]) => void;
@@ -670,6 +682,7 @@ it("상세가 claim해도 지도 요청을 지우지 않고 합집합을 보낸�
 	expect(sent.at(-1)).toEqual(["seoul-bus:100100029", "seoul-bus:100100118", "gbis:200000037"]);
 });
 it("지도가 다시 claim하면 heartbeat를 기다리지 않고 바로 보낸다", async () => {});
+it("지도가 release하고 상세만 claim한 동안에도 beat는 상세 노선을 계속 보낸다", async () => {});
 it("6개를 넘으면 최근 claim 쪽을 남긴다", () => {});
 it("같은 합집합이면 claim이 다시 보내지 않는다", () => {});
 ```
@@ -895,7 +908,7 @@ export function busRouteModel(input: { map: BusMap; now: number; selectedDirecti
 - 정류장 줄의 `status`는 그 정류장에 가장 가까운 차량의 `arrivalStatus`입니다. `view`가 없거나 estimated면 고른 정류장 한 곳에만 `headwayStatus`를 둡니다.
 - 고른 차량이 스냅샷에서 빠지면 `selectedVehicle`은 null이고 화면은 노선 보기로 돌아갑니다.
 - `busType === "1"`이면 저상입니다. 서울 버스 위치 API의 값입니다. 구현 전에 `packages/realtime/src/__fixtures__/bus-6411.json`에서 확인합니다.
-- 화면은 보이는 동안 `claim("bus-detail", [line])`, 떠나면 `release("bus-detail")`입니다. 폴링은 스냅샷 10초, 노선 보기 30초입니다.
+- 화면은 보이는 동안 `claim("bus-detail", [line])`, 가려지거나 떠나면 `release("bus-detail")`입니다. heartbeat는 registry가 돕니다(Task 10). 폴링은 스냅샷 10초, 노선 보기 30초입니다.
 - 문구:
   - `busDetail.title`: "{shortName}번"
   - `busDetail.direction`: "{name} 방면"
