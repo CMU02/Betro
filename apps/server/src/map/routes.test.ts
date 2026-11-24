@@ -6,6 +6,12 @@ import { Hono } from "hono";
 import type { CollectorClient } from "../collector/client";
 import { sha256Hex } from "../commute/auth";
 import type { CommuteRunnerClient } from "../commute/client";
+import {
+	GBIS_COLLIDING_ROUTE_ID,
+	GBIS_ROUTE_ID,
+	OLD_ONLY_ROUTE_ID,
+	seedBusReference,
+} from "../ref/test-seed";
 import { createMapRoutes } from "./routes";
 import type { StationTimetable } from "./station-view";
 
@@ -23,6 +29,7 @@ let app: Hono;
 let nowMs = Date.UTC(2026, 10, 20, 0, 0, 0);
 let watchCalls: [string, string[], number][] = [];
 let routeViewCalls = 0;
+let busRouteViewCalls: string[] = [];
 let stationWatchCalls = 0;
 let stationCollectorFails = false;
 
@@ -33,7 +40,18 @@ const fakeCollector = {
 	},
 } as unknown as CollectorClient;
 
+const busRouteViewStub = {
+	etaState: "live",
+	fetchedAt: 1,
+	headwayMs: 480_000,
+	stops: [{ seq: 1, vehicles: [] }],
+} as const;
+
 const fakeCommute = {
+	busRouteView: (line: string) => {
+		busRouteViewCalls.push(line);
+		return Promise.resolve(busRouteViewStub);
+	},
 	routeView: () => {
 		routeViewCalls += 1;
 		return Promise.resolve({ destinationEtaAt: 123, legs: [] });
@@ -85,6 +103,7 @@ beforeEach(async () => {
 	nowMs = Date.UTC(2026, 10, 20, 0, 0, 0);
 	watchCalls = [];
 	routeViewCalls = 0;
+	busRouteViewCalls = [];
 	stationWatchCalls = 0;
 	stationCollectorFails = false;
 	await db.insert(install).values({
@@ -286,5 +305,58 @@ describe("POST /v1/map/station-view", () => {
 			method: "POST",
 		});
 		expect(res.status).toBe(503);
+	});
+});
+
+describe("POST /v1/map/bus-route-view", () => {
+	test("gbis 노선과 서울 출처 경기 면허 노선(routeType 8)은 400이고 실행기를 부르지 않는다", async () => {
+		await seedBusReference(db);
+		const unauth = await post(
+			"/v1/map/bus-route-view",
+			{ line: "seoul-bus:100100001" },
+			false
+		);
+		expect(unauth.status).toBe(401);
+		const bodies = [
+			{ line: `gbis:${GBIS_ROUTE_ID}` },
+			{ line: "seoul-bus:200000001" },
+			{ line: "seoul-bus:234001243" },
+			{ line: `seoul-bus:${OLD_ONLY_ROUTE_ID}` },
+			{ line: "seoul-bus:404404404" },
+			{ line: "seoul-bus:abc" },
+			{ line: "100100001" },
+			{ extra: 1, line: "seoul-bus:100100001" },
+			{},
+		];
+		const statuses = await Promise.all(
+			bodies.map(
+				async (body) => (await post("/v1/map/bus-route-view", body)).status
+			)
+		);
+		expect(statuses).toEqual(bodies.map(() => 400));
+		expect(busRouteViewCalls).toEqual([]);
+	});
+
+	test("응답에 노선 번호·이름·routeType이 붙는다", async () => {
+		await seedBusReference(db);
+		// 서초03은 gbis 노선과 routeId가 같다. 서울 노선을 골라야 한다.
+		const res = await post("/v1/map/bus-route-view", {
+			line: `seoul-bus:${GBIS_COLLIDING_ROUTE_ID}`,
+		});
+		expect(res.status).toBe(200);
+		expect(res.headers.get("Cache-Control")).toBe("no-store");
+		expect(await res.json()).toEqual({
+			...busRouteViewStub,
+			route: { name: "서초03", routeType: "2", shortName: "서초03" },
+		});
+		expect(busRouteViewCalls).toEqual([`seoul-bus:${GBIS_COLLIDING_ROUTE_ID}`]);
+	});
+
+	test("현재 버스 배치가 없으면 503이고 실행기를 부르지 않는다", async () => {
+		const res = await post("/v1/map/bus-route-view", {
+			line: "seoul-bus:100100001",
+		});
+		expect(res.status).toBe(503);
+		expect(busRouteViewCalls).toEqual([]);
 	});
 });

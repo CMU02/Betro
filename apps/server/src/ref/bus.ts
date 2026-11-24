@@ -277,3 +277,34 @@ export async function findStopRoutes(
 		},
 	};
 }
+
+/** 07 제목·배지 색·즐겨찾기에 쓰는 서울 노선 정보. */
+export interface SeoulBusRouteInfo {
+	name: string;
+	routeType: string;
+	shortName: string;
+}
+
+/**
+ * 현재 배치에서 서울 노선(`seoulRouteWhere`) 하나를 접두사 없는 노선 ID로 찾는다. 없거나 서울 노선이
+ * 아니면(경기·인천 면허 포함) `route`가 null이다. 현재 배치가 없으면 null.
+ */
+export async function findSeoulBusRoute(
+	db: Database,
+	routeId: string
+): Promise<{ batchId: number; route: SeoulBusRouteInfo | null } | null> {
+	const batchId = await currentBusBatchId(db);
+	if (batchId === null) {
+		return null;
+	}
+	const [row] = await db
+		.select({
+			name: busRoute.routeName,
+			routeType: busRoute.routeType,
+			shortName: busRoute.shortName,
+		})
+		.from(busRoute)
+		.where(and(seoulRouteWhere(batchId), eq(busRoute.routeId, routeId)))
+		.limit(1);
+	return { batchId, route: row ?? null };
+}

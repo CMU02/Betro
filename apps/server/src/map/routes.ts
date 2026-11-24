@@ -1,4 +1,5 @@
 import { parseRoute } from "@Betro/commute/plan";
+import { lineRef } from "@Betro/commute/refs";
 import type { Database } from "@Betro/db";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -6,6 +7,8 @@ import { z } from "zod";
 import type { CollectorClient } from "../collector/client";
 import { authenticateInstall } from "../commute/auth";
 import type { CommuteRunnerClient } from "../commute/client";
+import type { BusRouteView } from "../commute/runner-core";
+import { findSeoulBusRoute, type SeoulBusRouteInfo } from "../ref/bus";
 import { findLineKey } from "../ref/subway";
 import {
 	STATION_VIEW_MAX,
@@ -28,6 +31,11 @@ export interface MapRoutesDeps {
 	watchTtlMs: number;
 }
 
+/** 버스 노선 보기 응답. 실행기 값에 D1 노선 정보를 붙인다. 07 제목·배지 색·즐겨찾기에 쓴다(`BusMap`에는 없음). */
+export interface BusRouteViewResponse extends BusRouteView {
+	route: SeoulBusRouteInfo;
+}
+
 const BUS_REF_PREFIX = "seoul-bus:";
 const NUMERIC_ID = /^\d+$/;
 /** 지역 노선 참조. 수집기가 받는 출처 키와 같은 모양이다. */
@@ -39,6 +47,12 @@ const watchBodySchema = z
 	.strict();
 
 const routeViewBodySchema = z.object({ route: z.unknown() }).strict();
+
+const SEOUL_BUS_LINE = /^seoul-bus:\d+$/;
+
+const busRouteViewBodySchema = z
+	.object({ line: z.string().regex(SEOUL_BUS_LINE) })
+	.strict();
 
 const SUBWAY_REF_PREFIX = "seoul-subway:";
 const SUBWAY_STOP_REF = /^seoul-subway:\d+$/;
@@ -157,6 +171,33 @@ export function createMapRoutes(deps: MapRoutesDeps): Hono {
 		const view = await deps.commute.routeView(route.route);
 		c.header("Cache-Control", "no-store");
 		return c.json(view);
+	});
+
+	routes.post("/v1/map/bus-route-view", async (c) => {
+		const auth = await authenticateInstall(db, c.req.raw.headers, now());
+		if (!auth) {
+			return c.json(UNAUTHORIZED, 401);
+		}
+		const body = busRouteViewBodySchema.safeParse(await readJson(c.req.raw));
+		if (!body.success) {
+			return c.json({ error: "invalid" }, 400);
+		}
+		const routeId = body.data.line.slice(BUS_REF_PREFIX.length);
+		// 경기·인천 노선은 07이 없다. 서울 출처의 경기·인천 면허 노선도 여기서 거른다(지도 몫 서울 한도를 쓰지 않게).
+		const found = await findSeoulBusRoute(db, routeId);
+		if (!found) {
+			return c.json(UNAVAILABLE, 503);
+		}
+		if (!found.route) {
+			return c.json({ error: "invalid" }, 400);
+		}
+		if (!deps.commute) {
+			return c.json(UNAVAILABLE, 503);
+		}
+		const view = await deps.commute.busRouteView(lineRef("seoul-bus", routeId));
+		const response: BusRouteViewResponse = { ...view, route: found.route };
+		c.header("Cache-Control", "no-store");
+		return c.json(response);
 	});
 
 	routes.post("/v1/map/station-view", async (c) => {

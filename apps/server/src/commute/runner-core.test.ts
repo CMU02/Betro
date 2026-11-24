@@ -2691,6 +2691,123 @@ describe("RunnerCore 경로 보기", () => {
 	});
 });
 
+describe("RunnerCore 버스 노선 보기", () => {
+	const LINE = `seoul-bus:${ROUTE_ID}`;
+	const EIGHT_MINUTES = 8;
+
+	function eightMinuteHeadway(h: Harness): void {
+		h.busSchedules.handler = (ids) =>
+			Object.fromEntries(
+				ids.map((id) => [
+					id,
+					{
+						firstBusMinute: null,
+						headwayMin: EIGHT_MINUTES,
+						lastBusMinute: null,
+					},
+				])
+			);
+	}
+
+	test("버스 노선 보기는 세션과 같은 캐시를 쓰고 60초 안에 다시 부르지 않는다", async () => {
+		const h = harness();
+		eightMinuteHeadway(h);
+		const core = h.core();
+		const view = await core.busRouteView(LINE, T0);
+		h.clock.now = T0 + 30 * SECOND;
+		await core.busRouteView(LINE, h.clock.now);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID]);
+		expect(h.busSchedules.calls.at(-1)).toEqual([LINE]);
+		expect(view).toMatchObject({
+			etaState: "live",
+			fetchedAt: T0,
+			headwayMs: EIGHT_MINUTES * MINUTE,
+		});
+		expect(view.stops).toHaveLength(LAST_SEQ);
+		const board = view.stops.find((stop) => stop.seq === BOARD_SEQ);
+		expect(board?.vehicles).toEqual([
+			{
+				etaAt: V1_AT_BOARD,
+				plate: "서울74사V1",
+				stopsAway: 17,
+				vehicleId: "V1",
+			},
+			{
+				etaAt: V2_AT_BOARD,
+				plate: "서울74사V2",
+				stopsAway: 29,
+				vehicleId: "V2",
+			},
+		]);
+
+		// 같은 노선의 출퇴근 세션도 그 캐시를 쓴다.
+		addAndroid(h);
+		await tickAt(h, core, T0 + TICK_STEP);
+		expect(await sessions(h)).toHaveLength(1);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID]);
+	});
+
+	test("지도 몫에 닿으면 부르지 않고 배차간격 추정이다", async () => {
+		const h = harness();
+		eightMinuteHeadway(h);
+		await h.store.put(
+			`budget:${SERVICE_DATE}`,
+			h.config.dailyBudgetBusArrival - h.config.busArrivalSessionReserve
+		);
+		const view = await h.core().busRouteView(LINE, T0);
+		expect(h.boards.busCalls).toEqual([]);
+		expect(view).toEqual({
+			etaState: "estimated",
+			fetchedAt: null,
+			headwayMs: EIGHT_MINUTES * MINUTE,
+			stops: [],
+		});
+		expect(h.logs.some((line) => line.includes("map share"))).toBe(true);
+	});
+
+	test("운행 종료로 차량이 없으면 estimated이고 stops가 비어 있다", async () => {
+		const h = harness();
+		h.boards.handler = () => [];
+		const view = await h.core().busRouteView(LINE, T0);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID]);
+		expect(view).toEqual({
+			etaState: "estimated",
+			fetchedAt: T0,
+			headwayMs: null,
+			stops: [],
+		});
+	});
+
+	test("묵은 원자료(staleAfterMs 초과)는 정류장을 보이되 estimated다", async () => {
+		const h = harness();
+		const core = h.core();
+		await core.busRouteView(LINE, T0);
+		h.boards.handler = () => new Error("upstream down");
+		h.clock.now = T0 + h.config.staleAfterMs + SECOND;
+		const view = await core.busRouteView(LINE, h.clock.now);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID, ROUTE_ID]);
+		expect(view.etaState).toBe("estimated");
+		expect(view.fetchedAt).toBe(T0);
+		expect(view.stops).toHaveLength(LAST_SEQ);
+	});
+
+	test("배차간격을 읽지 못해도 던지지 않고 headwayMs가 null이다", async () => {
+		const h = harness();
+		h.busSchedules.handler = () => new Error("D1 down");
+		const view = await h.core().busRouteView(LINE, T0);
+		expect(view.headwayMs).toBeNull();
+		expect(view.etaState).toBe("live");
+	});
+
+	test("서울 버스가 아닌 노선은 던지고 상류를 부르지 않는다", async () => {
+		const h = harness();
+		await expect(
+			h.core().busRouteView(`gbis:${ROUTE_ID}`, T0)
+		).rejects.toThrow();
+		expect(h.boards.busCalls).toEqual([]);
+	});
+});
+
 describe("RunnerCore 경로 보기의 캐시와 이상한 응답", () => {
 	function busRoute(): Route {
 		return makePlan(PLAN_ANDROID).routes[0] as Route;

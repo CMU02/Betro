@@ -61,6 +61,7 @@ import {
 	legKey,
 	type RawBoards,
 } from "@Betro/commute/sources/assemble";
+import { scheduledHeadwayMs } from "@Betro/commute/sources/bus-schedule";
 import {
 	dropFrozen,
 	dropFrozenPositions,
@@ -73,7 +74,11 @@ import {
 	type RegionalSource,
 	type RegionalStop,
 } from "@Betro/commute/sources/regional-bus";
-import type { RouteStopArrival } from "@Betro/commute/sources/seoul-bus";
+import {
+	busBoards,
+	type RouteStopArrival,
+	SOURCE_TIMEZONE,
+} from "@Betro/commute/sources/seoul-bus";
 import type { StationRow } from "@Betro/commute/sources/seoul-subway";
 import type {
 	ArrivalMethod,
@@ -344,6 +349,45 @@ export interface RouteViewLeg {
 export interface RouteView {
 	destinationEtaAt: number | null;
 	legs: RouteViewLeg[];
+}
+
+/** 버스 노선 보기의 정류장 하나. 차량은 그 정류장으로 다가오는 순서(가까운 순)다. */
+export interface BusRouteViewStop {
+	seq: number;
+	vehicles: {
+		/** 그 정류장 도착 예상. 그 정류장의 `madeAt` 기준이다. */
+		etaAt: number | null;
+		plate: string | null;
+		stopsAway: number | null;
+		vehicleId: string;
+	}[];
+}
+
+/**
+ * 서울 버스 노선 하나의 전 정류장 도착(07 버스 노선 상세). `stops`는 원자료가 없으면 비어 있다.
+ * `headwayMs`는 정적 배차간격이고 운행 시간 밖이거나 일정이 없으면 null이다.
+ */
+export interface BusRouteView {
+	etaState: "live" | "estimated";
+	fetchedAt: number | null;
+	headwayMs: number | null;
+	stops: BusRouteViewStop[];
+}
+
+/** 원자료 → 정류장마다 다가오는 차량. 세션 도착판과 같은 `busBoards`로 만든다. */
+function busRouteViewStops(
+	data: NonNullable<RawBoards["bus"][string]>
+): BusRouteViewStop[] {
+	const boards = busBoards(data.prev, data.now, data.fetchedAt);
+	return data.now.map((stop) => ({
+		seq: stop.seq,
+		vehicles: boards.board(stop.seq).approaching.map((vehicle) => ({
+			etaAt: vehicle.etaAt,
+			plate: vehicle.plate,
+			stopsAway: vehicle.stopsAway,
+			vehicleId: vehicle.vehicleId,
+		})),
+	}));
 }
 
 function routeViewLeg(
@@ -884,6 +928,15 @@ export class RunnerCore {
 	}
 
 	/**
+	 * 서울 버스 노선 하나의 전 정류장 도착(07). 경로 보기와 같은 노선별 도착정보 캐시(`busRoute:<id>`)와
+	 * 지도 몫 규칙을 쓴다. 지도 몫에 닿았거나 출처가 멈췄으면 부르지 않고, 배차간격만으로 추정이다.
+	 * 서울 버스가 아닌 노선은 던진다.
+	 */
+	busRouteView(line: LineRef, now: number): Promise<BusRouteView> {
+		return this.#exclusive(() => this.#busRouteView(line, now));
+	}
+
+	/**
 	 * `commute/summaries/<date>/`를 모아 `commute/reports/<date>.json`을 쓴다. 마지막으로 쓴 날짜를
 	 * 저장해 같은 날(또는 그 전 날)은 다시 쓰지 않는다. 썼으면 true.
 	 */
@@ -995,6 +1048,39 @@ export class RunnerCore {
 			legs: route.legs.map((leg, index) =>
 				routeViewLeg(estimate.legs[index], boards.board(leg, "board"))
 			),
+		};
+	}
+
+	async #busRouteView(line: LineRef, now: number): Promise<BusRouteView> {
+		const { id: routeId, source } = parseRef(line);
+		if (source !== "seoul-bus") {
+			throw new Error(`busRouteView needs a seoul-bus line: ${line}`);
+		}
+		const raw: RawBoards = {
+			bus: {},
+			subway: {},
+			timetable: { arrivals: {}, rideMs: {} },
+		};
+		await this.#collectBus(routeId, false, raw, now, true, "map");
+		await this.#collectBusSchedules([line], raw);
+		const schedule = raw.busSchedules?.[line];
+		const headwayMs = schedule
+			? scheduledHeadwayMs(schedule, now, SOURCE_TIMEZONE)
+			: null;
+		const data = raw.bus[routeId];
+		if (!data) {
+			return { etaState: "estimated", fetchedAt: null, headwayMs, stops: [] };
+		}
+		const stops = busRouteViewStops(data);
+		// 운행 종료(`now: []`)나 차량이 한 대도 없는 응답은 실시간이 아니다. 정류장 하나의 `madeAt`이
+		// 늦다고 노선 전체를 추정으로 돌리지는 않는다.
+		const hasVehicle = stops.some((stop) => stop.vehicles.length > 0);
+		const isFresh = now - data.fetchedAt <= this.#ports.config.staleAfterMs;
+		return {
+			etaState: hasVehicle && isFresh ? "live" : "estimated",
+			fetchedAt: data.fetchedAt,
+			headwayMs,
+			stops,
 		};
 	}
 

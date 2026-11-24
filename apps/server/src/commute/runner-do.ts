@@ -8,6 +8,7 @@ import type { Env } from "../worker-env";
 import { runnerPorts, SqlRecordStore, SqlRunnerStore } from "./cf-ports";
 import {
 	type ActiveSession,
+	type BusRouteView,
 	type InputResult,
 	type RouteView,
 	RunnerCore,
@@ -20,11 +21,16 @@ const MIN_ALARM_DELAY_MS = 1000;
 const MAX_ID_LENGTH = 128;
 const INPUT_KINDS: ReadonlySet<string> = new Set(["boarded", "next", "end"]);
 const REPORT_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const SEOUL_BUS_LINE = /^seoul-bus:\d+$/;
 
 function isId(value: unknown): value is string {
 	return (
 		typeof value === "string" && value !== "" && value.length <= MAX_ID_LENGTH
 	);
+}
+
+function isSeoulBusLine(value: unknown): value is `seoul-bus:${string}` {
+	return typeof value === "string" && SEOUL_BUS_LINE.test(value);
 }
 
 function isSessionInput(value: unknown): value is SessionInput {
@@ -109,6 +115,14 @@ export class CommuteRunner extends DurableObject<Env> {
 			);
 		}
 		return await this.#getCore().routeView(parsed.route, Date.now());
+	}
+
+	/** 서울 버스 노선 하나의 전 정류장 도착(07). 노선 참조가 `seoul-bus:<숫자>`가 아니면 던진다. */
+	async busRouteView(line: string): Promise<BusRouteView> {
+		if (!isSeoulBusLine(line)) {
+			throw new Error("busRouteView needs a seoul-bus line");
+		}
+		return await this.#getCore().busRouteView(line, Date.now());
 	}
 
 	/** cron용: 서비스일 하나의 일일 보고서를 쓴다(이미 썼으면 false). */
