@@ -634,6 +634,21 @@ export const ko = {
 			title: "도착 정보를 불러오지 못했어요",
 		},
 	},
+	/** 08 정류장 상세 */
+	stopDetail: {
+		direction: "{name} 방면",
+		favorite: "즐겨찾기",
+		favoriteRemove: "즐겨찾기 해제",
+		loading: "노선 정보를 불러오는 중이에요",
+		noRoutes: "지나는 노선 정보가 없어요",
+		notice: "버스 노선을 누르면 실시간 도착을 볼 수 있어요",
+		retry: "다시 시도",
+		routes: "지나는 노선",
+		unavailable: {
+			body: "인터넷 연결을 확인하고 다시 시도해 주세요",
+			title: "노선 정보를 불러오지 못했어요",
+		},
+	},
 	tabs: {
 		commute: "출퇴근",
 		favorites: "즐겨찾기",
