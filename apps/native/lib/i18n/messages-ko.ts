@@ -136,12 +136,24 @@ export const ko = {
 		legendTitle: "위치 표시 방식",
 		providers: {
 			dataGoKr: {
-				subtitle: "버스 위치·노선·정류소, 서울교통공사 시간표",
+				subtitle: "서울 버스 위치·노선·정류소, 서울교통공사 시간표",
 				title: "공공데이터포털",
+			},
+			gyeonggi: {
+				subtitle: "경기도 버스정보 · 경기 버스 노선·정류소·도착·위치",
+				title: "경기도",
 			},
 			kric: {
 				subtitle: "철도산업정보센터 · 광역철도 시간표",
 				title: "국가철도공단",
+			},
+			molit: {
+				subtitle: "TAGO · 인천 버스 노선·정류소·도착·위치",
+				title: "국토교통부",
+			},
+			naverMap: {
+				subtitle: "배경 지도",
+				title: "NAVER 지도",
 			},
 			openStreetMap: {
 				subtitle: "선로·지도 형상 (ODbL)",
