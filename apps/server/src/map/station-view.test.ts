@@ -160,13 +160,23 @@ describe("stationView", () => {
 		});
 	});
 
-	it("묵은 행(staleAfterMs 초과)은 estimated다", async () => {
+	it("묵은 행(staleAfterMs 초과)은 버리고 시간표 3대를 estimated로 낸다", async () => {
 		const sourceAt = NOW - STALE_AFTER_MS - 1;
 		const collector = fakeCollector({
 			[STATN]: { fetchedAt: sourceAt, rows: [row({ sourceAt })] },
 		});
 		const view = await stationView(depsOf(collector), oneStation, NOW);
-		expect(directionOf(view, "up")?.etaState).toBe("estimated");
+		const up = directionOf(view, "up");
+		expect(up?.etaState).toBe("estimated");
+		// 묵은 행의 열차(이미 지난 ETA, 낡은 정거장 수)는 내지 않는다.
+		expect(up?.approaching).toEqual(
+			[0, 1, 2].map((index) => ({
+				etaAt: NOW + (1 + index * 4) * MINUTE_MS,
+				method: "timetable",
+				stopsAway: null,
+				vehicleId: `timetable:${100 + index}`,
+			}))
+		);
 	});
 
 	it("첫 열차에 공식 예측이 없어 시간표로 채우면 estimated다", async () => {

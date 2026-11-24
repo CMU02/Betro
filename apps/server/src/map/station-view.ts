@@ -119,7 +119,10 @@ async function rowsOf(
 
 /**
  * 한 방향의 도착판. 수집기 행이 있으면 출퇴근 카드와 같은 `stationBoard` + `fillFromTimetable`,
- * 행이 없거나 그 방향 열차가 없으면 시간표만으로 만든다. `live`는 공식 예측이 묵지 않았을 때뿐이다.
+ * 행이 없거나, 그 방향 열차가 없거나, 행이 묵었으면(`staleAfterMs` 초과) 시간표만으로 만든다.
+ * 수집기는 한도 초과·인증 중단·연속 오류·운행 종료 뒤에도 마지막 행을 남기므로, 묵은 행의
+ * 지난 ETA와 낡은 정거장 수를 내지 않는다(출퇴근 카드도 묵은 도착판을 버린다).
+ * `live`는 첫 열차가 공식 예측일 때뿐이다.
  */
 function boardOf(
 	entry: StationRowsEntry | undefined,
@@ -135,10 +138,9 @@ function boardOf(
 			arrivals
 		);
 		const [first] = board.approaching;
-		if (first) {
-			const fresh = now - board.sourceAt <= staleAfterMs;
+		if (first && now - board.sourceAt <= staleAfterMs) {
 			const official = first.method !== null && LIVE_METHODS.has(first.method);
-			return { board, live: fresh && official };
+			return { board, live: official };
 		}
 	}
 	return { board: timetableOnlyBoard(arrivals, now), live: false };
