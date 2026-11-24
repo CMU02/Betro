@@ -559,6 +559,32 @@ export class D1Timetable implements TimetablePort {
 			? null
 			: row.ride * SECOND_MS;
 	}
+
+	/**
+	 * `atMs`가 속한 서비스일에 그 방향 열차가 이 역을 떠나는 첫·마지막 시각(epoch ms).
+	 * 출발 시각이 없는 정차(종점)는 도착 시각을 쓴다. 시간표가 없으면 둘 다 null이다.
+	 */
+	async firstLast(
+		line: string,
+		direction: "up" | "down",
+		statnId: string,
+		atMs: number
+	): Promise<{ firstAt: number | null; lastAt: number | null }> {
+		const { dayStart, serviceDay } = serviceDayOf(atMs);
+		const row = await this.#db
+			.prepare(
+				`SELECT MIN(COALESCE(st.depart_sec, st.arrive_sec)) AS firstSec,
+				        MAX(COALESCE(st.depart_sec, st.arrive_sec)) AS lastSec
+				   FROM timetable_stop_time st JOIN timetable_trip t ON t.id = st.trip_id
+				  WHERE t.batch_id = (SELECT MAX(id) FROM reference_batch WHERE kind = 'timetable' AND is_current = 1)
+				    AND t.line_key = ? AND t.direction = ? AND t.service_day = ? AND st.statn_id = ?`
+			)
+			.bind(line, direction, serviceDay, statnId)
+			.first<{ firstSec: number | null; lastSec: number | null }>();
+		const atOf = (sec: number | null | undefined): number | null =>
+			sec === null || sec === undefined ? null : dayStart + sec * SECOND_MS;
+		return { firstAt: atOf(row?.firstSec), lastAt: atOf(row?.lastSec) };
+	}
 }
 
 /** `epochMs`가 속한 서비스일의 0시(epoch ms)와 요일 구분. */

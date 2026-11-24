@@ -16,6 +16,7 @@ import { INSTALL_HEADER } from "./commute/auth";
 import type { CommuteRunnerClient } from "./commute/client";
 import { createCommuteRoutes } from "./commute/routes";
 import { createMapRoutes } from "./map/routes";
+import type { StationViewDeps } from "./map/station-view";
 import { ifNoneMatchMatches } from "./ref/if-none-match";
 import { createRefRoutes } from "./ref/routes";
 import { renderStatusPage } from "./status-page";
@@ -36,6 +37,8 @@ export interface AppDeps {
 	mapWatchMaxPerInstall?: number;
 	/** 관측 요청 유지 시간 ms(`MAP_WATCH_TTL_MS`). */
 	mapWatchTtlMs?: number;
+	/** 역 도착판(`POST /v1/map/station-view`)의 수집기·시간표·설정. 없으면 503이다. */
+	stationView?: Omit<StationViewDeps, "watched">;
 	statusHost: string;
 }
 

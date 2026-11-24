@@ -127,7 +127,7 @@ const JSON_TYPE = "application/json";
 const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
 /** 세션이 보는 역을 수집기에 등록해 두는 시간. tick마다 늘린다. */
-const WATCH_MS = 5 * MINUTE_MS;
+export const WATCH_MS = 5 * MINUTE_MS;
 const TIMETABLE_REFRESH_MS = 10 * MINUTE_MS;
 const TIMETABLE_ARRIVALS = 6;
 const ENDED_KEEP_MS = DAY_MS;

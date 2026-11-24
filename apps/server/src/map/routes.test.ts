@@ -7,6 +7,7 @@ import type { CollectorClient } from "../collector/client";
 import { sha256Hex } from "../commute/auth";
 import type { CommuteRunnerClient } from "../commute/client";
 import { createMapRoutes } from "./routes";
+import type { StationTimetable } from "./station-view";
 
 const INSTALL_A = "11111111-1111-4111-8111-111111111111";
 const SECRET_A = "secret-a-secret-a-secret-a-secret-a-0001";
@@ -22,6 +23,8 @@ let app: Hono;
 let nowMs = Date.UTC(2026, 10, 20, 0, 0, 0);
 let watchCalls: [string, string[], number][] = [];
 let routeViewCalls = 0;
+let stationWatchCalls = 0;
+let stationCollectorFails = false;
 
 const fakeCollector = {
 	watchBusRoutes: (installId: string, routeIds: string[], until: number) => {
@@ -36,6 +39,32 @@ const fakeCommute = {
 		return Promise.resolve({ destinationEtaAt: 123, legs: [] });
 	},
 } as unknown as CommuteRunnerClient;
+
+/** 역 도착용 수집기. `stationCollectorFails`이면 두 메서드 모두 throw한다. */
+const fakeStationCollector = {
+	stationRows: () =>
+		stationCollectorFails
+			? Promise.reject(new Error("collector down"))
+			: Promise.resolve({}),
+	watchStations: () => {
+		stationWatchCalls += 1;
+		return stationCollectorFails
+			? Promise.reject(new Error("collector down"))
+			: Promise.resolve();
+	},
+};
+
+const fakeTimetable: StationTimetable = {
+	firstLast: () => Promise.resolve({ firstAt: null, lastAt: null }),
+	nextArrivals: (_line, _direction, _statnId, fromMs) =>
+		Promise.resolve(
+			[1, 2, 3, 4].map((minute) => ({
+				at: fromMs + minute * 60_000,
+				tripId: minute,
+			}))
+		),
+	rideMs: () => Promise.resolve(null),
+};
 
 const validRoute = {
 	legs: [
@@ -56,6 +85,8 @@ beforeEach(async () => {
 	nowMs = Date.UTC(2026, 10, 20, 0, 0, 0);
 	watchCalls = [];
 	routeViewCalls = 0;
+	stationWatchCalls = 0;
+	stationCollectorFails = false;
 	await db.insert(install).values({
 		createdAt: nowMs,
 		id: INSTALL_A,
@@ -72,6 +103,12 @@ beforeEach(async () => {
 			db,
 			maxRoutesPerInstall: MAX_ROUTES,
 			now: () => nowMs,
+			stationView: {
+				collector: fakeStationCollector,
+				config: { staleAfterMs: 150_000, subwayEtaBiasSec: {} },
+				timetable: fakeTimetable,
+				timezone: "test/zone",
+			},
 			watchTtlMs: TTL_MS,
 		})
 	);
@@ -166,5 +203,88 @@ describe("POST /v1/map/route-view", () => {
 		expect(ok.status).toBe(200);
 		expect(ok.headers.get("Cache-Control")).toBe("no-store");
 		expect(await ok.json()).toEqual({ destinationEtaAt: 123, legs: [] });
+	});
+});
+
+describe("POST /v1/map/station-view", () => {
+	const station = {
+		line: "seoul-subway:line2",
+		stop: "seoul-subway:1002000222",
+	};
+
+	test("seoul-subway가 아닌 stop, 모르는 노선, 7개 이상은 400이고 인증이 없으면 401이다", async () => {
+		const unauth = await post(
+			"/v1/map/station-view",
+			{ stations: [station] },
+			false
+		);
+		expect(unauth.status).toBe(401);
+		const bodies = [
+			{ stations: [{ ...station, stop: "seoul-bus:1002000222" }] },
+			{ stations: [{ ...station, stop: "seoul-subway:abc" }] },
+			{ stations: [{ ...station, line: "seoul-subway:line99" }] },
+			{ stations: [{ ...station, line: "seoul-bus:line2" }] },
+			{ stations: [{ ...station, line: "line2" }] },
+			{ stations: Array.from({ length: TOO_MANY }, () => station) },
+			{ stations: [] },
+			{ stations: [{ ...station, name: "강남" }] },
+			{ extra: 1, stations: [station] },
+		];
+		const statuses = await Promise.all(
+			bodies.map(
+				async (body) => (await post("/v1/map/station-view", body)).status
+			)
+		);
+		expect(statuses).toEqual(bodies.map(() => 400));
+		expect(stationWatchCalls).toBe(0);
+	});
+
+	test("수집기가 throw해도 시간표로 200이다", async () => {
+		stationCollectorFails = true;
+		const res = await post("/v1/map/station-view", { stations: [station] });
+		expect(res.status).toBe(200);
+		expect(res.headers.get("Cache-Control")).toBe("no-store");
+		const body = (await res.json()) as {
+			stations: {
+				directions: { approaching: unknown[]; etaState: string }[];
+				line: string;
+				stop: string;
+			}[];
+			timezone: string;
+		};
+		expect(body.timezone).toBe("test/zone");
+		expect(body.stations[0]).toMatchObject(station);
+		expect(
+			body.stations[0]?.directions.map((d) => [
+				d.etaState,
+				d.approaching.length,
+			])
+		).toEqual([
+			["estimated", 3],
+			["estimated", 3],
+		]);
+	});
+
+	test("역 도착 의존성이 없으면 503이다", async () => {
+		const bare = new Hono();
+		bare.route(
+			"/",
+			createMapRoutes({
+				db,
+				maxRoutesPerInstall: MAX_ROUTES,
+				now: () => nowMs,
+				watchTtlMs: TTL_MS,
+			})
+		);
+		const res = await bare.request(`${BASE}/v1/map/station-view`, {
+			body: JSON.stringify({ stations: [station] }),
+			headers: {
+				Authorization: `Bearer ${SECRET_A}`,
+				"Content-Type": "application/json",
+				"X-Betro-Install": INSTALL_A,
+			},
+			method: "POST",
+		});
+		expect(res.status).toBe(503);
 	});
 });

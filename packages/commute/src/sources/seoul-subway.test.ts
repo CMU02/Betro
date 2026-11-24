@@ -6,6 +6,7 @@ import {
 	fillFromTimetable,
 	type StationRow,
 	stationBoard,
+	timetableOnlyBoard,
 } from "./seoul-subway";
 import type { StopBoard } from "./types";
 
@@ -227,5 +228,40 @@ describe("fillFromTimetable", () => {
 			["A", AT_0810 + 5 * MINUTE_MS, "official"],
 			["B", AT_0810 + 8 * MINUTE_MS, "timetable"],
 		]);
+	});
+});
+
+describe("timetableOnlyBoard", () => {
+	it("timetableOnlyBoard는 now 뒤 도착만 쓰고 headwayMs는 이웃한 두 도착의 차다", () => {
+		const board = timetableOnlyBoard(
+			[
+				{ at: AT_0810 + 9 * MINUTE_MS, tripId: 3 },
+				{ at: AT_0810, tripId: 0 },
+				{ at: AT_0810 + 3 * MINUTE_MS, tripId: 1 },
+				{ at: AT_0810 + 7 * MINUTE_MS, tripId: 2 },
+			],
+			AT_0810
+		);
+		expect(
+			board.approaching.map((a) => [a.vehicleId, a.etaAt, a.method])
+		).toEqual([
+			["timetable:1", AT_0810 + 3 * MINUTE_MS, "timetable"],
+			["timetable:2", AT_0810 + 7 * MINUTE_MS, "timetable"],
+			["timetable:3", AT_0810 + 9 * MINUTE_MS, "timetable"],
+		]);
+		expect(board.headwayMs).toBe(4 * MINUTE_MS);
+		expect(board).toMatchObject({
+			fetchedAt: AT_0810,
+			passed: [],
+			sourceAt: AT_0810,
+		});
+	});
+
+	it("도착이 하나뿐이면 headwayMs는 null이고 없으면 빈 도착판이다", () => {
+		expect(
+			timetableOnlyBoard([{ at: AT_0810 + MINUTE_MS, tripId: 1 }], AT_0810)
+				.headwayMs
+		).toBeNull();
+		expect(timetableOnlyBoard([], AT_0810).approaching).toEqual([]);
 	});
 });

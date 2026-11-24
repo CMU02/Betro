@@ -189,3 +189,33 @@ export function fillFromTimetable(
 		board.headwayMs ?? (first && second ? second.at - first.at : null);
 	return { ...board, approaching, headwayMs };
 }
+
+/**
+ * 수집기 행이 없을 때 시간표 도착만으로 만든 도착판. `now` 뒤 도착만 이른 순서로 쓰고,
+ * 차량 ID는 `timetable:<tripId>`, method는 "timetable"이다. 배차간격은 이웃한 두 도착의 차다.
+ */
+export function timetableOnlyBoard(
+	arrivals: readonly { at: number; tripId: number }[],
+	now: number
+): StopBoard {
+	const future = arrivals
+		.filter((arrival) => arrival.at > now)
+		.sort((a, b) => a.at - b.at);
+	const [first, second] = future;
+	return {
+		approaching: future.map(
+			(arrival): Approaching => ({
+				etaAt: arrival.at,
+				lastOfDay: false,
+				method: "timetable",
+				plate: null,
+				stopsAway: null,
+				vehicleId: `timetable:${arrival.tripId}`,
+			})
+		),
+		fetchedAt: now,
+		headwayMs: first && second ? second.at - first.at : null,
+		passed: [],
+		sourceAt: now,
+	};
+}

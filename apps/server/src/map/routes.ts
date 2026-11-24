@@ -6,6 +6,12 @@ import { z } from "zod";
 import type { CollectorClient } from "../collector/client";
 import { authenticateInstall } from "../commute/auth";
 import type { CommuteRunnerClient } from "../commute/client";
+import { findLineKey } from "../ref/subway";
+import {
+	STATION_VIEW_MAX,
+	type StationViewDeps,
+	stationView,
+} from "./station-view";
 
 export interface MapRoutesDeps {
 	/** 버스 관측 요청을 받는 수집기. 없으면 watch는 503이다. */
@@ -16,6 +22,8 @@ export interface MapRoutesDeps {
 	/** 설치 하나가 한 번에 관측을 요청할 수 있는 버스 노선 수. */
 	maxRoutesPerInstall: number;
 	now?: () => number;
+	/** 역 도착판(수집기 행 + 시간표). 없으면 station-view는 503이다. */
+	stationView?: Omit<StationViewDeps, "watched">;
 	/** 관측 요청이 살아 있는 시간(ms). 앱이 다시 보내지 않으면 이 뒤에 빠진다. */
 	watchTtlMs: number;
 }
@@ -31,6 +39,31 @@ const watchBodySchema = z
 	.strict();
 
 const routeViewBodySchema = z.object({ route: z.unknown() }).strict();
+
+const SUBWAY_REF_PREFIX = "seoul-subway:";
+const SUBWAY_STOP_REF = /^seoul-subway:\d+$/;
+
+const stationViewBodySchema = z
+	.object({
+		stations: z
+			.array(
+				z
+					.object({
+						line: z
+							.string()
+							.refine(
+								(line) =>
+									line.startsWith(SUBWAY_REF_PREFIX) &&
+									findLineKey(line.slice(SUBWAY_REF_PREFIX.length)) !== null
+							),
+						stop: z.string().regex(SUBWAY_STOP_REF),
+					})
+					.strict()
+			)
+			.min(1)
+			.max(STATION_VIEW_MAX),
+	})
+	.strict();
 
 const UNAUTHORIZED = { error: "unauthorized" } as const;
 const UNAVAILABLE = { error: "unavailable" } as const;
@@ -74,6 +107,8 @@ export function createMapRoutes(deps: MapRoutesDeps): Hono {
 	const { db } = deps;
 	const now = deps.now ?? Date.now;
 	const routes = new Hono();
+	/** 수집기에 등록해 둔 역(역 ID → 만료 시각). isolate마다 하나다. */
+	const watchedStations = new Map<string, number>();
 
 	routes.post("/v1/map/watch", async (c) => {
 		const auth = await authenticateInstall(db, c.req.raw.headers, now());
@@ -120,6 +155,27 @@ export function createMapRoutes(deps: MapRoutesDeps): Hono {
 			return c.json(UNAVAILABLE, 503);
 		}
 		const view = await deps.commute.routeView(route.route);
+		c.header("Cache-Control", "no-store");
+		return c.json(view);
+	});
+
+	routes.post("/v1/map/station-view", async (c) => {
+		const auth = await authenticateInstall(db, c.req.raw.headers, now());
+		if (!auth) {
+			return c.json(UNAUTHORIZED, 401);
+		}
+		const body = stationViewBodySchema.safeParse(await readJson(c.req.raw));
+		if (!body.success) {
+			return c.json({ error: "invalid" }, 400);
+		}
+		if (!deps.stationView) {
+			return c.json(UNAVAILABLE, 503);
+		}
+		const view = await stationView(
+			{ ...deps.stationView, watched: watchedStations },
+			body.data.stations,
+			now()
+		);
 		c.header("Cache-Control", "no-store");
 		return c.json(view);
 	});

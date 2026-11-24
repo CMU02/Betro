@@ -1,4 +1,3 @@
-import type { LibsqlDatabase } from "@Betro/db";
 import {
 	type BusRegion,
 	type BusSource,
@@ -13,28 +12,8 @@ import {
 	tagoPositionUrl,
 } from "@Betro/realtime/upstream/regional-position";
 import { describe, expect, test } from "bun:test";
-import type { D1Database } from "@cloudflare/workers-types";
+import { d1Over } from "../test-d1";
 import { D1ReferenceSource, fixtureUpstream } from "./cf-ports";
-
-type SqlArg = string | number | null;
-
-/** D1ReferenceSource가 쓰는 prepare → bind → all 만 libsql 위에 흉내 낸다. */
-function d1Over(db: LibsqlDatabase): D1Database {
-	const statement = (sql: string, args: SqlArg[] = []) => ({
-		all: async () => {
-			const result = await db.$client.execute({ args, sql });
-			return {
-				results: result.rows.map((row) =>
-					Object.fromEntries(
-						result.columns.map((column, index) => [column, row[index]])
-					)
-				),
-			};
-		},
-		bind: (...next: SqlArg[]) => statement(sql, next),
-	});
-	return { prepare: (sql: string) => statement(sql) } as unknown as D1Database;
-}
 
 describe("D1ReferenceSource.currentBusRouteIds", () => {
 	test("leaves Incheon and Gyeonggi routes out of map observation", async () => {

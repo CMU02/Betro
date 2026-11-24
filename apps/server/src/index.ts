@@ -10,6 +10,7 @@ import type { Hono } from "hono";
 import { createApp } from "./app";
 import { upstreamFor } from "./collector/cf-ports";
 import { collectorClient } from "./collector/client";
+import { D1Timetable, runnerConfig } from "./commute/cf-ports";
 import { commuteClient } from "./commute/client";
 import { refreshHolidaysIfDue } from "./commute/holidays";
 import { commuteReportDate } from "./commute/runner-core";
@@ -42,6 +43,12 @@ function getApp(env: Env): Hono {
 			db,
 			mapWatchMaxPerInstall: positiveInt(env.MAP_WATCH_MAX_PER_INSTALL),
 			mapWatchTtlMs: positiveInt(env.MAP_WATCH_TTL_MS),
+			stationView: {
+				collector: collectorClient(env),
+				config: runnerConfig(env),
+				timetable: new D1Timetable(env.DB),
+				timezone: DEFAULT_TIMEZONE,
+			},
 			statusHost: env.STATUS_HOST,
 		});
 	}
