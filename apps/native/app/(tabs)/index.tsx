@@ -39,6 +39,7 @@ import { nearestApproachingPoint } from "@/lib/map/camera-region";
 import { lineColor } from "@/lib/map/line-color";
 import { estimatedBoardNotice, routeOptionLabel } from "@/lib/map/map-labels";
 import { type MapRegion, regionOf, spanSegments } from "@/lib/map/route-shape";
+import { isScheduledVehicleId } from "@/lib/map/scheduled-trains";
 import {
 	getUserSelection,
 	initialSelection,
@@ -186,6 +187,7 @@ function routeMarkers(
 		const color = legColor(mapLeg, busMeta, mode);
 		return mapLeg.vehicles.map((vehicle) => ({
 			color,
+			estimated: vehicle.estimated,
 			key: vehicleKey(vehicle),
 			kind: vehicle.kind,
 			motion: vehicle.motion,
@@ -532,6 +534,10 @@ function busDetailHref(
 	vehicleId: string
 ): string | null {
 	if (leg.mode === "subway") {
+		// 시간표 위치 열차는 실시간 열차 번호가 없어 06 열차 상세를 열 수 없다.
+		if (isScheduledVehicleId(vehicleId)) {
+			return null;
+		}
 		// 지하철 시트의 차량 ID는 열차 번호(`rawTrainNo`)다.
 		return `/train/${encodeURIComponent(vehicleId)}?line=${encodeURIComponent(leg.line)}`;
 	}

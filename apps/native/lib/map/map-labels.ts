@@ -33,11 +33,17 @@ export function chipLabel(name: string, state: ChipState): string {
 	});
 }
 
-/** 시트의 신선도 줄. 오래된 위치는 "실시간"이라고 쓰지 않고 몇 분 전 위치인지만 보여 준다(지도 설계 7장). */
+/**
+ * 시트의 신선도 줄. 오래된 위치는 "실시간"이라고 쓰지 않고 몇 분 전 위치인지만 보여 준다(지도 설계 7장).
+ * 시간표 위치 열차는 관측이 아니므로 "시간표 추정"이다(14).
+ */
 export function freshnessLabel(freshness: SheetModel["freshness"]): {
 	kind: StatusKind;
 	label: string;
 } {
+	if (freshness.scheduled) {
+		return { kind: "estimated", label: t("map.sheet.estimated") };
+	}
 	if (freshness.live) {
 		return {
 			kind: "live",

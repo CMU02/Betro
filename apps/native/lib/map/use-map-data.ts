@@ -59,6 +59,11 @@ import {
 	snapshotKinds,
 	watchRefsOf,
 } from "./regional-legs";
+import {
+	fetchScheduledTrains,
+	type ScheduledTrains,
+	scheduledVehicles,
+} from "./scheduled-trains";
 import type { MapSelection } from "./selection";
 import { viewFromSession } from "./session-view";
 import { useMapVisible } from "./use-map-visible";
@@ -69,6 +74,8 @@ export const SNAPSHOT_INTERVAL_MS = 10_000;
 const MAP_WATCH_OWNER = "map";
 /** 경로 보기 간격. */
 const ROUTE_VIEW_INTERVAL_MS = 15_000;
+/** 시간표 추정 모드에서 시간표 열차를 받는 간격. 서버 `max-age=15`와 맞춘다. */
+const SCHEDULED_INTERVAL_MS = 15_000;
 /** 마커 위치를 다시 계산하는 간격. */
 export const RENDER_TICK_MS = 1000;
 /** 참조 데이터(노선 선, 정류장)는 하루 단위로 바뀐다. */
@@ -79,6 +86,8 @@ const mapRefCache = createMapRefCache(Storage);
 export interface RenderVehicle {
 	/** 1초마다 계산한 표시 위치의 진행 방향. */
 	bearing: number;
+	/** 시간표 위치 열차(14, `scheduled:<tripId>`). 실시간 관측이 아니어서 흐리게 그리고 시트는 "시간표 추정"이다. */
+	estimated?: true;
 	id: string;
 	kind: "bus" | "subway";
 	lastSeenAt: number;
@@ -142,6 +151,8 @@ interface Snapshots {
 
 /** 스냅샷 전의 빈 값. 렌더마다 새 배열이 되지 않게 모듈에 둔다. */
 const NO_STOPPED_SOURCES: BusSnapshot["stoppedSources"] = [];
+/** 시간표 열차를 받기 전이거나 추정 모드가 아닐 때의 빈 값. */
+const NO_SCHEDULED: ReadonlyMap<string, ScheduledTrains> = new Map();
 
 type RefMap = BusMap | SubwayMap | null;
 
@@ -306,7 +317,41 @@ function renderVehicle(
 	};
 }
 
-function renderLeg(args: {
+/**
+ * 시간표 추정 모드에서 이 구간에 그릴 시간표 열차(14, 스펙 5.8). 그 노선에 실시간 스냅샷 열차가 하나라도 있으면
+ * 두 가지를 섞지 않도록 그리지 않는다. 탑승한 열차로 좁힌 구간도 시간표 열차는 어느 것인지 몰라 그리지 않는다.
+ */
+function scheduledForLeg(
+	leg: Leg,
+	legTrack: LegTrack,
+	legIndex: number,
+	args: Pick<RenderLegArgs, "boardedId" | "scheduled" | "snapshots">
+): RenderVehicle[] {
+	const scheduled = args.scheduled.get(leg.line);
+	if (
+		scheduled === undefined ||
+		args.boardedId !== null ||
+		leg.mode !== "subway" ||
+		legTrack.kind !== "subway"
+	) {
+		return [];
+	}
+	const lineKey = leg.line.slice(leg.line.indexOf(":") + 1);
+	const live = (args.snapshots.subway?.vehicles ?? []).some(
+		(vehicle) => vehicle.lineKey === lineKey
+	);
+	return live
+		? []
+		: scheduledVehicles(
+				scheduled.trains,
+				leg as SubwayLeg,
+				legTrack.map,
+				legIndex,
+				scheduled.generatedAt
+			);
+}
+
+interface RenderLegArgs {
 	boardedId: string | null;
 	leg: Leg;
 	legIndex: number;
@@ -314,9 +359,13 @@ function renderLeg(args: {
 	motionStates: ReadonlyMap<string, MotionState>;
 	nowMs: number;
 	realtime: boolean;
+	/** 시간표 추정 모드일 때만 채운 노선별 시간표 열차. 아니면 비어 있다. */
+	scheduled: ReadonlyMap<string, ScheduledTrains>;
 	showVehicles: boolean;
 	snapshots: Snapshots;
-}): MapLeg {
+}
+
+function renderLeg(args: RenderLegArgs): MapLeg {
 	const { boardedId, leg, legIndex, legTrack, nowMs, realtime, showVehicles } =
 		args;
 	const vehicles: RenderVehicle[] = [];
@@ -338,6 +387,7 @@ function renderLeg(args: {
 				vehicles.push(rendered);
 			}
 		}
+		vehicles.push(...scheduledForLeg(leg, legTrack, legIndex, args));
 	}
 	return {
 		...legSpanM(leg, legTrack),
@@ -364,6 +414,54 @@ function seoulBusRouteIds(legs: readonly MapLegFlags[]): string[] {
 
 function trackShape(legTrack: LegTrack | null): [number, number][] {
 	return legTrack === null ? [] : [...legTrack.track.shape];
+}
+
+/**
+ * 시간표 추정 모드일 때만 그 노선들의 시간표 열차를 15초마다 받는다. 모드가 꺼지면 받은 값을 버린다.
+ * 노선 ref만 보내고 위치는 보내지 않는다.
+ */
+function useScheduledTrains(
+	enabled: boolean,
+	lines: readonly string[]
+): ReadonlyMap<string, ScheduledTrains> {
+	const [byLine, setByLine] =
+		useState<ReadonlyMap<string, ScheduledTrains>>(NO_SCHEDULED);
+	const linesKey = lines.join(",");
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 모드가 바뀌거나 노선이 바뀌면 받아 둔 열차를 버린다.
+	useEffect(() => {
+		setByLine(NO_SCHEDULED);
+	}, [enabled, linesKey]);
+	useVisiblePoll(
+		enabled && lines.length > 0,
+		`scheduled:${linesKey}`,
+		SCHEDULED_INTERVAL_MS,
+		async () => {
+			const results = await Promise.all(
+				lines.map(
+					async (line) =>
+						[line, await fetchScheduledTrains(serverClient, line)] as const
+				)
+			);
+			setByLine((previous) => {
+				const next = new Map(previous);
+				for (const [line, result] of results) {
+					if (result.ok) {
+						next.set(line, result.value);
+					}
+				}
+				return next;
+			});
+		}
+	);
+	return enabled ? byLine : NO_SCHEDULED;
+}
+
+/** 차량을 그리는 지하철 구간의 노선 ref. 시간표 열차를 받을 노선이다. */
+function subwayLinesOf(legs: readonly MapLegFlags[]): string[] {
+	const lines = legs
+		.filter(({ leg, showVehicles }) => showVehicles && leg.mode === "subway")
+		.map(({ leg }) => leg.line);
+	return [...new Set(lines)];
 }
 
 /** 보일 때만 폴링하는 하트비트·스냅샷·경로 보기를 묶는다. 위치는 서버에 보내지 않고 노선 ref만 보낸다. */
@@ -585,6 +683,14 @@ export function useMapData(
 		() => ({ bus: mode.bus, subway: mode.subway }),
 		[mode.bus, mode.subway]
 	);
+	const scheduledLines = useMemo(
+		() => subwayLinesOf(legsWithFlags),
+		[legsWithFlags]
+	);
+	const scheduled = useScheduledTrains(
+		visible && estimatedMode.subway,
+		scheduledLines
+	);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: motionVersion이 ref 안 상태의 변경을 알린다.
 	const legs = useMemo<MapLeg[]>(
@@ -598,6 +704,7 @@ export function useMapData(
 					motionStates: motion.current,
 					nowMs,
 					realtime,
+					scheduled,
 					showVehicles,
 					snapshots,
 				})
@@ -605,6 +712,7 @@ export function useMapData(
 		[
 			legsWithFlags,
 			legTracks,
+			scheduled,
 			snapshots,
 			route,
 			sessionRoute,

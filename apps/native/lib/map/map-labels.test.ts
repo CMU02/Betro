@@ -37,6 +37,12 @@ it("never calls an old position live", () => {
 	});
 });
 
+it("시간표 열차의 신선도 줄은 '시간표 추정'이고 실시간이라고 쓰지 않는다", () => {
+	expect(
+		freshnessLabel({ live: false, scheduled: true, secondsAgo: 0 })
+	).toEqual({ kind: "estimated", label: "시간표 추정" });
+});
+
 it("my stop row shows minutes only when known and says when they are estimated", () => {
 	expect(mineLabel("bus", { estimated: false, minutesToMine: 3 })).toBe(
 		"내 정류장 · 3분"
