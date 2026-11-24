@@ -30,6 +30,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { StatusTag } from "@/components/ui/status-tag";
 import { TopBar } from "@/components/ui/top-bar";
 import { useAppTheme } from "@/contexts/app-theme-context";
+import { busFreshnessOf } from "@/lib/detail/bus-freshness";
 import {
 	type BusRouteModel,
 	type BusTimelineStop,
@@ -331,22 +332,30 @@ function Freshness({
 	running: number;
 	view: BusRouteViewResponse | null;
 }) {
-	const live = view?.etaState === "live" || (view === null && running > 0);
+	const { live, showNotice, showRunning } = busFreshnessOf({
+		etaState: view?.etaState ?? null,
+		running,
+	});
 	return (
-		<View className="flex-row items-center gap-3">
-			<StatusTag
-				kind={live ? "live" : "estimated"}
-				label={t(TAG_KEY[live ? "live" : "estimated"])}
-			/>
-			<AppText className="text-text-secondary" variant="caption">
-				{t("busDetail.running", { n: running })}
-			</AppText>
-			{headway === null ? null : (
-				<AppText className="text-text-secondary" variant="caption">
-					{headway.text}
-				</AppText>
-			)}
-		</View>
+		<>
+			<View className="flex-row items-center gap-3">
+				<StatusTag
+					kind={live ? "live" : "estimated"}
+					label={t(TAG_KEY[live ? "live" : "estimated"])}
+				/>
+				{showRunning ? (
+					<AppText className="text-text-secondary" variant="caption">
+						{t("busDetail.running", { n: running })}
+					</AppText>
+				) : null}
+				{headway === null ? null : (
+					<AppText className="text-text-secondary" variant="caption">
+						{headway.text}
+					</AppText>
+				)}
+			</View>
+			{showNotice ? <InlineNotice body={t("busDetail.notice")} /> : null}
+		</>
 	);
 }
 
@@ -595,14 +604,11 @@ export default function BusRouteDetailScreen() {
 						{model?.selectedVehicle ? (
 							<VehicleSummary selected={model.selectedVehicle} />
 						) : (
-							<>
-								<Freshness
-									headway={model?.headway ?? null}
-									running={running}
-									view={view}
-								/>
-								<InlineNotice body={t("busDetail.notice")} />
-							</>
+							<Freshness
+								headway={model?.headway ?? null}
+								running={running}
+								view={view}
+							/>
 						)}
 						<DirectionTabs
 							directions={model?.directions ?? NO_DIRECTIONS}
