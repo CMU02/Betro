@@ -144,6 +144,7 @@ export function VehicleSheet({
 	map,
 	onClose,
 	onHeight,
+	onOpenDetail,
 	toAlight,
 	vehicle,
 	view,
@@ -156,6 +157,8 @@ export function VehicleSheet({
 	onClose: () => void;
 	/** 시트 높이. 화면이 지도 여백에 더해 확대한 차량이 시트에 가리지 않게 한다. */
 	onHeight: (height: number) => void;
+	/** 07 버스 노선 상세를 여는 동작. 없으면 "자세히" 행을 그리지 않는다(경기·인천 노선, 지하철). */
+	onOpenDetail?: () => void;
 	/** 이미 탄 차량이면 줄이 하차 정류장에서 끝나므로 "내 정류장" 글을 붙이지 않는다. */
 	toAlight: boolean;
 	vehicle: SheetVehicle;
@@ -220,6 +223,17 @@ export function VehicleSheet({
 							)}
 						</View>
 					</View>
+					{onOpenDetail === undefined ? null : (
+						<Pressable
+							accessibilityRole="button"
+							className="h-11 justify-center"
+							onPress={onOpenDetail}
+						>
+							<AppText className="text-accent-primary" variant="bodyMStrong">
+								{t("map.sheet.more")}
+							</AppText>
+						</Pressable>
+					)}
 					<ScrollView style={STOPS_STYLE}>
 						{model.stops.map((stop, index) => (
 							<StopRow

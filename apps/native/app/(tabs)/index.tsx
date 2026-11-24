@@ -495,6 +495,25 @@ function isRiding(
 	);
 }
 
+/** 07이 없는 경기·인천 면허 노선(서울 routeType 7·8). */
+const NO_DETAIL_ROUTE_TYPES: readonly string[] = ["7", "8"];
+
+/** 버스 시트의 "자세히"가 여는 07 경로. `seoul-bus:` 구간이고 경기·인천 면허 노선이 아닐 때만 있다. */
+function busDetailHref(
+	leg: MapLeg["leg"],
+	busMeta: BusMetaMap,
+	vehicleId: string
+): string | null {
+	if (leg.mode !== "bus" || !leg.line.startsWith("seoul-bus:")) {
+		return null;
+	}
+	const meta = busMeta[leg.line];
+	if (meta !== undefined && NO_DETAIL_ROUTE_TYPES.includes(meta.routeType)) {
+		return null;
+	}
+	return `/bus/${encodeURIComponent(leg.line)}?veh=${encodeURIComponent(vehicleId)}`;
+}
+
 function SelectedSheet({
 	bottomOffset,
 	busMeta,
@@ -515,6 +534,13 @@ function SelectedSheet({
 	view: MapData["view"];
 }) {
 	const { mapLeg, vehicle } = selected;
+	const router = useRouter();
+	const detailHref = busDetailHref(mapLeg.leg, busMeta, vehicle.id);
+	const openDetail = useCallback(() => {
+		if (detailHref !== null) {
+			router.push(detailHref as never);
+		}
+	}, [detailHref, router]);
 	if (mapLeg.map === null || vehicle.positionSeq === null) {
 		return null;
 	}
@@ -527,6 +553,7 @@ function SelectedSheet({
 			map={mapLeg.map}
 			onClose={onClose}
 			onHeight={onHeight}
+			onOpenDetail={detailHref === null ? undefined : openDetail}
 			toAlight={toAlight}
 			vehicle={{
 				id: vehicle.id,

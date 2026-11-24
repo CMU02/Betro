@@ -6,6 +6,24 @@
  * - 문구를 바꿀 때는 Figma 문구 표(`docs/superpowers/plans/2026-11-05-mvp-1-app-foundation.md`의 "문구 변경")를 함께 고친다.
  */
 export const ko = {
+	/** 07 버스 노선 상세 */
+	busDetail: {
+		arrival: "도착",
+		direction: "{name} 방면",
+		favorite: "즐겨찾기",
+		favoriteRemove: "즐겨찾기 해제",
+		loading: "노선 정보를 불러오는 중이에요",
+		lowFloor: "저상",
+		nextStop: "다음 정류장",
+		notice: "버스 위치는 실시간으로 갱신돼요",
+		route: "운행 경로",
+		running: "{n}대 운행 중",
+		title: "{shortName}번",
+		unavailable: {
+			body: "검색에서 다시 찾아 주세요",
+			title: "찾을 수 없는 노선이에요",
+		},
+	},
 	common: {
 		back: "뒤로",
 		minutes: "{m}분",
@@ -314,6 +332,7 @@ export const ko = {
 			mineStation: "내가 탈 역",
 			minutes: "{minutes}분",
 			minutesEstimated: "시간표 추정 · 약 {minutes}분",
+			more: "자세히",
 			/** 실시간으로 볼 수 없을 만큼 오래된 위치. "실시간"이라고 쓰지 않는다(지도 설계 7장). */
 			stale: "{minutes}분 전 위치",
 			trainNo: "열차 {no}",
