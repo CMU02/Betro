@@ -4,6 +4,7 @@ import type { StationView } from "../detail/detail-client";
 import type { Favorite } from "./favorites";
 import {
 	favoriteHref,
+	favoritesBody,
 	filterFavorites,
 	mergeStationViews,
 	stationViewBatches,
@@ -94,4 +95,10 @@ it("카드는 검색 결과와 같은 상세 경로로 간다", () => {
 	expect(favoriteHref(station("강남", 1))).toBe("/station/%EA%B0%95%EB%82%A8");
 	expect(favoriteHref(stop)).toBe("/stop/seoul-bus%3A1");
 	expect(favoriteHref(route)).toBe("/bus/seoul-bus%3A2");
+});
+
+it("favoritesBody: 즐겨찾기가 없으면 empty, 필터에 맞는 게 없으면 filtered, 있으면 cards", () => {
+	expect(favoritesBody([], [])).toBe("empty");
+	expect(favoritesBody([route], [])).toBe("filtered");
+	expect(favoritesBody([route], [route])).toBe("cards");
 });

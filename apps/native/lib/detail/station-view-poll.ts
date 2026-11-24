@@ -31,6 +31,20 @@ export function stationPollInterval(
 	return visible ? intervalMs : false;
 }
 
+/**
+ * 쿼리 옵션. 가려지면 쿼리를 끄고(enabled), 다시 보이면 켜서 오래된 도착판을 바로 새로 받는다.
+ * 간격만 바꾸면 다시 보여도 다음 틱까지 옛 응답이 남는다.
+ */
+export function stationPollOptions(
+	visible: boolean,
+	intervalMs: number
+): { enabled: boolean; refetchInterval: number | false } {
+	return {
+		enabled: visible,
+		refetchInterval: stationPollInterval(visible, intervalMs),
+	};
+}
+
 export type StationViewPhase = "failed" | "loading" | "ready";
 
 /** 도착판·첫차 막차 카드가 함께 따르는 상태. 받은 적이 없을 때만 loading/failed다. */

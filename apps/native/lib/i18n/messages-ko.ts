@@ -200,6 +200,7 @@ export const ko = {
 			station: "역",
 			stop: "정류장",
 		},
+		filteredEmpty: "이 종류의 즐겨찾기가 없어요",
 		manage: "관리",
 		menu: "더보기",
 		myPlaces: "내 장소",

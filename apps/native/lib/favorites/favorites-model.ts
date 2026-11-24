@@ -13,6 +13,19 @@ export function filterFavorites(
 		: list.filter((favorite) => favorite.kind === filter);
 }
 
+export type FavoritesBody = "cards" | "empty" | "filtered";
+
+/** 카드 자리에 무엇을 그릴지. 칩과 내 장소는 어느 경우에도 그대로 둔다. */
+export function favoritesBody(
+	all: readonly Favorite[],
+	shown: readonly Favorite[]
+): FavoritesBody {
+	if (all.length === 0) {
+		return "empty";
+	}
+	return shown.length === 0 ? "filtered" : "cards";
+}
+
 /** 화면에 보이는 역 즐겨찾기만 한 번에 묻는다. STATION_VIEW_MAX를 넘으면 나눈다. */
 export function stationViewBatches(
 	list: readonly Favorite[]

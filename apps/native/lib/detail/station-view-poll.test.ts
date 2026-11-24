@@ -3,6 +3,7 @@ import type { StationView } from "./detail-client";
 import {
 	settleStationView,
 	stationPollInterval,
+	stationPollOptions,
 	stationViewPhase,
 } from "./station-view-poll";
 
@@ -46,5 +47,18 @@ describe("station-view-poll", () => {
 		expect(stationViewPhase(settleStationView(undefined, GOOD, 1))).toBe(
 			"ready"
 		);
+	});
+});
+
+describe("stationPollOptions", () => {
+	it("가려진 동안은 쿼리를 끄고, 다시 보이면 켜서 오래된 도착판을 바로 새로 받게 한다", () => {
+		expect(stationPollOptions(false, 15_000)).toEqual({
+			enabled: false,
+			refetchInterval: false,
+		});
+		expect(stationPollOptions(true, 15_000)).toEqual({
+			enabled: true,
+			refetchInterval: 15_000,
+		});
 	});
 });

@@ -30,7 +30,7 @@ import { stationModel } from "@/lib/detail/station-model";
 import {
 	type StationViewSnapshot,
 	settleStationView,
-	stationPollInterval,
+	stationPollOptions,
 } from "@/lib/detail/station-view-poll";
 import { stopModel } from "@/lib/detail/stop-model";
 import { useScreenVisible } from "@/lib/detail/use-screen-visible";
@@ -39,6 +39,7 @@ import type { Favorite } from "@/lib/favorites/favorites";
 import {
 	type FavoritesFilter,
 	favoriteHref,
+	favoritesBody,
 	filterFavorites,
 	mergeStationViews,
 	stationViewBatches,
@@ -141,7 +142,7 @@ function useStationViews(
 						Date.now()
 					),
 				queryKey,
-				refetchInterval: stationPollInterval(visible, STATION_POLL_MS),
+				...stationPollOptions(visible, STATION_POLL_MS),
 			};
 		}),
 	});
@@ -208,7 +209,12 @@ function CardShell({
 					<Ellipsis colorClassName="accent-icon-primary" size={ICON_SIZE} />
 				</IconButton>
 			</View>
-			{children}
+			{children === undefined ? null : (
+				// 카드 몸통(도착 행)을 눌러도 같은 상세로 간다. 더보기 버튼은 따로 눌린다.
+				<Pressable accessibilityRole="button" onPress={open}>
+					{children}
+				</Pressable>
+			)}
 		</View>
 	);
 }
@@ -473,32 +479,7 @@ export default function FavoritesTab() {
 		</IconButton>
 	);
 
-	if (favorites.length === 0) {
-		return (
-			<Screen scroll title={t("favorites.title")} titleAction={add}>
-				<View className="flex-1 justify-center px-4 pb-12">
-					<EmptyState
-						action={
-							<AppButton
-								className="w-[200px]"
-								label={t("favorites.empty.action")}
-								onPress={openSearch}
-							/>
-						}
-						body={t("favorites.empty.body")}
-						icon={
-							<EmptyStar
-								colorClassName="accent-icon-secondary"
-								size={EMPTY_ICON_SIZE}
-							/>
-						}
-						title={t("favorites.empty.title")}
-					/>
-				</View>
-			</Screen>
-		);
-	}
-
+	const body = favoritesBody(favorites, shown);
 	let stopIndex = 0;
 	return (
 		<Screen scroll title={t("favorites.title")} titleAction={add}>
@@ -519,41 +500,67 @@ export default function FavoritesTab() {
 					))}
 				</ScrollView>
 				<PlaceShortcuts onManage={manage} onOpen={openPlace} places={places} />
-				<View className="gap-3 px-4">
-					{shown.map((favorite) => {
-						if (favorite.kind === "station") {
+				{body === "cards" ? (
+					<View className="gap-3 px-4">
+						{shown.map((favorite) => {
+							if (favorite.kind === "station") {
+								return (
+									<StationCard
+										callbacks={callbacks}
+										favorite={favorite}
+										key={favorite.id}
+										maps={maps}
+										receivedAt={receivedAt}
+										view={view}
+									/>
+								);
+							}
+							if (favorite.kind === "stop") {
+								const result = stopQueries[stopIndex]?.data;
+								stopIndex += 1;
+								return (
+									<StopCard
+										callbacks={callbacks}
+										data={result?.ok ? result.value : null}
+										favorite={favorite}
+										key={favorite.id}
+									/>
+								);
+							}
 							return (
-								<StationCard
+								<RouteCard
 									callbacks={callbacks}
 									favorite={favorite}
 									key={favorite.id}
-									maps={maps}
-									receivedAt={receivedAt}
-									view={view}
 								/>
 							);
-						}
-						if (favorite.kind === "stop") {
-							const result = stopQueries[stopIndex]?.data;
-							stopIndex += 1;
-							return (
-								<StopCard
-									callbacks={callbacks}
-									data={result?.ok ? result.value : null}
-									favorite={favorite}
-									key={favorite.id}
+						})}
+					</View>
+				) : (
+					<EmptyState
+						action={
+							body === "empty" ? (
+								<AppButton
+									className="w-[200px]"
+									label={t("favorites.empty.action")}
+									onPress={openSearch}
 								/>
-							);
+							) : undefined
 						}
-						return (
-							<RouteCard
-								callbacks={callbacks}
-								favorite={favorite}
-								key={favorite.id}
+						body={
+							body === "empty"
+								? t("favorites.empty.body")
+								: t("favorites.filteredEmpty")
+						}
+						icon={
+							<EmptyStar
+								colorClassName="accent-icon-secondary"
+								size={EMPTY_ICON_SIZE}
 							/>
-						);
-					})}
-				</View>
+						}
+						title={t("favorites.empty.title")}
+					/>
+				)}
 			</View>
 		</Screen>
 	);
