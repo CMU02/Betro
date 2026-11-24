@@ -31,6 +31,7 @@ import type { ArrivalRow } from "@Betro/realtime/upstream/subway-arrival";
 import { redactKeys } from "@Betro/realtime/upstream/urls";
 import { SERVICE_ENDED_RECHECK_MS } from "./apply-call";
 import {
+	type BusWatchEntry,
 	type BusWatchSaved,
 	type CoreSaved,
 	currentOperatingWindow,
@@ -202,37 +203,74 @@ export class CollectorState {
 		}
 	}
 
-	/** 설치 하나의 관측 요청을 통째로 바꾼다. 빈 배열이면 그 설치의 요청을 지운다. */
+	/**
+	 * 설치 하나의 관측 요청을 통째로 바꾼다. 빈 배열이면 그 설치의 요청을 지운다.
+	 * 이번에 빠진 지역 노선의 멈춤 판단 기록은 빠진 요청의 원래 만료 시각까지 남긴다.
+	 * 남길 노선이 새로 생겼으면 true다(호출한 쪽이 core를 저장한다).
+	 */
 	watchBusRoutes(
 		installId: string,
 		routeIds: readonly string[],
 		until: number
-	): void {
+	): boolean {
 		const unique = [...new Set(routeIds)];
+		const kept = this.#keepDroppedPrev(this.busWatch[installId], unique);
 		if (unique.length === 0) {
 			delete this.busWatch[installId];
-			return;
+			return kept;
 		}
 		this.busWatch[installId] = { routeIds: unique, until };
+		return kept;
 	}
 
-	/** 만료 시각이 지난 설치의 관측 요청과, 아무도 보지 않는 지역 노선의 멈춤 판단 기록을 지운다. */
+	/** 앞 요청에서 빠진 노선 중 멈춤 판단 기록이 있는 노선을 앞 요청의 만료 시각까지 남긴다. */
+	#keepDroppedPrev(
+		previous: BusWatchEntry | undefined,
+		next: readonly string[]
+	): boolean {
+		const prev = this.core.regionalPrev;
+		if (!(previous && prev)) {
+			return false;
+		}
+		let kept = false;
+		for (const routeKey of previous.routeIds) {
+			if (next.includes(routeKey) || !prev[routeKey]) {
+				continue;
+			}
+			this.core.regionalPrevKeepUntil ??= {};
+			const keepUntil = this.core.regionalPrevKeepUntil;
+			if ((keepUntil[routeKey] ?? Number.NEGATIVE_INFINITY) < previous.until) {
+				keepUntil[routeKey] = previous.until;
+				kept = true;
+			}
+		}
+		return kept;
+	}
+
+	/**
+	 * 만료 시각이 지난 설치의 관측 요청과, 아무도 보지 않는 지역 노선의 멈춤 판단 기록을 지운다.
+	 * 명시적으로 내려놓은 노선의 기록은 원래 만료 시각까지 남긴다(`regionalPrevKeepUntil`).
+	 */
 	expireBusWatches(now: number): void {
 		for (const [installId, entry] of Object.entries(this.busWatch)) {
 			if (entry.until < now) {
 				delete this.busWatch[installId];
 			}
 		}
-		const prev = this.core.regionalPrev;
-		if (!prev) {
-			return;
-		}
+		const prev = this.core.regionalPrev ?? {};
+		const keepUntil = this.core.regionalPrevKeepUntil ?? {};
 		const watched = new Set(
 			Object.values(this.busWatch).flatMap((entry) => entry.routeIds)
 		);
 		for (const routeKey of Object.keys(prev)) {
-			if (!watched.has(routeKey)) {
+			if (!watched.has(routeKey) && (keepUntil[routeKey] ?? 0) < now) {
 				delete prev[routeKey];
+			}
+		}
+		// 다시 보거나, 기한이 지났거나, 기록이 없어진 노선의 표시는 지운다.
+		for (const [routeKey, at] of Object.entries(keepUntil)) {
+			if (watched.has(routeKey) || at < now || !prev[routeKey]) {
+				delete keepUntil[routeKey];
 			}
 		}
 	}

@@ -1364,6 +1364,77 @@ describe("CollectorCore regional bus watches", () => {
 		expect(after).toEqual([]);
 	});
 
+	for (const [label, leaving] of [
+		["빈 목록", [] as string[]],
+		["다른 노선", [ROUTE_6411]],
+	] as const) {
+		it(`지도를 잠깐 떠나며 ${label}을 보내고 원래 TTL 안에 돌아오면 멈춘 GBIS 차량이 다시 나오지 않는다`, async () => {
+			const first = regionalHarness();
+			const TTL = 90 * SECOND;
+			await first.core.watchBusRoutes("install-1", [GBIS_6411], T0 + TTL);
+			await first.core.tick();
+			// 하트비트로 감시를 늘리며 4분 동안 같은 순번을 본다.
+			first.clock.now = T0 + 4 * MINUTE;
+			await first.core.watchBusRoutes(
+				"install-1",
+				[GBIS_6411],
+				first.clock.now + TTL
+			);
+			await first.core.tick();
+			// 탭을 옮기거나 07을 열어 지도가 이 노선을 내려놓는다.
+			first.clock.now = T0 + 4 * MINUTE + 10 * SECOND;
+			await first.core.watchBusRoutes(
+				"install-1",
+				leaving,
+				first.clock.now + TTL
+			);
+			// DO가 잠들었다 깨어나고, 보지 않는 동안에도 tick은 돈다.
+			const second = regionalHarness({
+				clock: first.clock,
+				state: first.state,
+			});
+			second.clock.now = T0 + 4 * MINUTE + 30 * SECOND;
+			await second.core.tick();
+			// 원래 TTL(4분 + 90초) 안에 지도로 돌아오고, 다음 GBIS 호출 때까지 하트비트로 감시를 늘린다.
+			second.calls.splice(0);
+			for (const minute of [5, 6, 7]) {
+				second.clock.now = T0 + minute * MINUTE;
+				// biome-ignore lint/performance/noAwaitInLoops: 하트비트는 시각 순서대로 보낸다.
+				await second.core.watchBusRoutes(
+					"install-1",
+					[GBIS_6411],
+					second.clock.now + TTL
+				);
+			}
+			second.clock.now = T0 + 8 * MINUTE;
+			await second.core.tick();
+			expect(callsTo(second, GBIS_URL).length).toBeGreaterThan(0);
+			const after = (await busSnapshot(second)).vehicles.filter(
+				(vehicle) => vehicle.routeId === GBIS_6411
+			);
+			expect(after).toEqual([]);
+		});
+	}
+
+	it("내려놓은 지역 노선의 멈춤 판단 기록은 원래 TTL이 지나면 지운다", async () => {
+		const h = regionalHarness();
+		await h.core.watchBusRoutes("install-1", [GBIS_6411], T0 + 90 * SECOND);
+		await h.core.tick();
+		await h.core.watchBusRoutes("install-1", [], T0 + 90 * SECOND);
+		const savedCore = () =>
+			JSON.parse(h.state.kv.get(STATE_KEYS.core) ?? "{}") as {
+				regionalPrev?: Record<string, unknown>;
+				regionalPrevKeepUntil?: Record<string, number>;
+			};
+		h.clock.now = T0 + 60 * SECOND;
+		await h.core.tick();
+		expect(Object.keys(savedCore().regionalPrev ?? {})).toEqual([GBIS_6411]);
+		h.clock.now = T0 + 91 * SECOND;
+		await h.core.tick();
+		expect(savedCore().regionalPrev ?? {}).toEqual({});
+		expect(savedCore().regionalPrevKeepUntil ?? {}).toEqual({});
+	});
+
 	it("숫자가 아닌 tago 키도 감시를 받는다", async () => {
 		const h = regionalHarness();
 		await h.core.watchBusRoutes("install-1", [TAGO_82], T0 + MINUTE);

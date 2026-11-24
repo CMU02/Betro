@@ -189,9 +189,13 @@ export class CollectorCore {
 			);
 		}
 		const state = await this.#state();
-		state.watchBusRoutes(installId, unique, until);
+		const kept = state.watchBusRoutes(installId, unique, until);
 		state.expireBusWatches(clock());
 		await state.saveBusWatch(this.#ports.state);
+		// 내려놓은 노선의 기록을 남기기로 했으면 다음 tick 전에 DO가 잠들어도 잃지 않게 바로 저장한다.
+		if (kept) {
+			await state.saveCore(this.#ports.state);
+		}
 	}
 
 	/** 등록한 역 중 행을 받은 역의 최근 행. 받지 못한 역은 키가 없다. */
