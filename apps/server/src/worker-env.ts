@@ -69,6 +69,8 @@ export interface Env {
 	PRIVACY_CONTACT?: string;
 	/** `send`면 APNs·FCM에 보내고, `log`(기본)면 로그만 남긴다. */
 	PUSH_MODE?: string;
+	/** 지역(GBIS·TAGO) 위치 목록 호출 간격 상한(ms). 기본 240000. 차량 TTL(300000)보다 작게 둔다. */
+	REGIONAL_MAX_INTERVAL_MS?: string;
 	/** 서울 열린데이터광장 키(지하철, secret). */
 	SEOUL_OPEN_API_KEY?: string;
 	STATUS_HOST: string;

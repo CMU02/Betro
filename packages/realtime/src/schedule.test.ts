@@ -47,6 +47,7 @@ describe("config", () => {
 			mode: "dev",
 			operatingEnd: "01:00",
 			operatingStart: "05:00",
+			regionalMaxIntervalMs: 240_000,
 			subwayLines: [],
 			subwayMinIntervalMs: 80_000,
 		});
@@ -325,6 +326,42 @@ describe("regional bus routes", () => {
 		expect(interval("gbis-position", now, budget, config, [GBIS])).toBe(
 			(12 * HOUR_MS) / 300
 		);
+	});
+
+	it("GBIS 노선 두 개를 보고 예산이 300건이어도 간격은 240초를 넘지 않는다", () => {
+		const now = at("2026-11-04 12:00:00");
+		const budget = emptyBudget(now);
+		const config = devConfig({});
+		const two = [GBIS, "gbis:200000001"];
+		// 상한이 없으면 12시간 * 2 / 300 = 288초다.
+		expect(interval("gbis-position", now, budget, config, two)).toBe(240_000);
+		expect(
+			interval("tago-position", now, budget, config, [TAGO])
+		).toBeLessThanOrEqual(240_000);
+	});
+
+	it("하한이 상한보다 크면 하한을 쓴다", () => {
+		const now = at("2026-11-04 12:00:00");
+		const budget = emptyBudget(now);
+		const config = { ...devConfig({}), regionalMaxIntervalMs: 100_000 };
+		expect(interval("gbis-position", now, budget, config, [GBIS])).toBe(
+			160_000
+		);
+	});
+
+	it("서울 버스 간격은 바뀌지 않는다", () => {
+		const now = at("2026-11-04 12:00:00");
+		const budget = emptyBudget(now);
+		const config = { ...devConfig({}), regionalMaxIntervalMs: 160_000 };
+		// 900건을 12시간에 펴면 2노선 합쳐 96초지만 하한 160초가 이긴다. 상한 설정과 무관하다.
+		expect(interval("bus", now, budget, config)).toBe(
+			interval("bus", now, budget, devConfig({}))
+		);
+		const slow = {
+			...config,
+			dailyBudget: { ...config.dailyBudget, bus: 100 },
+		};
+		expect(interval("bus", now, budget, slow)).toBe((12 * HOUR_MS * 2) / 100);
 	});
 
 	it("GBIS 예산이 바닥나도 서울 버스와 TAGO는 계획된다", () => {

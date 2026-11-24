@@ -13,6 +13,7 @@ import { collectorClient } from "./collector/client";
 import { D1Timetable, runnerConfig } from "./commute/cf-ports";
 import { commuteClient } from "./commute/client";
 import { refreshHolidaysIfDue } from "./commute/holidays";
+import { prunePushTokens, shouldPrune } from "./commute/push-token-prune";
 import { commuteReportDate } from "./commute/runner-core";
 import type { Env } from "./worker-env";
 
@@ -56,6 +57,15 @@ function getApp(env: Env): Hono {
 	return cachedApp;
 }
 
+/** 하루 한 번만 묵은 푸시 토큰을 지운다. 로그에는 지운 수만 남긴다. */
+async function pruneTokensIfDue(env: Env, now: number): Promise<void> {
+	if (!shouldPrune(now, DEFAULT_TIMEZONE)) {
+		return;
+	}
+	const count = await prunePushTokens(createD1Db(env.DB), now);
+	console.log(`push token prune: ${count}`);
+}
+
 export default {
 	fetch(
 		request: Request,
@@ -68,7 +78,8 @@ export default {
 	 * cron(5분마다): 수집기 상태를 보고 알림을 판단한다. 시작한 수집기의 멈춘 alarm도 다시 건다.
 	 * 출퇴근 실행기는 alarm이 없으면 건다(처음 배포 뒤 첫 alarm도 여기서 건다). 공휴일은
 	 * 마지막 성공에서 24시간이 지났을 때만 받는다. 출퇴근 일일 보고서는 서비스일 다음 날 04:00부터
-	 * 그날 것을 한 번 쓴다(실행기가 쓴 날짜를 기억한다). 하나가 실패해도 나머지는 돈다.
+	 * 그날 것을 한 번 쓴다(실행기가 쓴 날짜를 기억한다). 묵은 푸시 토큰은 하루 한 번(04:00~04:05)
+	 * 지운다. 하나가 실패해도 나머지는 돈다.
 	 */
 	async scheduled(
 		_controller: ScheduledController,
@@ -88,6 +99,7 @@ export default {
 				timezone: DEFAULT_TIMEZONE,
 				upstream: upstreamFor(env),
 			}),
+			pruneTokensIfDue(env, Date.now()),
 		]);
 		for (const result of results) {
 			if (result.status === "rejected") {

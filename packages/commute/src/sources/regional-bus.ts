@@ -126,12 +126,26 @@ function gatewayFailure(json: unknown): RegionalFail | null {
 const num = z.coerce.number();
 const text = z.coerce.string();
 
+/** 결과 코드용: 숫자이거나 숫자 문자열일 때만 숫자로 읽는다(빈 문자열·null은 null). 수집기 `num()`과 같은 규칙이다. */
+function codeNumber(v: unknown): number | null {
+	const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v;
+	return typeof n === "number" && Number.isFinite(n) ? n : null;
+}
+
+/** 결과 코드용: 비지 않은 문자열이거나 숫자일 때만 문자열로 읽는다. 수집기 `str()`과 같은 규칙이다. */
+function codeText(v: unknown): string | null {
+	if (typeof v === "string" && v !== "") {
+		return v;
+	}
+	return typeof v === "number" ? String(v) : null;
+}
+
 // ---- GBIS ----
 
 const gbisEnvelope = z.object({
 	response: z.object({
 		msgBody: z.record(z.string(), z.unknown()).nullish(),
-		msgHeader: z.object({ resultCode: num }),
+		msgHeader: z.object({ resultCode: z.unknown() }),
 	}),
 });
 
@@ -146,12 +160,13 @@ function gbisBody(
 	if (!parsed.success) {
 		return fail("malformed");
 	}
-	const { resultCode } = parsed.data.response.msgHeader;
+	const resultCode = codeNumber(parsed.data.response.msgHeader.resultCode);
 	if (resultCode === GBIS_NO_DATA_CODE) {
 		return fail("no-data");
 	}
+	// 0과 4가 아닌 숫자 코드는 일시 오류이고, 숫자가 아니면 모양이 다른 응답이다.
 	if (resultCode !== GBIS_OK_CODE) {
-		return fail("malformed");
+		return fail(resultCode === null ? "malformed" : "temporary");
 	}
 	return { ok: true, value: parsed.data.response.msgBody ?? null };
 }
@@ -266,7 +281,7 @@ const tagoEnvelope = z.object({
 		body: z
 			.object({ items: z.union([z.string(), z.object({}).passthrough()]) })
 			.nullish(),
-		header: z.object({ resultCode: text }),
+		header: z.object({ resultCode: z.unknown() }),
 	}),
 });
 
@@ -280,11 +295,13 @@ function tagoItems(json: unknown): RegionalResult<unknown[]> {
 		return fail("malformed");
 	}
 	const { header, body } = parsed.data.response;
-	if (header.resultCode === TAGO_NO_DATA_CODE) {
+	const resultCode = codeText(header.resultCode);
+	if (resultCode === TAGO_NO_DATA_CODE) {
 		return fail("no-data");
 	}
-	if (header.resultCode !== TAGO_OK_CODE) {
-		return fail("malformed");
+	// "00"·"03"이 아닌 코드는 일시 오류이고, 코드가 없으면 모양이 다른 응답이다.
+	if (resultCode !== TAGO_OK_CODE) {
+		return fail(resultCode === null ? "malformed" : "temporary");
 	}
 	const items = body?.items;
 	if (items === undefined || typeof items === "string") {
