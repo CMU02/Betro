@@ -1,9 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import type { StationView } from "./detail-client";
+import { LIVE_STALE_AFTER_MS } from "./live-stale";
+import { stationModel } from "./station-model";
 import {
 	settleStationView,
 	stationPollInterval,
 	stationPollOptions,
+	stationViewAt,
 	stationViewPhase,
 } from "./station-view-poll";
 
@@ -60,5 +63,72 @@ describe("stationPollOptions", () => {
 			enabled: true,
 			refetchInterval: 15_000,
 		});
+	});
+});
+
+describe("stationViewAt", () => {
+	const NOW = Date.UTC(2026, 10, 24, 0, 0);
+	const MIN = 60_000;
+	const LIVE_VIEW: StationView = {
+		generatedAt: NOW,
+		stations: [
+			{
+				directions: [
+					{
+						approaching: [
+							{
+								etaAt: NOW + 3 * MIN,
+								method: null,
+								stopsAway: 2,
+								vehicleId: "2042",
+							},
+							{
+								etaAt: NOW + 9 * MIN,
+								method: null,
+								stopsAway: 5,
+								vehicleId: "2044",
+							},
+						],
+						direction: "up",
+						etaState: "live",
+						firstAt: null,
+						headwayMs: null,
+						lastAt: null,
+					},
+				],
+				line: "seoul-subway:line2",
+				stop: "seoul-subway:s2",
+			},
+		],
+		timezone: "Asia/Seoul",
+	};
+	const LIVE = { ok: true, value: LIVE_VIEW } as const;
+
+	it("받은 적이 없거나 실패만 받았으면 null이다", () => {
+		expect(stationViewAt(undefined, NOW)).toBeNull();
+		expect(
+			stationViewAt(settleStationView(undefined, BAD, NOW), NOW)
+		).toBeNull();
+	});
+
+	it("받은 지 묵음 기준 안이면 받은 도착판을 그대로 낸다", () => {
+		const snapshot = settleStationView(undefined, LIVE, NOW);
+		expect(stationViewAt(snapshot, NOW + LIVE_STALE_AFTER_MS)).toBe(LIVE_VIEW);
+	});
+
+	// 서버 401·503이 10분 이어져도 마지막 도착판이 남는다. 이미 떠난 열차를 실시간으로 그리지 않는다.
+	it("폴링이 묵음 기준보다 오래 실패하면 추정으로 내리고 이미 지난 도착은 뺀다", () => {
+		let snapshot = settleStationView(undefined, LIVE, NOW);
+		snapshot = settleStationView(snapshot, BAD, NOW + 5 * MIN);
+		const now = NOW + 5 * MIN;
+		const stale = stationViewAt(snapshot, now);
+		const direction = stale?.stations[0]?.directions[0];
+		expect(direction?.etaState).toBe("estimated");
+		expect(direction?.approaching.map((entry) => entry.vehicleId)).toEqual([
+			"2044",
+		]);
+		const rows = stationModel(stale as StationView, {}, now)[0]?.directions[0]
+			?.rows;
+		expect(rows?.map((row) => row.status.kind)).toEqual(["estimated"]);
 	});
 });

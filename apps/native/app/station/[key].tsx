@@ -31,8 +31,10 @@ import {
 	type StationViewSnapshot,
 	settleStationView,
 	stationPollInterval,
+	stationViewAt,
 	stationViewPhase,
 } from "@/lib/detail/station-view-poll";
+import { useNowMs } from "@/lib/detail/use-now-ms";
 import { useScreenVisible } from "@/lib/detail/use-screen-visible";
 import { appFavorites } from "@/lib/favorites/app-favorites";
 import { favoriteId } from "@/lib/favorites/favorites";
@@ -258,22 +260,24 @@ function StationBody({
 	onRetry,
 	station,
 	viewQuery,
+	visible,
 }: {
 	lines: string[];
 	onOpenTrain: (trainNo: string, line: string) => void;
 	onRetry: () => void;
 	station: SearchStation;
 	viewQuery: { data?: StationViewSnapshot };
+	visible: boolean;
 }) {
 	const [picked, setPicked] = useState<string | null>(null);
 	const maps = useLineMaps(lines);
 	const phase = stationViewPhase(viewQuery.data);
-	const view = viewQuery.data?.result.ok ? viewQuery.data.result.value : null;
-	// 응답을 받은 시각을 지금으로 쓴다. 폴링이 실패하면 마지막 응답과 그 시각을 그대로 둔다.
-	const receivedAt = viewQuery.data?.receivedAt ?? 0;
+	// 도착은 1초마다 다시 센다. 폴링이 오래 실패하면 마지막 도착판을 추정으로 내리고 지난 열차는 뺀다.
+	const now = useNowMs(visible);
+	const view = stationViewAt(viewQuery.data, now);
 	const models = useMemo(
-		() => (view === null ? [] : stationModel(view, maps, receivedAt)),
-		[view, maps, receivedAt]
+		() => (view === null ? [] : stationModel(view, maps, now)),
+		[view, maps, now]
 	);
 	const selectedLine =
 		picked !== null && lines.includes(picked) ? picked : (lines[0] ?? "");
@@ -430,6 +434,7 @@ export default function StationDetailScreen() {
 						onRetry={retry}
 						station={station}
 						viewQuery={viewQuery}
+						visible={visible}
 					/>
 				)}
 			</ScrollView>

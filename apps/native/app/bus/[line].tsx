@@ -37,13 +37,16 @@ import {
 	lineVehicles,
 } from "@/lib/detail/bus-route-model";
 import {
+	type BusRouteViewSnapshot,
 	busRouteUnavailable,
+	busRouteViewAt,
 	settleBusRouteView,
 } from "@/lib/detail/bus-route-view-poll";
 import {
 	type BusRouteViewResponse,
 	fetchBusRouteView,
 } from "@/lib/detail/detail-client";
+import { useNowMs } from "@/lib/detail/use-now-ms";
 import { useScreenVisible } from "@/lib/detail/use-screen-visible";
 import { appFavorites } from "@/lib/favorites/app-favorites";
 import { favoriteId } from "@/lib/favorites/favorites";
@@ -132,17 +135,16 @@ function useBusSnapshot(visible: boolean): BusSnapshot | null {
 	return query.data ?? null;
 }
 
-/** 서버가 모르는 노선(경기·인천 포함)이면 invalid다. 폴링 실패는 마지막 값을 둔다. */
+/** 서버가 모르는 노선(경기·인천 포함)이면 invalid다. 폴링 실패는 마지막 값과 받은 시각을 둔다. */
 function useRouteView(line: string, visible: boolean) {
 	const queryClient = useQueryClient();
 	const queryKey = ["bus-detail", "view", line];
 	return useQuery({
 		queryFn: async () =>
 			settleBusRouteView(
-				queryClient.getQueryData<Awaited<ReturnType<typeof fetchBusRouteView>>>(
-					queryKey
-				),
-				await fetchBusRouteView(serverClient, line)
+				queryClient.getQueryData<BusRouteViewSnapshot>(queryKey),
+				await fetchBusRouteView(serverClient, line),
+				Date.now()
 			),
 		queryKey,
 		refetchInterval: visible ? VIEW_POLL_MS : false,
@@ -489,8 +491,10 @@ export default function BusRouteDetailScreen() {
 		queryKey: ["map", "ref", `bus:${line}`],
 		staleTime: MAP_REF_STALE_MS,
 	});
-	const viewResult = viewQuery.data;
-	const view = viewResult?.ok ? viewResult.value : null;
+	// 도착은 1초마다 다시 센다. 폴링이 오래 실패하면 마지막 응답을 추정으로 내린다.
+	const now = useNowMs(visible);
+	const viewSnapshot = viewQuery.data;
+	const view = busRouteViewAt(viewSnapshot, now);
 	const map = mapQuery.data ?? null;
 	const snapshotVehicles = snapshot?.vehicles ?? NO_VEHICLES;
 	// 스냅샷은 모든 노선의 차량이라 이 노선 차량만 지도와 모델에 쓴다.
@@ -511,14 +515,22 @@ export default function BusRouteDetailScreen() {
 				? null
 				: busRouteModel({
 						map,
-						now: Date.now(),
+						now,
 						selectedDirection,
 						selectedSeq,
 						selectedVehicleId,
 						vehicles,
 						view,
 					}),
-		[map, selectedDirection, selectedSeq, selectedVehicleId, vehicles, view]
+		[
+			map,
+			now,
+			selectedDirection,
+			selectedSeq,
+			selectedVehicleId,
+			vehicles,
+			view,
+		]
 	);
 	const markers = useMarkers(map, vehicles, color);
 	const running = model === null ? 0 : markers.length;
@@ -532,7 +544,7 @@ export default function BusRouteDetailScreen() {
 		setSelectedVehicleId((current) => (current === key ? null : key));
 	}, []);
 	// 서버가 모르는 노선(경기·인천 면허 포함)은 400(invalid)일 때만 찾을 수 없음이다. 오프라인·503은 화면을 지우지 않는다.
-	const notFound = busRouteUnavailable(viewResult);
+	const notFound = busRouteUnavailable(viewSnapshot);
 	const title =
 		route === null ? "" : t("busDetail.title", { shortName: route.shortName });
 	return (

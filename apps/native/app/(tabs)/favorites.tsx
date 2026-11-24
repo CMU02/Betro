@@ -31,8 +31,10 @@ import {
 	type StationViewSnapshot,
 	settleStationView,
 	stationPollOptions,
+	stationViewAt,
 } from "@/lib/detail/station-view-poll";
 import { stopModel } from "@/lib/detail/stop-model";
+import { useNowMs } from "@/lib/detail/use-now-ms";
 import { useScreenVisible } from "@/lib/detail/use-screen-visible";
 import { appFavorites } from "@/lib/favorites/app-favorites";
 import type { Favorite } from "@/lib/favorites/favorites";
@@ -124,8 +126,9 @@ function useLineMaps(lines: string[]): Record<string, SubwayMap> {
 /** 보이는 역 즐겨찾기의 도착판. 구성 역을 6개씩 나눠 15초마다 묻는다. */
 function useStationViews(
 	list: readonly Favorite[],
-	visible: boolean
-): { receivedAt: number; view: ReturnType<typeof mergeStationViews> } {
+	visible: boolean,
+	now: number
+): ReturnType<typeof mergeStationViews> {
 	const queryClient = useQueryClient();
 	const batches = useMemo(() => stationViewBatches(list), [list]);
 	const queries = useQueries({
@@ -148,18 +151,18 @@ function useStationViews(
 	});
 	const snapshots = queries.map((query) => query.data);
 	const signature = queries.map((query) => query.dataUpdatedAt).join(",");
-	// biome-ignore lint/correctness/useExhaustiveDependencies: 응답이 바뀔 때만(dataUpdatedAt) 다시 합친다.
+	// 묵음은 묶음마다 따로 본다. 한 묶음이 잘 받아도 실패가 이어지는 다른 묶음을 실시간으로 두지 않는다.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 응답이 바뀌거나(dataUpdatedAt) 시각이 지날 때만 다시 합친다.
 	return useMemo(() => {
 		const views: StationView[] = [];
-		let receivedAt = 0;
 		for (const snapshot of snapshots) {
-			if (snapshot?.result.ok) {
-				views.push(snapshot.result.value);
-				receivedAt = Math.max(receivedAt, snapshot.receivedAt);
+			const view = stationViewAt(snapshot, now);
+			if (view !== null) {
+				views.push(view);
 			}
 		}
-		return { receivedAt, view: mergeStationViews(views) };
-	}, [signature]);
+		return mergeStationViews(views);
+	}, [signature, now]);
 }
 
 interface CardCallbacks {
@@ -223,25 +226,21 @@ const StationCard = memo(function StationCardView({
 	callbacks,
 	favorite,
 	maps,
-	receivedAt,
+	now,
 	view,
 }: {
 	callbacks: CardCallbacks;
 	favorite: Extract<Favorite, { kind: "station" }>;
 	maps: Record<string, SubwayMap>;
-	receivedAt: number;
+	now: number;
 	view: ReturnType<typeof mergeStationViews>;
 }) {
 	const models = useMemo(
 		() =>
 			view === null
 				? []
-				: stationModel(
-						viewForMembers(view, favorite.members),
-						maps,
-						receivedAt
-					),
-		[view, favorite.members, maps, receivedAt]
+				: stationModel(viewForMembers(view, favorite.members), maps, now),
+		[view, favorite.members, maps, now]
 	);
 	const lines = [...new Set(favorite.members.map((member) => member.line))];
 	return (
@@ -437,7 +436,9 @@ export default function FavoritesTab() {
 
 	const lines = useMemo(() => uniqueLines(shown), [shown]);
 	const maps = useLineMaps(lines);
-	const { receivedAt, view } = useStationViews(shown, visible);
+	// 도착은 1초마다 다시 센다. 폴링이 오래 실패한 묶음은 추정으로 내린다.
+	const now = useNowMs(visible);
+	const view = useStationViews(shown, visible, now);
 
 	const stops = useMemo(
 		() =>
@@ -510,7 +511,7 @@ export default function FavoritesTab() {
 										favorite={favorite}
 										key={favorite.id}
 										maps={maps}
-										receivedAt={receivedAt}
+										now={now}
 										view={view}
 									/>
 								);

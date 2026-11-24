@@ -1,6 +1,7 @@
 import type { RefResult } from "@/lib/ref/ref-client";
 
 import type { StationView } from "./detail-client";
+import { isLiveStale } from "./live-stale";
 
 /** 받은 도착판과 받은 시각. 시각은 도착 추정의 기준이라 실패한 폴링이 덮어쓰지 않는다. */
 export interface StationViewSnapshot {
@@ -21,6 +22,36 @@ export function settleStationView(
 		return previous;
 	}
 	return { receivedAt: now, result: next };
+}
+
+/**
+ * 지금 그릴 도착판. 받은 적이 없으면 null이다. 폴링이 실패해 마지막 응답이 묵음 기준보다 오래됐으면
+ * 모든 방향을 추정으로 내리고, 도착 시각이 이미 지난 열차는 뺀다(떠난 열차를 '약 1분'으로 두지 않는다).
+ */
+export function stationViewAt(
+	snapshot: StationViewSnapshot | undefined,
+	now: number
+): StationView | null {
+	if (!snapshot?.result.ok) {
+		return null;
+	}
+	const view = snapshot.result.value;
+	if (!isLiveStale(snapshot.receivedAt, now)) {
+		return view;
+	}
+	return {
+		...view,
+		stations: view.stations.map((entry) => ({
+			...entry,
+			directions: entry.directions.map((direction) => ({
+				...direction,
+				approaching: direction.approaching.filter(
+					(arrival) => arrival.etaAt === null || arrival.etaAt > now
+				),
+				etaState: "estimated",
+			})),
+		})),
+	};
 }
 
 /** 화면이 보이는 동안만 다시 받는다. 가려지면 폴링을 멈춘다. */
