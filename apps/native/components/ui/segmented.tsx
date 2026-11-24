@@ -3,6 +3,15 @@ import { useCallback } from "react";
 import { Pressable, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
+import {
+	SEGMENT_BASE_CLASS,
+	SEGMENT_IDLE_LABEL_CLASS,
+	SEGMENT_LABEL_VARIANT,
+	SEGMENT_SELECTED_CLASS,
+	SEGMENT_SELECTED_LABEL_CLASS,
+	SEGMENTED_CLASS,
+} from "@/components/ui/segmented-style";
+import { ELEVATION } from "@/theme/tokens";
 
 export interface SegmentedOption {
 	key: string;
@@ -10,33 +19,42 @@ export interface SegmentedOption {
 }
 
 export interface SegmentedProps {
+	accessibilityLabel?: string;
 	onChange: (key: string) => void;
 	options: readonly SegmentedOption[];
+	/** 탭이면 `tab`, 설정처럼 단일 선택 묶음이면 `radio`. */
+	role?: "radio" | "tab";
 	value: string;
 }
 
 interface SegmentProps {
 	onChange: (key: string) => void;
 	option: SegmentedOption;
+	role: "radio" | "tab";
 	selected: boolean;
 }
 
-function Segment({ onChange, option, selected }: SegmentProps) {
+/** 고른 칸은 `Elevation/1 Floating` 그림자로 떠 있다. */
+const SELECTED_SEGMENT_STYLE = { boxShadow: ELEVATION.floating } as const;
+
+function Segment({ onChange, option, role, selected }: SegmentProps) {
 	const press = useCallback(() => onChange(option.key), [onChange, option.key]);
 	return (
 		<Pressable
-			accessibilityRole="tab"
-			accessibilityState={{ selected }}
-			className={cn(
-				"flex-1 items-center justify-center rounded-full",
-				selected ? "bg-bg-inverse" : "active:bg-bg-hover"
-			)}
+			accessibilityRole={role}
+			accessibilityState={
+				role === "radio" ? { checked: selected } : { selected }
+			}
+			className={cn(SEGMENT_BASE_CLASS, selected && SEGMENT_SELECTED_CLASS)}
 			onPress={press}
+			style={selected ? SELECTED_SEGMENT_STYLE : undefined}
 		>
 			<AppText
-				className={selected ? "text-text-inverse" : "text-text-secondary"}
+				className={
+					selected ? SEGMENT_SELECTED_LABEL_CLASS : SEGMENT_IDLE_LABEL_CLASS
+				}
 				numberOfLines={1}
-				variant="labelM"
+				variant={SEGMENT_LABEL_VARIANT}
 			>
 				{option.label}
 			</AppText>
@@ -44,18 +62,26 @@ function Segment({ onChange, option, selected }: SegmentProps) {
 	);
 }
 
-/** Figma `Segmented`. 같은 폭으로 나눈 알약 안에서 하나를 고른다. 고른 칸은 `bg/inverse`. */
-export function Segmented({ onChange, options, value }: SegmentedProps) {
+/** Figma `Segmented`. 같은 폭으로 나눈 칸 중 하나를 고른다. */
+export function Segmented({
+	accessibilityLabel,
+	onChange,
+	options,
+	role = "tab",
+	value,
+}: SegmentedProps) {
 	return (
 		<View
-			accessibilityRole="tablist"
-			className="h-10 flex-row rounded-full bg-bg-control p-1"
+			accessibilityLabel={accessibilityLabel}
+			accessibilityRole={role === "radio" ? "radiogroup" : "tablist"}
+			className={SEGMENTED_CLASS}
 		>
 			{options.map((option) => (
 				<Segment
 					key={option.key}
 					onChange={onChange}
 					option={option}
+					role={role}
 					selected={option.key === value}
 				/>
 			))}

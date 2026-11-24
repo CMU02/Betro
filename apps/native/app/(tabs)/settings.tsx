@@ -1,6 +1,5 @@
 import { nativeApplicationVersion } from "expo-application";
 import { useRouter } from "expo-router";
-import { cn } from "heroui-native";
 import {
 	BellIcon,
 	BoxIcon,
@@ -14,7 +13,7 @@ import {
 	ZapIcon,
 } from "lucide-react-native";
 import { useCallback, useMemo } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, View } from "react-native";
 import { withUniwind } from "uniwind";
 
 import { LineBadge } from "@/components/transit/line-badge";
@@ -22,6 +21,7 @@ import { AppText } from "@/components/ui/app-text";
 import { ListDivider, ListRow } from "@/components/ui/list-row";
 import { Screen } from "@/components/ui/screen";
 import { Section } from "@/components/ui/section";
+import { Segmented } from "@/components/ui/segmented";
 import { useAppTheme } from "@/contexts/app-theme-context";
 import { showLockSamples } from "@/lib/commute/lock-sample-presenter";
 import {
@@ -37,7 +37,6 @@ import { appPlaces } from "@/lib/places/app-places";
 import { usePlaces } from "@/lib/places/use-places";
 import type { ThemePreference } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
-import { ELEVATION } from "@/theme/tokens";
 
 const MoonTileIcon = withUniwind(MoonIcon);
 const MapTileIcon = withUniwind(MapIcon);
@@ -56,49 +55,21 @@ const THEME_OPTIONS: { labelKey: MessageKey; mode: ThemePreference }[] = [
 	{ labelKey: "settings.theme.system", mode: "system" },
 ];
 
-/** Figma `Segmented`의 선택된 칸은 `Elevation/1 Floating` 그림자로 떠 있다. */
-const SELECTED_SEGMENT_STYLE = { boxShadow: ELEVATION.floating } as const;
-
 const MAP_QUALITY_LABEL_KEY = {
 	high3d: "settings.mapQuality.high3d",
 	standard: "settings.mapQuality.standard",
 } as const satisfies Record<string, MessageKey>;
 
-function ThemeOption({
-	label,
-	mode,
-	onSelect,
-	selected,
-}: {
-	label: string;
-	mode: ThemePreference;
-	onSelect: (mode: ThemePreference) => void;
-	selected: boolean;
-}) {
-	const handlePress = useCallback(() => onSelect(mode), [mode, onSelect]);
-	return (
-		<Pressable
-			accessibilityRole="radio"
-			accessibilityState={{ checked: selected }}
-			className={cn(
-				"h-full flex-1 items-center justify-center rounded-sm",
-				selected && "bg-bg-surface-raised"
-			)}
-			onPress={handlePress}
-			style={selected ? SELECTED_SEGMENT_STYLE : undefined}
-		>
-			<AppText
-				className={selected ? "text-text-primary" : "text-text-secondary"}
-				variant="labelS"
-			>
-				{label}
-			</AppText>
-		</Pressable>
-	);
-}
-
 function ThemeRow() {
 	const { setThemeMode, themeMode } = useAppTheme();
+	const themeSegments = THEME_OPTIONS.map((option) => ({
+		key: option.mode,
+		label: t(option.labelKey),
+	}));
+	const handleThemeChange = useCallback(
+		(key: string) => setThemeMode(key as ThemePreference),
+		[setThemeMode]
+	);
 	return (
 		<View className="gap-3 px-4 pt-3 pb-4">
 			<View className="flex-row items-center gap-3">
@@ -107,21 +78,13 @@ function ThemeRow() {
 				</View>
 				<AppText variant="bodyMStrong">{t("settings.theme.title")}</AppText>
 			</View>
-			<View
+			<Segmented
 				accessibilityLabel={t("settings.theme.title")}
-				accessibilityRole="radiogroup"
-				className="h-9 flex-row gap-0.5 rounded-md bg-bg-control p-[3px]"
-			>
-				{THEME_OPTIONS.map((option) => (
-					<ThemeOption
-						key={option.mode}
-						label={t(option.labelKey)}
-						mode={option.mode}
-						onSelect={setThemeMode}
-						selected={option.mode === themeMode}
-					/>
-				))}
-			</View>
+				onChange={handleThemeChange}
+				options={themeSegments}
+				role="radio"
+				value={themeMode}
+			/>
 		</View>
 	);
 }
