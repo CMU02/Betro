@@ -658,13 +658,13 @@ git commit -m "feat(commute): prune push tokens of ended sessions and idle insta
 
 Model: sonnet
 
-- [ ] **Step 1: 전체 테스트, 타입, 린트를 돌립니다**
+- [x] **Step 1: 전체 테스트, 타입, 린트를 돌립니다**
 
 Run: 각 패키지에서 `bun test`(`packages/commute`, `packages/realtime`, `packages/transit-static`, `apps/server`(`src`), `apps/native`(`lib`, `components`, `scripts`, `app-config.test.ts`)), 루트 `bun test scripts`, `bun run check-types`, `bunx biome ci --changed --since=origin/develop --no-errors-on-unmatched`.
 Expected: 실패 0, 타입 오류 0, 린트 오류 0.
 
-- [ ] **Step 2: 5-B 계획 Task 11 Step 1의 결과를 그 계획 끝에 적습니다.** Step 2(배포)와 Step 3(기기)은 Task 13으로 옮겼다고 적습니다.
-- [ ] **Step 3: 커밋합니다**
+- [x] **Step 2: 5-B 계획 Task 11 Step 1의 결과를 그 계획 끝에 적습니다.** Step 2(배포)와 Step 3(기기)은 Task 13으로 옮겼다고 적습니다.
+- [x] **Step 3: 커밋합니다**
 
 ```bash
 git add docs/superpowers/plans
