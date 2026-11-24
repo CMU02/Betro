@@ -136,11 +136,14 @@ export class CollectorCore {
 	 * `GET /v1/snapshot/:kind` 본문. 최신 상태와 그날 멈춤(이 종류의 `stoppedToday`, 버스의 지역
 	 * 출처)이 바뀌지 않았으면 같은 본문·ETag. 멈춤은 예산 소진으로도 생기고 다음 KST 날 저절로
 	 * 풀리므로 상태 버전과 따로 캐시 키에 넣는다.
+	 * 예산이 바닥나면 alarm이 다음 날까지 자서 tick의 만료가 돌지 않는다. 그래서 읽을 때도 TTL이
+	 * 지난 차량을 빼고(빠지면 버전이 오른다) 나서 캐시 키를 본다.
 	 */
 	async snapshot(kind: SnapshotKind): Promise<SnapshotResponse> {
 		const state = await this.#state();
 		const { clock, config } = this.#ports;
 		const now = clock();
+		state.expire(now);
 		const version = state.versions[kind];
 		const stoppedSources =
 			kind === "bus" ? state.stoppedSources(config, now) : [];

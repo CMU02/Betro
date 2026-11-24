@@ -11,6 +11,7 @@ import {
 	devConfig,
 	prodConfig,
 } from "@Betro/realtime/schedule";
+import { SUBWAY_TTL_MS } from "@Betro/realtime/state";
 import { describe, expect, it } from "bun:test";
 import { gunzipSync } from "node:zlib";
 import arrivalSample from "../../../../packages/realtime/src/__fixtures__/arrival-all-sample.json";
@@ -827,6 +828,51 @@ describe("CollectorCore", () => {
 		const body = JSON.parse((await h.core.snapshot("subway")).body);
 		expect(body.stoppedToday).toBe(true);
 		expect(body.vehicles.length).toBeGreaterThan(0);
+	});
+
+	// 지하철·버스 예산이 모두 바닥나면 alarm이 다음 KST 날까지 잔다. 그동안 tick이 없어도 TTL이 지난
+	// 열차는 스냅샷에서 빠져야 앱이 시간표 열차를 그린다(스펙 5.8).
+	it("예산이 바닥나 tick이 없어도 TTL이 지난 열차는 지하철 스냅샷에서 빠진다", async () => {
+		const h = makeHarness({
+			config: devConfig({ DAILY_BUDGET_BUS: "2", DAILY_BUDGET_SUBWAY: "1" }),
+		});
+		const { nextAlarmAt } = await h.core.tick();
+		expect(nextAlarmAt).toBeGreaterThan(h.clock.now + SUBWAY_TTL_MS);
+		const stopped = JSON.parse((await h.core.snapshot("subway")).body);
+		expect(stopped.stoppedToday).toBe(true);
+		expect(stopped.vehicles.length).toBeGreaterThan(0);
+		h.clock.now += SUBWAY_TTL_MS + SECOND;
+		const later = JSON.parse((await h.core.snapshot("subway")).body);
+		expect(later.stoppedToday).toBe(true);
+		expect(later.vehicles).toEqual([]);
+		expect(later.generatedAt).toBe(h.clock.now);
+	});
+
+	it("TTL이 지난 뒤 DO가 다시 깨어나도(새 CollectorCore) 지하철 스냅샷에 옛 열차가 없다", async () => {
+		const config = devConfig({
+			DAILY_BUDGET_BUS: "2",
+			DAILY_BUDGET_SUBWAY: "1",
+		});
+		const h = makeHarness({ config });
+		await h.core.tick();
+		h.clock.now += SUBWAY_TTL_MS + SECOND;
+		const woken = makeHarness({
+			blobs: h.blobs,
+			clock: h.clock,
+			config,
+			state: h.state,
+		});
+		const body = JSON.parse((await woken.core.snapshot("subway")).body);
+		expect(body.stoppedToday).toBe(true);
+		expect(body.vehicles).toEqual([]);
+	});
+
+	it("버스가 계속 돌면 지하철 예산이 바닥나도 tick마다 TTL이 지난 열차를 뺀다", async () => {
+		const h = makeHarness({ config: devConfig({ DAILY_BUDGET_SUBWAY: "1" }) });
+		await runTicks(h, Math.ceil(SUBWAY_TTL_MS / STEP) + 1);
+		const body = JSON.parse((await h.core.snapshot("subway")).body);
+		expect(body.stoppedToday).toBe(true);
+		expect(body.vehicles).toEqual([]);
 	});
 
 	it("counts every call when concurrent prod calls straddle a 5-minute bucket", async () => {
