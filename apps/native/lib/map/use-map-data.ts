@@ -13,6 +13,7 @@ import { usePreferences } from "@/lib/preferences/use-preferences";
 import { serverClient } from "@/lib/server/app-server";
 
 import { appMotionMetrics } from "./app-motion-metrics";
+import { appWatchRegistry } from "./app-watch-registry";
 import { legSpanM } from "./leg-span";
 import {
 	allLinesHidden,
@@ -31,7 +32,6 @@ import {
 	fetchSubwayMap,
 	loadCachedRef,
 	postRouteView,
-	postWatch,
 	type RouteView,
 	type SubwayMap,
 	type SubwaySnapshot,
@@ -58,8 +58,8 @@ import { useMapVisible } from "./use-map-visible";
 
 /** 스냅샷 폴링 간격. 서버 `max-age=10`과 맞춘다. */
 export const SNAPSHOT_INTERVAL_MS = 10_000;
-/** 관측 요청 하트비트 간격. 서버 TTL(90초)보다 짧게 둔다. */
-const HEARTBEAT_INTERVAL_MS = 60_000;
+/** 관측 요청 registry에서 지도 화면의 몫. */
+const MAP_WATCH_OWNER = "map";
 /** 경로 보기 간격. */
 const ROUTE_VIEW_INTERVAL_MS = 15_000;
 /** 마커 위치를 다시 계산하는 간격. */
@@ -453,19 +453,23 @@ export function useMapData(
 		return routeView;
 	}, [route, sessionRoute, session, routeView]);
 
-	// 하트비트. 이 경로 버스 노선의 seoul-bus ref만 보낸다. 경기·인천 노선은 보지 않는다.
+	// 관측 요청. 이 경로 버스 노선의 서울·경기·인천 ref(`seoul-bus:`·`gbis:`·`tago:`)를 보낸다.
+	// 보내기와 하트비트는 registry가 맡는다. 지도는 보이는 동안 claim, 가려지면 release만 한다.
 	const watchRefs = useMemo(
 		() => (route === null ? [] : watchRefsOf(route)),
 		[route]
 	);
-	useVisiblePoll(
-		visible && watchRefs.length > 0,
-		`watch:${watchRefs.join(",")}`,
-		HEARTBEAT_INTERVAL_MS,
-		async () => {
-			await postWatch(serverClient, watchRefs);
+	const watchKey = watchRefs.join(",");
+	// biome-ignore lint/correctness/useExhaustiveDependencies: watchRefs는 경로마다 새 배열이라 내용(watchKey)을 키로 쓴다.
+	useEffect(() => {
+		// 경로가 바뀔 때 release 뒤 claim하면 빈 목록이 먼저 나가므로, cleanup에서 release하지 않고 바로 claim으로 바꾼다.
+		if (visible && watchRefs.length > 0) {
+			appWatchRegistry.claim(MAP_WATCH_OWNER, watchRefs);
+		} else {
+			appWatchRegistry.release(MAP_WATCH_OWNER);
 		}
-	);
+	}, [visible, watchKey]);
+	useEffect(() => () => appWatchRegistry.release(MAP_WATCH_OWNER), []);
 
 	const etags = useRef<{ bus: string | null; subway: string | null }>({
 		bus: null,

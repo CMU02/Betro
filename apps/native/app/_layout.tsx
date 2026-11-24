@@ -24,6 +24,7 @@ import {
 } from "@/lib/crash/crash-reporting";
 import { ensureInstallIdentity } from "@/lib/device/app-install-identity";
 import { t } from "@/lib/i18n/t";
+import { useWatchHeartbeat } from "@/lib/map/app-watch-registry";
 import { appReachability } from "@/lib/network/app-reachability";
 import { onReconnect } from "@/lib/network/reachability";
 import { shouldShowOnboarding } from "@/lib/onboarding/onboarding";
@@ -213,6 +214,8 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 }
 
 function Layout() {
+	// 버스 관측 요청의 하트비트는 앱 전체에서 한 번만 돈다. 화면은 claim·release만 한다.
+	useWatchHeartbeat();
 	return (
 		<QueryClientProvider client={queryClient}>
 			<GestureHandlerRootView style={{ flex: 1 }}>
