@@ -205,14 +205,14 @@ describe("fetchSnapshot", () => {
 		expect(calls[0]?.options?.headers).toEqual({ "If-None-Match": '"abc"' });
 	});
 
-	it("sends no header without an etag and parses only the map fields of bus vehicles", async () => {
+	it("sends no header without an etag and parses only the known fields of bus vehicles", async () => {
 		const { client, calls } = fakeClient({
 			etag: '"def"',
 			json: {
 				generatedAt: 1,
 				staleRoutes: {},
 				staleSince: null,
-				vehicles: [{ ...BUS_VEHICLE, plainNo: "ignored" }],
+				vehicles: [{ ...BUS_VEHICLE, extra: 1, plainNo: "ignored" }],
 			},
 			status: 200,
 		});
@@ -221,7 +221,9 @@ describe("fetchSnapshot", () => {
 		expect(result.ok).toBe(true);
 		if (result.ok && result.value !== "not-modified") {
 			expect(result.value.etag).toBe('"def"');
-			expect(result.value.snapshot.vehicles).toEqual([BUS_VEHICLE]);
+			expect(result.value.snapshot.vehicles).toEqual([
+				{ ...BUS_VEHICLE, busType: null, plainNo: "ignored" },
+			]);
 		}
 	});
 
@@ -272,7 +274,9 @@ describe("fetchSnapshot", () => {
 		const result = await fetchSnapshot(client, "subway", null);
 		expect(result.ok).toBe(true);
 		if (result.ok && result.value !== "not-modified") {
-			expect(result.value.snapshot.vehicles).toEqual([train]);
+			expect(result.value.snapshot.vehicles).toEqual([
+				{ ...train, destinationStatnId: null, express: false, tripId: null },
+			]);
 		}
 	});
 
@@ -393,5 +397,70 @@ describe("createMapRefCache", () => {
 		const store = memoryStore();
 		await store.setItem("betro.mapRef.k", "{not json");
 		expect(await createMapRefCache(store).get("k")).toBeNull();
+	});
+});
+
+describe("스냅샷 필드", () => {
+	it("tripId·express가 없는 옛 지하철 스냅샷도 읽고 기본값을 넣는다", async () => {
+		const { client } = fakeClient({
+			etag: '"s1"',
+			json: {
+				generatedAt: 1,
+				staleSince: null,
+				vehicles: [
+					{
+						direction: "up",
+						lastSeenAt: 1,
+						lineKey: "line2",
+						observedAt: 1,
+						rawTrainNo: "2241",
+						stationDistanceM: null,
+						statnId: null,
+						status: null,
+					},
+				],
+			},
+			status: 200,
+		});
+		const result = await fetchSnapshot(client, "subway", null);
+		expect(result.ok).toBe(true);
+		if (result.ok && result.value !== "not-modified") {
+			expect(result.value.snapshot.vehicles[0]).toMatchObject({
+				destinationStatnId: null,
+				express: false,
+				tripId: null,
+			});
+		}
+	});
+
+	it("busType·plainNo가 없는 옛 버스 스냅샷은 null로 읽는다", async () => {
+		const { client } = fakeClient({
+			etag: '"s1"',
+			json: {
+				generatedAt: 1,
+				staleRoutes: {},
+				staleSince: null,
+				vehicles: [
+					{
+						lastSeenAt: 1,
+						lat: 37,
+						lng: 127,
+						observedAt: 1,
+						routeId: "1",
+						sectOrd: 1,
+						vehId: "v",
+					},
+				],
+			},
+			status: 200,
+		});
+		const result = await fetchSnapshot(client, "bus", null);
+		expect(result.ok).toBe(true);
+		if (result.ok && result.value !== "not-modified") {
+			expect(result.value.snapshot.vehicles[0]).toMatchObject({
+				busType: null,
+				plainNo: null,
+			});
+		}
 	});
 });

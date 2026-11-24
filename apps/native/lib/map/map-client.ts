@@ -87,17 +87,24 @@ const routeViewSchema = z.object({
 
 /** 스냅샷 차량 중 지도에 필요한 필드만 읽는다. 나머지 키는 버린다. */
 const busVehicleSchema = z.object({
+	/** 차량 종류(저상 등 서버 값). 이 필드가 없던 옛 스냅샷은 null로 읽는다. */
+	busType: z.string().nullable().default(null),
 	lastSeenAt: z.number(),
 	lat: z.number(),
 	lng: z.number(),
 	observedAt: z.number(),
+	plainNo: z.string().nullable().default(null),
 	routeId: z.string(),
 	sectOrd: z.number(),
 	vehId: z.string(),
 });
 
 const subwayVehicleSchema = z.object({
+	/** 종착역 ID. 옛 스냅샷에는 없다. */
+	destinationStatnId: z.string().nullable().default(null),
 	direction: z.enum(["up", "down"]),
+	/** 급행 여부. 옛 스냅샷에는 없다. */
+	express: z.boolean().default(false),
 	lastSeenAt: z.number(),
 	lineKey: z.string(),
 	observedAt: z.number(),
@@ -105,6 +112,8 @@ const subwayVehicleSchema = z.object({
 	stationDistanceM: z.number().nullable(),
 	statnId: z.string().nullable(),
 	status: z.enum(["approach", "arrive", "depart", "prev-depart"]).nullable(),
+	/** 시간표 열차 ID. 옛 스냅샷에는 없다. */
+	tripId: z.number().nullable().default(null),
 });
 
 const busSnapshotSchema = z.object({
@@ -132,7 +141,7 @@ export type SubwaySnapshotVehicle = z.infer<typeof subwayVehicleSchema>;
 export type BusSnapshot = z.infer<typeof busSnapshotSchema>;
 export type SubwaySnapshot = z.infer<typeof subwaySnapshotSchema>;
 
-function statusFailure(status: number): RefFailure {
+export function statusFailure(status: number): RefFailure {
 	if (status === NETWORK_ERROR_STATUS) {
 		return "offline";
 	}
@@ -146,7 +155,7 @@ function statusFailure(status: number): RefFailure {
 	return "invalid";
 }
 
-function read<S extends z.ZodType>(
+export function read<S extends z.ZodType>(
 	response: ServerResponse,
 	schema: S
 ): RefResult<z.infer<S>> {
@@ -166,7 +175,7 @@ export interface RefMapBody<T> {
 	value: T;
 }
 
-async function fetchRefMap<S extends z.ZodType>(
+export async function fetchRefMap<S extends z.ZodType>(
 	client: ServerClient,
 	path: string,
 	etag: string | null,
