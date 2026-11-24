@@ -2,6 +2,7 @@ import type { Leg } from "@Betro/commute/plan";
 
 import { t } from "@/lib/i18n/t";
 import type { MessageKey, MessageParams } from "@/lib/i18n/translate";
+import { ESTIMATED_METHODS } from "@/lib/transit/eta-status";
 import { isLoopBranch, subwayBranchForLeg } from "./leg-vehicles";
 import type { BusMap, RouteViewLeg, SubwayMap } from "./map-client";
 
@@ -9,11 +10,6 @@ const MS_PER_SEC = 1000;
 const MS_PER_MIN = 60_000;
 /** 서울 버스 관측 간격(최대 약 160초)보다 길게 잡아, 정상 갱신 사이에는 "실시간"으로 둔다. */
 const LIVE_MAX_AGE_SEC = 180;
-const ESTIMATED_METHODS: readonly string[] = [
-	"timetable",
-	"headway",
-	"extrapolated",
-];
 
 export type SheetStopState = "past" | "now" | "next" | "mine";
 

@@ -160,6 +160,14 @@ export const ko = {
 		retry: "다시 시도",
 		title: "화면을 그리지 못했어요",
 	},
+	/** 도착 한 칸의 글자(`lib/transit/eta-status.ts`). 단정하지 않는다. */
+	eta: {
+		arriving: "곧 도착",
+		ended: "운행 종료",
+		headway: "배차 약 {minutes}분",
+		minutes: "{minutes}분",
+		minutesEstimated: "약 {minutes}분",
+	},
 	/** 16 구간 고르기(수단 → 노선 → 승차 → 하차) */
 	legPicker: {
 		addLeg: "이 구간 추가",
