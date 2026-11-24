@@ -205,8 +205,8 @@ export class CollectorState {
 
 	/**
 	 * 설치 하나의 관측 요청을 통째로 바꾼다. 빈 배열이면 그 설치의 요청을 지운다.
-	 * 이번에 빠진 지역 노선의 멈춤 판단 기록은 빠진 요청의 원래 만료 시각까지 남긴다.
-	 * 남길 노선이 새로 생겼으면 true다(호출한 쪽이 core를 저장한다).
+	 * 이번에 빠진 지역 노선의 멈춤 판단 기록은 앞 요청의 만료와 이번 요청의 만료 중 늦은 때까지 남긴다
+	 * (떠난 때부터 TTL 하나). 남길 노선이 새로 생겼으면 true다(호출한 쪽이 core를 저장한다).
 	 */
 	watchBusRoutes(
 		installId: string,
@@ -214,7 +214,7 @@ export class CollectorState {
 		until: number
 	): boolean {
 		const unique = [...new Set(routeIds)];
-		const kept = this.#keepDroppedPrev(this.busWatch[installId], unique);
+		const kept = this.#keepDroppedPrev(this.busWatch[installId], unique, until);
 		if (unique.length === 0) {
 			delete this.busWatch[installId];
 			return kept;
@@ -223,15 +223,17 @@ export class CollectorState {
 		return kept;
 	}
 
-	/** 앞 요청에서 빠진 노선 중 멈춤 판단 기록이 있는 노선을 앞 요청의 만료 시각까지 남긴다. */
+	/** 앞 요청에서 빠진 노선 중 멈춤 판단 기록이 있는 노선을 앞·이번 요청의 만료 중 늦은 때까지 남긴다. */
 	#keepDroppedPrev(
 		previous: BusWatchEntry | undefined,
-		next: readonly string[]
+		next: readonly string[],
+		until: number
 	): boolean {
 		const prev = this.core.regionalPrev;
 		if (!(previous && prev)) {
 			return false;
 		}
+		const keepTo = Math.max(previous.until, until);
 		let kept = false;
 		for (const routeKey of previous.routeIds) {
 			if (next.includes(routeKey) || !prev[routeKey]) {
@@ -239,8 +241,8 @@ export class CollectorState {
 			}
 			this.core.regionalPrevKeepUntil ??= {};
 			const keepUntil = this.core.regionalPrevKeepUntil;
-			if ((keepUntil[routeKey] ?? Number.NEGATIVE_INFINITY) < previous.until) {
-				keepUntil[routeKey] = previous.until;
+			if ((keepUntil[routeKey] ?? Number.NEGATIVE_INFINITY) < keepTo) {
+				keepUntil[routeKey] = keepTo;
 				kept = true;
 			}
 		}

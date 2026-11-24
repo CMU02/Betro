@@ -1416,6 +1416,35 @@ describe("CollectorCore regional bus watches", () => {
 		});
 	}
 
+	it("하트비트 직전에 지도를 떠나도 떠난 때부터 TTL 동안은 멈춘 GBIS 차량이 다시 나오지 않는다", async () => {
+		const h = regionalHarness();
+		const TTL = 90 * SECOND;
+		await h.core.watchBusRoutes("install-1", [GBIS_6411], T0 + TTL);
+		await h.core.tick();
+		h.clock.now = T0 + 4 * MINUTE;
+		await h.core.watchBusRoutes("install-1", [GBIS_6411], h.clock.now + TTL);
+		await h.core.tick();
+		// 마지막 하트비트(4분)의 만료는 5분 30초다. 그 직전인 5분 20초에 떠난다.
+		h.clock.now = T0 + 5 * MINUTE + 20 * SECOND;
+		await h.core.watchBusRoutes("install-1", [], h.clock.now + TTL);
+		// 앞 요청의 만료(5분 30초)는 지났지만 떠난 지 90초는 안 됐다.
+		h.clock.now = T0 + 5 * MINUTE + 40 * SECOND;
+		await h.core.tick();
+		h.calls.splice(0);
+		for (const second of [6 * 60 + 20, 7 * 60 + 20]) {
+			h.clock.now = T0 + second * SECOND;
+			// biome-ignore lint/performance/noAwaitInLoops: 하트비트는 시각 순서대로 보낸다.
+			await h.core.watchBusRoutes("install-1", [GBIS_6411], h.clock.now + TTL);
+		}
+		h.clock.now = T0 + 8 * MINUTE;
+		await h.core.tick();
+		expect(callsTo(h, GBIS_URL).length).toBeGreaterThan(0);
+		const after = (await busSnapshot(h)).vehicles.filter(
+			(vehicle) => vehicle.routeId === GBIS_6411
+		);
+		expect(after).toEqual([]);
+	});
+
 	it("내려놓은 지역 노선의 멈춤 판단 기록은 원래 TTL이 지나면 지운다", async () => {
 		const h = regionalHarness();
 		await h.core.watchBusRoutes("install-1", [GBIS_6411], T0 + 90 * SECOND);
