@@ -140,13 +140,17 @@ describe("app.config.ts 릴리스 설정", () => {
 
 describe("Sentry 업로드 검사", () => {
 	// PROJECT_DIR의 상위에 .env가 없는 빈 폴더에서 돌려 실제 .env를 읽지 않는다.
-	function runXcodeGuard(env: Record<string, string>) {
+	function runXcodeGuard(
+		env: Record<string, string>,
+		shellArgs: string[] = ["sh"]
+	) {
 		const root = mkdtempSync(join(tmpdir(), "betro-sentry-guard-"));
 		const projectDir = join(root, "ios");
 		mkdirSync(projectDir);
 		try {
 			const script = `${sentryGuard.XCODE_ENV_GUARD}\nprintf '%s' "\${SENTRY_DISABLE_AUTO_UPLOAD:-}"`;
-			return spawnSync("sh", ["-c", script], {
+			const [shell = "sh", ...flags] = shellArgs;
+			return spawnSync(shell, [...flags, "-c", script], {
 				encoding: "utf8",
 				env: { PATH: process.env.PATH ?? "", PROJECT_DIR: projectDir, ...env },
 			});
@@ -181,6 +185,25 @@ describe("Sentry 업로드 검사", () => {
 		expect(result.status).toBe(0);
 		expect(result.stdout).toBe("");
 	});
+
+	// Sentry 디버그 심볼 단계는 set -x를 켠 채 .xcode.env를 읽으므로 토큰 값이 빌드 로그에 찍히면 안 된다.
+	it.each([["sh"], ["bash"]])(
+		"%s -x로 돌려도 토큰 값을 로그에 찍지 않는다",
+		(shell) => {
+			const fakeToken = "FAKE_TOKEN_VALUE_123";
+			const result = runXcodeGuard(
+				{
+					EAS_BUILD_PROFILE: "production",
+					...ALL_SENTRY,
+					SENTRY_AUTH_TOKEN: fakeToken,
+				},
+				[shell, "-x"]
+			);
+			expect(result.status).toBe(0);
+			expect(result.stdout).toBe("");
+			expect(result.stderr).not.toContain(fakeToken);
+		}
+	);
 
 	it("Gradle도 production 프로필이면 Sentry 값이 없을 때 GradleException으로 멈춘다", () => {
 		expect(sentryGuard.GRADLE_GUARD).toContain(

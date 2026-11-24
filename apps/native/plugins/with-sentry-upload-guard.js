@@ -17,8 +17,9 @@ const XCODE_ENV_GUARD = `
 # ${MARKER}: SENTRY_AUTH_TOKEN·SENTRY_ORG·SENTRY_PROJECT 중 하나라도 없으면 Sentry 업로드를 건너뛴다(빌드는 계속).
 # EAS production 프로필이면 건너뛰지 않고 빌드를 멈춘다.
 BETRO_SENTRY_DOTENV="$PROJECT_DIR/../.env"
+# Sentry 디버그 심볼 단계는 set -x로 이 파일을 읽는다. 값을 펼치면 토큰이 빌드 로그에 찍히므로 "x"로만 바꿔 본다.
 betro_sentry_has() {
-  if [ -n "$(printenv "$1")" ]; then
+  if eval "[ -n \\"\\\${$1:+x}\\" ]"; then
     return 0
   fi
   grep -Eqs "^[[:space:]]*$1[[:space:]]*=[[:space:]]*[\\"']?[^[:space:]#\\"']" "$BETRO_SENTRY_DOTENV"
