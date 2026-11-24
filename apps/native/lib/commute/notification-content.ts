@@ -60,9 +60,7 @@ export function notificationContent(
 	soonText: string
 ): NotificationContent {
 	const endAtMs =
-		model.countdownEpoch === null
-			? null
-			: model.countdownEpoch * MS_PER_SECOND;
+		model.countdownEpoch === null ? null : model.countdownEpoch * MS_PER_SECOND;
 	const counting = endAtMs !== null && endAtMs - nowMs >= MIN_COUNTDOWN_MS;
 	// 끝 시각이 1분 안이면 모델의 "N분"이 이미 낡았다. 남은 분 자리에 "곧"을 둔다.
 	const minutes = endAtMs !== null && !counting ? soonText : model.minutes;

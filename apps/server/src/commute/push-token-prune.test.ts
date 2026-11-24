@@ -92,15 +92,17 @@ describe("prunePushTokens", () => {
 		await addSession("done", "i1", "ended", NOW - ACTIVITY_TOKEN_KEEP_MS - 1);
 		await addSession("recent", "i1", "ended", NOW - ACTIVITY_TOKEN_KEEP_MS + 1);
 		await addSession("live", "i1", "active", null);
-		for (const [i, sessionId] of ["done", "recent", "live"].entries()) {
-			await addToken({
-				activityId: `a${i}`,
-				installId: "i1",
-				kind: "apns-activity",
-				sessionId,
-				updatedAt: NOW - 30 * DAY_MS,
-			});
-		}
+		await Promise.all(
+			["done", "recent", "live"].map((sessionId, i) =>
+				addToken({
+					activityId: `a${i}`,
+					installId: "i1",
+					kind: "apns-activity",
+					sessionId,
+					updatedAt: NOW - 30 * DAY_MS,
+				})
+			)
+		);
 		// 진행 중 세션은 updatedAt이 오래돼도 지우지 않는다
 		expect(await prunePushTokens(db, NOW)).toBe(1);
 		expect(await remainingSessions()).toEqual(["live", "recent"]);

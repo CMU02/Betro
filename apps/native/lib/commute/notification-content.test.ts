@@ -42,7 +42,9 @@ it("puts the line and status in the title and hands the countdown to the system 
 });
 
 it("passes the mode so the small icon shows a train for the subway", () => {
-	expect(notificationContent(model({ mode: "subway" }), NOW_MS, SOON).mode).toBe("subway");
+	expect(
+		notificationContent(model({ mode: "subway" }), NOW_MS, SOON).mode
+	).toBe("subway");
 });
 
 it("keeps the soon label after the detail when there is no timer", () => {
