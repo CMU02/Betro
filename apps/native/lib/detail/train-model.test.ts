@@ -2,7 +2,12 @@ import { describe, expect, it } from "bun:test";
 
 import type { SubwayMap, SubwaySnapshotVehicle } from "@/lib/map/map-client";
 import type { TripStops } from "./detail-client";
-import { trainModel, trainSubtitle } from "./train-model";
+import {
+	TRIP_STALE_MS,
+	trainModel,
+	trainSubtitle,
+	tripStaleTime,
+} from "./train-model";
 
 const NOW = 1_000_000_000_000;
 
@@ -249,5 +254,27 @@ describe("trainSubtitle", () => {
 		expect(
 			trainSubtitle({ ...base, destinationName: null, directionLabel: null })
 		).toBeNull();
+	});
+});
+
+describe("tripStaleTime", () => {
+	it("keeps a found or not-found trip fresh for the trip window", () => {
+		expect(tripStaleTime({ state: { data: { ok: true } } })).toBe(
+			TRIP_STALE_MS
+		);
+		expect(
+			tripStaleTime({ state: { data: { ok: false, reason: "not-found" } } })
+		).toBe(TRIP_STALE_MS);
+	});
+
+	it.each(["offline", "unavailable", "invalid"])(
+		"treats a %s failure as stale right away",
+		(reason) => {
+			expect(tripStaleTime({ state: { data: { ok: false, reason } } })).toBe(0);
+		}
+	);
+
+	it("treats a query with no data yet as stale", () => {
+		expect(tripStaleTime({ state: { data: undefined } })).toBe(0);
 	});
 });

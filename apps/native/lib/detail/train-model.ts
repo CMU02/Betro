@@ -182,3 +182,20 @@ export function trainSubtitle(
 		direction: directionLabel,
 	});
 }
+
+/** 시간표 열차의 정차는 배치가 바뀌기 전까지 그대로라 자주 다시 받지 않는다. */
+export const TRIP_STALE_MS = 5 * 60_000;
+
+/**
+ * 시간표 열차 쿼리의 `staleTime`. 조회 함수는 실패해도 throw하지 않으므로,
+ * 성공이나 없음(not-found)만 신선하게 두고 오프라인·503·시간 초과는 바로 다시 받게 한다.
+ */
+export function tripStaleTime(query: {
+	state: { data?: { ok: boolean; reason?: string } | undefined };
+}): number {
+	const { data } = query.state;
+	if (data === undefined) {
+		return 0;
+	}
+	return data.ok || data.reason === "not-found" ? TRIP_STALE_MS : 0;
+}

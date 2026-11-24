@@ -17,7 +17,9 @@ import {
 	type TrainModel,
 	trainModel,
 	trainSubtitle,
+	tripStaleTime,
 } from "@/lib/detail/train-model";
+import { useNowMs } from "@/lib/detail/use-now-ms";
 import { useScreenVisible } from "@/lib/detail/use-screen-visible";
 import { t } from "@/lib/i18n/t";
 import {
@@ -36,8 +38,6 @@ const BOTTOM_PADDING = 16;
 const SUBWAY_PREFIX = "seoul-subway:";
 /** 수집기 위치 출처 간격보다 자주 받아도 서버는 ETag로 304를 준다. */
 const SNAPSHOT_POLL_MS = 10_000;
-/** 시간표 열차의 정차는 배치가 바뀌기 전까지 그대로라 자주 다시 받지 않는다. */
-const TRIP_STALE_MS = 5 * 60_000;
 const NO_NAMES: Record<string, string> = {};
 
 const searchRefCache = createMapRefCache(Storage);
@@ -136,6 +136,7 @@ export default function TrainDetailScreen() {
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
 	const visible = useScreenVisible();
+	const now = useNowMs(visible);
 
 	const snapshot = useSubwaySnapshot(visible);
 	const mapQuery = useQuery({
@@ -169,7 +170,7 @@ export default function TrainDetailScreen() {
 		enabled: tripId !== null,
 		queryFn: () => fetchTrip(serverClient, tripId as number),
 		queryKey: ["train-detail", "trip", tripId],
-		staleTime: TRIP_STALE_MS,
+		staleTime: tripStaleTime,
 	});
 	const trip = tripQuery.data?.ok ? tripQuery.data.value : null;
 
@@ -191,8 +192,8 @@ export default function TrainDetailScreen() {
 		() =>
 			map === null
 				? null
-				: trainModel({ map, now: Date.now(), stationsById, trip, vehicle }),
-		[map, stationsById, trip, vehicle]
+				: trainModel({ map, now, stationsById, trip, vehicle }),
+		[map, now, stationsById, trip, vehicle]
 	);
 
 	const goBack = useCallback(() => router.back(), [router]);
