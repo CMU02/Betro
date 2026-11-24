@@ -95,6 +95,12 @@ export interface RawAttempt {
  * 수집기의 기억: 예산, 스케줄, 최신 상태, 소스 진행, 알림 상태, 이력 버퍼, 5분 지표.
  * `load`로 저장소에서 되살리고 `save`로 돌려 쓴다. 이력 버퍼(메모리)만 재시작 때 잃는다.
  */
+/**
+ * 한꺼번에 관측하는 역 수의 상한. 서울 지하철 역은 약 700개라 실제 요청은 닿지 않는다.
+ * 모든 관측 역과 그 행이 `boards` 값 하나에 저장되므로, 임의 ID로 값이 커지지 않게 막는다.
+ */
+export const MAX_WATCHED_STATION_TOTAL = 1000;
+
 export class CollectorState {
 	budget: BudgetState;
 	schedule: ScheduleState;
@@ -186,11 +192,17 @@ export class CollectorState {
 
 	/** 역을 `until`까지 본다. 이미 더 늦게까지 보고 있으면 그대로 둔다. */
 	watchStations(statnIds: readonly string[], until: number): void {
+		let count = Object.keys(this.boards.watch).length;
 		for (const statnId of statnIds) {
-			this.boards.watch[statnId] = Math.max(
-				this.boards.watch[statnId] ?? 0,
-				until
-			);
+			const current = this.boards.watch[statnId];
+			if (current === undefined) {
+				// 상한이 차면 새 역은 받지 않는다. 그 역은 시간표 도착판으로 대신한다.
+				if (count >= MAX_WATCHED_STATION_TOTAL) {
+					continue;
+				}
+				count += 1;
+			}
+			this.boards.watch[statnId] = Math.max(current ?? 0, until);
 		}
 	}
 

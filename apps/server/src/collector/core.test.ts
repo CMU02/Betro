@@ -23,6 +23,7 @@ import tagoGateway04 from "../../../../packages/realtime/src/__fixtures__/region
 import tagoLocation from "../../../../packages/realtime/src/__fixtures__/regional/tago-location.json";
 import subwayReferenceFixture from "../../../../packages/realtime/src/__fixtures__/subway-reference-sample.json";
 import { SERVICE_ENDED_RECHECK_MS } from "./apply-call";
+import { MAX_WATCHED_STATION_TOTAL } from "./collector-state";
 import { BACKLOG_RETRY_MS, CollectorCore, DEFAULT_IDLE_FLUSH_MS } from "./core";
 import { STATE_KEYS } from "./core-state";
 import type {
@@ -1140,6 +1141,43 @@ describe("CollectorCore station boards", () => {
 		h.clock.now = T0 + 6 * MINUTE;
 		await h.core.tick();
 		expect(Object.keys(await h.core.stationRows([GANGNAM]))).toEqual([GANGNAM]);
+	});
+
+	it("rejects station ids that are not 10 digits", async () => {
+		const h = makeHarness();
+		await expect(
+			h.core.watchStations(["9".repeat(200_000)], T0 + 10 * MINUTE)
+		).rejects.toThrow();
+		await expect(
+			h.core.watchStations(["abc"], T0 + 10 * MINUTE)
+		).rejects.toThrow();
+		expect(h.state.kv.get(STATE_KEYS.boards) ?? "").not.toContain(
+			"999999999999"
+		);
+	});
+
+	it("caps how many stations it watches at once and still extends watched ones", async () => {
+		const h = makeHarness();
+		const ids = Array.from({ length: MAX_WATCHED_STATION_TOTAL + 5 }, (_, i) =>
+			String(1_000_000_000 + i)
+		);
+		for (let start = 0; start < ids.length; start += 200) {
+			// biome-ignore lint/performance/noAwaitInLoops: 수집기 RPC처럼 차례로 등록한다
+			await h.core.watchStations(
+				ids.slice(start, start + 200),
+				T0 + 10 * MINUTE
+			);
+		}
+		const stored = JSON.parse(h.state.kv.get(STATE_KEYS.boards) ?? "{}") as {
+			watch: Record<string, number>;
+		};
+		expect(Object.keys(stored.watch)).toHaveLength(MAX_WATCHED_STATION_TOTAL);
+		expect(stored.watch[ids.at(-1) ?? ""]).toBeUndefined();
+		await h.core.watchStations([ids[0] ?? ""], T0 + 30 * MINUTE);
+		const extended = JSON.parse(h.state.kv.get(STATE_KEYS.boards) ?? "{}") as {
+			watch: Record<string, number>;
+		};
+		expect(extended.watch[ids[0] ?? ""]).toBe(T0 + 30 * MINUTE);
 	});
 
 	it("never stores key text with the station rows", async () => {

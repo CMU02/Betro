@@ -70,6 +70,8 @@ const BUS_REFERENCE_KINDS: readonly ReferenceBatchKind[] = ["bus_route"];
  * `tago:<영문 3자><숫자>`). 상류 URL에 그대로 들어가므로 이 꼴만 받는다.
  */
 const BUS_ROUTE_ID = /^\d+$|^gbis:\d+$|^tago:[A-Z]{3}\d+$/;
+/** 서울 지하철 역 ID(statnId)는 10자리 숫자다. */
+const SUBWAY_STATION_ID = /^\d{10}$/;
 
 /** 버스 참조와 그 참조를 읽을 때 요청한 노선(D1에 없던 노선도 든다). */
 interface LoadedBus {
@@ -168,9 +170,13 @@ export class CollectorCore {
 	 * 만료 시각이 지난 역은 지운다. 진행 중인 tick을 기다리지 않는다(메모리의 같은 값을 바꾸고 바로 저장).
 	 */
 	async watchStations(statnIds: string[], until: number): Promise<void> {
+		if (!statnIds.every((statnId) => SUBWAY_STATION_ID.test(statnId))) {
+			throw new Error("subway station ids must be 10 digits");
+		}
 		const state = await this.#state();
-		state.watchStations(statnIds, until);
+		// 만료된 역을 먼저 지워야 상한이 지난 요청 몫으로 차지 않는다.
 		state.expireWatches(this.#ports.clock());
+		state.watchStations(statnIds, until);
 		await state.saveBoards(this.#ports.state);
 	}
 

@@ -57,7 +57,8 @@ const busRouteViewBodySchema = z
 	.strict();
 
 const SUBWAY_REF_PREFIX = "seoul-subway:";
-const SUBWAY_STOP_REF = /^seoul-subway:\d+$/;
+/** 서울 지하철 역 ID(statnId)는 10자리 숫자다. 길이를 묶어 수집기 관측 목록이 임의 값으로 커지지 않게 한다. */
+const SUBWAY_STOP_REF = /^seoul-subway:\d{10}$/;
 
 const stationViewBodySchema = z
 	.object({

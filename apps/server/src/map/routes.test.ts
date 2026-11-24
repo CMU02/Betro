@@ -241,6 +241,8 @@ describe("POST /v1/map/station-view", () => {
 		const bodies = [
 			{ stations: [{ ...station, stop: "seoul-bus:1002000222" }] },
 			{ stations: [{ ...station, stop: "seoul-subway:abc" }] },
+			{ stations: [{ ...station, stop: "seoul-subway:10020002221" }] },
+			{ stations: [{ ...station, stop: `seoul-subway:${"9".repeat(5000)}` }] },
 			{ stations: [{ ...station, line: "seoul-subway:line99" }] },
 			{ stations: [{ ...station, line: "seoul-bus:line2" }] },
 			{ stations: [{ ...station, line: "line2" }] },
