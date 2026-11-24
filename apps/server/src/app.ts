@@ -164,6 +164,7 @@ function createApiRoutes(deps: AppDeps): Hono {
 			db,
 			maxRoutesPerInstall:
 				deps.mapWatchMaxPerInstall ?? DEFAULT_MAP_WATCH_MAX_PER_INSTALL,
+			stationView: deps.stationView,
 			watchTtlMs: deps.mapWatchTtlMs ?? DEFAULT_MAP_WATCH_TTL_MS,
 		})
 	);
