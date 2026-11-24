@@ -30,6 +30,7 @@ import {
 	VehicleMarkers,
 } from "@/components/map/vehicle-markers";
 import { VehicleSheet } from "@/components/map/vehicle-sheet";
+import { SearchBarButton } from "@/components/ui/text-field";
 import { useAppTheme } from "@/contexts/app-theme-context";
 import type { ActiveSessionView } from "@/lib/commute/session-client";
 import { useActiveSession } from "@/lib/commute/use-active-session";
@@ -89,6 +90,10 @@ const FAINT_LINE_OPACITY = 0.35;
 const OVERLAY_GAP = 12;
 /** 칩과 그 아래 알약이 차지하는 높이. 경로를 맞출 때 이만큼 위를 비운다. */
 const TOP_OVERLAY_HEIGHT = 88;
+/** 맨 위 검색창(Figma SearchBar 52pt)과 그 아래 요소 사이 간격(`gap-2`). 경로를 맞출 때 늘 비운다. */
+const SEARCH_BAR_HEIGHT = 52;
+const SEARCH_BAR_GAP = 8;
+const SEARCH_OVERLAY_HEIGHT = SEARCH_BAR_HEIGHT + SEARCH_BAR_GAP;
 
 type Shape = readonly [number, number][];
 
@@ -647,6 +652,7 @@ export default function MapTab() {
 	}, []);
 	const ready = useCallback(() => setMapReady(true), []);
 	const register = useCallback(() => router.navigate("/commute"), [router]);
+	const openSearch = useCallback(() => router.push("/search"), [router]);
 
 	const markers = hasPlaces
 		? routeMarkers(data.legs, busMeta, themeMode)
@@ -658,7 +664,10 @@ export default function MapTab() {
 	const mapPadding = useMemo(
 		() => ({
 			bottom: bottomOverlay + sheetInset,
-			top: insets.top + (hasPlaces ? TOP_OVERLAY_HEIGHT : 0),
+			top:
+				insets.top +
+				SEARCH_OVERLAY_HEIGHT +
+				(hasPlaces ? TOP_OVERLAY_HEIGHT : 0),
 		}),
 		[bottomOverlay, hasPlaces, insets.top, sheetInset]
 	);
@@ -702,6 +711,13 @@ export default function MapTab() {
 				pointerEvents="box-none"
 				style={topStyle}
 			>
+				<View className="px-4" pointerEvents="box-none">
+					<SearchBarButton
+						accessibilityLabel={t("search.placeholder")}
+						onPress={openSearch}
+						placeholder={t("search.placeholder")}
+					/>
+				</View>
 				{hasPlaces ? (
 					<PlacesOverlay
 						data={data}
