@@ -29,16 +29,16 @@
    - R2 사본과 새 적재 단계는 만들지 않습니다. 배포 절차가 늘지 않게 하려는 것입니다.
    - 서울 정류장은 약 1.1만 개, 색인은 gzip 전 약 1MB로 **추정**합니다(재지 않았습니다. Task 2 Step 5에서 잽니다). 앱은 지도 참조 캐시(`createMapRefCache`)에 그대로 둡니다.
 2. **검색 범위는 서울입니다. [사용자 결정, 스펙 2장 L70]**
-   - 지하철역, 서울 시내버스(간선·지선·순환·광역·공항), 서울 마을버스(`routeType "2"`)만 넣습니다.
+   - 지하철역, 서울 시내버스(간선·지선·순환·광역·심야), 서울 마을버스(`routeType "2"`)만 넣습니다. 공항버스(`routeType "1"`)는 적재 단계에서 빠지므로 D1에 없습니다(`transit-static/src/bus/scope.ts:21-26` `OUT_OF_SCOPE_ROUTE_TYPES`).
    - "서울 노선"은 한 조건으로 셉니다: `source = 'seoul' AND region = 'seoul'`. 서울 출처에도 경기·인천 면허 노선(`routeType` 7·8, `region` gyeonggi·incheon)이 있기 때문입니다(`transit-static/src/bus/scope.ts` `regionOf`).
    - 경기·인천 노선과, 그 노선만 지나는 정류장은 색인, 정류장 노선 목록, 즐겨찾기에 들어가지 않습니다.
    - 기존 `/v1/ref/bus/routes`(구간 등록용)는 바꾸지 않습니다.
 3. **역 묶기. [설계 판단]** `station_crosswalk`는 노선마다 행이 따로 있습니다.
-   - `nameCanonical`이 같고 묶음의 첫 역에서 700m 안이면 한 역으로 봅니다.
+   - 행을 먼저 `stop`(`seoul-subway:<statnId>`) 순으로 정렬합니다. 그다음 `nameCanonical`이 같고 묶음의 첫 역에서 700m 안이면 한 역으로 봅니다. DB 행 순서(`id`)에 기대면 배치가 바뀔 때 묶음과 키가 달라져 저장된 `station:<key>` 즐겨찾기가 깨질 수 있습니다.
    - 묶음 키는 구성 역 `StopRef`를 정렬해 `,`로 이은 값입니다.
    - 이름이 같아도 멀면 따로입니다(5호선 양평과 경의중앙선 양평).
 4. **찾기 규칙. [설계 판단]** 스펙이 정하지 않았습니다.
-   - 정규화: NFC, 소문자, 공백 제거. 역은 질의와 이름 끝의 "역"을 떼고 비교합니다.
+   - 정규화: NFC, 소문자, 공백 제거. 역은 질의와 이름 끝의 "역"을 떼고 비교합니다. `lib/` 코드에는 한글 리터럴을 쓸 수 없으므로(`no-hardcoded-copy.test.ts:18`) 코드에서는 `"역"`로 쓰고 주석에 "역"이라고 적습니다.
    - 순위: 같음(0) > 앞부분(1) > 포함(2). 같은 순위 안에서는 짧은 이름, 그다음 이름 순입니다.
    - 버스 노선은 `shortName`을, 정류장은 이름과 `arsId`(앞부분)를 봅니다.
    - "전체"는 구역마다 3개까지, 범위 칩을 고르면 50개까지 보입니다. 초성 검색은 하지 않습니다.
@@ -52,7 +52,7 @@
 7. **버스 노선 상세의 도착. [설계 판단]**
    - `POST /v1/map/bus-route-view`가 실행기의 `#collectBus(…, "map")`를 씁니다. 서울 노선 하나에 60초마다 최대 1건이고, 출퇴근 세션과 캐시를 함께 씁니다.
    - 지도 몫(`dailyBudgetBusArrival − busArrivalSessionReserve`, 기본 600)에 닿거나 출처가 멈추면 부르지 않습니다. 그때 화면은 "배차 약 N분 · 시간표 추정"입니다.
-   - 경기·인천 노선은 07이 없으므로 400입니다.
+   - 경기·인천 노선은 07이 없으므로 400입니다(스펙 3장 L130 "일반 검색(05)과 상세(07)에는 노출하지 않습니다"). `gbis:`·`tago:`뿐 아니라 서울 출처의 경기·인천 면허 노선(`seoul-bus:`이지만 `region` gyeonggi·incheon, `routeType` 7·8)도 400입니다. 라우트가 D1에서 `seoulRouteWhere`로 확인합니다. 접두사만 보면 이 노선이 지도 몫 서울 도착 한도를 씁니다.
 8. **정류장 상세와 즐겨찾기 카드의 버스는 배차간격만 보입니다. [설계 판단]**
    - 노선 N개가 서는 정류장은 1분에 N건이 듭니다. 지도 몫 600건으로는 받칠 수 없습니다.
    - 그래서 정류장 상세는 노선마다 "배차 약 N분 · 시간표 추정"을 보입니다. 행을 누르면 그 노선의 07로 가고, 07에서 실시간을 봅니다.
@@ -181,27 +181,28 @@ export async function buildSearchIndex(db: Database): Promise<{ etag: string; in
 ```ts
 it("같은 이름이 700m 안이면 한 역이고 멀면 따로다", () => {
 	const groups = groupStations([
-		{ lat: 37.4979, line: "seoul-subway:2", lng: 127.0276, name: "강남", stop: "seoul-subway:1002000222" },
-		{ lat: 37.4966, line: "seoul-subway:sinbundang", lng: 127.0283, name: "강남", stop: "seoul-subway:1077000687" },
-		{ lat: 37.5257, line: "seoul-subway:5", lng: 126.8865, name: "양평", stop: "seoul-subway:1005000522" },
-		{ lat: 37.4925, line: "seoul-subway:gyeongui", lng: 127.4917, name: "양평", stop: "seoul-subway:1063075131" },
+		{ lat: 37.4966, line: "seoul-subway:shinbundang", lng: 127.0283, name: "강남", stop: "seoul-subway:1077000687" },
+		{ lat: 37.4979, line: "seoul-subway:line2", lng: 127.0276, name: "강남", stop: "seoul-subway:1002000222" },
+		{ lat: 37.4925, line: "seoul-subway:gyeongui-jungang", lng: 127.4917, name: "양평", stop: "seoul-subway:1063075131" },
+		{ lat: 37.5257, line: "seoul-subway:line5", lng: 126.8865, name: "양평", stop: "seoul-subway:1005000522" },
 	]);
 	expect(groups.map((g) => [g.name, g.members.length])).toEqual([["강남", 2], ["양평", 1], ["양평", 1]]);
 	expect(groups[0]?.key).toBe("seoul-subway:1002000222,seoul-subway:1077000687");
 });
+it("입력 순서가 바뀌어도 묶음과 키가 같다", () => {});
 it("색인에는 서울 노선과 마을버스만 있고 경기·인천 노선과 그 정류장은 없다", async () => { /* 시드: seoul 간선, seoul routeType "2", source seoul·routeType "8"(region gyeonggi) 노선, gbis 노선(서울 정류장과 stationId를 하나 공유) → routes는 앞의 2개, stops에 routeType 8·gbis만 지나는 정류장 없음 */ });
 it("towards는 가장 많은 노선의 다음 정류장 이름이다", async () => {});
 it("ETag가 맞으면 304이고 배치가 없으면 503이다", async () => {});
 ```
 
-역 ID와 좌표는 예시입니다. 시드에 맞게 바꿉니다.
+역 ID와 좌표는 예시입니다. 시드에 맞게 바꿉니다. 노선 ref는 실제 `LineKey`(`packages/transit-static/src/lines.ts`: `line2`, `line5`, `shinbundang`, `gyeongui-jungang`)를 씁니다. 입력은 일부러 섞인 순서입니다.
 
 - [ ] **Step 2: 실패를 확인합니다**
 
 Run: `cd apps/server && bun test src/ref/search-index.test.ts`
 Expected: FAIL. 모듈을 찾지 못한다는 오류가 나옵니다.
 
-- [ ] **Step 3: 구현합니다.** 정류장 질의는 D1 바인딩 100개 제한에 걸리지 않게 `IN` 목록을 쓰지 않고 `batch_id`와 `source`로 거릅니다. 거리 계산은 기존 거리 함수가 있으면 그것을 씁니다(`rg -n "haversine|distanceM" apps/server/src packages`).
+- [ ] **Step 3: 구현합니다.** 정류장 질의는 D1 바인딩 100개 제한에 걸리지 않게 `IN` 목록을 쓰지 않습니다. `bus_route_stop`에는 `batch_id`·`source` 열이 없으므로(`bus_route_id`만 있음) `bus_route`와 join하고 `seoulRouteWhere`(`batch_id`, `source = 'seoul'`, `region = 'seoul'`)로 거릅니다. 거리 계산은 기존 거리 함수가 있으면 그것을 씁니다(`rg -n "haversine|distanceM" apps/server/src packages`).
 - [ ] **Step 4: 통과를 확인합니다**
 
 Run: `cd apps/server && bun test src/ref`
@@ -223,14 +224,15 @@ Model: sonnet
 - Modify: `apps/server/src/ref/bus.ts`. `findStopRoutes`를 더합니다.
 - Modify: `apps/server/src/ref/subway.ts`. `findTripStops`를 더합니다.
 - Modify: `apps/server/src/ref/routes.ts`
+- Modify: `apps/server/src/commute/cf-ports.ts`. `serviceDayOf`(`:564`, 지금은 파일 안 함수)를 export합니다.
 - Test: `apps/server/src/ref/bus.test.ts`, `apps/server/src/ref/subway.test.ts`, `apps/server/src/ref/routes.test.ts`
 
 **Interfaces:**
 - Produces:
 
 ```ts
-// bus.ts
-export interface StopRouteView { directionName: string | null; firstBusMinute: number | null; headwayMin: number; lastBusMinute: number | null; line: string; nextStopName: string | null; routeType: string; seq: number; shortName: string }
+// bus.ts. headwayMin은 D1 `bus_route.headway_min`처럼 null일 수 있다(`transit.ts:208`).
+export interface StopRouteView { directionName: string | null; firstBusMinute: number | null; headwayMin: number | null; lastBusMinute: number | null; line: string; nextStopName: string | null; routeType: string; seq: number; shortName: string }
 export interface StopRoutes { arsId: string | null; lat: number; lng: number; name: string; routes: StopRouteView[]; stop: string; timezone: string }
 export async function findStopRoutes(db: Database, stop: string): Promise<{ batchId: number; result: StopRoutes | null } | null>;
 // subway.ts
@@ -251,6 +253,7 @@ it("정류장 노선은 서울 노선만이고 다음 정류장 이름과 배차
 	expect(found?.result?.timezone).toBe(SOURCE_TIMEZONE);
 });
 it("gbis 정류장 ref는 404다", async () => {});
+it("배차간격이 없는 노선은 headwayMin이 null이다", async () => {});
 it("trip 정차 시각은 서비스일 0시 + 초이고 자정을 넘는 정차도 이어진다", async () => {
 	// 시드: 출발 86_000초, 다음 역 도착 86_600초 → departAt + 600_000 === 다음 arriveAt
 });
@@ -258,12 +261,12 @@ it("다른 배치의 tripId는 404다", async () => {});
 ```
 
 - [ ] **Step 2: 실패를 확인합니다** `cd apps/server && bun test src/ref`. Expected: FAIL.
-- [ ] **Step 3: 구현합니다.** 서비스일 경계는 `apps/server/src/commute/cf-ports.ts`의 `D1Timetable`이 쓰는 함수를 그대로 가져다 씁니다. 같은 계산을 다시 쓰지 않습니다.
-- [ ] **Step 4: 통과를 확인합니다** `cd apps/server && bun test src/ref`. Expected: PASS.
+- [ ] **Step 3: 구현합니다.** 서비스일 경계는 `D1Timetable`이 쓰는 `serviceDayOf`를 export해 가져다 씁니다. 같은 계산을 다시 쓰지 않습니다. 정차 시각은 `COALESCE`로 읽습니다(두 열 모두 null일 수 있음, `transit.ts:178-179`).
+- [ ] **Step 4: 통과를 확인합니다** `cd apps/server && bun test src/ref src/commute/cf-ports.test.ts`. Expected: PASS.
 - [ ] **Step 5: 커밋합니다**
 
 ```bash
-git add apps/server/src/ref
+git add apps/server/src/ref apps/server/src/commute/cf-ports.ts
 git commit -m "feat(ref): list routes at a Seoul stop and stop times of a subway trip"
 ```
 
@@ -274,13 +277,15 @@ Model: opus
 **Files:**
 - Create: `apps/server/src/map/station-view.ts`
 - Modify: `apps/server/src/map/routes.ts`. `POST /v1/map/station-view`를 더합니다.
-- Modify: `apps/server/src/app.ts`, `apps/server/src/index.ts`. `stationView` 의존성을 넘깁니다(`new D1Timetable(env.DB)`, `runnerConfig(env)`).
+- Modify: `apps/server/src/app.ts`, `apps/server/src/index.ts`. `stationView` 의존성을 넘깁니다(`new D1Timetable(env.DB)`, `runnerConfig(env)`, `collectorClient(env)`).
 - Modify: `apps/server/src/commute/cf-ports.ts`. `D1Timetable.firstLast`를 더합니다.
+- Modify: `apps/server/src/commute/runner-core.ts`. `WATCH_MS`(`:130`, 지금은 export 안 됨)를 export합니다.
 - Modify: `packages/commute/src/sources/seoul-subway.ts`. `timetableOnlyBoard`를 더합니다.
-- Test: `apps/server/src/map/station-view.test.ts`, `apps/server/src/map/routes.test.ts`, `packages/commute/src/sources/seoul-subway.test.ts`
+- Test: `apps/server/src/map/station-view.test.ts`, `apps/server/src/map/routes.test.ts`, `apps/server/src/commute/cf-ports.test.ts`, `packages/commute/src/sources/seoul-subway.test.ts`
 
 **Interfaces:**
 - Consumes: `CollectorRpcClient.watchStations`, `stationRows`(`apps/server/src/collector/client.ts`), `stationBoard`, `fillFromTimetable`, `TimetablePort`
+- 의존성 타입: `AppDeps.collector`와 `MapRoutesDeps.collector`는 `CollectorClient`이고 `watchStations`·`stationRows`가 없습니다(`client.ts:17-41`). 그 타입은 바꾸지 않습니다(`app.test.ts`의 `fakeCollector`가 그대로 맞게). 대신 `AppDeps.stationView?`와 `MapRoutesDeps.stationView?`를 새로 두고, 그 안의 수집기는 `Pick<CollectorRpcClient, "stationRows" | "watchStations">`입니다. 없으면 station-view는 503입니다.
 - Produces:
 
 ```ts
@@ -302,10 +307,11 @@ export interface StationViewDirection {
 export interface StationView { generatedAt: number; stations: { directions: StationViewDirection[]; line: string; stop: string }[]; timezone: string }
 export const STATION_VIEW_MAX = 6;
 export const STATION_VIEW_ARRIVALS = 3;
-export async function stationView(deps: { collector: CollectorRpcClient; config: Pick<CommuteConfig, "staleAfterMs" | "subwayEtaBiasSec">; timetable: StationTimetable; timezone: string }, stations: readonly { line: string; stop: string }[], now: number): Promise<StationView>;
+export async function stationView(deps: { collector: Pick<CollectorRpcClient, "stationRows" | "watchStations">; config: Pick<CommuteConfig, "staleAfterMs" | "subwayEtaBiasSec">; timetable: StationTimetable; timezone: string; watched: Map<string, number> }, stations: readonly { line: string; stop: string }[], now: number): Promise<StationView>;
 ```
 
-- 요청 본문은 `{ stations: { line, stop }[] }`이고 `.strict()`입니다. 1~`STATION_VIEW_MAX`개이고, `seoul-subway:` 접두사만 받습니다. 설치 인증은 `/v1/map/watch`와 같습니다. 응답은 `Cache-Control: no-store`입니다.
+- 요청 본문은 `{ stations: { line, stop }[] }`이고 `.strict()`입니다. 1~`STATION_VIEW_MAX`개입니다. `line`은 `findLineKey`(`ref/subway.ts:194`)가 아는 노선이어야 하고, `stop`은 `seoul-subway:<숫자>`여야 합니다. 그 밖은 400입니다.
+- `watchStations`는 수집기 DO가 `boards` 전체를 다시 저장합니다(`collector/core.ts:163-168`). 15초 폴링마다 부르지 않도록, isolate 메모리 `watched`(statnId → 등록한 `until`)에 남은 시간이 `WATCH_MS / 2`보다 긴 역은 빼고 부릅니다. 뺄 역만 남으면 부르지 않습니다. [설계 판단] 설치 인증은 `/v1/map/watch`와 같습니다. 응답은 `Cache-Control: no-store`입니다.
 - 방향마다 수집기 행이 있으면 `fillFromTimetable(stationBoard(null, rows, direction, bias, fetchedAt), arrivals)`를 씁니다. `approaching`은 앞 `STATION_VIEW_ARRIVALS`대입니다.
 - 행이 없거나 그 방향 `approaching`이 비면 `timetableOnlyBoard`를 씁니다.
 - `etaState`는 다음이 모두 맞을 때만 `"live"`입니다. 수집기 행이 있고, `now − sourceAt ≤ staleAfterMs`이고, 첫 차량의 method가 `official` 또는 `official-corrected`입니다.
@@ -316,7 +322,7 @@ export async function stationView(deps: { collector: CollectorRpcClient; config:
 ```ts
 it("수집기 행이 있으면 출퇴근 카드와 같은 도착판이고 live다", async () => {
 	// 가짜 수집기: statnId 1002000222 rows [{direction:"up", barvlSec:120, sourceAt: NOW-10_000, trainNo:"2241", arvlCd:"99", ordkey:"…"}]
-	const view = await stationView(deps, [{ line: "seoul-subway:2", stop: "seoul-subway:1002000222" }], NOW);
+	const view = await stationView(deps, [{ line: "seoul-subway:line2", stop: "seoul-subway:1002000222" }], NOW);
 	const up = view.stations[0]?.directions.find((d) => d.direction === "up");
 	expect(up?.etaState).toBe("live");
 	expect(up?.approaching[0]).toMatchObject({ method: "official", vehicleId: "2241" });
@@ -329,7 +335,11 @@ it("행이 없으면 시간표 3대를 estimated로 낸다", async () => {
 });
 it("묵은 행(staleAfterMs 초과)은 estimated다", async () => {});
 it("수집기가 throw해도 시간표로 200이다", async () => {});
-it("seoul-subway가 아닌 stop이나 7개 이상은 400이고 인증이 없으면 401이다", async () => {});
+it("15초 뒤 같은 역을 다시 물으면 watchStations를 부르지 않고, 2분 30초가 지나면 다시 부른다", async () => {});
+it("seoul-subway가 아닌 stop, 모르는 노선, 7개 이상은 400이고 인증이 없으면 401이다", async () => {});
+it("D1Timetable.firstLast는 그 서비스일 그 방향의 첫·마지막 시각이고 depart가 null인 종점은 arrive를 쓴다", async () => {
+	// cf-ports.test.ts. createTestDb 위에 collector/cf-ports.test.ts:22의 d1Over 같은 D1 어댑터를 씌운다.
+});
 it("timetableOnlyBoard는 now 뒤 도착만 쓰고 headwayMs는 이웃한 두 도착의 차다", () => {});
 ```
 
@@ -338,7 +348,7 @@ it("timetableOnlyBoard는 now 뒤 도착만 쓰고 headwayMs는 이웃한 두 �
 Run: `cd packages/commute && bun test src/sources/seoul-subway.test.ts && cd ../../apps/server && bun test src/map`
 Expected: FAIL.
 
-- [ ] **Step 3: 구현합니다.** `WATCH_MS`(5분)는 실행기의 값(`runner-core.ts`)을 export해 같이 씁니다. `firstLast`는 그 서비스일 그 방향의 최소·최대 출발 시각입니다.
+- [ ] **Step 3: 구현합니다.** `WATCH_MS`(5분)는 실행기의 값(`runner-core.ts`)을 export해 같이 씁니다. `firstLast`는 그 서비스일 그 방향의 `COALESCE(depart_sec, arrive_sec)` 최소·최대입니다. `D1Timetable`은 날 `D1Database`를 받으므로 테스트는 `d1Over` 어댑터(`collector/cf-ports.test.ts:22-36`)를 옮겨 쓰거나 공용 테스트 도우미로 뺍니다.
 - [ ] **Step 4: 통과를 확인합니다**
 
 Run: `cd packages/commute && bun test && cd ../../apps/server && bun test src`
@@ -367,17 +377,21 @@ Model: opus
 ```ts
 export interface BusRouteViewStop { seq: number; vehicles: { etaAt: number | null; plate: string | null; stopsAway: number | null; vehicleId: string }[] }
 export interface BusRouteView { etaState: "live" | "estimated"; fetchedAt: number | null; headwayMs: number | null; stops: BusRouteViewStop[] }
-// CommuteRunner
+/** 라우트 응답. 실행기 값에 D1 노선 정보를 붙인다. 07 제목·배지 색·즐겨찾기에 쓴다(`BusMap`에는 없음). */
+export interface BusRouteViewResponse extends BusRouteView { route: { name: string; routeType: string; shortName: string } }
+// RunnerCore(runner-core.ts). now를 받는 다른 메서드(routeView)와 같다.
 busRouteView(line: LineRef, now: number): Promise<BusRouteView>;
+// CommuteRunner(runner-do.ts, DO). Date.now()를 넘겨 core에 맡긴다.
+busRouteView(line: string): Promise<BusRouteView>;
 // CommuteRunnerClient
 busRouteView: (line: LineRef) => Promise<BusRouteView>;
 ```
 
 - `#exclusive` 안에서 `#collectBus(routeId, false, raw, now, true, "map")`를 부릅니다. 세션과 같은 캐시 키(`busRoute:<id>`)와 지도 몫 규칙을 씁니다.
 - `stops`는 받은 `RouteStopArrival[]`의 정류장마다 차량(가까운 순)입니다. 원자료가 없으면 빈 배열입니다.
-- `headwayMs`는 `readBusSchedules`와 `scheduledHeadwayMs(…, now, SOURCE_TIMEZONE)`입니다.
-- `etaState`는 원자료가 있고 `now − fetchedAt ≤ staleAfterMs`일 때만 `"live"`입니다.
-- 라우트 본문은 `{ line }`(`.strict()`)이고 `seoul-bus:<숫자>`만 받습니다. 그 밖은 400입니다. 설치 인증이 있고, 응답은 `no-store`입니다.
+- `headwayMs`는 실행기 포트 `this.#ports.busSchedules([line])`(`ports.ts:138`)와 `scheduledHeadwayMs(…, now, SOURCE_TIMEZONE)`입니다. `readBusSchedules`를 직접 부르지 않습니다(테스트가 포트를 가짜로 바꿉니다).
+- `etaState`는 다음이 모두 맞을 때만 `"live"`입니다. 원자료가 있고, 차량이 한 대 이상 있고(운행 종료 `headerCd 8`은 `now: []`로 저장됨, `cf-ports.ts:635-641`), `now − min(fetchedAt, 가장 이른 madeAt) ≤ staleAfterMs`입니다(`madeAt`은 출처의 `mkTm`).
+- 라우트 본문은 `{ line }`(`.strict()`)이고 `seoul-bus:<숫자>`만 받습니다. 그다음 D1에서 현재 배치의 그 노선을 `seoulRouteWhere`로 찾습니다. 없거나 서울 노선이 아니면(경기·인천 면허 7·8 포함) 400이고 실행기를 부르지 않습니다. 설치 인증이 있고, 응답은 `no-store`입니다.
 
 - [ ] **Step 1: 실패하는 테스트를 씁니다**
 
@@ -393,7 +407,9 @@ it("지도 몫에 닿으면 부르지 않고 배차간격 추정이다", async (
 	expect(upstream.busRouteCalls).toBe(0);
 	expect(view).toMatchObject({ etaState: "estimated", headwayMs: 8 * 60_000, stops: [] });
 });
-it("gbis 노선은 400이다", async () => {});
+it("운행 종료로 차량이 없으면 estimated이고 stops가 비어 있다", async () => {});
+it("gbis 노선과 서울 출처 경기 면허 노선(routeType 8)은 400이고 실행기를 부르지 않는다", async () => {});
+it("응답에 노선 번호·이름·routeType이 붙는다", async () => {});
 ```
 
 - [ ] **Step 2: 실패를 확인합니다** `cd apps/server && bun test src/commute/runner-core.test.ts src/map`. Expected: FAIL.
@@ -427,12 +443,12 @@ Model: sonnet
 export type { SearchIndex, SearchRoute, SearchStation, SearchStop };
 export const SEARCH_INDEX_CACHE_KEY = "search-index";
 export function loadSearchIndex(client: ServerClient, cache: MapRefCache): Promise<SearchIndex>; // 실패하고 캐시도 없으면 throw
-// detail-client.ts. 서버 응답 타입(StationView, StationViewDirection, BusRouteView, StopRoutes, TripStops)을
+// detail-client.ts. 서버 응답 타입(StationView, StationViewDirection, BusRouteViewResponse, StopRoutes, TripStops)을
 // zod 스키마로 여기서 다시 정의해 export한다. 앱은 apps/server를 import하지 않는다.
 /** 서버 `apps/server/src/map/station-view.ts`의 같은 이름 값과 같다. */
 export const STATION_VIEW_MAX = 6;
 export function fetchStationView(client: ServerClient, stations: { line: string; stop: string }[]): Promise<RefResult<StationView>>;
-export function fetchBusRouteView(client: ServerClient, line: string): Promise<RefResult<BusRouteView>>;
+export function fetchBusRouteView(client: ServerClient, line: string): Promise<RefResult<BusRouteViewResponse>>;
 export function fetchStopRoutes(client: ServerClient, stop: string): Promise<RefResult<StopRoutes>>;
 export function fetchTrip(client: ServerClient, tripId: number): Promise<RefResult<TripStops>>;
 ```
@@ -450,7 +466,7 @@ it("station-view 401은 unavailable이다", async () => {});
 ```
 
 - [ ] **Step 2: 실패를 확인합니다** `cd apps/native && bun test lib/search lib/detail lib/map/map-client.test.ts`. Expected: FAIL.
-- [ ] **Step 3: 구현합니다.** 상태 코드 해석은 `map-client.ts`의 `statusFailure`를 export해 같이 씁니다.
+- [ ] **Step 3: 구현합니다.** 상태 코드 해석은 `map-client.ts`의 `statusFailure`(`:135`)를, ETag 받기는 `fetchRefMap`(`:169`)을 export해 같이 씁니다. 둘 다 지금은 파일 안 함수입니다.
 - [ ] **Step 4: 통과를 확인합니다** `cd apps/native && bun test lib`. Expected: PASS.
 - [ ] **Step 5: 커밋합니다**
 
@@ -517,7 +533,7 @@ it("gbis 대상이 저장돼 있어도 읽을 때 버린다", () => {});
 
 - [ ] **Step 2: 실패를 확인합니다** `cd apps/native && bun test lib/search`. Expected: FAIL.
 - [ ] **Step 3: 구현합니다.** ES2023 배열 메서드를 쓰지 않습니다.
-- [ ] **Step 4: 통과를 확인합니다** `cd apps/native && bun test lib/search lib/hermes-compat.test.ts`. Expected: PASS.
+- [ ] **Step 4: 통과를 확인합니다** `cd apps/native && bun test lib`. Expected: PASS. `hermes-compat`과 `no-hardcoded-copy`도 통과합니다("역" 리터럴은 `"역"`).
 - [ ] **Step 5: 커밋합니다**
 
 ```bash
@@ -575,15 +591,16 @@ git add apps/native/lib/favorites
 git commit -m "feat(native): store favorites on the device"
 ```
 
-### Task 9: 도착 표시 모델과 공용 컴포넌트
+### Task 9: 도착 표시 모델과 공용 컴포넌트 (+Android 검색칸 정렬 #4)
 
 Model: sonnet
 
 **Files:**
 - Create: `apps/native/lib/transit/eta-status.ts`
 - Modify: `apps/native/lib/map/sheet-model.ts`. `ESTIMATED_METHODS`를 `eta-status.ts`의 것으로 바꿉니다. 동작은 같습니다.
-- Create: `apps/native/components/ui/search-bar.tsx`(Figma `SearchBar` Idle/Active), `apps/native/components/ui/segmented.tsx`(`Segmented`), `apps/native/components/ui/icon-button.tsx`(`IconButton` Glass/Solid), `apps/native/components/transit/arrival-row.tsx`(`ArrivalRow`), `apps/native/components/transit/timeline-stop.tsx`(`TimelineStop` Passed/Current/Upcoming)
-- Modify: `apps/native/components/ui/text-field.tsx`. Android 자리표시자 정렬을 고칩니다(남은 일 #4, `2026-11-10-mvp-2e-commute-screens.md:547`).
+- Create: `apps/native/components/ui/segmented.tsx`(`Segmented`), `apps/native/components/ui/icon-button.tsx`(`IconButton` Glass/Solid), `apps/native/components/transit/arrival-row.tsx`(`ArrivalRow`), `apps/native/components/transit/timeline-stop.tsx`(`TimelineStop` Passed/Current/Upcoming)
+- Modify: `apps/native/components/ui/text-field.tsx`. Figma `SearchBar`(5:303)는 이미 `TextField`의 `search` 옵션입니다(52pt 알약, `text-field.tsx:26-30`, `:72-95`). 새 검색창 컴포넌트를 만들지 않습니다. 이 파일에 누르기만 하는 Idle 모양 `SearchBarButton`(같은 52pt 알약과 돋보기, 자리표시자 글자, `onPress`)을 더하고, Android 자리표시자 정렬을 고칩니다(남은 일 #4, `2026-11-10-mvp-2e-commute-screens.md:547`).
+- Modify: `apps/native/components/ui/screen.tsx`. `Screen`의 `LargeTitle` 줄에 오른쪽 동작 자리(`titleAction?: ReactNode`)를 더합니다(`screen.tsx:8-14`, `:34-40`). 09의 `IconButton/Add`가 씁니다.
 - Modify: `apps/native/lib/i18n/messages-ko.ts`. `eta.*` 키를 더합니다.
 - Test: `apps/native/lib/transit/eta-status.test.ts`, `apps/native/lib/map/sheet-model.test.ts`
 
@@ -611,7 +628,7 @@ export function headwayStatus(headwayMs: number | null): EtaStatus;
   - `etaAt`이 null이면 `{ kind: "estimated", text: "" }`입니다. 화면은 그 줄을 그리지 않습니다.
 - `headwayStatus(null)`은 `kind: "ended"`, "운행 종료"입니다. 아니면 `kind: "estimated"`, "배차 약 N분"(반올림, 최소 1)입니다.
 - 태그 글자는 기존 `dataSources.status.*.label`을 씁니다.
-- `SearchBar`와 `TextField`는 Android에서 `textAlignVertical="center"`, `includeFontPadding={false}`, 세로 padding 0입니다.
+- `TextField`(검색 모양 포함)와 `SearchBarButton`은 Android에서 `textAlignVertical="center"`, `includeFontPadding={false}`, 세로 padding 0입니다.
 
 - [ ] **Step 1: 실패하는 테스트를 씁니다**
 
@@ -627,7 +644,7 @@ it("배차간격이 없으면 운행 종료다", () => {
 ```
 
 - [ ] **Step 2: 실패를 확인합니다** `cd apps/native && bun test lib/transit lib/map/sheet-model.test.ts`. Expected: FAIL.
-- [ ] **Step 3: 구현합니다.** 컴포넌트는 Figma 컴포넌트의 변형 이름을 props로 둡니다(`state: "idle" | "active"`, `variant: "glass" | "solid"`, `state: "passed" | "current" | "upcoming"`). 크기는 Dimension 토큰입니다(검색창 높이 44, 행 높이 64).
+- [ ] **Step 3: 구현합니다.** 컴포넌트는 Figma 컴포넌트의 변형 이름을 props로 둡니다(`variant: "glass" | "solid"`, `state: "passed" | "current" | "upcoming"`). 크기는 Dimension 토큰입니다(검색창 높이는 기존 `SearchBar`와 같은 52, 행 높이 64).
 - [ ] **Step 4: 통과를 확인합니다** `cd apps/native && bun test lib`. Expected: PASS. `no-hardcoded-copy`도 통과합니다.
 - [ ] **Step 5: 커밋합니다**
 
@@ -643,8 +660,8 @@ Model: opus
 **Files:**
 - Create: `apps/native/lib/map/watch-registry.ts`
 - Create: `apps/native/lib/map/app-watch-registry.ts`. `postWatch`와 `serverClient`로 앱 하나를 만듭니다.
-- Modify: `apps/native/lib/map/use-map-data.ts:455-470`. 지도의 heartbeat 폴러를 없앱니다. 지도가 보이면 `claim("map", refs)`, 가려지면 `release("map")`입니다.
-- Modify: `apps/native/app/_layout.tsx`. `useWatchHeartbeat()`를 부릅니다. `:456` 주석("경기·인천 노선은 보지 않는다")을 지금 동작대로 고칩니다(남은 일 #8).
+- Modify: `apps/native/lib/map/use-map-data.ts:455-470`. 지도의 heartbeat 폴러를 없앱니다. 지도가 보이면 `claim("map", refs)`, 가려지면 `release("map")`입니다. 같은 파일 `:456` 주석("경기·인천 노선은 보지 않는다")을 지금 동작(`watchRefsOf`가 `gbis:`·`tago:`도 보냄)대로 고칩니다(남은 일 #8).
+- Modify: `apps/native/app/_layout.tsx`. `useWatchHeartbeat()`를 부릅니다.
 - Test: `apps/native/lib/map/watch-registry.test.ts`
 
 **Interfaces:**
@@ -669,6 +686,9 @@ export function createWatchRegistry(send: (refs: string[]) => Promise<void>): Wa
 
 - 합집합은 가장 최근 claim의 refs부터 담고, 중복을 빼고 `WATCH_MAX`에서 자릅니다.
 - 07 화면은 `claim("bus-detail", [line])`, 떠날 때 `release`입니다(Task 14).
+- `release`로 합집합이 비면 `[]`를 한 번 보냅니다. 서버 감시(TTL 90초, `app.ts:44`)를 바로 풀어 상류 호출을 줄이려는 것입니다. [설계 판단]
+- 보내기는 한 번에 하나입니다. 보내는 중에 합집합이 바뀌면 끝난 뒤 마지막 합집합만 보냅니다. 늦게 끝난 `[]`가 새 claim을 지우지 않게 하려는 것입니다.
+- `useWatchHeartbeat`는 앱이 다시 앞으로 오면(`AppState` active) 60초를 기다리지 않고 바로 `beat()`합니다. 뒤에 있는 동안은 보내지 않습니다.
 - 보내기 실패는 다음 beat에 다시 보냅니다. 예외를 밖으로 던지지 않습니다.
 
 - [ ] **Step 1: 실패하는 테스트를 씁니다**
@@ -685,6 +705,8 @@ it("지도가 다시 claim하면 heartbeat를 기다리지 않고 바로 보낸�
 it("지도가 release하고 상세만 claim한 동안에도 beat는 상세 노선을 계속 보낸다", async () => {});
 it("6개를 넘으면 최근 claim 쪽을 남긴다", () => {});
 it("같은 합집합이면 claim이 다시 보내지 않는다", () => {});
+it("마지막 화면이 release하면 빈 목록을 한 번 보내고 beat는 보내지 않는다", async () => {});
+it("보내는 중에 release 뒤 claim이 오면 마지막 합집합만 보낸다", async () => {});
 ```
 
 `.at()`은 테스트(Bun)에서만 씁니다. 구현에는 쓰지 않습니다.
@@ -695,7 +717,7 @@ it("같은 합집합이면 claim이 다시 보내지 않는다", () => {});
 - [ ] **Step 5: 커밋합니다**
 
 ```bash
-git add apps/native/lib/map
+git add apps/native/lib/map apps/native/app/_layout.tsx
 git commit -m "feat(map): merge bus watch requests from the map and detail screens"
 ```
 
@@ -713,13 +735,15 @@ Model: sonnet
 **Files:**
 - Create: `apps/native/app/search.tsx`
 - Create: `apps/native/lib/search/search-view-model.ts`
-- Modify: `apps/native/app/_layout.tsx`. `search`, `station/[key]`, `stop/[stop]`, `bus/[line]`, `train/[trainNo]`을 등록합니다(화면은 다음 Task들이 채웁니다).
-- Modify: `apps/native/app/(tabs)/index.tsx:700-720`. 위쪽 오버레이 맨 위에 `SearchBar`(Idle)를 둡니다. 누르면 `/search`입니다. 장소 칩과 알약은 그 아래입니다(`164:20202`).
+- Modify: `apps/native/app/_layout.tsx`. `search`를 등록합니다. `station/[key]`, `stop/[stop]`, `bus/[line]`, `train/[trainNo]`은 그 화면 파일을 만드는 Task 12~15가 각각 등록합니다. 파일 없는 화면을 먼저 등록하지 않습니다.
+- Modify: `apps/native/app/(tabs)/index.tsx:700-720`. 위쪽 오버레이 맨 위에 `SearchBarButton`(Task 9)을 둡니다. 누르면 `/search`입니다. 장소 칩과 알약은 그 아래입니다(`164:20202`).
+  - 경로 맞춤 여백 `TOP_OVERLAY_HEIGHT`(`:91`, 지금 88)를 검색창 높이(52)와 간격만큼 늘립니다. 장소가 없을 때도 검색창은 있으므로, `:661`의 `hasPlaces ? TOP_OVERLAY_HEIGHT : 0`은 검색창 몫을 늘 더하게 고칩니다.
+  - 아직 화면이 없는 결과(역·정류장·노선 상세)를 누르면 Task 12~15 전까지는 아무 일도 하지 않습니다(`targetHref`만 테스트).
 - Modify: `apps/native/lib/i18n/messages-ko.ts`. `search.*` 키를 더합니다.
 - Test: `apps/native/lib/search/search-view-model.test.ts`
 
 **Interfaces:**
-- Consumes: `loadSearchIndex`(Task 6), `searchIndex`, `createRecentsStore`(Task 7), `SearchBar`, `Chip`, `ListRow`, `EmptyState`
+- Consumes: `loadSearchIndex`(Task 6), `searchIndex`, `createRecentsStore`(Task 7), `TextField`(`search` 모양), `SearchBarButton`, `Chip`, `ListRow`, `EmptyState`
 - Produces:
 
 ```ts
@@ -778,21 +802,27 @@ Model: sonnet
 
 **Files:**
 - Create: `apps/native/app/station/[key].tsx`
+- Modify: `apps/native/app/_layout.tsx`. `station/[key]`을 등록합니다.
 - Create: `apps/native/lib/detail/station-model.ts`
 - Modify: `apps/native/lib/i18n/messages-ko.ts`. `stationDetail.*`
 - Test: `apps/native/lib/detail/station-model.test.ts`
 
 **Interfaces:**
-- Consumes: `fetchStationView`(Task 6), `fetchSubwayMap`(방면 이름), `arrivalStatus`(Task 9), `appFavorites`(Task 8), 색인의 `SearchStation`(`key`로 찾습니다)
+- Consumes: `fetchStationView`(Task 6), `fetchSubwayMap`(방면 이름), `arrivalStatus`(Task 9), `appFavorites`(Task 8), 색인의 `SearchStation`(`key`로 찾습니다), `formatClock`(`lib/commute/lock-screen-model.ts:53`, epoch 초)
 - Produces:
 
 ```ts
-export interface StationDirectionRow { directionLabel: string; firstAt: number | null; lastAt: number | null; rows: { status: EtaStatus; trainNo: string | null }[] }
+export interface StationDirectionRow { directionLabel: string; firstLabel: string | null; lastLabel: string | null; rows: { status: EtaStatus; trainNo: string | null }[] }
 export interface StationLineModel { line: string; directions: StationDirectionRow[] }
-/** 방면 이름은 그 방향 지선의 끝 역이고, 2호선은 "내선순환"/"외선순환"을 앞에 붙인다(`map.sheet.direction.subway`). */
+/**
+ * 가지는 그 방향이면서 이 역(`stop`)을 지나는 것을 고른다(`subwayBranchForLeg`와 같은 규칙).
+ * 방면 이름은 그 가지의 끝 역이다. 순환선(2호선 본선)은 종점이 없으므로 지도 시트(`sheet-model.ts:153-167`)처럼
+ * 이 역 다음 역을 방면으로 쓰고 "내선순환"/"외선순환"을 앞에 붙인다(`map.sheet.direction.subway`).
+ */
 export function stationModel(view: StationView, maps: Record<string, SubwayMap>, now: number): StationLineModel[];
-export function formatClock(epochMs: number, timezone: string): string; // "05:30"
 ```
+
+- 첫차·막차 시각은 새 함수를 만들지 않고 기존 `formatClock(Math.floor(epochMs / 1000), view.timezone)`으로 그립니다. 같은 이름의 함수를 하나 더 만들지 않습니다.
 
 - 화면 구성(Figma `16:9607`):
   - `TopBar`(뒤로, 이름, 별)
@@ -820,9 +850,10 @@ it("두 방향 모두 시간표뿐이면 행마다 시간표 추정이다", () =
 	const [line] = stationModel(estimatedOnlyView, MAPS, NOW);
 	expect(line?.directions.flatMap((d) => d.rows.map((r) => r.status.kind))).toEqual(["estimated", "estimated", "estimated", "estimated"]);
 });
-it("2호선 up 방향은 '내선순환 · 성수 방면'이다", () => {});
-it("formatClock은 응답의 시간대로 그린다", () => {
-	expect(formatClock(Date.UTC(2026, 10, 24, 20, 30), "Asia/Tokyo")).toBe("05:30");
+it("2호선 강남역 up 방향은 '내선순환 · {강남 다음 역} 방면'이다", () => {});
+it("갈라지는 노선은 이 역을 지나는 가지의 끝 역을 방면으로 쓴다", () => {});
+it("첫차·막차는 응답의 timezone으로 그린다", () => {
+	expect(stationModel(viewWith({ firstAt: Date.UTC(2026, 10, 24, 20, 30), timezone: "Asia/Tokyo" }), MAPS, NOW)[0]?.directions[0]?.firstLabel).toBe("05:30");
 });
 ```
 
@@ -834,7 +865,7 @@ it("formatClock은 응답의 시간대로 그린다", () => {
 - [ ] **Step 5: 커밋합니다**
 
 ```bash
-git add apps/native/app/station apps/native/lib/detail apps/native/lib/i18n/messages-ko.ts
+git add apps/native/app/station apps/native/app/_layout.tsx apps/native/lib/detail apps/native/lib/i18n/messages-ko.ts
 git commit -m "feat(native): add the station detail screen"
 ```
 
@@ -844,6 +875,7 @@ Model: sonnet
 
 **Files:**
 - Create: `apps/native/app/stop/[stop].tsx`
+- Modify: `apps/native/app/_layout.tsx`. `stop/[stop]`을 등록합니다.
 - Create: `apps/native/lib/detail/stop-model.ts`
 - Modify: `apps/native/lib/i18n/messages-ko.ts`. `stopDetail.*`
 - Test: `apps/native/lib/detail/stop-model.test.ts`
@@ -853,11 +885,13 @@ Model: sonnet
 - Produces:
 
 ```ts
-export interface StopRouteRow { directionLabel: string | null; href: string; line: string; routeType: string; shortName: string; status: EtaStatus }
+/** `status`가 null이면 배차 정보가 없는 노선이다. 행에는 번호와 방면만 그린다. */
+export interface StopRouteRow { directionLabel: string | null; href: string; line: string; routeType: string; shortName: string; status: EtaStatus | null }
 export function stopModel(routes: StopRoutes, now: number): StopRouteRow[];
 ```
 
 - 노선마다 `headwayStatus(scheduledHeadwayMs({ firstBusMinute, headwayMin, lastBusMinute }, now, routes.timezone))`입니다. 상류 호출은 없습니다(설계 결정 8).
+- `headwayMin`이 null이거나 0 이하면 `scheduledHeadwayMs`를 부르지 않고 `status: null`입니다. 그 함수는 이때도 null을 돌려주므로(`bus-schedule.ts:34-36`) 그대로 넘기면 달리는 노선이 "운행 종료"로 보입니다. [설계 판단]
 - `href`는 `/bus/<line>?stop=<seq>`입니다. 07은 이 순번의 정류장을 고른 채로 열립니다.
 - 화면은 Task 1의 정류장 상세 프레임을 따릅니다. 별은 `kind: "stop"` 즐겨찾기입니다. 노선 행 위에 `InlineNotice` "버스 노선을 누르면 실시간 도착을 볼 수 있어요"를 둡니다.
 - 문구:
@@ -871,6 +905,7 @@ export function stopModel(routes: StopRoutes, now: number): StopRouteRow[];
 ```ts
 it("운행 시간 안이면 배차 약 N분, 밖이면 운행 종료다", () => {});
 it("방면이 없는 노선은 directionLabel이 null이다", () => {});
+it("headwayMin이 null인 노선은 운행 종료가 아니라 status가 null이다", () => {});
 ```
 
 - [ ] **Step 2: 실패를 확인합니다** `cd apps/native && bun test lib/detail`. Expected: FAIL.
@@ -879,7 +914,7 @@ it("방면이 없는 노선은 directionLabel이 null이다", () => {});
 - [ ] **Step 5: 커밋합니다**
 
 ```bash
-git add apps/native/app/stop apps/native/lib/detail apps/native/lib/i18n/messages-ko.ts
+git add apps/native/app/stop apps/native/app/_layout.tsx apps/native/lib/detail apps/native/lib/i18n/messages-ko.ts
 git commit -m "feat(native): add the bus stop detail screen with headway estimates"
 ```
 
@@ -889,20 +924,24 @@ Model: sonnet
 
 **Files:**
 - Create: `apps/native/app/bus/[line].tsx`
+- Modify: `apps/native/app/_layout.tsx`. `bus/[line]`을 등록합니다.
 - Create: `apps/native/lib/detail/bus-route-model.ts`
-- Modify: `apps/native/components/map/vehicle-sheet.tsx`. 버스 시트에 "자세히" 행을 더합니다. 누르면 `/bus/<line>?veh=<vehId>`입니다.
+- Modify: `apps/native/components/map/vehicle-sheet.tsx`. 버스 시트에 "자세히" 행을 더합니다. 누르면 `/bus/<line>?veh=<vehId>`입니다. `seoul-bus:` 구간이고 `busKindOf`/`BusMeta`의 `routeType`이 7·8이 아닐 때만 보입니다. `gbis:`·`tago:`와 경기·인천 면허 노선은 07이 없습니다(설계 결정 7).
 - Modify: `apps/native/lib/i18n/messages-ko.ts`. `busDetail.*`
 - Test: `apps/native/lib/detail/bus-route-model.test.ts`
 
 **Interfaces:**
-- Consumes: `fetchBusMap`(정류장·모양·방면), `fetchBusRouteView`(Task 5, 6), 버스 스냅샷(`plainNo`, `busType`), `appWatchRegistry`(Task 10), `arrivalStatus`, `headwayStatus`
+- Consumes: `fetchBusMap`(정류장·모양·방면), `fetchBusRouteView`(Task 5, 6. 노선 번호·이름·`routeType`도 여기서 받습니다), 버스 스냅샷(`plainNo`, `busType`), `appWatchRegistry`(Task 10), `arrivalStatus`, `headwayStatus`, `vehicleRouteKey`(`lib/map/leg-vehicles.ts:22`)
 - Produces:
 
 ```ts
 export interface BusTimelineStop { name: string; seq: number; state: "passed" | "current" | "upcoming"; status: EtaStatus | null; vehicleHere: boolean }
 export interface BusRouteModel { directions: string[]; selectedVehicle: { lowFloor: boolean; nextStopName: string | null; plate: string | null; status: EtaStatus | null } | null; stops: BusTimelineStop[] }
+/** 스냅샷 차량은 `vehicle.routeId === vehicleRouteKey(map.line)`인 것만 쓴다. 서울 차량의 routeId는 접두사 없는 숫자다. */
 export function busRouteModel(input: { map: BusMap; now: number; selectedDirection: string | null; selectedSeq: number | null; selectedVehicleId: string | null; vehicles: BusSnapshotVehicle[]; view: BusRouteView | null }): BusRouteModel;
 ```
+
+- 제목(`busDetail.title`), 배지 색(`busKindOf(routeType)`), 즐겨찾기(`kind: "route"`)는 `fetchBusRouteView` 응답의 `route`로 만듭니다. 지도 시트에서 바로 열어도(색인 없이) 같습니다. 응답이 400이면 `EmptyState`입니다.
 
 - 방향은 정류장의 `directionName`이 바뀌는 곳으로 나눕니다. 이름이 없는 노선은 방향 칸을 숨깁니다.
 - 정류장 줄의 `status`는 그 정류장에 가장 가까운 차량의 `arrivalStatus`입니다. `view`가 없거나 estimated면 고른 정류장 한 곳에만 `headwayStatus`를 둡니다.
@@ -930,11 +969,13 @@ it("다른 노선 차량은 타임라인에 올리지 않는다", () => {});
 
 - [ ] **Step 2: 실패를 확인합니다** `cd apps/native && bun test lib/detail`. Expected: FAIL.
 - [ ] **Step 3: 화면을 만듭니다.** 위 지도는 노선 모양과 차량 마커만 그리고, 기존 `RouteLines`, `VehicleMarkers`를 다시 씁니다.
+  - `RouteLines`는 `boardM`·`alightM`이 null이면 옅은 선만 그리므로(`route-lines.tsx:82-95`), 노선 전체를 진하게 그리려면 `boardM: 0`, `alightM: 모양 길이`를 넘깁니다.
+  - `MarkerVehicle`은 `motion: MotionState`가 필요합니다(`vehicle-markers.tsx:27-35`). 지도 홈의 `use-map-data`처럼 관측 위치로 움직임 상태를 만들어 넘깁니다.
 - [ ] **Step 4: 통과를 확인합니다** `cd apps/native && bun test lib && bun run check-types`. Expected: PASS.
 - [ ] **Step 5: 커밋합니다**
 
 ```bash
-git add apps/native/app/bus apps/native/lib/detail apps/native/components/map/vehicle-sheet.tsx apps/native/lib/i18n/messages-ko.ts
+git add apps/native/app/bus apps/native/app/_layout.tsx apps/native/lib/detail apps/native/components/map/vehicle-sheet.tsx apps/native/lib/i18n/messages-ko.ts
 git commit -m "feat(native): add the bus route detail screen"
 ```
 
@@ -944,6 +985,7 @@ Model: sonnet
 
 **Files:**
 - Create: `apps/native/app/train/[trainNo].tsx`
+- Modify: `apps/native/app/_layout.tsx`. `train/[trainNo]`을 등록합니다.
 - Create: `apps/native/lib/detail/train-model.ts`
 - Modify: `apps/native/components/map/vehicle-sheet.tsx`. 지하철 시트에도 "자세히"(`/train/<rawTrainNo>?line=<line>`)를 더합니다.
 - Modify: `apps/native/lib/i18n/messages-ko.ts`. `trainDetail.*`
@@ -954,16 +996,18 @@ Model: sonnet
 - Produces:
 
 ```ts
-export interface TrainModel { destinationName: string | null; express: boolean; freshness: { live: boolean; secondsAgo: number } | null; hasTimetable: boolean; nextStopName: string | null; stops: { name: string; state: "passed" | "current" | "upcoming"; time: string | null }[] }
+export interface TrainModel { destinationName: string | null; directionLabel: string | null; express: boolean; freshness: { live: boolean; secondsAgo: number } | null; hasTimetable: boolean; nextStopName: string | null; stops: { name: string; state: "passed" | "current" | "upcoming"; time: string | null }[] }
 export function trainModel(input: { map: SubwayMap; now: number; stationsById: Record<string, string>; trip: TripStops | null; vehicle: SubwaySnapshotVehicle | null }): TrainModel;
 ```
 
-- 정차 목록은 `trip`이 있으면 그 정차들이고, 없으면 그 방향 지선의 역입니다(`time: null`, `hasTimetable: false`).
+- 정차 목록은 `trip`이 있으면 그 정차들이고, 없으면 그 방향 지선의 역입니다(`time: null`, `hasTimetable: false`). 지선은 `branchForTrain(map, vehicle)`(`lib/map/nearby-trains.ts:23-38`)로 고릅니다. 차량도 `trip`도 없으면 정차 목록은 비고 화면은 `trainDetail.gone`만 보입니다.
+- `directionLabel`은 순환선이면 "내선순환"/"외선순환"(`map.sheet.loop.*`), 아니면 `trainDetail.direction.up`·`.down`("상행"·"하행")입니다. 부제는 `"{destination}행 · {direction}"`이고, 목적지를 모르면 방향만 씁니다.
 - 현재 역은 차량의 `statnId`입니다. 차량이 없으면 모든 역이 `upcoming`이고 `freshness`는 null입니다.
 - 신선도는 지도 시트와 같은 규칙(`map.sheet.live`, `map.sheet.stale`)입니다.
 - 문구:
   - `trainDetail.title`: "{trainNo} 열차"
   - `trainDetail.subtitle`: "{destination}행 · {direction}"
+  - `trainDetail.direction.up`: "상행", `trainDetail.direction.down`: "하행"
   - `trainDetail.express`: "급행"
   - `trainDetail.nextStation`: "다음 역"
   - `trainDetail.notice`: "열차 위치는 역 도착 신호와 시간표로 계산돼요"
@@ -976,6 +1020,9 @@ export function trainModel(input: { map: SubwayMap; now: number; stationsById: R
 it("tripId가 없으면 지선 역 목록이고 시각이 없다", () => {});
 it("현재 역 앞은 passed, 뒤는 upcoming이다", () => {});
 it("차량이 사라지면 freshness가 null이다", () => {});
+it("갈라지는 노선은 열차가 지나는 지선의 역만 보인다", () => {});
+it("차량도 trip도 없으면 정차 목록이 비어 있다", () => {});
+it("2호선은 directionLabel이 내선순환·외선순환이다", () => {});
 ```
 
 - [ ] **Step 2: 실패를 확인합니다** `cd apps/native && bun test lib/detail`. Expected: FAIL.
@@ -984,7 +1031,7 @@ it("차량이 사라지면 freshness가 null이다", () => {});
 - [ ] **Step 5: 커밋합니다**
 
 ```bash
-git add apps/native/app/train apps/native/lib/detail apps/native/components/map/vehicle-sheet.tsx apps/native/lib/i18n/messages-ko.ts
+git add apps/native/app/train apps/native/app/_layout.tsx apps/native/lib/detail apps/native/components/map/vehicle-sheet.tsx apps/native/lib/i18n/messages-ko.ts
 git commit -m "feat(native): add the train detail screen"
 ```
 
@@ -993,13 +1040,13 @@ git commit -m "feat(native): add the train detail screen"
 Model: sonnet
 
 **Files:**
-- Modify: `apps/native/app/(tabs)/favorites.tsx`. 자리만 있던 화면을 채웁니다.
+- Modify: `apps/native/app/(tabs)/favorites.tsx`. 자리만 있던 화면을 채웁니다. `Screen`의 `titleAction`(Task 9)에 `IconButton/Add`를 둡니다.
 - Create: `apps/native/lib/favorites/favorites-model.ts`
 - Modify: `apps/native/lib/i18n/messages-ko.ts`. `favorites.*`
 - Test: `apps/native/lib/favorites/favorites-model.test.ts`
 
 **Interfaces:**
-- Consumes: `appFavorites`(Task 8), `appPlaces`, `fetchStationView`, `fetchStopRoutes`, `stationModel`, `stopModel`, `PlaceShortcut`에 해당하는 기존 장소 칩
+- Consumes: `appFavorites`(Task 8), `appPlaces`, `fetchStationView`, `fetchStopRoutes`, `fetchSubwayMap`(역 카드의 `stationModel`이 방면 이름에 씁니다. 지도 참조 캐시를 같이 씁니다), `stationModel`, `stopModel`, `PlaceShortcut`에 해당하는 기존 장소 칩
 - Produces:
 
 ```ts
@@ -1037,7 +1084,7 @@ it("역 즐겨찾기 7개 노선은 6개와 1개로 나눠 묻는다", () => {})
 ```
 
 - [ ] **Step 2: 실패를 확인합니다** `cd apps/native && bun test lib/favorites`. Expected: FAIL.
-- [ ] **Step 3: 화면을 만들고, 08·정류장·07 화면의 별을 `appFavorites.toggle`에 연결합니다.**
+- [ ] **Step 3: 화면을 만듭니다.** 08·정류장·07 화면의 별은 각 Task(12~14)가 이미 `appFavorites.toggle`에 연결했습니다. 여기서는 즐겨찾기 탭에서 빼면 그 화면 별도 바로 꺼지는지(`subscribe`)만 봅니다.
 - [ ] **Step 4: 통과를 확인합니다** `cd apps/native && bun test lib && bun run check-types`. Expected: PASS.
 - [ ] **Step 5: 커밋합니다**
 
@@ -1075,3 +1122,10 @@ git commit -m "docs(plan): record search and detail verification"
 1. 정류장 단위 실시간(서울 `getStationByUid`, 오퍼레이션 한도 따로)을 신청해 정류장 상세와 즐겨찾기에 실시간을 붙일까요? **기본값: 이번에는 하지 않고 배차간격 추정만 보입니다.**
 2. 검색 색인을 R2에 미리 만들어 둘까요? **기본값: Worker가 D1에서 만들고 메모리에 캐시합니다.**
 3. 즐겨찾기 개수 상한이 필요할까요? **기본값: 두지 않습니다.**
+
+## 교차 검토 (2026-11-24)
+
+Gemini(agy `gemini-4-neon-high`, 읽기 전용)로 이 계획을 검토했고, 지적 21건을 코드에서 하나씩 확인했습니다. 근거가 있는 것만 위 본문에 반영했습니다.
+- 반영: 07의 서울 노선 확인(서울 출처 경기·인천 면허 포함)과 노선 정보 응답, 배차간격 null 처리, station-view 의존성 타입과 `watchStations` 저장 빈도, `firstLast`의 `COALESCE`와 테스트, 운행 종료 때의 `etaState`, "역" 리터럴, 정류장 질의의 join, 실제 `LineKey`, 실행기 메서드 위치, watch registry의 빈 목록·순서·복귀, 지도 홈 여백과 화면 등록 순서, 2호선 방면과 `formatClock` 재사용, 열차 방향 문구와 지선, 기존 `SearchBar` 재사용, `Screen` 제목 동작 자리, export할 함수들, 역 묶기 정렬, 공항버스 범위, 07 지도 컴포넌트 재사용 조건
+- 일부만 반영: `watchStations`는 폴링마다 저장하는 것만 확인했습니다. 저장 크기는 역 수로 묶이므로 상한은 두지 않습니다.
+
