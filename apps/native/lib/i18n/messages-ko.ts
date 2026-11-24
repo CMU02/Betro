@@ -326,6 +326,11 @@ export const ko = {
 		},
 		towards: "{name} 방면",
 	},
+	/** 오픈소스 라이선스 화면(`app/settings/licenses.tsx`). */
+	licenses: {
+		intro: "Betro는 아래 오픈소스를 쓰고 있어요.",
+		title: "오픈소스 라이선스",
+	},
 	map: {
 		allHidden: "이 경로의 노선이 모두 꺼져 있어요",
 		chips: {
@@ -622,6 +627,9 @@ export const ko = {
 		dataSources: {
 			title: "데이터 출처",
 		},
+		licenses: {
+			title: "오픈소스 라이선스",
+		},
 		/** `EXPO_PUBLIC_LOCK_SAMPLES=1`일 때만 보이는 행과 화면. 표본 값으로 잠금화면을 띄운다. */
 		lockSamples: {
 			endAll: "표본 모두 끝내기",
@@ -645,6 +653,9 @@ export const ko = {
 			subtitle:
 				"오늘 갱신 {updates}건 · 뒤로 {backward} · 순간이동 {jump} · {percent}%",
 			title: "지도 움직임 지표",
+		},
+		privacy: {
+			title: "개인정보 처리방침",
 		},
 		sections: {
 			about: "정보",

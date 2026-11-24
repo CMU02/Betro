@@ -88,6 +88,7 @@ beforeAll(async () => {
 		auth,
 		corsOrigins: [LOCAL_ORIGIN],
 		db,
+		privacyContact: "privacy@example.test",
 		statusHost: STATUS_HOST,
 	});
 	appWithCollector = createApp({
@@ -96,6 +97,7 @@ beforeAll(async () => {
 		collector: fakeCollector,
 		corsOrigins: [LOCAL_ORIGIN],
 		db,
+		privacyContact: "privacy@example.test",
 		statusHost: STATUS_HOST,
 	});
 });
@@ -244,6 +246,21 @@ describe("createApp", () => {
 		expect(bus.headers.get("etag")).toBe(`"${SNAPSHOT_ETAG}-bus"`);
 		const unknown = await appWithCollector.request(`${API}/v1/snapshot/tram`);
 		expect(unknown.status).toBe(404);
+	});
+
+	test("/privacy는 API 호스트에서만 200이고 상태 호스트에서는 404다", async () => {
+		const page = await appWithCollector.request(`${API}/privacy`);
+		expect(page.status).toBe(200);
+		expect(page.headers.get("content-type")).toContain("text/html");
+		expect(page.headers.get("content-security-policy")).toContain(
+			"default-src 'none'"
+		);
+		const html = await page.text();
+		expect(html).toContain("privacy@example.test");
+		expect(html).not.toContain("<script");
+
+		const onStatus = await appWithCollector.request(`${STATUS}/privacy`);
+		expect(onStatus.status).toBe(404);
 	});
 
 	test("status page only on status host", async () => {

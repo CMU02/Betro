@@ -17,6 +17,7 @@ import type { CommuteRunnerClient } from "./commute/client";
 import { createCommuteRoutes } from "./commute/routes";
 import { createMapRoutes } from "./map/routes";
 import type { StationViewDeps } from "./map/station-view";
+import { renderPrivacyPage } from "./privacy-page";
 import { ifNoneMatchMatches } from "./ref/if-none-match";
 import { createRefRoutes } from "./ref/routes";
 import { renderStatusPage } from "./status-page";
@@ -37,6 +38,8 @@ export interface AppDeps {
 	mapWatchMaxPerInstall?: number;
 	/** 관측 요청 유지 시간 ms(`MAP_WATCH_TTL_MS`). */
 	mapWatchTtlMs?: number;
+	/** 개인정보 처리방침의 문의 연락처(`PRIVACY_CONTACT`). 비어 있으면 연락처 줄을 뺀다. */
+	privacyContact?: string;
 	/** 역 도착판(`POST /v1/map/station-view`)의 수집기·시간표·설정. 없으면 503이다. */
 	stationView?: Omit<StationViewDeps, "watched">;
 	statusHost: string;
@@ -50,6 +53,9 @@ const DEFAULT_MAP_WATCH_MAX_PER_INSTALL = 6;
 /** 라우팅 접두사. 호스트로 API와 상태 페이지를 나눈다. */
 const API_SCOPE = "/api-host";
 const STATUS_SCOPE = "/status-host";
+
+/** 개인정보 처리방침을 마지막으로 고친 날. 내용을 고칠 때 함께 바꾼다. */
+const PRIVACY_UPDATED_ON = "2026-11-24";
 
 const PORT_SUFFIX = /:\d+$/;
 /** 상태 페이지는 스크립트·외부 자원을 쓰지 않는다(인라인 스타일만). */
@@ -94,6 +100,18 @@ function createApiRoutes(deps: AppDeps): Hono {
 	});
 
 	const routes = new Hono();
+
+	/** 개인정보 처리방침. 앱 설정 행이 이 주소를 연다. CORS가 필요 없어 미들웨어보다 앞에 둔다. */
+	routes.get("/privacy", (c) =>
+		c.html(
+			renderPrivacyPage({
+				contact: deps.privacyContact?.trim() || null,
+				updatedOn: PRIVACY_UPDATED_ON,
+			}),
+			200,
+			{ "Content-Security-Policy": STATUS_PAGE_CSP }
+		)
+	);
 
 	routes.use(
 		"*",

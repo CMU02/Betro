@@ -4,8 +4,10 @@ import {
 	BellIcon,
 	BoxIcon,
 	BugIcon,
+	FileTextIcon,
 	InfoIcon,
 	LockIcon,
+	LockKeyholeIcon,
 	MapIcon,
 	MoonIcon,
 	RouteIcon,
@@ -13,7 +15,7 @@ import {
 	ZapIcon,
 } from "lucide-react-native";
 import { useCallback, useMemo } from "react";
-import { Alert, View } from "react-native";
+import { Alert, Linking, View } from "react-native";
 import { withUniwind } from "uniwind";
 
 import { LineBadge } from "@/components/transit/line-badge";
@@ -31,12 +33,14 @@ import {
 } from "@/lib/crash/app-crash-reporting";
 import { t } from "@/lib/i18n/t";
 import type { MessageKey } from "@/lib/i18n/translate";
+import { privacyUrl } from "@/lib/legal/privacy";
 import { appMotionMetrics } from "@/lib/map/app-motion-metrics";
 import { type MyLine, myLines } from "@/lib/map/my-lines";
 import { appPlaces } from "@/lib/places/app-places";
 import { usePlaces } from "@/lib/places/use-places";
 import type { ThemePreference } from "@/lib/preferences/preferences";
 import { usePreferences } from "@/lib/preferences/use-preferences";
+import { ENV } from "@/src/env";
 
 const MoonTileIcon = withUniwind(MoonIcon);
 const MapTileIcon = withUniwind(MapIcon);
@@ -48,6 +52,8 @@ const ShieldTileIcon = withUniwind(ShieldCheckIcon);
 const InfoTileIcon = withUniwind(InfoIcon);
 const BugTileIcon = withUniwind(BugIcon);
 const LockTileIcon = withUniwind(LockIcon);
+const PrivacyTileIcon = withUniwind(LockKeyholeIcon);
+const LicenseTileIcon = withUniwind(FileTextIcon);
 
 const THEME_OPTIONS: { labelKey: MessageKey; mode: ThemePreference }[] = [
 	{ labelKey: "settings.theme.dark", mode: "dark" },
@@ -205,6 +211,15 @@ export default function SettingsTab() {
 	const openDataSources = useCallback(() => {
 		router.push("/settings/data-sources");
 	}, [router]);
+	const openLicenses = useCallback(() => {
+		router.push("/settings/licenses");
+	}, [router]);
+	const openPrivacy = useCallback(() => {
+		// 열 수 있는 브라우저가 없으면 아무 일도 하지 않는다.
+		Linking.openURL(privacyUrl(ENV.EXPO_PUBLIC_SERVER_URL)).catch(
+			() => undefined
+		);
+	}, []);
 	const openLockSamples = useCallback(() => {
 		router.push("/settings/lock-samples");
 	}, [router]);
@@ -274,6 +289,21 @@ export default function SettingsTab() {
 						icon={ShieldTileIcon}
 						onPress={openDataSources}
 						title={t("settings.dataSources.title")}
+						trailing={{ type: "chevron" }}
+					/>
+					<ListDivider />
+					<ListRow
+						accessibilityRole="link"
+						icon={PrivacyTileIcon}
+						onPress={openPrivacy}
+						title={t("settings.privacy.title")}
+						trailing={{ type: "chevron" }}
+					/>
+					<ListDivider />
+					<ListRow
+						icon={LicenseTileIcon}
+						onPress={openLicenses}
+						title={t("settings.licenses.title")}
 						trailing={{ type: "chevron" }}
 					/>
 					<ListDivider />

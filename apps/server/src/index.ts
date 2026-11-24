@@ -43,6 +43,7 @@ function getApp(env: Env): Hono {
 			db,
 			mapWatchMaxPerInstall: positiveInt(env.MAP_WATCH_MAX_PER_INSTALL),
 			mapWatchTtlMs: positiveInt(env.MAP_WATCH_TTL_MS),
+			privacyContact: env.PRIVACY_CONTACT,
 			stationView: {
 				collector: collectorClient(env),
 				config: runnerConfig(env),
