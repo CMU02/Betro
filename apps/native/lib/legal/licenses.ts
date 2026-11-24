@@ -40,3 +40,8 @@ export function collectLicenses(
 		return a.name < b.name ? -1 : 1;
 	});
 }
+
+/** `assets/licenses.json`에 쓸 문자열. Biome JSON 포맷(2칸 들여쓰기)과 맞춰 CI 포맷 검사를 통과시킨다. */
+export function serializeLicenses(entries: readonly LicenseEntry[]): string {
+	return `${JSON.stringify(entries, null, 2)}\n`;
+}

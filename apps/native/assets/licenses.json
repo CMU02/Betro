@@ -1,232 +1,232 @@
 [
-	{
-		"license": "MIT",
-		"name": "@expo/metro-runtime",
-		"version": "58.0.17"
-	},
-	{
-		"license": "MIT",
-		"name": "@mj-studio/react-native-naver-map",
-		"version": "2.10.0"
-	},
-	{
-		"license": "MIT",
-		"name": "@orpc/client",
-		"version": "1.16.1"
-	},
-	{
-		"license": "MIT",
-		"name": "@orpc/tanstack-query",
-		"version": "1.16.1"
-	},
-	{
-		"license": "MIT",
-		"name": "@react-native-community/datetimepicker",
-		"version": "9.2.1"
-	},
-	{
-		"license": "Apache-2.0",
-		"name": "@react-native-firebase/app",
-		"version": "27.1.0"
-	},
-	{
-		"license": "Apache-2.0",
-		"name": "@react-native-firebase/messaging",
-		"version": "27.1.0"
-	},
-	{
-		"license": "MIT",
-		"name": "@sentry/react-native",
-		"version": "8.28.0"
-	},
-	{
-		"license": "MIT",
-		"name": "@tanstack/react-query",
-		"version": "5.105.0"
-	},
-	{
-		"license": "MIT",
-		"name": "@varlock/expo-integration",
-		"version": "1.2.2"
-	},
-	{
-		"license": "MIT",
-		"name": "expo",
-		"version": "58.0.23"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-application",
-		"version": "58.1.2"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-blur",
-		"version": "58.0.5"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-build-properties",
-		"version": "58.0.12"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-constants",
-		"version": "58.0.15"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-crypto",
-		"version": "58.0.7"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-dev-client",
-		"version": "58.0.18"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-font",
-		"version": "58.0.11"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-linking",
-		"version": "58.0.16"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-location",
-		"version": "58.0.20"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-navigation-bar",
-		"version": "58.0.4"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-router",
-		"version": "58.0.30"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-secure-store",
-		"version": "58.0.2"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-splash-screen",
-		"version": "58.0.13"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-sqlite",
-		"version": "58.0.15"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-status-bar",
-		"version": "58.0.4"
-	},
-	{
-		"license": "MIT",
-		"name": "expo-system-ui",
-		"version": "58.0.7"
-	},
-	{
-		"license": "Apache-2.0",
-		"name": "heroui-native",
-		"version": "1.0.11"
-	},
-	{
-		"license": "ISC",
-		"name": "lucide-react-native",
-		"version": "1.69.0"
-	},
-	{
-		"license": "MIT",
-		"name": "react",
-		"version": "19.3.0"
-	},
-	{
-		"license": "MIT",
-		"name": "react-dom",
-		"version": "19.3.0"
-	},
-	{
-		"license": "MIT",
-		"name": "react-native",
-		"version": "0.88.1"
-	},
-	{
-		"license": "MIT",
-		"name": "react-native-gesture-handler",
-		"version": "3.3.0"
-	},
-	{
-		"license": "MIT",
-		"name": "react-native-keyboard-controller",
-		"version": "1.22.7"
-	},
-	{
-		"license": "MIT",
-		"name": "react-native-reanimated",
-		"version": "4.7.1"
-	},
-	{
-		"license": "MIT",
-		"name": "react-native-safe-area-context",
-		"version": "5.11.1"
-	},
-	{
-		"license": "MIT",
-		"name": "react-native-screens",
-		"version": "4.30.1"
-	},
-	{
-		"license": "MIT",
-		"name": "react-native-svg",
-		"version": "15.16.0"
-	},
-	{
-		"license": "MIT",
-		"name": "react-native-web",
-		"version": "0.21.4"
-	},
-	{
-		"license": "MIT",
-		"name": "react-native-worklets",
-		"version": "0.13.0"
-	},
-	{
-		"license": "MIT",
-		"name": "tailwind-merge",
-		"version": "3.7.0"
-	},
-	{
-		"license": "MIT",
-		"name": "tailwind-variants",
-		"version": "3.3.1"
-	},
-	{
-		"license": "MIT",
-		"name": "tailwindcss",
-		"version": "4.3.3"
-	},
-	{
-		"license": "MIT",
-		"name": "uniwind",
-		"version": "1.13.1"
-	},
-	{
-		"license": "MIT",
-		"name": "varlock",
-		"version": "1.23.0"
-	},
-	{
-		"license": "MIT",
-		"name": "zod",
-		"version": "4.6.7"
-	}
+  {
+    "license": "MIT",
+    "name": "@expo/metro-runtime",
+    "version": "58.0.17"
+  },
+  {
+    "license": "MIT",
+    "name": "@mj-studio/react-native-naver-map",
+    "version": "2.10.0"
+  },
+  {
+    "license": "MIT",
+    "name": "@orpc/client",
+    "version": "1.16.1"
+  },
+  {
+    "license": "MIT",
+    "name": "@orpc/tanstack-query",
+    "version": "1.16.1"
+  },
+  {
+    "license": "MIT",
+    "name": "@react-native-community/datetimepicker",
+    "version": "9.2.1"
+  },
+  {
+    "license": "Apache-2.0",
+    "name": "@react-native-firebase/app",
+    "version": "27.1.0"
+  },
+  {
+    "license": "Apache-2.0",
+    "name": "@react-native-firebase/messaging",
+    "version": "27.1.0"
+  },
+  {
+    "license": "MIT",
+    "name": "@sentry/react-native",
+    "version": "8.28.0"
+  },
+  {
+    "license": "MIT",
+    "name": "@tanstack/react-query",
+    "version": "5.105.0"
+  },
+  {
+    "license": "MIT",
+    "name": "@varlock/expo-integration",
+    "version": "1.2.2"
+  },
+  {
+    "license": "MIT",
+    "name": "expo",
+    "version": "58.0.23"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-application",
+    "version": "58.1.2"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-blur",
+    "version": "58.0.5"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-build-properties",
+    "version": "58.0.12"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-constants",
+    "version": "58.0.15"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-crypto",
+    "version": "58.0.7"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-dev-client",
+    "version": "58.0.18"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-font",
+    "version": "58.0.11"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-linking",
+    "version": "58.0.16"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-location",
+    "version": "58.0.20"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-navigation-bar",
+    "version": "58.0.4"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-router",
+    "version": "58.0.30"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-secure-store",
+    "version": "58.0.2"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-splash-screen",
+    "version": "58.0.13"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-sqlite",
+    "version": "58.0.15"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-status-bar",
+    "version": "58.0.4"
+  },
+  {
+    "license": "MIT",
+    "name": "expo-system-ui",
+    "version": "58.0.7"
+  },
+  {
+    "license": "Apache-2.0",
+    "name": "heroui-native",
+    "version": "1.0.11"
+  },
+  {
+    "license": "ISC",
+    "name": "lucide-react-native",
+    "version": "1.69.0"
+  },
+  {
+    "license": "MIT",
+    "name": "react",
+    "version": "19.3.0"
+  },
+  {
+    "license": "MIT",
+    "name": "react-dom",
+    "version": "19.3.0"
+  },
+  {
+    "license": "MIT",
+    "name": "react-native",
+    "version": "0.88.1"
+  },
+  {
+    "license": "MIT",
+    "name": "react-native-gesture-handler",
+    "version": "3.3.0"
+  },
+  {
+    "license": "MIT",
+    "name": "react-native-keyboard-controller",
+    "version": "1.22.7"
+  },
+  {
+    "license": "MIT",
+    "name": "react-native-reanimated",
+    "version": "4.7.1"
+  },
+  {
+    "license": "MIT",
+    "name": "react-native-safe-area-context",
+    "version": "5.11.1"
+  },
+  {
+    "license": "MIT",
+    "name": "react-native-screens",
+    "version": "4.30.1"
+  },
+  {
+    "license": "MIT",
+    "name": "react-native-svg",
+    "version": "15.16.0"
+  },
+  {
+    "license": "MIT",
+    "name": "react-native-web",
+    "version": "0.21.4"
+  },
+  {
+    "license": "MIT",
+    "name": "react-native-worklets",
+    "version": "0.13.0"
+  },
+  {
+    "license": "MIT",
+    "name": "tailwind-merge",
+    "version": "3.7.0"
+  },
+  {
+    "license": "MIT",
+    "name": "tailwind-variants",
+    "version": "3.3.1"
+  },
+  {
+    "license": "MIT",
+    "name": "tailwindcss",
+    "version": "4.3.3"
+  },
+  {
+    "license": "MIT",
+    "name": "uniwind",
+    "version": "1.13.1"
+  },
+  {
+    "license": "MIT",
+    "name": "varlock",
+    "version": "1.23.0"
+  },
+  {
+    "license": "MIT",
+    "name": "zod",
+    "version": "4.6.7"
+  }
 ]

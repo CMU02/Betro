@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { collectLicenses } from "../lib/legal/licenses";
+import { collectLicenses, serializeLicenses } from "../lib/legal/licenses";
 
 describe("collectLicenses", () => {
 	const packages: Record<
@@ -36,5 +36,16 @@ describe("collectLicenses", () => {
 		expect(
 			collectLicenses({ dependencies: { missing: "1.0.0" } }, read)
 		).toEqual([]);
+	});
+});
+
+describe("serializeLicenses", () => {
+	it("Biome JSON 포맷과 같은 2칸 들여쓰기에 끝 줄바꿈으로 쓴다", () => {
+		const text = serializeLicenses([
+			{ license: "MIT", name: "a-lib", version: "1.0.0" },
+		]);
+		expect(text).toBe(
+			'[\n  {\n    "license": "MIT",\n    "name": "a-lib",\n    "version": "1.0.0"\n  }\n]\n'
+		);
 	});
 });

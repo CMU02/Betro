@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { collectLicenses } from "../lib/legal/licenses";
+import { collectLicenses, serializeLicenses } from "../lib/legal/licenses";
 
 const APP_ROOT = join(import.meta.dir, "..");
 const OUTPUT = join(APP_ROOT, "assets", "licenses.json");
@@ -48,5 +48,5 @@ for (const name of Object.keys(pkgJson.dependencies)) {
 		console.error(`설치된 패키지를 찾지 못했어요: ${name}`);
 	}
 }
-writeFileSync(OUTPUT, `${JSON.stringify(licenses, null, "\t")}\n`);
+writeFileSync(OUTPUT, serializeLicenses(licenses));
 console.log(`${licenses.length}개를 ${OUTPUT}에 썼어요`);
