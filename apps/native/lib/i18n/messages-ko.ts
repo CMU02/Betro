@@ -674,6 +674,20 @@ export const ko = {
 		map: "지도",
 		settings: "설정",
 	},
+	/** 06 열차 상세 */
+	trainDetail: {
+		direction: {
+			down: "하행",
+			up: "상행",
+		},
+		express: "급행",
+		gone: "이 열차의 위치를 더 받지 못했어요",
+		nextStation: "다음 역",
+		noTimetable: "이 열차의 시간표 정보가 없어요",
+		notice: "열차 위치는 역 도착 신호와 시간표로 계산돼요",
+		subtitle: "{destination}행 · {direction}",
+		title: "{trainNo} 열차",
+	},
 	transit: {
 		region: {
 			gyeonggi: "경기",

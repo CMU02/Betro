@@ -9,7 +9,7 @@ import type { BusMap, RouteViewLeg, SubwayMap } from "./map-client";
 const MS_PER_SEC = 1000;
 const MS_PER_MIN = 60_000;
 /** 서울 버스 관측 간격(최대 약 160초)보다 길게 잡아, 정상 갱신 사이에는 "실시간"으로 둔다. */
-const LIVE_MAX_AGE_SEC = 180;
+export const LIVE_MAX_AGE_SEC = 180;
 
 export type SheetStopState = "past" | "now" | "next" | "mine";
 

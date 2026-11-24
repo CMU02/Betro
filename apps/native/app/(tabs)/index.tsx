@@ -498,12 +498,16 @@ function isRiding(
 /** 07이 없는 경기·인천 면허 노선(서울 routeType 7·8). */
 const NO_DETAIL_ROUTE_TYPES: readonly string[] = ["7", "8"];
 
-/** 버스 시트의 "자세히"가 여는 07 경로. `seoul-bus:` 구간이고 경기·인천 면허 노선이 아닐 때만 있다. */
+/** 시트의 "자세히"가 여는 경로. 지하철은 06, 버스는 `seoul-bus:` 구간이고 경기·인천 면허 노선이 아닐 때만 07이다. */
 function busDetailHref(
 	leg: MapLeg["leg"],
 	busMeta: BusMetaMap,
 	vehicleId: string
 ): string | null {
+	if (leg.mode === "subway") {
+		// 지하철 시트의 차량 ID는 열차 번호(`rawTrainNo`)다.
+		return `/train/${encodeURIComponent(vehicleId)}?line=${encodeURIComponent(leg.line)}`;
+	}
 	if (leg.mode !== "bus" || !leg.line.startsWith("seoul-bus:")) {
 		return null;
 	}
