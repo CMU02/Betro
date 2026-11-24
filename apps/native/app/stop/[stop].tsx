@@ -89,7 +89,9 @@ function RouteRow({
 	onOpen: (href: string) => void;
 	row: StopRouteRow;
 }) {
-	const open = () => onOpen(row.href);
+	// 렌더마다 새 함수를 만들지 않도록 고정한다
+	const { href } = row;
+	const open = useCallback(() => onOpen(href), [onOpen, href]);
 	return (
 		<ArrivalRow
 			eta={row.status?.text ?? ""}
