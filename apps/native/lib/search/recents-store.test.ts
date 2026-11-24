@@ -25,7 +25,7 @@ const stopTarget = (n: number): SearchTarget => ({
 it("최근 검색은 같은 대상을 맨 앞으로 옮기고 8개까지다", () => {
 	const { kv } = memoryKv();
 	const store = createRecentsStore(kv);
-	for (let i = 0; i < 10; i++) {
+	for (let i = 0; i < 10; i += 1) {
 		store.add(stopTarget(i));
 	}
 	expect(store.get()).toHaveLength(RECENTS_MAX);

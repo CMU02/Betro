@@ -126,7 +126,7 @@ export function searchIndex(
 						rank: bestRank([
 							rankOf(name, normalized),
 							// 정류장 번호는 앞부분만 본다.
-							arsId !== null && arsId.startsWith(normalized)
+							arsId?.startsWith(normalized)
 								? Number(arsId !== normalized)
 								: null,
 						]),
