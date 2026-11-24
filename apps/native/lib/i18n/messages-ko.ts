@@ -186,6 +186,27 @@ export const ko = {
 		minutes: "{minutes}분",
 		minutesEstimated: "약 {minutes}분",
 	},
+	/** 09 즐겨찾기 */
+	favorites: {
+		cancel: "취소",
+		empty: {
+			action: "검색하기",
+			body: "검색에서 별을 눌러 추가해요",
+			title: "즐겨찾기가 없어요",
+		},
+		filter: {
+			all: "전체",
+			route: "노선",
+			station: "역",
+			stop: "정류장",
+		},
+		manage: "관리",
+		menu: "더보기",
+		myPlaces: "내 장소",
+		noArrivals: "도착 정보가 없어요",
+		remove: "즐겨찾기에서 빼기",
+		title: "즐겨찾기",
+	},
 	/** 16 구간 고르기(수단 → 노선 → 승차 → 하차) */
 	legPicker: {
 		addLeg: "이 구간 추가",
