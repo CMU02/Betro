@@ -1152,3 +1152,11 @@ Gemini(agy `gemini-4-neon-high`, 읽기 전용)로 이 계획을 검토했고, �
 - 반영: 07의 서울 노선 확인(서울 출처 경기·인천 면허 포함)과 노선 정보 응답, 배차간격 null 처리, station-view 의존성 타입과 `watchStations` 저장 빈도, `firstLast`의 `COALESCE`와 테스트, 운행 종료 때의 `etaState`, "역" 리터럴, 정류장 질의의 join, 실제 `LineKey`, 실행기 메서드 위치, watch registry의 빈 목록·순서·복귀, 지도 홈 여백과 화면 등록 순서, 2호선 방면과 `formatClock` 재사용, 열차 방향 문구와 지선, 기존 `SearchBar` 재사용, `Screen` 제목 동작 자리, export할 함수들, 역 묶기 정렬, 공항버스 범위, 07 지도 컴포넌트 재사용 조건
 - 일부만 반영: `watchStations`는 폴링마다 저장하는 것만 확인했습니다. 저장 크기는 역 수로 묶이므로 상한은 두지 않습니다.
 
+
+## 검증 결과 (2026-11-24)
+
+- `bun test`: `packages/commute` 377, `packages/realtime` 123, `apps/server` `src` 324, `apps/native` `lib components` 698. 모두 통과, 실패 0.
+- `bun run check-types`: 10개 작업 모두 성공, 타입 오류 0.
+- `bunx biome ci --changed --since=origin/develop --no-errors-on-unmatched`: 오류 0.
+- 기존 단언 확인(`git diff feat/regional-bus-realtime`): 지워진 `it(`/`expect(` 줄이 3개 있습니다. 모두 `apps/native/lib/map/map-client.test.ts`이고 Task 6이 스냅샷에 필드(`busType`, `destinationStatnId`, `express`, `tripId`)를 더하면서 기대값을 새 모양에 맞춘 것입니다. 서울 동작을 바꾼 것이 아닙니다.
+- 시뮬레이터 확인(Step 3)은 하지 않았습니다. 릴리스 준비 계획의 마지막 Task에서 모아서 합니다.
