@@ -9,7 +9,9 @@ import { authenticateInstall } from "../commute/auth";
 import type { CommuteRunnerClient } from "../commute/client";
 import type { BusRouteView } from "../commute/runner-core";
 import { findSeoulBusRoute, type SeoulBusRouteInfo } from "../ref/bus";
+import { stripSubwayPrefix } from "../ref/ids";
 import { findLineKey } from "../ref/subway";
+import { scheduledTrains } from "./scheduled-trains";
 import {
 	STATION_VIEW_MAX,
 	type StationViewDeps,
@@ -78,6 +80,9 @@ const stationViewBodySchema = z
 			.max(STATION_VIEW_MAX),
 	})
 	.strict();
+
+/** 시간표 열차는 앱이 15초마다 받는다. 같은 값을 15초 동안 공유한다. */
+const SCHEDULED_CACHE_CONTROL = "public, max-age=15";
 
 const UNAUTHORIZED = { error: "unauthorized" } as const;
 const UNAVAILABLE = { error: "unavailable" } as const;
@@ -219,6 +224,20 @@ export function createMapRoutes(deps: MapRoutesDeps): Hono {
 		);
 		c.header("Cache-Control", "no-store");
 		return c.json(view);
+	});
+
+	// 시간표 추정 모드(14)의 시간표 위치 열차. 노선 키만 받는 공개 GET이다.
+	routes.get("/v1/map/scheduled/:lineKey", async (c) => {
+		const lineKey = findLineKey(stripSubwayPrefix(c.req.param("lineKey")));
+		if (!lineKey) {
+			return c.json({ error: "line not found" }, 404);
+		}
+		const result = await scheduledTrains(db, lineKey, now());
+		if (!result) {
+			return c.json(UNAVAILABLE, 503);
+		}
+		c.header("Cache-Control", SCHEDULED_CACHE_CONTROL);
+		return c.json(result);
 	});
 
 	return routes;
