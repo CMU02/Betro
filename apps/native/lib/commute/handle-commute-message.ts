@@ -106,7 +106,11 @@ export async function handleCommuteMessage(
 	});
 	const shown = deps.notifier.show({
 		channelName: deps.t("commute.notification.channel"),
-		content: notificationContent(model),
+		content: notificationContent(
+			model,
+			nowMs,
+			deps.t("commute.lock.minutes.soon")
+		),
 		endLabel: deps.t("commute.lock.action.end"),
 		planId,
 		seq: state.seq,

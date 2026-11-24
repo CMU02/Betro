@@ -108,6 +108,18 @@ it("shows a start message and acknowledges it once with a ms timestamp", async (
 	]);
 });
 
+it("타이머가 끝난 뒤 다시 그릴 칩으로 '곧'을 넘긴다", async () => {
+	const { deps, shown } = setup();
+
+	await handleCommuteMessage(data("update"), deps);
+
+	expect(shown[0]?.content.countdownAtMs).toBe((NOW + 180) * 1000);
+	expect(shown[0]?.content.afterCountdown).toEqual({
+		body: "노량진역 · 08:03 도착 · 곧",
+		chipText: "곧",
+	});
+});
+
 it("shows an update without acknowledging it", async () => {
 	const { calls, deps } = setup();
 

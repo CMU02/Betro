@@ -6,7 +6,13 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
 
+class AfterCountdownRecord : Record {
+  @Field val body: String = ""
+  @Field val chipText: String = ""
+}
+
 class ContentRecord : Record {
+  @Field val afterCountdown: AfterCountdownRecord? = null
   @Field val title: String = ""
   @Field val body: String = ""
   @Field val header: String = ""
@@ -47,6 +53,9 @@ class CommuteNotificationModule : Module() {
           chipText = input.content.chipText,
           countdownAtMs = input.content.countdownAtMs?.toLong(),
           mode = input.content.mode,
+          afterCountdown = input.content.afterCountdown?.let {
+            AfterCountdown(body = it.body, chipText = it.chipText)
+          },
         ),
         input.endLabel,
         input.channelName,

@@ -50,7 +50,8 @@ function androidPresenter(): LockSamplePresenter | null {
 			return Promise.resolve();
 		},
 		show: (sample, index) => {
-			const now = Date.now() / 1000;
+			const nowMs = Date.now();
+			const now = nowMs / 1000;
 			shown += 1;
 			const sessionId = `sample-${index}-${Math.round(now)}-${shown}`;
 			const model = lockScreenModel(lockSampleState(sample, now), {
@@ -62,7 +63,11 @@ function androidPresenter(): LockSamplePresenter | null {
 			});
 			notifier.show({
 				channelName: t("commute.notification.channel"),
-				content: notificationContent(model),
+				content: notificationContent(
+					model,
+					nowMs,
+					t("commute.lock.minutes.soon")
+				),
 				endLabel: t("commute.lock.action.end"),
 				planId: SAMPLE_PLAN_ID,
 				seq: 1,

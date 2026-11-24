@@ -6,6 +6,10 @@
     <receiver
       android:name="expo.modules.commutenotification.CommuteActionReceiver"
       android:exported="false" />
+    <!-- 진행 중 알림의 타이머가 끝나면 타이머 없이 "곧"으로 다시 그린다. -->
+    <receiver
+      android:name="expo.modules.commutenotification.CountdownEndReceiver"
+      android:exported="false" />
     <service
       android:name="expo.modules.commutenotification.CommuteActionTaskService"
       android:exported="false" />
