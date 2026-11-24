@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { BusMap, BusSnapshotVehicle } from "@/lib/map/map-client";
-import { busRouteModel } from "./bus-route-model";
+import { busRouteModel, lineVehicles } from "./bus-route-model";
 import type { BusRouteViewResponse } from "./detail-client";
 
 const NOW = Date.UTC(2026, 10, 24, 3, 0);
@@ -194,5 +194,48 @@ describe("busRouteModel", () => {
 			plate: null,
 			status: null,
 		});
+	});
+
+	it("방향을 안 골랐으면 고른 정류장이 있는 방향을 연다", () => {
+		const model = busRouteModel({
+			...base,
+			selectedSeq: 4,
+			view: view({ etaState: "estimated" }),
+		});
+		expect(model.stops.map((entry) => entry.seq)).toEqual([4, 5]);
+		expect(model.stops[0]?.state).toBe("current");
+		expect(model.stops[0]?.status).toEqual({
+			kind: "estimated",
+			text: "배차 약 8분",
+		});
+	});
+
+	it("방향도 정류장도 없으면 고른 차량이 있는 방향을 연다", () => {
+		const model = busRouteModel({
+			...base,
+			selectedVehicleId: "A",
+			vehicles: [vehicle("A", 4)],
+		});
+		expect(model.stops.map((entry) => entry.seq)).toEqual([4, 5]);
+	});
+
+	it("고른 정류장이 없어도 estimated면 배차간격을 따로 낸다", () => {
+		const estimated = busRouteModel({
+			...base,
+			view: view({ etaState: "estimated" }),
+		});
+		expect(estimated.headway).toEqual({
+			kind: "estimated",
+			text: "배차 약 8분",
+		});
+		expect(busRouteModel({ ...base, view: view() }).headway).toBeNull();
+		expect(busRouteModel(base).headway).toBeNull();
+	});
+});
+
+describe("lineVehicles", () => {
+	it("이 노선 차량만 남긴다", () => {
+		const list = [vehicle("A", 2), vehicle("X", 3, { routeId: "999" })];
+		expect(lineVehicles(map, list).map((entry) => entry.vehId)).toEqual(["A"]);
 	});
 });

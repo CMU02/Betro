@@ -17,7 +17,11 @@ export interface BusTimelineStop {
 }
 
 export interface BusRouteModel {
+	/** 지금 보이는 방향. 방향 이름이 없는 노선은 null이다. */
+	direction: string | null;
 	directions: string[];
+	/** 고른 정류장 없이도 보이는 배차간격. 도착을 모르는(estimated) 노선 보기에만 있다. */
+	headway: EtaStatus | null;
 	selectedVehicle: {
 		lowFloor: boolean;
 		nextStopName: string | null;
@@ -108,6 +112,15 @@ function selectedVehicleOf(
 	};
 }
 
+/** 스냅샷은 모든 노선의 차량이 섞여 있어 이 노선 차량만 남긴다. */
+export function lineVehicles(
+	map: BusMap,
+	vehicles: readonly BusSnapshotVehicle[]
+): BusSnapshotVehicle[] {
+	const routeKey = vehicleRouteKey(map.line);
+	return vehicles.filter((entry) => entry.routeId === routeKey);
+}
+
 /**
  * 07 버스 노선 상세의 모델. 스냅샷 차량은 `vehicle.routeId === vehicleRouteKey(map.line)`인 것만 쓴다.
  * 노선 보기가 없거나 estimated면 도착은 모르므로, 고른 정류장 한 곳에만 배차간격을 둔다.
@@ -122,23 +135,32 @@ export function busRouteModel(input: {
 	view: BusRouteViewResponse | null;
 }): BusRouteModel {
 	const { map, now, selectedSeq, view } = input;
-	const routeKey = vehicleRouteKey(map.line);
-	const onLine = input.vehicles.filter((entry) => entry.routeId === routeKey);
+	const onLine = lineVehicles(map, input.vehicles);
 	const ordered = withDirections(map);
 	const directions = uniqueDirections(ordered);
-	const direction =
+	const selectedVehicle = onLine.find(
+		(entry) => entry.vehId === input.selectedVehicleId
+	);
+	// 방향을 안 골랐으면 고른 정류장, 없으면 고른 차량이 있는 방향을 연다.
+	const anchorSeq = selectedSeq ?? selectedVehicle?.sectOrd ?? null;
+	const anchorDirection =
+		anchorSeq === null
+			? null
+			: (ordered.find((entry) => entry.seq === anchorSeq)?.direction ?? null);
+	let direction: string | null = directions[0] ?? null;
+	if (
 		input.selectedDirection !== null &&
 		directions.includes(input.selectedDirection)
-			? input.selectedDirection
-			: (directions[0] ?? null);
+	) {
+		direction = input.selectedDirection;
+	} else if (anchorDirection !== null) {
+		direction = anchorDirection;
+	}
 	const shown =
 		direction === null
 			? ordered
 			: ordered.filter((entry) => entry.direction === direction);
 
-	const selectedVehicle = onLine.find(
-		(entry) => entry.vehId === input.selectedVehicleId
-	);
 	// 고른 정류장이 없으면 고른 차량의 위치를 기준으로 지난 정류장을 가른다.
 	const currentSeq = selectedSeq ?? selectedVehicle?.sectOrd ?? null;
 	const live = view !== null && view.etaState === "live";
@@ -166,7 +188,12 @@ export function busRouteModel(input: {
 		};
 	});
 	return {
+		direction,
 		directions,
+		headway:
+			view === null || view.etaState !== "estimated"
+				? null
+				: headwayStatus(view.headwayMs),
 		selectedVehicle: selectedVehicleOf({ now, view }, ordered, selectedVehicle),
 		stops,
 	};

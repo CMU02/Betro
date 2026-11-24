@@ -1,5 +1,5 @@
 import { NaverMapView } from "@mj-studio/react-native-naver-map";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BusFrontIcon, StarIcon } from "lucide-react-native";
 import {
@@ -34,7 +34,12 @@ import {
 	type BusRouteModel,
 	type BusTimelineStop,
 	busRouteModel,
+	lineVehicles,
 } from "@/lib/detail/bus-route-model";
+import {
+	busRouteUnavailable,
+	settleBusRouteView,
+} from "@/lib/detail/bus-route-view-poll";
 import {
 	type BusRouteViewResponse,
 	fetchBusRouteView,
@@ -127,11 +132,19 @@ function useBusSnapshot(visible: boolean): BusSnapshot | null {
 	return query.data ?? null;
 }
 
-/** 서버가 모르는 노선(경기·인천 포함)이면 ok가 false다. 폴링 실패는 마지막 값을 둔다. */
+/** 서버가 모르는 노선(경기·인천 포함)이면 invalid다. 폴링 실패는 마지막 값을 둔다. */
 function useRouteView(line: string, visible: boolean) {
+	const queryClient = useQueryClient();
+	const queryKey = ["bus-detail", "view", line];
 	return useQuery({
-		queryFn: () => fetchBusRouteView(serverClient, line),
-		queryKey: ["bus-detail", "view", line],
+		queryFn: async () =>
+			settleBusRouteView(
+				queryClient.getQueryData<Awaited<ReturnType<typeof fetchBusRouteView>>>(
+					queryKey
+				),
+				await fetchBusRouteView(serverClient, line)
+			),
+		queryKey,
 		refetchInterval: visible ? VIEW_POLL_MS : false,
 		staleTime: 0,
 	});
@@ -308,9 +321,11 @@ function VehicleSummary({
 }
 
 function Freshness({
+	headway,
 	running,
 	view,
 }: {
+	headway: EtaStatus | null;
 	running: number;
 	view: BusRouteViewResponse | null;
 }) {
@@ -324,6 +339,11 @@ function Freshness({
 			<AppText className="text-text-secondary" variant="caption">
 				{t("busDetail.running", { n: running })}
 			</AppText>
+			{headway === null ? null : (
+				<AppText className="text-text-secondary" variant="caption">
+					{headway.text}
+				</AppText>
+			)}
 		</View>
 	);
 }
@@ -472,7 +492,12 @@ export default function BusRouteDetailScreen() {
 	const viewResult = viewQuery.data;
 	const view = viewResult?.ok ? viewResult.value : null;
 	const map = mapQuery.data ?? null;
-	const vehicles = snapshot?.vehicles ?? NO_VEHICLES;
+	const snapshotVehicles = snapshot?.vehicles ?? NO_VEHICLES;
+	// 스냅샷은 모든 노선의 차량이라 이 노선 차량만 지도와 모델에 쓴다.
+	const vehicles = useMemo(
+		() => (map === null ? NO_VEHICLES : lineVehicles(map, snapshotVehicles)),
+		[map, snapshotVehicles]
+	);
 	const route = view?.route ?? null;
 	const color = useMemo(
 		() => routeColor(route, isDark ? "dark" : "light"),
@@ -506,8 +531,8 @@ export default function BusRouteDetailScreen() {
 	const pickVehicle = useCallback((key: string) => {
 		setSelectedVehicleId((current) => (current === key ? null : key));
 	}, []);
-	// 서버가 모르는 노선(경기·인천 면허 포함)은 400이라 ok가 false다. 받은 적이 있으면 폴링 실패로 지우지 않는다.
-	const notFound = viewResult !== undefined && !viewResult.ok && view === null;
+	// 서버가 모르는 노선(경기·인천 면허 포함)은 400(invalid)일 때만 찾을 수 없음이다. 오프라인·503은 화면을 지우지 않는다.
+	const notFound = busRouteUnavailable(viewResult);
 	const title =
 		route === null ? "" : t("busDetail.title", { shortName: route.shortName });
 	return (
@@ -559,14 +584,18 @@ export default function BusRouteDetailScreen() {
 							<VehicleSummary selected={model.selectedVehicle} />
 						) : (
 							<>
-								<Freshness running={running} view={view} />
+								<Freshness
+									headway={model?.headway ?? null}
+									running={running}
+									view={view}
+								/>
 								<InlineNotice body={t("busDetail.notice")} />
 							</>
 						)}
 						<DirectionTabs
 							directions={model?.directions ?? NO_DIRECTIONS}
 							onChange={pickDirection}
-							selected={selectedDirection}
+							selected={model?.direction ?? null}
 						/>
 						{model === null ? null : (
 							<Timeline model={model} onSelect={setSelectedSeq} />
