@@ -2,14 +2,14 @@ import {
 	NaverMapMarkerOverlay,
 	NaverMapView,
 } from "@mj-studio/react-native-naver-map";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Storage from "expo-sqlite/kv-store";
 import { StarIcon } from "lucide-react-native";
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { withUniwind } from "uniwind";
+import { useCSSVariable, withUniwind } from "uniwind";
 
 import { ArrivalRow } from "@/components/transit/arrival-row";
 import { LineBadge } from "@/components/transit/line-badge";
@@ -21,15 +21,19 @@ import { OfflineNotice } from "@/components/ui/offline-notice";
 import { Section } from "@/components/ui/section";
 import { Segmented } from "@/components/ui/segmented";
 import { TopBar } from "@/components/ui/top-bar";
-import {
-	fetchStationView,
-	STATION_VIEW_MAX,
-	type StationView,
-} from "@/lib/detail/detail-client";
+import { fetchStationView, STATION_VIEW_MAX } from "@/lib/detail/detail-client";
 import {
 	type StationDirectionRow,
 	stationModel,
 } from "@/lib/detail/station-model";
+import {
+	type StationViewPhase,
+	type StationViewSnapshot,
+	settleStationView,
+	stationPollInterval,
+	stationViewPhase,
+} from "@/lib/detail/station-view-poll";
+import { useScreenVisible } from "@/lib/detail/use-screen-visible";
 import { appFavorites } from "@/lib/favorites/app-favorites";
 import { favoriteId } from "@/lib/favorites/favorites";
 import { t } from "@/lib/i18n/t";
@@ -37,7 +41,6 @@ import type { MessageKey } from "@/lib/i18n/translate";
 import type { SubwayMap } from "@/lib/map/map-client";
 import { createMapRefCache } from "@/lib/map/map-client";
 import { loadRefMap, MAP_REF_STALE_MS } from "@/lib/map/use-map-data";
-import type { RefResult } from "@/lib/ref/ref-client";
 import {
 	loadSearchIndex,
 	type SearchStation,
@@ -160,7 +163,24 @@ function DirectionRows({
 	));
 }
 
-function FirstLastRows({ directions }: { directions: StationDirectionRow[] }) {
+function FirstLastRows({
+	directions,
+	phase,
+}: {
+	directions: StationDirectionRow[];
+	phase: StationViewPhase;
+}) {
+	if (phase !== "ready") {
+		return (
+			<AppText className="px-4 py-3 text-text-secondary" variant="bodyS">
+				{t(
+					phase === "loading"
+						? "stationDetail.loading"
+						: "stationDetail.unavailable.title"
+				)}
+			</AppText>
+		);
+	}
 	const hasClock = directions.some(
 		(d) => d.firstLabel !== null || d.lastLabel !== null
 	);
@@ -243,13 +263,14 @@ function StationBody({
 	onOpenTrain: (trainNo: string, line: string) => void;
 	onRetry: () => void;
 	station: SearchStation;
-	viewQuery: { data?: RefResult<StationView>; dataUpdatedAt: number };
+	viewQuery: { data?: StationViewSnapshot };
 }) {
 	const [picked, setPicked] = useState<string | null>(null);
 	const maps = useLineMaps(lines);
-	const view = viewQuery.data?.ok ? viewQuery.data.value : null;
-	// 응답을 받은 시각을 지금으로 쓴다. 15초마다 새 응답이 와서 다시 계산한다.
-	const receivedAt = viewQuery.dataUpdatedAt;
+	const phase = stationViewPhase(viewQuery.data);
+	const view = viewQuery.data?.result.ok ? viewQuery.data.result.value : null;
+	// 응답을 받은 시각을 지금으로 쓴다. 폴링이 실패하면 마지막 응답과 그 시각을 그대로 둔다.
+	const receivedAt = viewQuery.data?.receivedAt ?? 0;
 	const models = useMemo(
 		() => (view === null ? [] : stationModel(view, maps, receivedAt)),
 		[view, maps, receivedAt]
@@ -287,7 +308,7 @@ function StationBody({
 			>
 				<ArrivalsBody
 					directions={directions}
-					failed={viewQuery.data !== undefined && !viewQuery.data.ok}
+					failed={phase === "failed"}
 					line={selectedLine}
 					loaded={view !== null}
 					onOpenTrain={onOpenTrain}
@@ -295,7 +316,7 @@ function StationBody({
 				/>
 			</Section>
 			<Section title={t("stationDetail.firstLast")}>
-				<FirstLastRows directions={directions} />
+				<FirstLastRows directions={directions} phase={phase} />
 			</Section>
 		</View>
 	);
@@ -324,16 +345,26 @@ export default function StationDetailScreen() {
 		() => (station === null ? [] : stationLineKeys(station)),
 		[station]
 	);
+	const queryClient = useQueryClient();
+	// 화면이 가려지거나 앱이 뒤로 가면 폴링을 멈춘다.
+	const visible = useScreenVisible();
+	const viewKey = ["station-view", key];
 	const viewQuery = useQuery({
-		enabled: station !== null,
-		queryFn: () =>
-			fetchStationView(
-				serverClient,
-				station?.members.slice(0, STATION_VIEW_MAX) ?? []
+		enabled: station !== null && visible,
+		queryFn: async () =>
+			settleStationView(
+				queryClient.getQueryData<StationViewSnapshot>(viewKey),
+				await fetchStationView(
+					serverClient,
+					station?.members.slice(0, STATION_VIEW_MAX) ?? []
+				),
+				Date.now()
 			),
-		queryKey: ["station-view", key],
-		refetchInterval: STATION_VIEW_POLL_MS,
+		queryKey: viewKey,
+		refetchInterval: stationPollInterval(visible, STATION_VIEW_POLL_MS),
 	});
+	// lucide는 color를 stroke에만 써서 fill=currentColor가 검정이 된다. 토큰 색을 직접 넘긴다.
+	const starColor = useCSSVariable("--color-icon-primary");
 
 	const goBack = useCallback(() => router.back(), [router]);
 	const retry = useCallback(() => {
@@ -371,7 +402,7 @@ export default function StationDetailScreen() {
 		>
 			<Star
 				colorClassName="accent-icon-primary"
-				fill={isFavorite ? "currentColor" : "none"}
+				fill={isFavorite && typeof starColor === "string" ? starColor : "none"}
 				size={STAR_SIZE}
 			/>
 		</IconButton>
