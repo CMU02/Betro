@@ -54,7 +54,7 @@
 4. **빌드 번호는 EAS가 셉니다. [설계 판단]** `appVersionSource: "remote"`이고 production 프로필에 `autoIncrement: true`입니다. `expo-updates`(OTA)는 쓰지 않습니다.
 5. **`aps-environment`는 바꾸지 않습니다. [설계 판단]** 배포 서명 때 프로비저닝 프로필의 값(production)으로 바뀌는지를 Part C에서 아카이브로 확인합니다. 서버는 토큰의 환경을 앱이 보낸 값으로 정합니다(`CommuteTokenReporter.swift:197-203`).
 6. **iPad는 받지 않습니다. [설계 판단, 열린 질문]** `supportsTablet: false`입니다. iPad 화면과 스크린숏 심사를 피합니다.
-7. **production 빌드는 Sentry DSN이 있어야 합니다. [설계 판단]** 7.2 ①(크래시 0회 확인)은 수집 도구가 켜져 있어야 셀 수 있습니다. `EAS_BUILD_PROFILE=production`인데 `EXPO_PUBLIC_SENTRY_DSN`이 없으면 설정 단계에서 멈춥니다.
+7. **production 빌드는 Sentry DSN이 있어야 합니다. [설계 판단]** 7.2 ①(크래시 0회 확인)은 수집 도구가 켜져 있어야 셀 수 있습니다. `EAS_BUILD_PROFILE=production`인데 `EXPO_PUBLIC_SENTRY_DSN`이 없으면 설정 단계에서 멈춥니다. 같은 이유로 production 빌드는 `SENTRY_AUTH_TOKEN`·`SENTRY_ORG`·`SENTRY_PROJECT`가 없으면 빌드 단계에서 멈춥니다(소스맵이 없으면 크래시 줄을 읽을 수 없습니다). 이 값들을 EAS에 넣기 전에는 production 빌드가 되지 않습니다.
 
 ## Global Constraints
 
@@ -67,7 +67,7 @@
 - 화면 글자는 `messages-ko.ts` 키로 씁니다. 새 코드에 `Asia/Seoul`, `+09:00` 리터럴을 쓰지 않습니다(스펙 5.10).
 - 광고 SDK, 결제, 로그인 유도를 넣지 않습니다(스펙 11.1, 2장).
 - 서버에 주소·좌표·장소 이름을 보내지 않습니다(스펙 5.2). 개인정보 처리방침도 이 사실과 다르게 쓰지 않습니다.
-- 서울 동작을 바꾸지 않습니다. 기존 테스트의 단언은 이 계획이 일부러 바꾸는 인터페이스에서만 고칩니다. 고치는 곳은 다음 셋뿐입니다.
+- 서울 동작을 바꾸지 않습니다. 기존 테스트의 단언은 이 계획이 일부러 바꾸는 인터페이스에서만 고칩니다. 교차 검토 때 확인한 곳은 다음 셋입니다. 그 밖의 단언을 고쳐야 하면 그 Task 본문에 단언과 이유를 적은 뒤 고칩니다. Task 1의 `stoppedToday`는 스냅샷 전체를 `toEqual`로 비교하는 기존 테스트가 없어 단언을 바꾸지 않습니다.
   - Task 3: `data-sources.test.ts`의 제공 기관 4곳 단언
   - Task 7: `notification-content.test.ts`의 인자 하나 `toEqual` 단언
   - Task 9: `schedule.test.ts`의 `dev defaults` `toEqual` 단언
@@ -91,7 +91,7 @@ Model: opus
 
 **Files:**
 - Modify: `packages/realtime/src/state.ts`. `Snapshot`에 `stoppedToday: boolean`을 더합니다.
-- Modify: `apps/server/src/collector/core.ts:140-156`, `apps/server/src/collector/collector-state.ts`. 스냅샷 캐시 키에 `stoppedToday`를 넣습니다. `stoppedSources(now)`와 새 `stoppedToday(kind, now)`는 `isStopped(kind, now) || remaining(this.budget, kind, config, now) <= 0`으로 셉니다(`remaining`은 `packages/realtime/src/schedule.ts`에서 export).
+- Modify: `apps/server/src/collector/core.ts:140-156`, `apps/server/src/collector/collector-state.ts`. 스냅샷 캐시 키에 `stoppedToday`를 넣습니다. `stoppedSources(now)`와 새 `stoppedToday(kind, now)`는 `isStopped(kind, now) || remaining(this.budget, kind, config, now) <= 0`으로 셉니다(`remaining`은 `packages/realtime/src/budget.ts:72`, 운행 시간과 상관없이 하루 예산에서 쓴 수를 뺀 값).
 - Modify: `apps/native/lib/map/map-client.ts`. 두 스냅샷 스키마에 `stoppedToday: z.boolean().default(false)`
 - Create: `apps/native/lib/map/estimated-mode.ts`
 - Modify: `apps/native/lib/map/use-map-data.ts`. `MapData`에 `estimatedMode: EstimatedMode`를 더합니다. 이미 있는 `RENDER_TICK_MS` 시계(`:544`)로 다시 셉니다.
@@ -181,8 +181,10 @@ export function fetchScheduledTrains(client: ServerClient, line: string): Promis
  * 가지는 `subwayBranchForLeg`로 고른다. 위치는 `createSubwayTrack(branch)`의 역 `distanceM` 두 개를 `progress`로 보간한 거리를
  * `pointAlong(shape, distanceM)`에 넣어 낸다. 차량 ID는 `scheduled:<tripId>`, `estimated: true`.
  */
-export function scheduledVehicles(trains: readonly ScheduledTrain[], leg: SubwayLeg, map: SubwayMap): RenderVehicle[];
+export function scheduledVehicles(trains: readonly ScheduledTrain[], leg: SubwayLeg, map: SubwayMap, legIndex: number): RenderVehicle[];
 ```
+
+- `RenderVehicle`(`use-map-data.ts:72-90`)의 필드를 모두 채웁니다. `legIndex`는 그 구간 번호, `motion`은 움직임 없이 그 지점에 멈춘 상태, `observedPosition`·`latitude`·`longitude`는 보간한 지점, `observedAt`·`lastSeenAt`은 응답의 `generatedAt`, `positionSeq`는 앞 역 순번, `statnId`는 앞 역입니다.
 
 - 서버: `now`가 속한 서비스일(3시 경계)과 요일 구분으로, `depart(앞 역) ≤ nowSec < arrive(다음 역)`인 trip을 고릅니다.
   - 시각은 `ref/map.ts` `loadRunTimes`처럼 `COALESCE(depart_sec, arrive_sec)`(앞 역), `COALESCE(arrive_sec, depart_sec)`(다음 역)이고, `arrive > depart`인 쌍만 씁니다. 두 열 모두 null일 수 있습니다(`transit.ts:178-179`).

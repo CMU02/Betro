@@ -390,7 +390,7 @@ busRouteView: (line: LineRef) => Promise<BusRouteView>;
 - `#exclusive` 안에서 `#collectBus(routeId, false, raw, now, true, "map")`를 부릅니다. 세션과 같은 캐시 키(`busRoute:<id>`)와 지도 몫 규칙을 씁니다.
 - `stops`는 받은 `RouteStopArrival[]`의 정류장마다 차량(가까운 순)입니다. 원자료가 없으면 빈 배열입니다.
 - `headwayMs`는 실행기 포트 `this.#ports.busSchedules([line])`(`ports.ts:138`)와 `scheduledHeadwayMs(…, now, SOURCE_TIMEZONE)`입니다. `readBusSchedules`를 직접 부르지 않습니다(테스트가 포트를 가짜로 바꿉니다).
-- `etaState`는 다음이 모두 맞을 때만 `"live"`입니다. 원자료가 있고, 차량이 한 대 이상 있고(운행 종료 `headerCd 8`은 `now: []`로 저장됨, `cf-ports.ts:635-641`), `now − min(fetchedAt, 가장 이른 madeAt) ≤ staleAfterMs`입니다(`madeAt`은 출처의 `mkTm`).
+- `etaState`는 다음이 모두 맞을 때만 `"live"`입니다. 원자료가 있고, 차량이 한 대 이상 있고(운행 종료 `headerCd 8`은 `now: []`로 저장됨, `cf-ports.ts:635-641`), `now − fetchedAt ≤ staleAfterMs`입니다. 정류장 하나의 `mkTm`이 늦다고 노선 전체를 추정으로 돌리지 않습니다. 각 차량의 `etaAt`은 그 정류장의 `madeAt` 기준입니다(`seoul-bus.ts:191`).
 - 라우트 본문은 `{ line }`(`.strict()`)이고 `seoul-bus:<숫자>`만 받습니다. 그다음 D1에서 현재 배치의 그 노선을 `seoulRouteWhere`로 찾습니다. 없거나 서울 노선이 아니면(경기·인천 면허 7·8 포함) 400이고 실행기를 부르지 않습니다. 설치 인증이 있고, 응답은 `no-store`입니다.
 
 - [ ] **Step 1: 실패하는 테스트를 씁니다**
