@@ -122,12 +122,16 @@ const busSnapshotSchema = z.object({
 	staleSince: z.number().nullable(),
 	/** 그날 멈춘 지역 출처. 옛 스냅샷에는 없다. */
 	stoppedSources: z.array(z.enum(["gbis", "tago"])).default([]),
+	/** 그날 서울 버스 수집이 멈췄거나 예산을 다 썼다. 옛 스냅샷에는 없다. */
+	stoppedToday: z.boolean().default(false),
 	vehicles: z.array(busVehicleSchema),
 });
 
 const subwaySnapshotSchema = z.object({
 	generatedAt: z.number(),
 	staleSince: z.number().nullable(),
+	/** 그날 지하철 수집이 멈췄거나 예산을 다 썼다. 옛 스냅샷에는 없다. */
+	stoppedToday: z.boolean().default(false),
 	vehicles: z.array(subwayVehicleSchema),
 });
 

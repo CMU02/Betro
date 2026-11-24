@@ -706,6 +706,60 @@ describe("CollectorCore", () => {
 		expect(next.etag).toHaveLength(16);
 	});
 
+	// 서울 지하철 API에는 일일 한도 초과 코드가 없어(데이터 출처 조사) 상류가 멈추는 길은 인증 실패뿐이다.
+	// 한도는 우리 예산 소진으로 센다(아래 테스트).
+	it("서울 지하철이 인증 실패로 멈추면 지하철 스냅샷의 stoppedToday가 true이고 ETag가 바뀐다", async () => {
+		const h = makeHarness({
+			respond: (url) =>
+				ALL_URL.test(url)
+					? { body: "Unauthorized", status: 401 }
+					: fixtureResponder(url),
+		});
+		// 멈추기 전 스냅샷을 먼저 읽어 캐시가 무효화되는지 본다.
+		const before = await h.core.snapshot("subway");
+		expect(JSON.parse(before.body).stoppedToday).toBe(false);
+		await h.core.tick();
+		expect(subwayCalls(h)).toHaveLength(1);
+		const after = await h.core.snapshot("subway");
+		expect(JSON.parse(after.body).stoppedToday).toBe(true);
+		expect(after.etag).not.toBe(before.etag);
+		// 버스는 멈추지 않았다.
+		expect(JSON.parse((await h.core.snapshot("bus")).body).stoppedToday).toBe(
+			false
+		);
+	});
+
+	it("다음 날(KST)에는 stoppedToday가 false로 돌아온다", async () => {
+		const h = makeHarness({
+			respond: (url) =>
+				ALL_URL.test(url)
+					? { body: "Unauthorized", status: 401 }
+					: fixtureResponder(url),
+		});
+		await h.core.tick();
+		const stopped = await h.core.snapshot("subway");
+		expect(JSON.parse(stopped.body).stoppedToday).toBe(true);
+		h.clock.now = NEXT_KST_DAY;
+		const nextDay = await h.core.snapshot("subway");
+		expect(JSON.parse(nextDay.body).stoppedToday).toBe(false);
+		expect(nextDay.etag).not.toBe(stopped.etag);
+	});
+
+	it("지하철 하루 예산을 다 쓰면 상류 오류가 없어도 stoppedToday가 true다", async () => {
+		const h = makeHarness({ config: devConfig({ DAILY_BUDGET_SUBWAY: "1" }) });
+		expect(
+			JSON.parse((await h.core.snapshot("subway")).body).stoppedToday
+		).toBe(false);
+		await h.core.tick();
+		expect(subwayCalls(h)).toHaveLength(1);
+		expect(h.logs.some((line) => line.includes("stopped for the day"))).toBe(
+			false
+		);
+		const body = JSON.parse((await h.core.snapshot("subway")).body);
+		expect(body.stoppedToday).toBe(true);
+		expect(body.vehicles.length).toBeGreaterThan(0);
+	});
+
 	it("counts every call when concurrent prod calls straddle a 5-minute bucket", async () => {
 		const clock = { now: T0 + 4 * MINUTE + 58 * SECOND };
 		let release: () => void = () => undefined;
@@ -1185,13 +1239,15 @@ describe("CollectorCore regional bus watches", () => {
 			respond?: Responder;
 			state?: MemoryState;
 			clock?: { now: number };
+			/** 기본은 `watchOnly`. */
+			config?: CollectorConfig;
 			/** 참조의 TAGO 도시 코드. 기본 "23"(인천), null이면 없다. */
 			tagoCity?: string | null;
 		} = {}
 	): Harness {
 		const h = makeHarness({
 			clock: options.clock,
-			config: watchOnly,
+			config: options.config ?? watchOnly,
 			respond: options.respond ?? regionalResponder(),
 			state: options.state,
 		});
@@ -1294,6 +1350,29 @@ describe("CollectorCore regional bus watches", () => {
 		expect((await busSnapshot(h)).stoppedSources).toEqual([]);
 		await h.core.tick();
 		expect(callsTo(h, GBIS_URL)).toHaveLength(1);
+	});
+
+	it("GBIS 위치 예산을 다 쓰면 버스 스냅샷 stoppedSources에 gbis가 있다", async () => {
+		const h = regionalHarness({
+			config: {
+				...prodConfig({ DAILY_BUDGET_GBIS_LOCATION_COLLECTOR: "1" }, []),
+				subwayLines: [],
+			},
+		});
+		await h.core.watchBusRoutes("install-1", [GBIS_6411], T0 + 30 * MINUTE);
+		// 예산을 쓰기 전 스냅샷을 먼저 읽어 캐시가 무효화되는지 본다.
+		expect((await busSnapshot(h)).stoppedSources).toEqual([]);
+		await h.core.tick();
+		expect(callsTo(h, GBIS_URL)).toHaveLength(1);
+		expect(h.logs.some((line) => line.includes("stopped for the day"))).toBe(
+			false
+		);
+		const body = (await busSnapshot(h)) as SnapshotBody & {
+			stoppedToday: boolean;
+		};
+		expect(body.stoppedSources).toEqual(["gbis"]);
+		// 서울 버스 예산은 남았다.
+		expect(body.stoppedToday).toBe(false);
 	});
 
 	it("GBIS XML 게이트웨이 한도 초과(22)도 그날 GBIS를 멈춘다", async () => {

@@ -404,15 +404,20 @@ function useCenterOnHere(
 	}, [here, mapRef, ready, userMoved]);
 }
 
-/** 칩 위·경로 목록 아래의 알약들. 지금 경로, 노선이 모두 꺼졌다는 안내, 실시간이 없는 구간 안내, 시간표 추정 도착 예상이다. */
+/**
+ * 칩 위·경로 목록 아래의 알약들. 지금 경로, 노선이 모두 꺼졌다는 안내, 실시간이 없는 구간 안내,
+ * 시간표 추정 모드(14), 시간표 추정 도착 예상이다.
+ */
 function RouteStatus({
 	allHidden,
 	estimated,
+	estimatedMode,
 	noRealtime,
 	routeLabel,
 }: {
 	allHidden: boolean;
 	estimated: string | null;
+	estimatedMode: boolean;
 	noRealtime: boolean;
 	routeLabel: string | null;
 }) {
@@ -421,9 +426,30 @@ function RouteStatus({
 			{routeLabel === null ? null : <MapPill label={routeLabel} />}
 			{allHidden ? <MapPill label={t("map.allHidden")} /> : null}
 			{noRealtime ? <MapPill label={t("map.noRealtime")} /> : null}
+			{estimatedMode ? (
+				<MapPill label={t("map.estimatedMode")} tone="estimated" />
+			) : null}
 			{estimated === null ? null : (
 				<MapPill label={estimated} tone="estimated" />
 			)}
+		</View>
+	);
+}
+
+/** 장소가 없을 때 검색창 아래. "근처 지하철"과, 그 옆에 시간표 추정 모드(14)다. */
+function NearbyStatus({
+	estimatedMode,
+	shown,
+}: {
+	estimatedMode: boolean;
+	shown: boolean;
+}) {
+	return (
+		<View className="flex-row gap-2 px-4" pointerEvents="box-none">
+			{shown ? <MapPill label={t("map.nearby")} tone="live" /> : null}
+			{shown && estimatedMode ? (
+				<MapPill label={t("map.estimatedMode")} tone="estimated" />
+			) : null}
 		</View>
 	);
 }
@@ -474,6 +500,7 @@ function PlacesOverlay({
 				<RouteStatus
 					allHidden={data.allHidden}
 					estimated={estimatedOf(data)}
+					estimatedMode={data.estimatedMode.bus || data.estimatedMode.subway}
 					noRealtime={data.legs.some((mapLeg) => !mapLeg.realtime)}
 					routeLabel={current === null ? null : routeOptionLabel(current)}
 				/>
@@ -759,11 +786,10 @@ export default function MapTab() {
 						selection={selection}
 					/>
 				) : (
-					<View className="px-4" pointerEvents="box-none">
-						{nearby.paths.length > 0 ? (
-							<MapPill label={t("map.nearby")} tone="live" />
-						) : null}
-					</View>
+					<NearbyStatus
+						estimatedMode={nearby.estimatedMode}
+						shown={nearby.paths.length > 0}
+					/>
 				)}
 			</View>
 			{hasPlaces ? null : (

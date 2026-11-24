@@ -4,6 +4,7 @@ import {
 	type BudgetKind,
 	type BudgetState,
 	emptyBudget,
+	remaining,
 } from "@Betro/realtime/budget";
 import type { RegionalPrev } from "@Betro/realtime/bus/regional-normalize";
 import { dedupeRaw, sha256Hex } from "@Betro/realtime/history";
@@ -365,11 +366,27 @@ export class CollectorState {
 		);
 	}
 
-	/** 그날(KST) 멈춘 지역 출처(버스 스냅샷 `stoppedSources`). */
-	stoppedSources(now: number): RegionalSource[] {
+	/**
+	 * 그날(KST) 이 소스에서 실시간을 더 받지 못하는가(스냅샷 `stoppedToday`·`stoppedSources`).
+	 * 한도 초과·인증 실패로 멈췄거나(`isStopped`) 그날 예산을 다 썼으면 true다. 예산 소진은
+	 * `stop`으로 남지 않으므로 여기서 함께 센다. `#poll`과 알림은 `isStopped`만 본다.
+	 */
+	stoppedToday(
+		kind: BudgetKind,
+		config: CollectorConfig,
+		now: number
+	): boolean {
+		return (
+			this.isStopped(kind, now) ||
+			remaining(this.budget, kind, config, now) <= 0
+		);
+	}
+
+	/** 그날(KST) 멈췄거나 예산을 다 쓴 지역 출처(버스 스냅샷 `stoppedSources`). */
+	stoppedSources(config: CollectorConfig, now: number): RegionalSource[] {
 		const sources: RegionalSource[] = ["gbis", "tago"];
 		return sources.filter((source) =>
-			this.isStopped(regionalBudgetKind(source), now)
+			this.stoppedToday(regionalBudgetKind(source), config, now)
 		);
 	}
 

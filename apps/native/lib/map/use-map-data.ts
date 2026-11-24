@@ -14,6 +14,7 @@ import { serverClient } from "@/lib/server/app-server";
 
 import { appMotionMetrics } from "./app-motion-metrics";
 import { appWatchRegistry } from "./app-watch-registry";
+import { type EstimatedMode, estimatedModeOf } from "./estimated-mode";
 import { legSpanM } from "./leg-span";
 import {
 	allLinesHidden,
@@ -21,6 +22,7 @@ import {
 	busVehiclesForLeg,
 	subwayBranchForLeg,
 	subwayVehiclesForLeg,
+	vehicleRouteKey,
 } from "./leg-vehicles";
 import {
 	type BusMap,
@@ -51,7 +53,12 @@ import {
 	type TrackPoint,
 } from "./motion";
 import { createPoller } from "./polling";
-import { mapLegFlags, snapshotKinds, watchRefsOf } from "./regional-legs";
+import {
+	type MapLegFlags,
+	mapLegFlags,
+	snapshotKinds,
+	watchRefsOf,
+} from "./regional-legs";
 import type { MapSelection } from "./selection";
 import { viewFromSession } from "./session-view";
 import { useMapVisible } from "./use-map-visible";
@@ -108,6 +115,8 @@ export interface MapLeg {
 
 export interface MapData {
 	allHidden: boolean;
+	/** 이 경로가 보는 지하철·서울 버스의 시간표 추정 모드(14). 1초 시계로 다시 센다. */
+	estimatedMode: EstimatedMode;
 	legs: MapLeg[];
 	route: Route | null;
 	smoothVehicleMotion: boolean;
@@ -342,6 +351,17 @@ function renderLeg(args: {
 	};
 }
 
+/** 지도가 차량을 그리는 서울 버스 노선의 맨 ID. 지역 노선은 `stoppedSources`로 따로 다룬다. */
+function seoulBusRouteIds(legs: readonly MapLegFlags[]): string[] {
+	const ids = legs
+		.filter(
+			({ leg, showVehicles }) =>
+				showVehicles && leg.mode === "bus" && leg.line.startsWith("seoul-bus:")
+		)
+		.map(({ leg }) => vehicleRouteKey(leg.line));
+	return [...new Set(ids)];
+}
+
 function trackShape(legTrack: LegTrack | null): [number, number][] {
 	return legTrack === null ? [] : [...legTrack.track.shape];
 }
@@ -549,6 +569,23 @@ export function useMapData(
 		return () => clearInterval(timer);
 	}, [visible]);
 
+	// 시간표 추정 모드. 경로가 바뀌어도 스냅샷 상태는 남으므로, 이 경로가 차량을 그리는 종류의 스냅샷만 본다.
+	const busRouteIds = useMemo(
+		() => seoulBusRouteIds(legsWithFlags),
+		[legsWithFlags]
+	);
+	const mode = estimatedModeOf({
+		bus: busRouteIds.length > 0 ? snapshots.bus : null,
+		busRouteIds,
+		now: nowMs,
+		subway: kinds.includes("subway") ? snapshots.subway : null,
+	});
+	// 1초마다 새 객체가 되지 않게 두 값이 바뀔 때만 만든다.
+	const estimatedMode = useMemo<EstimatedMode>(
+		() => ({ bus: mode.bus, subway: mode.subway }),
+		[mode.bus, mode.subway]
+	);
+
 	// biome-ignore lint/correctness/useExhaustiveDependencies: motionVersion이 ref 안 상태의 변경을 알린다.
 	const legs = useMemo<MapLeg[]>(
 		() =>
@@ -579,6 +616,7 @@ export function useMapData(
 
 	return {
 		allHidden,
+		estimatedMode,
 		legs,
 		route,
 		smoothVehicleMotion: preferences.smoothVehicleMotion,

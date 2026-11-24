@@ -133,22 +133,26 @@ export class CollectorCore {
 	}
 
 	/**
-	 * `GET /v1/snapshot/:kind` 본문. 최신 상태와 그날 멈춘 지역 출처가 바뀌지 않았으면 같은
-	 * 본문·ETag. 멈춤은 다음 KST 날 저절로 풀리므로 캐시 키에 넣는다.
+	 * `GET /v1/snapshot/:kind` 본문. 최신 상태와 그날 멈춤(이 종류의 `stoppedToday`, 버스의 지역
+	 * 출처)이 바뀌지 않았으면 같은 본문·ETag. 멈춤은 예산 소진으로도 생기고 다음 KST 날 저절로
+	 * 풀리므로 상태 버전과 따로 캐시 키에 넣는다.
 	 */
 	async snapshot(kind: SnapshotKind): Promise<SnapshotResponse> {
 		const state = await this.#state();
+		const { clock, config } = this.#ports;
+		const now = clock();
 		const version = state.versions[kind];
 		const stoppedSources =
-			kind === "bus" ? state.stoppedSources(this.#ports.clock()) : [];
-		const stopped = stoppedSources.join(",");
+			kind === "bus" ? state.stoppedSources(config, now) : [];
+		const stoppedToday = state.stoppedToday(kind, config, now);
+		const stopped = `${stoppedToday}|${stoppedSources.join(",")}`;
 		const cached = this.#snapshots.get(kind);
 		if (cached?.version === version && cached.stopped === stopped) {
 			return cached.response;
 		}
 		const generatedAt = state.core.changedAt[kind] ?? state.loadedAt;
 		const body = JSON.stringify(
-			state.latest.snapshot(kind, generatedAt, stoppedSources)
+			state.latest.snapshot(kind, generatedAt, stoppedSources, stoppedToday)
 		);
 		const etag = (await sha256Hex(body)).slice(0, ETAG_LENGTH);
 		const response = { body, etag };

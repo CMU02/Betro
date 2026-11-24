@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { serverClient } from "@/lib/server/app-server";
 
 import { appMotionMetrics } from "./app-motion-metrics";
+import { estimatedModeOf } from "./estimated-mode";
 import {
 	fetchSnapshot,
 	fetchSubwayStations,
@@ -124,6 +125,8 @@ async function loadStations() {
  * 서버에는 노선 ref로 참조 지도만 받는다. 위치는 보내지 않는다. 폴링은 지도가 보일 때만 돈다(4.5).
  */
 export function useNearbyTrains(here: Coordinate | null): {
+	/** 근처 지하철이 시간표 추정 모드인가(14). */
+	estimatedMode: boolean;
 	paths: NearbyPath[];
 	trains: NearbyTrain[];
 } {
@@ -164,10 +167,11 @@ export function useNearbyTrains(here: Coordinate | null): {
 		[lines, refDataKey]
 	);
 
+	const polling = visible && lines.length > 0;
 	const [snapshot, setSnapshot] = useState<SubwaySnapshot | null>(null);
 	const etag = useRef<string | null>(null);
 	useVisiblePoll(
-		visible && lines.length > 0,
+		polling,
 		`nearby-snapshot:${lines.join(",")}`,
 		SNAPSHOT_INTERVAL_MS,
 		async () => {
@@ -179,6 +183,25 @@ export function useNearbyTrains(here: Coordinate | null): {
 			setSnapshot(result.value.snapshot as SubwaySnapshot);
 		}
 	);
+
+	// 304가 이어지면 스냅샷이 바뀌지 않으므로, 보이는 동안 폴링 간격마다 시각을 새로 읽어 추정 모드를 다시 센다.
+	const [nowMs, setNowMs] = useState(Date.now);
+	useEffect(() => {
+		if (!polling) {
+			return;
+		}
+		setNowMs(Date.now());
+		const timer = setInterval(() => setNowMs(Date.now()), SNAPSHOT_INTERVAL_MS);
+		return () => clearInterval(timer);
+	}, [polling]);
+	const estimatedMode =
+		lines.length > 0 &&
+		estimatedModeOf({
+			bus: null,
+			busRouteIds: [],
+			now: nowMs,
+			subway: snapshot,
+		}).subway;
 
 	// 관측이 들어오면 열차별 움직임을 이어 간다. 스냅샷에서 빠진 열차는 버린다.
 	const motion = useRef(new Map<string, MotionState>());
@@ -214,5 +237,5 @@ export function useNearbyTrains(here: Coordinate | null): {
 		[here, trains]
 	);
 
-	return { paths, trains: shown };
+	return { estimatedMode, paths, trains: shown };
 }

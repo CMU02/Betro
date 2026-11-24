@@ -329,6 +329,8 @@ export const ko = {
 		},
 		/** 실시간 버스가 아직 없을 때 승차 정류장 도착 예상(지도 설계 2.6). 단정하지 않는다. */
 		estimatedBoard: "{line} · 시간표 추정 · 약 {minutes}분 뒤",
+		/** 실시간이 그날 멈췄거나 3분 넘게 끊겨 시간표로 추정하는 중(14, 지도 설계 5장). */
+		estimatedMode: "시간표 추정 모드",
 		nearby: "근처 지하철",
 		noRealtime: "실시간 정보 없음",
 		routeMenu: {
