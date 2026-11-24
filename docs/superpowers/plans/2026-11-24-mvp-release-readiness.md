@@ -1,0 +1,635 @@
+# MVP 출시 준비 Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** MVP 설계 8장 6단계 "출시 준비" 중 코드와 설정으로 할 수 있는 일을 끝냅니다. 7.2·7.3 기준을 받칠 코드, 출시 전에 고칠 남은 일, 그리고 사용자 확인이 필요한 기기 확인과 배포 목록입니다.
+
+**Architecture:** 세 Part입니다.
+- **Part A(7.2·7.3).** 시간표 추정 모드(14)의 화면 표시와 시간표 위치 열차, 데이터 출처(13), 개인정보 처리방침과 오픈소스 고지, 릴리스 빌드 설정입니다.
+- **Part B(남은 일).** 조사에서 확인한 남은 일을 하나씩 테스트와 함께 고칩니다.
+- **Part C.** 기기 확인과 배포 단계를 한곳에 모읍니다. 이 Task는 사용자 확인 뒤에만 진행합니다.
+
+실사용 검증(7.1, 2주 크래시 관찰, 지표 읽기), 스토어 등록 자료(스크린숏, 설명), 길찾기는 이 계획에 없습니다.
+
+**Tech Stack:** TypeScript, Bun test, Hono on Cloudflare Workers + Durable Objects, D1, Expo(React Native, Hermes), EAS Build, Kotlin(Android 알림 모듈), Sentry.
+
+**Spec:**
+- `docs/superpowers/specs/2026-11-05-mvp-design.md` 4.1(13·14), 5.2, 5.8, 5.9, 7.2, 7.3, 8장 6단계, 11.1
+- `docs/superpowers/specs/2026-11-20-mvp4-map-design.md` 4.4, 5장(14)
+- `docs/research/2026-10-30-data-sources.md`(출처 표시와 라이선스)
+- 앞 계획: `docs/superpowers/plans/2026-11-24-mvp-search-detail.md`. **그 계획이 끝난 뒤에 합니다.** 시간표 추정 표시가 새 화면에도 걸리고, 두 계획 모두 `messages-ko.ts`와 설정 화면을 고칩니다.
+
+## 조사에서 확인한 것 (2026-11-24, HEAD 7c2b33c)
+
+1. **14 시간표 추정 모드는 일부만 있습니다.** 조사 문서는 "만들어짐"이라고 했지만 코드는 다릅니다.
+   - 있는 것: 버스 구간 예상이 추정이면 지도에 "{노선} · 시간표 추정 · 약 N분 뒤" 알약을 띄웁니다(`map-labels.ts:74` `estimatedBoardNotice`). 차량 시트도 method로 "시간표 추정"을 붙입니다.
+   - 없는 것:
+     - 서울 지하철·버스 수집이 한도로 멈춰도 스냅샷에 그 사실이 없습니다. `stoppedSources`는 `gbis | tago`만 담습니다(`collector/core.ts:142`).
+     - 앱은 `staleSince`를 읽기만 하고 쓰지 않습니다.
+     - 열차를 시간표 위치로 그리는 코드도 없습니다(스펙 5.8).
+2. **iOS 위치 권한에 영어 기본 문구가 들어갑니다.** 생성된 `Info.plist`에 `NSLocationAlwaysAndWhenInUseUsageDescription`, `NSLocationAlwaysUsageDescription`이 "Allow $(PRODUCT_NAME) to access your location"으로 들어 있습니다. 앱은 사용 중 위치만 씁니다.
+3. **Android 매니페스트에 쓰지 않는 권한이 있습니다.** `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`, `SYSTEM_ALERT_WINDOW`입니다.
+4. **iOS 개인정보 매니페스트.** 생성된 `PrivacyInfo.xcprivacy`에는 API 사용 이유(UserDefaults, FileTimestamp, SystemBootTime)만 있고 `NSPrivacyCollectedDataTypes`가 비어 있습니다. 앱은 크래시 보고(Sentry, 설치 ID를 사용자로 씀)와 하루 지도 지표를 보냅니다.
+5. **`eas.json`이 없습니다.** 빌드 번호(`ios.buildNumber`, `android.versionCode`)도 없습니다.
+6. **데이터 출처 13에 GBIS(경기도), TAGO(국토교통부), 네이버 지도가 없습니다.** 지금은 서울특별시, 공공데이터포털, 국가철도공단, OpenStreetMap 네 곳입니다(`lib/legal/data-sources.ts`).
+7. **개인정보 처리방침, 오픈소스 고지가 앱과 서버 어디에도 없습니다.**
+8. **7.2 ③ 지표는 자동으로 모입니다.** `appMotionMetrics`가 하루 한 번 Sentry `map-motion-daily`로 숫자만 보냅니다. 코드 작업은 없고, 읽는 일은 Part C입니다.
+9. **02 권한 문구는 4.4대로입니다.** "출퇴근 시간에 잠금화면에 도착 정보를 띄워요"(`permissions.purpose.*.notifications`). 고칠 것이 없습니다.
+
+## 설계 결정
+
+1. **한도로 멈춘 서울 출처를 스냅샷에 싣습니다. [설계 판단]**
+   - 지하철·버스 스냅샷에 `stoppedToday: boolean`을 더합니다. 그날 그 종류(`subway`, 서울 `bus`)가 한도 초과나 인증 실패로 멈췄으면 true입니다.
+   - 앱은 지하철이 멈췄거나 `staleSince`가 3분(`ESTIMATED_MODE_AFTER_MS = 180_000`)보다 오래되면 "시간표 추정 모드"를 띄웁니다. 3분은 `dev` ALL 간격(80초)의 두 배보다 깁니다.
+2. **시간표 위치 열차. [설계 판단]** 스펙 5.8 "열차는 시간표 위치로 그린다"를 따릅니다.
+   - Worker가 D1 시간표로 지금 달리는 열차의 앞 역, 다음 역, 진행률을 냅니다.
+   - 앱은 시간표 추정 모드일 때만 그 열차를 70% 불투명도로 그립니다(Motion Spec).
+   - 버스는 그리지 않습니다(스펙 5.8).
+3. **개인정보 처리방침은 Worker가 한 곳에서 냅니다. [설계 판단]**
+   - `GET /privacy`(API 호스트)가 HTML을 냅니다. 앱 설정 행은 그 주소를 엽니다. 글이 두 곳에 있으면 서로 어긋나기 때문입니다.
+   - 내용은 스펙 5.2 그대로입니다. 연락처는 환경 변수 `PRIVACY_CONTACT`입니다.
+4. **빌드 번호는 EAS가 셉니다. [설계 판단]** `appVersionSource: "remote"`이고 production 프로필에 `autoIncrement: true`입니다. `expo-updates`(OTA)는 쓰지 않습니다.
+5. **`aps-environment`는 바꾸지 않습니다. [설계 판단]** 배포 서명 때 프로비저닝 프로필의 값(production)으로 바뀌는지를 Part C에서 아카이브로 확인합니다. 서버는 토큰의 환경을 앱이 보낸 값으로 정합니다(`CommuteTokenReporter.swift:197-203`).
+6. **iPad는 받지 않습니다. [설계 판단, 열린 질문]** `supportsTablet: false`입니다. iPad 화면과 스크린숏 심사를 피합니다.
+7. **production 빌드는 Sentry DSN이 있어야 합니다. [설계 판단]** 7.2 ①(크래시 0회 확인)은 수집 도구가 켜져 있어야 셀 수 있습니다. `EAS_BUILD_PROFILE=production`인데 `EXPO_PUBLIC_SENTRY_DSN`이 없으면 설정 단계에서 멈춥니다.
+
+## Global Constraints
+
+- 커밋 메시지와 PR 본문에 AI 서명·출처 표기(`Claude-Session:`, `Co-Authored-By: Claude`, 세션 URL)를 넣지 않습니다.
+- 브랜치: `feat/mvp-search-detail`에 이어서 커밋합니다(찾기와 상세 계획 다음).
+- `.env`, `google-services.json`, `GoogleService-Info.plist`, API 키, 푸시 토큰, wrangler 토큰을 읽거나 화면·로그·문서·테스트에 남기지 않습니다. `expo config` 출력은 필요한 키만 `rg`로 골라 봅니다.
+- 원격 배포(`wrangler deploy`, 원격 D1, `eas build/submit`)는 Part C에서 사용자 확인 뒤에만 합니다.
+- 린트 게이트: `bunx biome ci --changed --since=origin/develop --no-errors-on-unmatched`.
+- 앱에는 ES2023 배열 메서드를 쓰지 않습니다(`lib/hermes-compat.test.ts`).
+- 화면 글자는 `messages-ko.ts` 키로 씁니다. 새 코드에 `Asia/Seoul`, `+09:00` 리터럴을 쓰지 않습니다(스펙 5.10).
+- 광고 SDK, 결제, 로그인 유도를 넣지 않습니다(스펙 11.1, 2장).
+- 서버에 주소·좌표·장소 이름을 보내지 않습니다(스펙 5.2). 개인정보 처리방침도 이 사실과 다르게 쓰지 않습니다.
+- 서울 동작과 기존 테스트를 바꾸지 않습니다.
+- 주석과 테스트 이름은 한국어로 씁니다.
+
+## Review Focus
+
+1. **잠깐 끊긴 것과 멈춘 것:** 지하철 응답이 1분 비었다고 "시간표 추정 모드"가 깜빡이면 안 됩니다. 3분을 넘거나 그날 멈췄을 때만 떠야 합니다. 실시간이 돌아오면 다음 스냅샷에서 사라져야 합니다. 테스트는 Task 1에 있습니다.
+2. **자정을 넘는 시간표:** 00:30에 달리는 막차(서비스일 초 > 86,400)도 시간표 위치 열차에 나와야 합니다. 03:00 경계 뒤에는 새 서비스일로 넘어가야 합니다. 테스트는 Task 2에 있습니다.
+3. **카운트다운이 끝난 뒤:** 다음 푸시가 오기 전에도 "-0:05"가 아니라 "곧"이 보여야 합니다. 1분 안 남은 시각으로는 타이머를 걸지 않아야 합니다. 테스트는 Task 7에 있습니다.
+4. **릴리스 설정이 개발 빌드를 막지 않음:** `EAS_BUILD_PROFILE`이 없는 로컬 개발에서는 DSN 없이도 설정이 읽혀야 합니다. 위치 Always 문구가 빠져도 사용 중 위치 요청은 그대로여야 합니다. 테스트는 Task 5에 있습니다.
+5. **푸시 토큰 정리:** 진행 중인 세션의 Live Activity 토큰과 지금 쓰는 시작 토큰은 지우면 안 됩니다. 테스트는 Task 11에 있습니다.
+
+---
+
+## Part A: 7.2·7.3 코드와 설정
+
+### Task 1: 시간표 추정 모드 표시 (14)
+
+Model: opus
+
+**Files:**
+- Modify: `packages/realtime/src/state.ts`. `Snapshot`에 `stoppedToday: boolean`을 더합니다.
+- Modify: `apps/server/src/collector/core.ts:140-156`, `apps/server/src/collector/collector-state.ts`. 스냅샷 캐시 키에 `stoppedToday`를 넣습니다.
+- Modify: `apps/native/lib/map/map-client.ts`. 두 스냅샷 스키마에 `stoppedToday: z.boolean().default(false)`
+- Create: `apps/native/lib/map/estimated-mode.ts`
+- Modify: `apps/native/app/(tabs)/index.tsx`. `RouteStatus`에 알약을 더합니다. 장소가 없을 때의 "근처 지하철" 알약 옆에도 둡니다.
+- Modify: `apps/native/lib/i18n/messages-ko.ts`. `map.estimatedMode`
+- Test: `packages/realtime/src/state.test.ts`, `apps/server/src/collector/core.test.ts`, `apps/native/lib/map/estimated-mode.test.ts`
+
+**Interfaces:**
+- Produces:
+
+```ts
+export const ESTIMATED_MODE_AFTER_MS = 180_000;
+export interface EstimatedMode { bus: boolean; subway: boolean }
+export function estimatedModeOf(input: { bus: BusSnapshot | null; now: number; subway: SubwaySnapshot | null }): EstimatedMode;
+```
+
+- `subway`는 지하철 스냅샷이 `stoppedToday`이거나, `staleSince !== null && now − staleSince > ESTIMATED_MODE_AFTER_MS`일 때 true입니다. `bus`도 같은 규칙입니다.
+- 문구 `map.estimatedMode`: "시간표 추정 모드". Figma `13:4866`에 다른 글자가 있으면 그것을 씁니다. 알약 tone은 `estimated`입니다.
+- 버스만 추정 모드면 지하철 차량은 그대로 그립니다. 버스 마커는 원래 위치가 없어 그려지지 않습니다.
+
+- [ ] **Step 1: 실패하는 테스트를 씁니다**
+
+```ts
+// core.test.ts
+it("서울 지하철이 한도로 멈추면 지하철 스냅샷의 stoppedToday가 true이고 ETag가 바뀐다", async () => {});
+it("다음 날(KST)에는 stoppedToday가 false로 돌아온다", async () => {});
+// estimated-mode.test.ts
+it("staleSince가 1분 전이면 추정 모드가 아니고 4분 전이면 추정 모드다", () => {
+	expect(estimatedModeOf({ bus: null, now: NOW, subway: snap({ staleSince: NOW - 60_000 }) }).subway).toBe(false);
+	expect(estimatedModeOf({ bus: null, now: NOW, subway: snap({ staleSince: NOW - 240_000 }) }).subway).toBe(true);
+});
+it("stoppedToday가 없는 옛 스냅샷은 false로 읽는다", () => {});
+```
+
+- [ ] **Step 2: 실패를 확인합니다**
+
+Run: `cd packages/realtime && bun test src/state.test.ts && cd ../../apps/server && bun test src/collector && cd ../native && bun test lib/map`
+Expected: FAIL.
+
+- [ ] **Step 3: 구현합니다.** 멈춤 판정은 기존 `isStopped(kind, now)`를 씁니다.
+- [ ] **Step 4: 통과를 확인합니다** 같은 명령. Expected: PASS.
+- [ ] **Step 5: 커밋합니다**
+
+```bash
+git add packages/realtime/src apps/server/src/collector apps/native/lib/map apps/native/app apps/native/lib/i18n/messages-ko.ts
+git commit -m "feat(map): show the timetable estimate mode when Seoul sources stop or go stale"
+```
+
+### Task 2: 시간표 위치 열차 (14)
+
+Model: opus
+
+**Files:**
+- Create: `apps/server/src/map/scheduled-trains.ts`
+- Modify: `apps/server/src/map/routes.ts`. `GET /v1/map/scheduled/:lineKey`
+- Create: `apps/native/lib/map/scheduled-trains.ts`
+- Modify: `apps/native/lib/map/use-map-data.ts`. 추정 모드일 때만 그 노선의 시간표 열차를 15초마다 받습니다.
+- Modify: `apps/native/components/map/vehicle-markers.tsx`. `estimated` 차량은 불투명도 0.7입니다.
+- Test: `apps/server/src/map/scheduled-trains.test.ts`, `apps/native/lib/map/scheduled-trains.test.ts`
+
+**Interfaces:**
+- Produces:
+
+```ts
+// 서버
+export interface ScheduledTrain { direction: "up" | "down"; fromStop: string; progress: number; toStop: string; trainNo: string; tripId: number }
+export async function scheduledTrains(db: D1Database, lineKey: string, now: number, timezone: string): Promise<{ generatedAt: number; trains: ScheduledTrain[] } | null>;
+// 앱
+export function fetchScheduledTrains(client: ServerClient, line: string): Promise<RefResult<{ generatedAt: number; trains: ScheduledTrain[] }>>;
+/** 노선 지도 위 앞 역과 다음 역 사이 `progress` 지점. 차량 ID는 `scheduled:<tripId>`, `estimated: true`. */
+export function scheduledVehicles(trains: readonly ScheduledTrain[], map: SubwayMap, legIndex: number): RenderVehicle[];
+```
+
+- 서버: `now`가 속한 서비스일(3시 경계)과 요일 구분으로, `depart(앞 역) ≤ nowSec < arrive(다음 역)`인 trip을 고릅니다. `progress = (nowSec − depart) / (arrive − depart)`입니다. 서비스일 계산은 `D1Timetable`(`commute/cf-ports.ts`)과 같은 함수를 씁니다. 응답은 공개 GET이고 `Cache-Control: public, max-age=15`입니다.
+- 앱: `RenderVehicle`에 `estimated?: true`를 더합니다. 시간표 열차는 실시간 열차와 같은 마커이고, 차량 시트는 "시간표 추정"으로 엽니다.
+- 실시간 스냅샷 열차가 있으면 시간표 열차는 그리지 않습니다. 두 가지를 섞지 않습니다.
+
+- [ ] **Step 1: 실패하는 테스트를 씁니다**
+
+```ts
+it("앞 역 출발과 다음 역 도착 사이의 열차만 progress와 함께 낸다", async () => {
+	// 시드: 출발 30_000초, 다음 역 도착 30_120초 → now가 30_060초면 progress 0.5
+});
+it("서비스일 초가 86_400을 넘는 막차도 00:30에 나온다", async () => {});
+it("03:00 뒤에는 새 서비스일의 첫차만 본다", async () => {});
+it("scheduledVehicles는 두 역 좌표 사이에 놓이고 estimated다", () => {});
+```
+
+- [ ] **Step 2: 실패를 확인합니다** `cd apps/server && bun test src/map && cd ../native && bun test lib/map`. Expected: FAIL.
+- [ ] **Step 3: 구현합니다.** 위치는 `SubwayMap` 지선의 `offsetM`과 `shape`로 냅니다(`lib/map/motion.ts`의 `pointAlong`).
+- [ ] **Step 4: 통과를 확인합니다** 같은 명령. `motion-metrics` 테스트도 통과해야 합니다. 시간표 열차는 지표에 넣지 않습니다(실시간 갱신이 아닙니다).
+- [ ] **Step 5: 커밋합니다**
+
+```bash
+git add apps/server/src/map apps/native/lib/map apps/native/components/map
+git commit -m "feat(map): draw subway trains at timetable positions in the estimate mode"
+```
+
+### Task 3: 데이터 출처 13에 모든 출처 싣기
+
+Model: sonnet
+
+**Files:**
+- Modify: `apps/native/lib/legal/data-sources.ts`
+- Modify: `apps/native/lib/i18n/messages-ko.ts`. `dataSources.providers.*`
+- Test: `apps/native/lib/legal/data-sources.test.ts`
+
+**Interfaces:**
+- Produces: `DataProvider`에 `sources: readonly ("seoul-subway" | "seoul-bus" | "gbis" | "tago" | "kric" | "osm" | "naver-map")[]`를 더합니다. `export const USED_SOURCES`(같은 값의 전체 목록)를 둡니다.
+
+- 더할 제공 기관:
+  - `gyeonggi`: 제목 "경기도", 부제 "경기도 버스정보 · 경기 버스 노선·정류소·도착·위치", URL `https://www.data.go.kr`
+  - `molit`: 제목 "국토교통부", 부제 "TAGO · 인천 버스 노선·정류소·도착·위치", URL `https://www.data.go.kr`
+  - `naverMap`: 제목 "NAVER 지도", 부제 "배경 지도", URL `https://www.ncloud.com/product/applicationService/maps`
+- `dataGoKr` 부제는 "서울 버스 위치·노선·정류소, 서울교통공사 시간표"로 바꿉니다.
+- 라이선스 표기는 `docs/research/2026-10-30-data-sources.md`를 따릅니다(공공누리 1유형, ODbL). 각주 `dataSources.footnote`는 그대로 둡니다.
+
+- [ ] **Step 1: 실패하는 테스트를 씁니다**
+
+```ts
+it("앱이 쓰는 모든 출처가 제공 기관 하나 이상에 있다", () => {
+	const covered = new Set(DATA_PROVIDERS.flatMap((p) => p.sources));
+	expect(USED_SOURCES.filter((s) => !covered.has(s))).toEqual([]);
+});
+it("버스 출처 ID(@Betro/commute/refs BUS_SOURCE_IDS)마다 USED_SOURCES에 대응이 있다", () => {});
+```
+
+- [ ] **Step 2: 실패를 확인합니다** `cd apps/native && bun test lib/legal`. Expected: FAIL.
+- [ ] **Step 3: 구현합니다.**
+- [ ] **Step 4: 통과를 확인합니다** `cd apps/native && bun test lib`. Expected: PASS.
+- [ ] **Step 5: 커밋합니다**
+
+```bash
+git add apps/native/lib/legal apps/native/lib/i18n/messages-ko.ts
+git commit -m "feat(native): credit GBIS, TAGO and NAVER Map on the data sources screen"
+```
+
+### Task 4: 개인정보 처리방침과 오픈소스 고지
+
+Model: sonnet
+
+**Files:**
+- Create: `apps/server/src/privacy-page.ts`
+- Modify: `apps/server/src/app.ts`. API 호스트에 `GET /privacy`를 더합니다. CSP는 상태 페이지와 같습니다.
+- Modify: `apps/server/src/worker-env.ts`, `apps/server/wrangler.jsonc`. `PRIVACY_CONTACT` 변수(값은 비워 둡니다. Part C에서 사용자가 채웁니다)
+- Create: `apps/native/scripts/generate-licenses.ts`. `apps/native/package.json`의 `dependencies`를 따라 설치된 패키지의 `name`, `version`, `license`를 `apps/native/assets/licenses.json`에 씁니다.
+- Create: `apps/native/app/settings/licenses.tsx`
+- Modify: `apps/native/app/(tabs)/settings.tsx:308-322`. "정보" 섹션에 "개인정보 처리방침"(외부 주소 열기), "오픈소스 라이선스" 행을 더합니다.
+- Modify: `apps/native/app/_layout.tsx`. `settings/licenses`를 등록합니다.
+- Modify: `apps/native/lib/i18n/messages-ko.ts`. `settings.privacy.title`, `settings.licenses.title`, `licenses.*`
+- Test: `apps/server/src/privacy-page.test.ts`, `apps/native/scripts/generate-licenses.test.ts`
+
+**Interfaces:**
+- Produces:
+
+```ts
+export function renderPrivacyPage(input: { contact: string | null; updatedOn: string }): string;
+export function privacyUrl(serverUrl: string): string; // `${serverUrl}/privacy`
+export function collectLicenses(pkgJson: { dependencies: Record<string, string> }, readPackage: (name: string) => { license?: string; name: string; version: string } | null): { license: string; name: string; version: string }[];
+```
+
+- 처리방침 내용(스펙 5.2):
+  - 서버가 받는 것: 설치 ID, 플랫폼, 푸시 토큰, 출퇴근 경로의 구간(노선·정류장·역)과 나가는 시각·요일
+  - 크래시 보고(Sentry, 개인 식별 정보 없음, 설치 ID로 묶음)와 하루 지도 지표 숫자
+  - 받지 않는 것: 주소, 좌표, 장소 이름. 위치는 기기 안에서만 씁니다.
+  - 즐겨찾기와 장소는 기기에만 저장됩니다.
+  - 지우는 법: 장소를 지우면 그 경로가 서버에서 지워집니다. 설치 기록의 보존 기간은 열린 질문 2의 답을 받기 전까지 적지 않습니다.
+  - 광고 추적을 하지 않습니다.
+- `contact`가 null이면 연락처 줄을 빼고 그린다. 빈 값으로 배포하지 않는 것은 Part C에서 확인합니다.
+- `license`가 없는 패키지는 "UNKNOWN"으로 쓰고, 스크립트가 그 이름을 stderr에 찍습니다.
+
+- [ ] **Step 1: 실패하는 테스트를 씁니다**
+
+```ts
+it("처리방침은 주소·좌표를 받지 않는다고 쓰고 광고 추적 문구가 있다", () => {
+	const html = renderPrivacyPage({ contact: null, updatedOn: "2026-11-24" });
+	expect(html).toContain("주소");
+	expect(html).not.toContain("<script");
+});
+it("/privacy는 API 호스트에서만 200이고 상태 호스트에서는 404다", async () => {});
+it("collectLicenses는 이름순이고 license가 없으면 UNKNOWN이다", () => {});
+```
+
+- [ ] **Step 2: 실패를 확인합니다** `cd apps/server && bun test src/privacy-page.test.ts src/app.test.ts && cd ../native && bun test scripts`. Expected: FAIL.
+- [ ] **Step 3: 구현하고 스크립트를 한 번 돌려 `licenses.json`을 만듭니다** (`cd apps/native && bun scripts/generate-licenses.ts`).
+- [ ] **Step 4: 통과를 확인합니다** 같은 명령. Expected: PASS.
+- [ ] **Step 5: 커밋합니다**
+
+```bash
+git add apps/server/src apps/server/wrangler.jsonc apps/native/scripts apps/native/assets/licenses.json apps/native/app apps/native/lib/i18n/messages-ko.ts
+git commit -m "feat: add a privacy policy page and an open source licenses screen"
+```
+
+### Task 5: 릴리스 빌드 설정
+
+Model: opus
+
+**Files:**
+- Create: `apps/native/eas.json`
+- Modify: `apps/native/app.config.ts`
+- Test: `apps/native/app-config.test.ts`
+
+**Interfaces:**
+- Produces: `app.config.ts`는 `export default config`를 유지합니다. 테스트는 `process.env`를 바꾼 뒤 `import(…?v=<n>)`로 다시 읽습니다.
+
+- `eas.json`:
+  - `cli.appVersionSource: "remote"`
+  - `build.development`: `developmentClient: true`, `distribution: "internal"`
+  - `build.preview`: `distribution: "internal"`
+  - `build.production`: `autoIncrement: true`
+  - `submit.production`: 비워 둡니다. 계정 값은 Part C에서 사용자가 채웁니다.
+- `app.config.ts`:
+  - `ios.config.usesNonExemptEncryption: false`
+  - `ios.supportsTablet: false`
+  - `ios.privacyManifests.NSPrivacyCollectedDataTypes`
+    - `NSPrivacyCollectedDataTypeCrashData`: linked false, tracking false, 목적 `NSPrivacyCollectedDataTypePurposeAppFunctionality`
+    - `NSPrivacyCollectedDataTypeOtherDiagnosticData`: 같은 값
+    - `NSPrivacyCollectedDataTypeDeviceID`(설치 ID): 같은 값
+  - `expo-location` 플러그인 옵션: `locationAlwaysAndWhenInUsePermission: false`, `locationAlwaysPermission: false`, `isIosBackgroundLocationEnabled: false`, `isAndroidBackgroundLocationEnabled: false`
+  - `android.blockedPermissions`: `android.permission.READ_EXTERNAL_STORAGE`, `android.permission.WRITE_EXTERNAL_STORAGE`, `android.permission.SYSTEM_ALERT_WINDOW`
+  - `process.env.EAS_BUILD_PROFILE === "production"`이고 `EXPO_PUBLIC_SENTRY_DSN`이 없으면 throw합니다. 메시지는 키 값을 담지 않습니다.
+  - `extra.eas.projectId`와 `owner`는 넣지 않습니다. 사용자가 `eas init`으로 넣습니다(Part C).
+
+- [ ] **Step 1: 실패하는 테스트를 씁니다**
+
+```ts
+it("production 프로필에 DSN이 없으면 설정을 읽을 때 멈춘다", async () => {});
+it("프로필이 없으면 DSN 없이도 읽힌다", async () => {});
+it("위치 Always 문구를 넣지 않고 사용 중 문구는 한국어다", async () => {
+	const config = await load({ NAVER_MAP_CLIENT_ID: "test-client" });
+	const location = pluginOptions(config, "expo-location");
+	expect(location).toMatchObject({ locationAlwaysAndWhenInUsePermission: false, locationAlwaysPermission: false });
+	expect(location?.locationWhenInUsePermission).toContain("위치");
+});
+it("암호화 면제, iPad 끔, 개인정보 수집 항목 세 개", async () => {});
+```
+
+- [ ] **Step 2: 실패를 확인합니다** `cd apps/native && bun test app-config.test.ts`. Expected: FAIL.
+- [ ] **Step 3: 구현합니다.**
+- [ ] **Step 4: 통과를 확인하고, 생성 결과를 골라 봅니다**
+
+Run: `cd apps/native && bun test app-config.test.ts && npx expo config --type introspect 2>/dev/null | rg -o "NSLocation[A-Za-z]*|ITSAppUsesNonExemptEncryption|UIDeviceFamily|SYSTEM_ALERT_WINDOW|EXTERNAL_STORAGE" | sort -u`
+Expected: 테스트 PASS. 출력에 `NSLocationWhenInUseUsageDescription`과 `ITSAppUsesNonExemptEncryption`, `UIDeviceFamily`는 있고, `NSLocationAlways…`, `SYSTEM_ALERT_WINDOW`, `EXTERNAL_STORAGE`는 없습니다(blockedPermissions는 `tools:node="remove"`로 남을 수 있습니다. 그 경우 매니페스트에서 remove인지 봅니다).
+
+- [ ] **Step 5: 커밋합니다**
+
+```bash
+git add apps/native/eas.json apps/native/app.config.ts apps/native/app-config.test.ts
+git commit -m "chore(native): add EAS profiles and release privacy and permission settings"
+```
+
+## Part B: 출시 전에 고칠 남은 일
+
+### Task 6: GBIS 일시 오류 코드를 재시도하기 (남은 일 #5)
+
+Model: sonnet
+
+**Files:**
+- Modify: `packages/commute/src/sources/regional-bus.ts:149-154`
+- Test: `packages/commute/src/sources/regional-bus.test.ts`
+
+- 0과 4가 아닌 숫자 `resultCode`는 `temporary`입니다. 숫자가 아니면 지금처럼 `malformed`입니다. 수집기 파서(`packages/realtime/src/upstream/regional-position.ts:130-136`)와 같은 규칙입니다.
+- 실행기가 `temporary`를 재시도로 다루는지(`runner-core.ts` `#attemptRegional`) 확인하고, 아니면 그 분기도 고칩니다.
+
+- [ ] **Step 1: 실패하는 테스트를 씁니다**
+
+```ts
+it("GBIS resultCode 1은 temporary다", () => {
+	expect(parseGbisLocations(gbisEnvelope(1))).toEqual({ ok: false, reason: "temporary" });
+});
+it("resultCode가 숫자가 아니면 malformed다", () => {});
+```
+
+- [ ] **Step 2: 실패를 확인합니다** `cd packages/commute && bun test src/sources/regional-bus.test.ts`. Expected: FAIL. 지금은 malformed가 나옵니다.
+- [ ] **Step 3: 구현합니다.**
+- [ ] **Step 4: 통과를 확인합니다** `cd packages/commute && bun test && cd ../../apps/server && bun test src/commute`. Expected: PASS.
+- [ ] **Step 5: 커밋합니다**
+
+```bash
+git add packages/commute/src/sources apps/server/src/commute
+git commit -m "fix(commute): retry GBIS system error codes as temporary"
+```
+
+### Task 7: Android 카운트다운이 0 아래로 가지 않게 (남은 일 #1)
+
+Model: opus
+
+**Files:**
+- Modify: `apps/native/lib/commute/notification-content.ts`
+- Modify: `apps/native/lib/commute/handle-commute-message.ts:109`, `apps/native/lib/commute/lock-sample-presenter.ts:65`. `now`를 넘깁니다.
+- Modify: `apps/native/modules/commute-notification/android/src/main/java/expo/modules/commutenotification/CommuteNotifier.kt:145-150`, `:173-178`
+- Create: `apps/native/modules/commute-notification/android/src/main/java/expo/modules/commutenotification/CountdownEndReceiver.kt`
+- Modify: `apps/native/modules/commute-notification/android/src/main/AndroidManifest.xml`. 리시버를 등록합니다(`exported="false"`).
+- Test: `apps/native/lib/commute/notification-content.test.ts`
+
+**Interfaces:**
+- Produces:
+
+```ts
+export const MIN_COUNTDOWN_MS = 60_000;
+export interface NotificationContent {
+	// 기존 필드 그대로
+	/** 타이머가 끝난 뒤 네이티브가 다시 그릴 본문과 칩. 타이머가 없으면 null. */
+	afterCountdown: { body: string; chipText: string } | null;
+}
+export function notificationContent(model: LockScreenModel, nowMs: number): NotificationContent;
+```
+
+- `countdownEpoch × 1000 − nowMs < MIN_COUNTDOWN_MS`이면 타이머를 걸지 않습니다(`countdownAtMs: null`). 본문은 지금의 "타이머 없음" 규칙입니다.
+- 타이머를 걸면 `afterCountdown`은 남은 분 자리에 `commute.lock.minutes.soon`("곧")을 넣은 본문과 칩입니다.
+- Kotlin:
+  - `CommuteNotifier.show`는 타이머가 있으면 `AlarmManager.set(RTC, countdownAt, …)`로 `CountdownEndReceiver`를 겁니다. 정확한 알람 권한이 필요 없는 비정확 알람이라 몇 초 늦을 수 있습니다.
+  - 마지막 내용(JSON)은 `SharedPreferences`에 둡니다.
+  - 리시버는 같은 세션의 알림이 아직 있을 때만 `afterCountdown`으로 타이머 없이 다시 그립니다.
+  - 새 `show`와 세션 끝은 걸린 알람을 지웁니다.
+
+- [ ] **Step 1: 실패하는 테스트를 씁니다**
+
+```ts
+it("남은 시간이 1분보다 짧으면 타이머를 걸지 않는다", () => {
+	const content = notificationContent(model({ countdownEpoch: NOW_S + 30 }), NOW_S * 1000);
+	expect(content.countdownAtMs).toBeNull();
+	expect(content.afterCountdown).toBeNull();
+});
+it("타이머를 걸면 끝난 뒤의 칩은 '곧'이다", () => {
+	const content = notificationContent(model({ countdownEpoch: NOW_S + 300 }), NOW_S * 1000);
+	expect(content.afterCountdown?.chipText).toBe("곧");
+});
+```
+
+- [ ] **Step 2: 실패를 확인합니다** `cd apps/native && bun test lib/commute`. Expected: FAIL.
+- [ ] **Step 3: 구현합니다.** Kotlin은 컴파일만 확인합니다: `cd apps/native/android && ./gradlew :commute-notification:compileDebugKotlin`. 기기 확인은 Task 13입니다.
+- [ ] **Step 4: 통과를 확인합니다** `cd apps/native && bun test lib`. Expected: PASS. `lock-screen-cases.json` 사례 테스트도 통과합니다.
+- [ ] **Step 5: 커밋합니다**
+
+```bash
+git add apps/native/lib/commute apps/native/modules/commute-notification
+git commit -m "fix(android): stop the commute countdown at zero instead of counting negative"
+```
+
+### Task 8: 지역 버스 호출 동시성 (남은 일 #6)
+
+Model: sonnet
+
+**Files:**
+- Modify: `apps/server/src/commute/runner-core.ts:1605`, `:1698`. 동시성 1을 `REGIONAL_CONCURRENCY`로 바꿉니다.
+- Test: `apps/server/src/commute/runner-core.test.ts`
+
+**Interfaces:**
+- Produces: `export const REGIONAL_CONCURRENCY = 3;`
+
+- 예산은 시도마다 세므로(`#attemptRegional`) 동시성을 올려도 하루 한도를 넘지 않습니다. 예산 확인과 증가가 같은 `await` 사이에 끼지 않는지 봅니다. 끼면 확인과 증가를 한 함수 안에서 `await` 없이 합니다.
+
+- [ ] **Step 1: 실패하는 테스트를 씁니다**
+
+```ts
+it("TAGO 정류장 세 곳이 각 8초 걸려도 tick은 약 8초다", async () => {});
+it("예산이 2건 남았을 때 동시에 세 곳을 불러도 2건만 부른다", async () => {});
+```
+
+- [ ] **Step 2: 실패를 확인합니다** `cd apps/server && bun test src/commute/runner-core.test.ts`. Expected: FAIL.
+- [ ] **Step 3: 구현합니다.**
+- [ ] **Step 4: 통과를 확인합니다** `cd apps/server && bun test src`. Expected: PASS.
+- [ ] **Step 5: 커밋합니다**
+
+```bash
+git add apps/server/src/commute
+git commit -m "perf(commute): call regional bus stops three at a time"
+```
+
+### Task 9: 수집기 지역 위치 간격 상한 (남은 일 #7)
+
+Model: sonnet
+
+**Files:**
+- Modify: `packages/realtime/src/schedule.ts:312-325`. 지역 종류(`gbis-position`, `tago-position`)는 간격을 `regionalMaxIntervalMs`에서 자릅니다.
+- Test: `packages/realtime/src/schedule.test.ts`
+
+**Interfaces:**
+- Produces: `CollectorConfig.regionalMaxIntervalMs: number`(기본 `120_000`, 환경 변수 `REGIONAL_MAX_INTERVAL_MS`)
+
+- 지금은 남은 예산을 운행 시간 전체에 고르게 폅니다. 지역 노선은 지도에서 보는 동안만 부르므로, 이 계산은 간격을 TTL(300초)보다 길게 만듭니다. 2개 노선이면 약 456초입니다.
+- 상한을 두면 예산이 더 빨리 닳을 수 있습니다. 닳으면 그 출처는 `stoppedSources`로 "실시간 정보 없음"이 됩니다(5-B 설계 결정 10). 예산 값은 열린 질문입니다.
+
+- [ ] **Step 1: 실패하는 테스트를 씁니다**
+
+```ts
+it("GBIS 노선 두 개를 보고 예산이 300건이어도 간격은 120초를 넘지 않는다", () => {});
+it("서울 버스 간격은 바뀌지 않는다", () => {});
+```
+
+- [ ] **Step 2: 실패를 확인합니다** `cd packages/realtime && bun test src/schedule.test.ts`. Expected: FAIL.
+- [ ] **Step 3: 구현합니다.**
+- [ ] **Step 4: 통과를 확인합니다** `cd packages/realtime && bun test && cd ../../apps/server && bun test src/collector`. Expected: PASS.
+- [ ] **Step 5: 커밋합니다**
+
+```bash
+git add packages/realtime/src
+git commit -m "fix(realtime): cap regional position intervals below the vehicle TTL"
+```
+
+### Task 10: 7.1 정확도 보고 스크립트 (남은 일 #3)
+
+Model: sonnet
+
+**Files:**
+- Create: `scripts/accuracy-report.ts`
+- Test: `scripts/accuracy-report.test.ts`
+
+**Interfaces:**
+- Consumes: `packages/commute/src/accuracy.ts`의 `summarize`(`:758`), `dailyReport`(`:889`)와 그 입력 타입
+- Produces:
+
+```ts
+export interface AccuracyHitRates { mode: "bus" | "subway"; samples: number; within1Min: number; within2Min: number }
+export function hitRates(summaries: readonly SessionSummary[]): AccuracyHitRates[];
+```
+
+- 입력은 로컬 폴더입니다(`bun scripts/accuracy-report.ts <dir>`). R2 `commute/summaries/…`를 받아 오는 일은 사용자가 합니다. 스크립트는 네트워크를 쓰지 않습니다.
+- 기준은 "나가기 5분 전 예측이 ±1분 80%, ±2분 95%"입니다(`docs/research/2026-11-06-mvp2-experiments.md:580`, 정확도 우선 설계 `:287`). 출력은 방식별 표와 통과 여부입니다.
+
+- [ ] **Step 1: 실패하는 테스트를 씁니다**
+
+```ts
+it("5분 전 예측 오차 0.5분·1.5분·3분 세 건이면 ±1분 1/3, ±2분 2/3이다", () => {});
+it("5분 전 시점이 없는 세션은 세지 않는다", () => {});
+```
+
+- [ ] **Step 2: 실패를 확인합니다** `bun test scripts/accuracy-report.test.ts`. Expected: FAIL.
+- [ ] **Step 3: 구현합니다.** 요약에 5분 전 예측이 어떻게 들어 있는지 `accuracy.ts`의 타입을 보고 정합니다. 새 계산을 만들지 않고 그 값을 셉니다.
+- [ ] **Step 4: 통과를 확인합니다** 같은 명령. Expected: PASS.
+- [ ] **Step 5: 커밋합니다**
+
+```bash
+git add scripts/accuracy-report.ts scripts/accuracy-report.test.ts
+git commit -m "feat(scripts): report 7.1 hit rates from commute summaries"
+```
+
+### Task 11: 묵은 푸시 토큰 정리 (남은 일 #2)
+
+Model: sonnet
+
+**Files:**
+- Create: `apps/server/src/commute/push-token-prune.ts`
+- Modify: `apps/server/src/index.ts`. cron(`scheduled`)의 `Promise.allSettled`에 더합니다.
+- Test: `apps/server/src/commute/push-token-prune.test.ts`
+
+**Interfaces:**
+- Produces:
+
+```ts
+export const ACTIVITY_TOKEN_KEEP_MS = 86_400_000;
+export const IDLE_TOKEN_KEEP_MS = 60 * 86_400_000;
+export async function prunePushTokens(db: Database, now: number): Promise<number>;
+```
+
+- 지우는 것:
+  - `kind = 'apns-activity'`이고 그 `sessionId`의 세션이 `ended`이며, 끝난 지 `ACTIVITY_TOKEN_KEEP_MS`가 지난 행
+  - `updatedAt`이 `IDLE_TOKEN_KEEP_MS`보다 오래된 행
+- 진행 중 세션의 토큰은 지우지 않습니다. 지운 행 수를 돌려주고 로그에는 수만 남깁니다.
+- 정리 기준(60일)은 열린 질문입니다.
+
+- [ ] **Step 1: 실패하는 테스트를 씁니다**
+
+```ts
+it("끝난 세션의 Live Activity 토큰은 하루 뒤 지우고 진행 중 세션 토큰은 남긴다", async () => {});
+it("60일 넘게 갱신되지 않은 시작 토큰은 지운다", async () => {});
+```
+
+- [ ] **Step 2: 실패를 확인합니다** `cd apps/server && bun test src/commute/push-token-prune.test.ts`. Expected: FAIL.
+- [ ] **Step 3: 구현합니다.** 세션 표 이름과 끝난 시각 열은 `packages/db/src/schema/commute.ts`를 봅니다. D1 바인딩 100개 제한 때문에 ID 목록을 `IN`으로 넘기지 않고 하위 질의로 지웁니다.
+- [ ] **Step 4: 통과를 확인합니다** `cd apps/server && bun test src`. Expected: PASS.
+- [ ] **Step 5: 커밋합니다**
+
+```bash
+git add apps/server/src
+git commit -m "feat(commute): prune push tokens of ended sessions and idle installs"
+```
+
+### Task 12: 전체 확인
+
+Model: sonnet
+
+- [ ] **Step 1: 전체 테스트, 타입, 린트를 돌립니다**
+
+Run: 각 패키지에서 `bun test`(`packages/commute`, `packages/realtime`, `packages/transit-static`, `apps/server`(`src`), `apps/native`(`lib`, `components`, `scripts`, `app-config.test.ts`)), 루트 `bun test scripts`, `bun run check-types`, `bunx biome ci --changed --since=origin/develop --no-errors-on-unmatched`.
+Expected: 실패 0, 타입 오류 0, 린트 오류 0.
+
+- [ ] **Step 2: 5-B 계획 Task 11 Step 1의 결과를 그 계획 끝에 적습니다.** Step 2(배포)와 Step 3(기기)은 Task 13으로 옮겼다고 적습니다.
+- [ ] **Step 3: 커밋합니다**
+
+```bash
+git add docs/superpowers/plans
+git commit -m "docs(plan): record release readiness verification"
+```
+
+## Part C: 사용자 확인이 필요한 일
+
+### Task 13: 기기 확인과 배포 (사용자 확인 뒤)
+
+Model: opus
+
+이 Task의 단계는 하나씩 사용자에게 확인을 받고 진행합니다. 기기 확인은 한 번에 모아서 하고, 어느 기기를 연결할지만 묻습니다. 비행기 모드와 절전 모드 확인은 하지 않습니다.
+
+- [ ] **Step 1: 원격 반영 (서버).** 순서는 다음과 같습니다.
+  1. 5-A: 원격 D1 migration 0008, `publish:d1 --remote`
+  2. GBIS 원본의 남은 92개 노선 받기(`fetch:gbis-routes`)와 다시 적재. 이 단계는 없어도 다음 단계를 막지 않습니다.
+  3. `wrangler.jsonc`의 `PRIVACY_CONTACT` 채우기
+  4. `wrangler deploy`
+  5. 배포 뒤 `/v1/ref/search-index` 크기와 응답 시간, `/privacy`를 봅니다.
+  6. GBIS 노선 하나를 지도에서 열어 Worker에서 GBIS가 불리는지 봅니다(5-B Task 11 Step 2).
+- [ ] **Step 2: 기기 확인.** iOS 시뮬레이터와 S20 실기기입니다.
+  - 7.2 흐름: 온보딩 → 권한 → 지도 → 검색 → 상세 → 즐겨찾기 → 내 장소 등록 → 출퇴근 안내
+  - 검색창 자리표시자가 Android에서 가운데에 있는지(남은 일 #4)
+  - 지도 위 알약과 검색창이 NAVER 로고를 가리지 않는지(네이버 지도 약관)
+  - Android 출퇴근 알림의 카운트다운이 0에서 "곧"으로 바뀌는지(Task 7)
+  - 경기·인천 노선 출퇴근 카드가 실시간 ETA를 내는지(5-B Task 11 Step 3)
+  - 2-E의 Android 18 Live Update 프레임 문구
+- [ ] **Step 3: 릴리스 빌드.**
+  - `eas init`으로 `owner`, `extra.eas.projectId`를 넣습니다.
+  - EAS 환경 변수: `NAVER_MAP_CLIENT_ID`, `EXPO_PUBLIC_SERVER_URL`, `EXPO_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`·`SENTRY_ORG`·`SENTRY_PROJECT`
+  - 파일 비밀값: `google-services.json`, `GoogleService-Info.plist`
+  - production 빌드 뒤 아카이브 entitlements의 `aps-environment`가 `production`인지 봅니다(`codesign -d --entitlements :- <app>`).
+  - Sentry에 그 릴리스의 소스맵이 올라갔는지, 시험 오류 하나가 원래 줄로 보이는지 봅니다.
+- [ ] **Step 4: 스토어 양식.** App Store 개인정보(App Privacy)와 Google Play 데이터 보안 양식을 Task 5의 매니페스트와 Task 4의 처리방침에 맞춰 채웁니다. 처리방침 주소는 `<API 호스트>/privacy`입니다.
+- [ ] **Step 5: 출시 뒤 읽을 지표.**
+  - Sentry `map-motion-daily`의 `ratio`(7.2 ③, 1% 미만)
+  - 크래시 0회(7.2 ①, 2주)
+  - `scripts/accuracy-report.ts`(7.1)
+- [ ] **Step 6: 남은 측정.** 2-C의 지하철 `staleAfterMs`(150초) 측정, 정확도 계획 Task 10의 사전 수집은 지하철 세션이 있어야 하므로 실사용 기간에 합니다.
+
+## 이번에 하지 않는 것
+
+- 2-E: `ContentState`에 버스 `routeType`을 넣어 잠금화면 배지 색을 나누는 일. 겉모습만 바뀌고 서버와 앱을 같이 고쳐야 합니다. 열린 질문입니다.
+- 2-C: 임시 공휴일에 평일 시간표를 쓰는 문제, 지원 목록 밖 시간대 경로. 지금 사용자 범위(서울 시간대)에서는 생기지 않습니다.
+- 4단계: 401로 멈춘 출처를 상태 페이지가 표시하지 않는 것, `clientDisconnected` 알람. 관찰 항목입니다.
+- 옛 계획들의 체크박스 정리. 문서만 바뀌고 동작은 같습니다.
+
+## 열린 질문 (사용자만 답할 수 있음)
+
+1. 시간표 위치 열차(Task 2)를 1차 출시에 꼭 넣을까요? **기본값: 넣습니다(스펙 5.8).**
+2. 개인정보 처리방침의 연락처와 설치 기록 보존 기간. **기본값: 둘 다 배포 전에 받습니다. 그전까지 페이지는 연락처 줄을 빼고, 보존 기간은 "장소를 지우면 바로 지웁니다"만 적습니다. 설치 기록을 지우는 코드는 아직 없으므로 기간을 약속하지 않습니다.**
+3. iPad 지원. **기본값: 받지 않습니다(`supportsTablet: false`).**
+4. EAS 계정(owner)과 프로젝트. **기본값: 사용자가 `eas init`으로 정합니다.**
+5. 수집기 GBIS 위치 예산(기본 하루 300건)과 간격 상한 120초. **기본값: 예산은 그대로 두고 상한만 둡니다.**
+6. 묵은 푸시 토큰 정리(남은 일 #2)의 원래 의도와 기준. **기본값: 끝난 세션 토큰은 하루 뒤, 갱신 없는 토큰은 60일 뒤 지웁니다.**
+7. 2-E 버스 `routeType` 배지 색을 1차 출시에 넣을까요? **기본값: 넣지 않습니다.**
+8. App Privacy에서 설치 ID를 "기기 ID"로 신고할까요? **기본값: 기기 ID, 사용자와 연결 안 됨, 앱 기능 목적으로 신고합니다.**
