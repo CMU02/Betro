@@ -247,22 +247,37 @@ async function loadStops(
 		.sort((a, b) => compareText(a.name, b.name) || compareText(a.stop, b.stop));
 }
 
-/** 앱이 기기에서 검색할 서울 역·노선·정류장 색인. 배치가 하나라도 없으면 null. */
-export async function buildSearchIndex(
+export interface SearchIndexBatches {
+	busBatchId: number;
+	crosswalkBatchId: number;
+	etag: string;
+}
+
+/** 색인 ETag를 만드는 두 배치 ID만 조회한다. 하나라도 없으면 null. */
+export async function currentSearchBatches(
 	db: Database
-): Promise<{ etag: string; index: SearchIndex } | null> {
+): Promise<SearchIndexBatches | null> {
 	const busBatchId = await currentBusBatch(db);
 	const crosswalkBatchId = await currentCrosswalkBatch(db);
 	if (busBatchId === null || crosswalkBatchId === null) {
 		return null;
 	}
-	const [stations, routes, stops] = await Promise.all([
-		loadStations(db, crosswalkBatchId),
-		loadRoutes(db, busBatchId),
-		loadStops(db, busBatchId),
-	]);
 	return {
+		busBatchId,
+		crosswalkBatchId,
 		etag: `"search-${crosswalkBatchId}-${busBatchId}"`,
-		index: { routes, stations, stops },
 	};
+}
+
+/** 앱이 기기에서 검색할 서울 역·노선·정류장 색인을 주어진 배치로 만든다. */
+export async function buildSearchIndex(
+	db: Database,
+	batches: SearchIndexBatches
+): Promise<SearchIndex> {
+	const [stations, routes, stops] = await Promise.all([
+		loadStations(db, batches.crosswalkBatchId),
+		loadRoutes(db, batches.busBatchId),
+		loadStops(db, batches.busBatchId),
+	]);
+	return { routes, stations, stops };
 }

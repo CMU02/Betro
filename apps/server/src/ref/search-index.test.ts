@@ -98,6 +98,8 @@ describe("groupStations", () => {
 describe("GET /v1/ref/search-index", () => {
 	let app: ReturnType<typeof createApp>;
 	let emptyApp: ReturnType<typeof createApp>;
+	let countedApp: ReturnType<typeof createApp>;
+	let selectCount = 0;
 	let busBatchId: number;
 	let crosswalkBatchId: number;
 
@@ -206,6 +208,20 @@ describe("GET /v1/ref/search-index", () => {
 			}))
 		);
 		app = buildApp(db);
+		// select 호출 횟수를 세는 db. 배치 조회만 하는지 본다.
+		countedApp = buildApp(
+			new Proxy(db, {
+				get(target, prop, receiver) {
+					if (prop === "select") {
+						return (...args: unknown[]) => {
+							selectCount += 1;
+							return Reflect.apply(target.select, target, args);
+						};
+					}
+					return Reflect.get(target, prop, receiver);
+				},
+			})
+		);
 		emptyApp = buildApp(await createTestDb());
 	});
 
@@ -255,5 +271,23 @@ describe("GET /v1/ref/search-index", () => {
 		const second = await get(app, { "if-none-match": etag ?? "" });
 		expect(second.status).toBe(304);
 		expect((await get(emptyApp)).status).toBe(503);
+	});
+
+	test("ETag가 맞으면 배치 ID 두 번만 조회하고 색인은 만들지 않는다", async () => {
+		const etag = (await get(countedApp)).headers.get("etag") ?? "";
+		selectCount = 0;
+		const res = await get(countedApp, { "if-none-match": etag });
+		expect(res.status).toBe(304);
+		expect(selectCount).toBe(2);
+	});
+
+	test("같은 배치의 200 응답은 isolate 메모리의 색인을 재사용한다", async () => {
+		const first = await get(countedApp);
+		const firstBody = await first.text();
+		selectCount = 0;
+		const second = await get(countedApp);
+		expect(second.status).toBe(200);
+		expect(await second.text()).toBe(firstBody);
+		expect(selectCount).toBe(2);
 	});
 });

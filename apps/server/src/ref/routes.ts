@@ -4,7 +4,11 @@ import { currentBusBatch, findBusRouteStops, searchBusRoutes } from "./bus";
 import { stripSubwayPrefix } from "./ids";
 import { ifNoneMatchMatches } from "./if-none-match";
 import { createMapRefRoutes } from "./map";
-import { buildSearchIndex } from "./search-index";
+import {
+	buildSearchIndex,
+	currentSearchBatches,
+	type SearchIndex,
+} from "./search-index";
 import {
 	currentTrackBatch,
 	findDirection,
@@ -33,6 +37,8 @@ function parseLimit(raw: string | undefined): number | null {
 /** 등록 화면용 조회 API(`/v1/ref`). 인증이 없는 공개 GET이다. */
 export function createRefRoutes(db: Database): Hono {
 	const routes = new Hono();
+	// 색인은 배치가 같으면 같다. 무거운 조회·직렬화를 피하려 ETag별로 isolate 메모리에 둔다.
+	let searchIndexCache: { etag: string; index: SearchIndex } | null = null;
 
 	/** 현재 배치로 ETag를 만들고 맞으면 304를 돌려줄 응답 머리. */
 	const cacheHeaders = (batchId: number) => ({
@@ -130,15 +136,21 @@ export function createRefRoutes(db: Database): Hono {
 	});
 
 	routes.get("/search-index", async (c) => {
-		const built = await buildSearchIndex(db);
-		if (!built) {
+		const batches = await currentSearchBatches(db);
+		if (!batches) {
 			return c.json({ error: "reference unavailable" }, 503);
 		}
-		const headers = { "Cache-Control": CACHE_CONTROL, ETag: built.etag };
-		if (ifNoneMatchMatches(c.req.header("if-none-match"), built.etag)) {
+		const headers = { "Cache-Control": CACHE_CONTROL, ETag: batches.etag };
+		if (ifNoneMatchMatches(c.req.header("if-none-match"), batches.etag)) {
 			return c.body(null, 304, headers);
 		}
-		return c.json(built.index, 200, headers);
+		if (searchIndexCache?.etag !== batches.etag) {
+			searchIndexCache = {
+				etag: batches.etag,
+				index: await buildSearchIndex(db, batches),
+			};
+		}
+		return c.json(searchIndexCache.index, 200, headers);
 	});
 
 	routes.route("/map", createMapRefRoutes(db));
