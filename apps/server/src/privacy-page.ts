@@ -26,6 +26,7 @@ const SECTIONS: readonly Section[] = [
 			"설치 ID(앱을 설치할 때 만들어지는 임의의 값)와 플랫폼(iOS 또는 Android)",
 			"푸시 알림을 보내기 위한 기기 푸시 토큰",
 			"출퇴근 경로의 구간(노선·정류장·역)과 나가는 시각·요일",
+			"지도에서 보는 노선과 즐겨찾기한 정류장의 ID(실시간 정보를 가져오는 동안에만 쓰고 저장하지 않아요)",
 		],
 		title: "서버가 받는 정보",
 	},
@@ -40,7 +41,7 @@ const SECTIONS: readonly Section[] = [
 		items: [
 			"주소, 좌표, 장소 이름은 서버로 보내지 않아요.",
 			"현재 위치는 기기 안에서만 쓰고 서버에 올리지 않아요.",
-			"즐겨찾기와 장소는 기기에만 저장돼요.",
+			"즐겨찾기와 장소의 목록과 이름은 기기에만 저장돼요.",
 		],
 		title: "받지 않는 정보",
 	},
@@ -71,5 +72,5 @@ export function renderPrivacyPage(input: {
 	const contact = input.contact
 		? `<h2>문의</h2><p>개인정보에 관한 문의는 ${escapeHtml(input.contact)}로 보내 주세요.</p>`
 		: "";
-	return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Betro 개인정보 처리방침</title><style>${STYLE}</style></head><body><h1>Betro 개인정보 처리방침</h1><p class="meta">시행일 ${escapeHtml(input.updatedOn)}</p><p>Betro는 필요한 만큼만 받고, 받는 정보는 아래에 모두 적었어요.</p>${sections}${contact}</body></html>`;
+	return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Betro 개인정보 처리방침</title><style>${STYLE}</style></head><body><h1>Betro 개인정보 처리방침</h1><p class="meta">시행일 ${escapeHtml(input.updatedOn)}</p><p>Betro는 필요한 만큼만 받고, 받는 정보를 아래에 적었어요.</p>${sections}${contact}</body></html>`;
 }

@@ -26,4 +26,12 @@ describe("개인정보 처리방침 페이지", () => {
 		expect(html).toContain("a@b.test&lt;x&gt;");
 		expect(html).not.toContain("<x>");
 	});
+
+	test("모두 적었다고 단정하지 않고 지도에서 보는 노선·정류장 ID를 밝힌다", () => {
+		const html = renderPrivacyPage({ contact: null, updatedOn: "2026-11-24" });
+		expect(html).not.toContain("모두 적었어요");
+		expect(html).toContain("지도에서 보는 노선");
+		expect(html).toContain("즐겨찾기한 정류장");
+		expect(html).not.toContain("즐겨찾기와 장소는 기기에만 저장돼요");
+	});
 });
