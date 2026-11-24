@@ -176,6 +176,7 @@ function StackLayout() {
 					<Stack.Screen name="places/leg" />
 					<Stack.Screen name="commute/[placeId]" />
 					<Stack.Screen name="search" />
+					<Stack.Screen name="station/[key]" />
 				</Stack.Protected>
 				{/* 개발용 표본 화면은 EXPO_PUBLIC_LOCK_SAMPLES=1일 때만 열린다(딥링크로도). */}
 				<Stack.Protected guard={!showOnboarding && showLockSamples}>

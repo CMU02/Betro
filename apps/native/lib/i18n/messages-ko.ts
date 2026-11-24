@@ -612,6 +612,28 @@ export const ko = {
 			title: "버전",
 		},
 	},
+	/** 08 역 상세 */
+	stationDetail: {
+		arrivals: "{line} 도착 정보",
+		direction: "{name} 방면",
+		favorite: "즐겨찾기",
+		favoriteRemove: "즐겨찾기 해제",
+		first: "첫차",
+		firstLast: "첫차 · 막차",
+		last: "막차",
+		loading: "도착 정보를 불러오는 중이에요",
+		noArrivals: "곧 도착하는 열차 정보가 없어요",
+		noService: "오늘은 운행 정보가 없어요",
+		notFound: {
+			body: "검색에서 다시 찾아 주세요",
+			title: "찾을 수 없는 역이에요",
+		},
+		retry: "다시 시도",
+		unavailable: {
+			body: "인터넷 연결을 확인하고 다시 시도해 주세요",
+			title: "도착 정보를 불러오지 못했어요",
+		},
+	},
 	tabs: {
 		commute: "출퇴근",
 		favorites: "즐겨찾기",
