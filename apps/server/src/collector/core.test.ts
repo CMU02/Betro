@@ -706,6 +706,75 @@ describe("CollectorCore", () => {
 		expect(next.etag).toHaveLength(16);
 	});
 
+	// 상류 장애(5xx·네트워크)는 멈춤이 아니지만 실시간이 끊긴다. 앱이 3분 넘게 끊긴 것을 보고
+	// 시간표 추정 모드로 바꾸도록 staleSince를 남긴다(14).
+	it("서울 지하철이 4분 동안 500을 돌려주면 staleSince가 남고, 200을 받으면 지워진다", async () => {
+		const outage: { on: boolean } = { on: false };
+		const h = makeHarness({
+			respond: (url) =>
+				outage.on && ALL_URL.test(url)
+					? { body: "Internal Server Error", status: 500 }
+					: fixtureResponder(url),
+		});
+		await h.core.tick();
+		const subway = async () =>
+			JSON.parse((await h.core.snapshot("subway")).body) as {
+				staleSince: number | null;
+				stoppedToday: boolean;
+			};
+		expect((await subway()).staleSince).toBeNull();
+		outage.on = true;
+		h.clock.now += STEP;
+		const outageStart = h.clock.now;
+		await runTicks(h, 3);
+		const during = await subway();
+		expect(during.stoppedToday).toBe(false);
+		expect(during.staleSince).not.toBeNull();
+		expect(during.staleSince ?? 0).toBeGreaterThanOrEqual(outageStart);
+		expect(h.clock.now - (during.staleSince ?? 0)).toBeGreaterThan(3 * MINUTE);
+		outage.on = false;
+		const before = subwayCalls(h).length;
+		await h.core.tick();
+		expect(subwayCalls(h).length).toBeGreaterThan(before);
+		expect((await subway()).staleSince).toBeNull();
+	});
+
+	// `dev` 버스는 노선마다 160초 간격이라 첫 실패 호출이 장애 시작보다 늦다. 그 호출부터 3분을 넘긴다.
+	it("서울 버스 노선 하나가 6분 동안 500을 돌려주면 그 노선만 staleRoutes에 남고, 200을 받으면 지워진다", async () => {
+		const outage: { on: boolean } = { on: false };
+		const h = makeHarness({
+			respond: (url) =>
+				outage.on && routeOf(url) === ROUTE_6411
+					? { body: "Internal Server Error", status: 500 }
+					: fixtureResponder(url),
+		});
+		await h.core.tick();
+		const bus = async () =>
+			JSON.parse((await h.core.snapshot("bus")).body) as {
+				staleRoutes: Record<string, number | undefined>;
+				stoppedToday: boolean;
+			};
+		expect((await bus()).staleRoutes).toEqual({});
+		outage.on = true;
+		h.clock.now += STEP;
+		const before = busCalls(h, ROUTE_6411).length;
+		await runTicks(h, 5);
+		const firstFailedAt = busCalls(h, ROUTE_6411)[before]?.at ?? 0;
+		expect(firstFailedAt).toBeGreaterThan(0);
+		const during = await bus();
+		expect(during.stoppedToday).toBe(false);
+		expect(Object.keys(during.staleRoutes)).toEqual([ROUTE_6411]);
+		const staleAt = during.staleRoutes[ROUTE_6411] ?? 0;
+		expect(staleAt).toBeGreaterThanOrEqual(firstFailedAt);
+		expect(h.clock.now - staleAt).toBeGreaterThan(3 * MINUTE);
+		outage.on = false;
+		const failed = busCalls(h, ROUTE_6411).length;
+		h.clock.now += STEP;
+		await h.core.tick();
+		expect(busCalls(h, ROUTE_6411).length).toBeGreaterThan(failed);
+		expect((await bus()).staleRoutes).toEqual({});
+	});
+
 	// 서울 지하철 API에는 일일 한도 초과 코드가 없어(데이터 출처 조사) 상류가 멈추는 길은 인증 실패뿐이다.
 	// 한도는 우리 예산 소진으로 센다(아래 테스트).
 	it("서울 지하철이 인증 실패로 멈추면 지하철 스냅샷의 stoppedToday가 true이고 ETag가 바뀐다", async () => {

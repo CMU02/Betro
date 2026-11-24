@@ -17,7 +17,7 @@ export type BusSnapshotVehicle = BusObservation & { lastSeenAt: number };
  * ```jsonc
  * {
  *   "generatedAt": 1793678684100,   // 스냅샷을 만든 시각(UTC epoch ms)
- *   "staleSince": null,             // 소스가 비어 온 첫 시각. 정상이면 null
+ *   "staleSince": null,             // 소스가 비었거나 상류 장애로 끊긴 첫 시각. 정상이면 null
  *   "stoppedToday": false,          // 그날(KST) 이 종류(지하철, 서울 버스)가 한도·인증 실패로 멈췄거나 예산을 다 썼다
  *   "vehicles": [                   // 키(`lineKey|rawTrainNo` 또는 `routeId|vehId`) 순
  *     {
