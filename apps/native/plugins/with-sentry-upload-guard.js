@@ -68,12 +68,21 @@ function withIosGuard(config) {
 				".xcode.env"
 			);
 			const current = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
-			if (!current.includes(MARKER)) {
-				fs.writeFileSync(file, `${current.trimEnd()}\n${XCODE_ENV_GUARD}`);
+			const next = applyXcodeEnvGuard(current);
+			if (next !== current) {
+				fs.writeFileSync(file, next);
 			}
 			return modConfig;
 		},
 	]);
+}
+
+// 검사 문구는 늘 파일 끝에 붙인다. 옛 문구가 있으면 표시 줄부터 끝까지 지우고 지금 문구로 바꾼다.
+// --clean 없이 prebuild해도 예전 검사가 남지 않게 하려는 것이다.
+function applyXcodeEnvGuard(current) {
+	const start = current.indexOf(`# ${MARKER}`);
+	const head = start === -1 ? current : current.slice(0, start);
+	return `${head.trimEnd()}\n${XCODE_ENV_GUARD}`;
 }
 
 function withAndroidGuard(config) {
@@ -89,4 +98,5 @@ function withAndroidGuard(config) {
 module.exports = (config) => withAndroidGuard(withIosGuard(config));
 // 테스트가 검사 문구를 그대로 실행해 본다.
 module.exports.XCODE_ENV_GUARD = XCODE_ENV_GUARD;
+module.exports.applyXcodeEnvGuard = applyXcodeEnvGuard;
 module.exports.GRADLE_GUARD = GRADLE_GUARD;

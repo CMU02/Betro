@@ -8,6 +8,7 @@ import type { ExpoConfig } from "expo/config";
 
 // CommonJS 플러그인이라 require로 읽는다. 검사 문구를 그대로 실행해 본다.
 const sentryGuard = require("./plugins/with-sentry-upload-guard") as {
+	applyXcodeEnvGuard: (current: string) => string;
 	GRADLE_GUARD: string;
 	XCODE_ENV_GUARD: string;
 };
@@ -204,6 +205,16 @@ describe("Sentry 업로드 검사", () => {
 			expect(result.stderr).not.toContain(fakeToken);
 		}
 	);
+
+	it("이미 들어간 옛 검사 문구는 새 문구로 바꾸고 한 번만 넣는다", () => {
+		const base = "export NODE_BINARY=$(command -v node)\n";
+		const stale = `${base}\n# betro-sentry-upload-guard: 옛 문구\nif [ -n "$(printenv "$1")" ]; then :; fi\n`;
+		const updated = sentryGuard.applyXcodeEnvGuard(stale);
+		expect(updated).toBe(`${base}${sentryGuard.XCODE_ENV_GUARD}`);
+		expect(updated).not.toContain("printenv");
+		expect(sentryGuard.applyXcodeEnvGuard(updated)).toBe(updated);
+		expect(sentryGuard.applyXcodeEnvGuard(base)).toBe(updated);
+	});
 
 	it("Gradle도 production 프로필이면 Sentry 값이 없을 때 GradleException으로 멈춘다", () => {
 		expect(sentryGuard.GRADLE_GUARD).toContain(
