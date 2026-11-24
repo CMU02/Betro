@@ -4,6 +4,8 @@ const { withAppBuildGradle, withDangerousMod } = require("expo/config-plugins");
 
 /**
  * Release 빌드에서 SENTRY_AUTH_TOKEN이 없으면 Sentry 소스맵·디버그 심볼 업로드를 건너뛴다(빌드는 계속).
+ * 단 EAS production 프로필(EAS_BUILD_PROFILE=production)은 건너뛰지 않고 빌드를 멈춘다.
+ * 소스맵이 없으면 크래시 줄을 읽을 수 없기 때문이다. 비밀 값은 EAS 빌드 기계에서만 보여서 설정 읽기가 아니라 빌드 단계에서 본다.
  * 토큰은 셸 환경변수나 apps/native/.env 둘 중 하나에 있으면 된다. 값은 읽지 않고 "비어 있지 않은지"만 본다.
  * Debug 빌드는 Sentry 스크립트가 원래 업로드하지 않는다.
  */
@@ -13,6 +15,7 @@ const MARKER = "betro-sentry-upload-guard";
 // ios/.xcode.env는 번들 단계와 Sentry 디버그 심볼 단계가 모두 읽는다.
 const XCODE_ENV_GUARD = `
 # ${MARKER}: SENTRY_AUTH_TOKEN·SENTRY_ORG·SENTRY_PROJECT 중 하나라도 없으면 Sentry 업로드를 건너뛴다(빌드는 계속).
+# EAS production 프로필이면 건너뛰지 않고 빌드를 멈춘다.
 BETRO_SENTRY_DOTENV="$PROJECT_DIR/../.env"
 betro_sentry_has() {
   if [ -n "$(printenv "$1")" ]; then
@@ -24,6 +27,9 @@ if betro_sentry_has SENTRY_AUTH_TOKEN && betro_sentry_has SENTRY_ORG && betro_se
   if [ -z "$SENTRY_DOTENV_PATH" ] && [ -f "$BETRO_SENTRY_DOTENV" ]; then
     export SENTRY_DOTENV_PATH="$BETRO_SENTRY_DOTENV"
   fi
+elif [ "$EAS_BUILD_PROFILE" = "production" ]; then
+  echo "error: production 빌드에는 SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT가 모두 있어야 합니다." >&2
+  exit 1
 else
   export SENTRY_DISABLE_AUTO_UPLOAD=true
 fi
@@ -32,6 +38,7 @@ fi
 // sentry.gradle.kts를 적용한 뒤(파일 끝)에 업로드 조건을 덧씌운다.
 const GRADLE_GUARD = `
 // ${MARKER}: SENTRY_AUTH_TOKEN·SENTRY_ORG·SENTRY_PROJECT 중 하나라도 없으면 Sentry 소스맵 업로드를 건너뛴다(빌드는 계속).
+// EAS production 프로필이면 건너뛰지 않고 빌드를 멈춘다.
 def betroSentryHas = { String key ->
     if (System.getenv(key)?.trim()) {
         return true
@@ -39,10 +46,14 @@ def betroSentryHas = { String key ->
     def dotenv = new File(rootDir, "../.env")
     return dotenv.isFile() && dotenv.readLines().any { it ==~ /^\\s*\${key}\\s*=\\s*["']?[^\\s#"'].*/ }
 }
+def betroSentryKeys = ["SENTRY_AUTH_TOKEN", "SENTRY_ORG", "SENTRY_PROJECT"]
+if (System.getenv("EAS_BUILD_PROFILE") == "production" && !betroSentryKeys.every { betroSentryHas(it) }) {
+    throw new GradleException("production 빌드에는 SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT가 모두 있어야 합니다.")
+}
 if (project.ext.has("shouldSentryAutoUploadGeneral")) {
     def betroSentryAutoUploadDefault = project.ext.shouldSentryAutoUploadGeneral
     project.ext.shouldSentryAutoUploadGeneral = { ->
-        betroSentryAutoUploadDefault() && ["SENTRY_AUTH_TOKEN", "SENTRY_ORG", "SENTRY_PROJECT"].every { betroSentryHas(it) }
+        betroSentryAutoUploadDefault() && betroSentryKeys.every { betroSentryHas(it) }
     }
 }
 `;
@@ -75,3 +86,6 @@ function withAndroidGuard(config) {
 }
 
 module.exports = (config) => withAndroidGuard(withIosGuard(config));
+// 테스트가 검사 문구를 그대로 실행해 본다.
+module.exports.XCODE_ENV_GUARD = XCODE_ENV_GUARD;
+module.exports.GRADLE_GUARD = GRADLE_GUARD;
