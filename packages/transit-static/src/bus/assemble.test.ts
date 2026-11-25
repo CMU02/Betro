@@ -678,7 +678,7 @@ describe("assembleBusRoutes", () => {
 	});
 
 	it("bumps the logic version for the widened scope", () => {
-		expect(BUS_ROUTE_LOGIC_VERSION).toBe(5);
+		expect(BUS_ROUTE_LOGIC_VERSION).toBe(6);
 	});
 
 	it("re-exports the shape attribution", () => {

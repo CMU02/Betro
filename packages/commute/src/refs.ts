@@ -1,4 +1,8 @@
-export const SOURCE_IDS = ["seoul-bus", "seoul-subway"] as const;
+/** 버스 구간의 출처. 서울 버스, 경기(GBIS), 인천(TAGO). */
+export const BUS_SOURCE_IDS = ["seoul-bus", "gbis", "tago"] as const;
+/** 지하철 구간의 출처. */
+export const SUBWAY_SOURCE_IDS = ["seoul-subway"] as const;
+export const SOURCE_IDS = [...BUS_SOURCE_IDS, ...SUBWAY_SOURCE_IDS] as const;
 export type SourceId = (typeof SOURCE_IDS)[number];
 
 export type LineRef = `${SourceId}:${string}`;

@@ -21,6 +21,8 @@ export type MatchMethod = "auto-same-line" | "auto-shared" | "manual-alias";
 export type TrackDirection = "up" | "down";
 /** bus_route.region. transit-static bus/scope.ts의 BusRegion과 같다. */
 export type BusRegion = "seoul" | "gyeonggi" | "incheon";
+/** bus_route.source. 노선·정류장 ID 접두사(seoul은 접두사 없음, gbis:, tago:)와 짝이다. */
+export type BusSource = "seoul" | "gbis" | "tago";
 export type ServiceDay = "weekday" | "saturday" | "holiday";
 export type ServiceDaySource = "source" | "holiday-copied";
 export type ExpressKind = "local" | "express" | "special" | "direct";
@@ -195,6 +197,8 @@ export const timetableStopTime = sqliteTable(
 export const busRoute = sqliteTable(
 	"bus_route",
 	{
+		/** 같은 번호가 시·군마다 있어 구분하는 지역 이름. GBIS는 regionName의 첫 시·군, TAGO는 인천. 서울은 null */
+		areaName: text("area_name"),
 		batchId: integer("batch_id")
 			.notNull()
 			.references(() => referenceBatch.id, { onDelete: "cascade" }),
@@ -217,9 +221,17 @@ export const busRoute = sqliteTable(
 		routeType: text("route_type").notNull(),
 		/** 지역을 뗀 노선명(getBusRouteList busRouteAbrv). 목록에 없는 서울 노선은 route_name과 같다 */
 		shortName: text("short_name").notNull(),
+		/** 노선을 받은 출처. 기존 행은 seoul */
+		source: text("source").$type<BusSource>().notNull().default("seoul"),
+		/** 출처의 도시 코드(TAGO cityCode 등). 없으면 null */
+		sourceCity: text("source_city"),
 	},
 	(table) => [
-		uniqueIndex("bus_route_batch_route_idx").on(table.batchId, table.routeId),
+		uniqueIndex("bus_route_batch_route_idx").on(
+			table.batchId,
+			table.source,
+			table.routeId
+		),
 	]
 );
 

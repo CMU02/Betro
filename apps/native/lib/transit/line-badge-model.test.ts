@@ -43,6 +43,17 @@ describe("lineBadgeModel bus", () => {
 		expect(model.regionKey).toBeNull();
 	});
 
+	it("Seoul night buses (routeType 15) keep the default color, not GBIS 15", () => {
+		const model = lineBadgeModel({ ...bus("15"), name: "N26" });
+		expect(model.colorToken).toBe("bus/trunk");
+		expect(model.label).toBe("N26");
+		expect(model.regionKey).toBeNull();
+	});
+
+	it("Seoul routeType 14 keeps the default color, not GBIS 14", () => {
+		expect(lineBadgeModel(bus("14")).colorToken).toBe("bus/trunk");
+	});
+
 	it("shows the region label for non-Seoul routes of any type", () => {
 		expect(lineBadgeModel(bus("3", "gyeonggi")).regionKey).toBe(
 			"transit.region.gyeonggi"
@@ -121,5 +132,37 @@ describe("lineBadgeModel subway", () => {
 				true
 			);
 		}
+	});
+});
+
+describe("lineBadgeModel regional bus", () => {
+	it.each([
+		["30", "bus/village"],
+		["11", "bus/express"],
+		["14", "bus/express"],
+		["13", "bus/branch"],
+		["16", "bus/circular"],
+	])(
+		"GBIS code %s uses %s with the Gyeonggi label",
+		(routeType, colorToken) => {
+			const model = lineBadgeModel(bus(routeType, "gyeonggi"));
+			expect(model.colorToken).toBe(colorToken);
+			expect(model.regionKey).toBe("transit.region.gyeonggi");
+		}
+	);
+
+	it("TAGO village type keeps the village color with the Incheon label", () => {
+		const model = lineBadgeModel(bus("마을버스", "incheon"));
+		expect(model.colorToken).toBe("bus/village");
+		expect(model.regionKey).toBe("transit.region.incheon");
+	});
+
+	it("TAGO trunk and express types use their own colors", () => {
+		expect(lineBadgeModel(bus("간선버스", "incheon")).colorToken).toBe(
+			"bus/trunk"
+		);
+		expect(lineBadgeModel(bus("광역버스", "incheon")).colorToken).toBe(
+			"bus/express"
+		);
 	});
 });

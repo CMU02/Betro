@@ -9,6 +9,7 @@ import type {
 	SubwayBranch,
 	SubwayLine,
 } from "../ref/ref-client";
+import { type BusKind, busKindOf } from "../transit/bus-route-type";
 import type { LineBadgeInput } from "../transit/line-badge-model";
 import type { BusMeta } from "./places";
 
@@ -59,14 +60,18 @@ export interface BusRouteRow {
 	title: string;
 }
 
-const ROUTE_TYPE_KEYS: Record<string, MessageKey> = {
-	"1": "legPicker.routeType.airport",
-	"2": "legPicker.routeType.village",
-	"3": "legPicker.routeType.trunk",
-	"4": "legPicker.routeType.branch",
-	"5": "legPicker.routeType.circular",
-	"6": "legPicker.routeType.express",
-};
+const BUS_KIND_KEYS = {
+	airport: "legPicker.routeType.airport",
+	branch: "legPicker.routeType.branch",
+	circular: "legPicker.routeType.circular",
+	direct: "legPicker.routeType.gbis.direct",
+	express: "legPicker.routeType.express",
+	general: "legPicker.routeType.gbis.general",
+	seat: "legPicker.routeType.gbis.seat",
+	trunk: "legPicker.routeType.trunk",
+	village: "legPicker.routeType.village",
+	wide: "legPicker.routeType.gbis.wide",
+} as const satisfies Record<BusKind, MessageKey>;
 
 const REGION_KEYS = {
 	gyeonggi: "legPicker.region.gyeonggi",
@@ -349,10 +354,12 @@ export function subwayLeg(
 	};
 }
 
-/** 검색 결과 줄. 번호가 같은 서울·경기·인천 노선이 배지 옆 지역 글자와 아래 글자로 구분된다. */
+/** 검색 결과 줄. 번호가 같은 서울·경기·인천 노선이 배지 옆 지역 글자와 아래 글자(시·군 이름 포함)로 구분된다. */
 export function busRouteRow(route: BusRouteMatch, t: Translate): BusRouteRow {
-	const region = t(REGION_KEYS[route.region]);
-	const typeKey = ROUTE_TYPE_KEYS[route.routeType];
+	// 경기·인천 노선은 시·군 이름으로 같은 번호를 구분한다. 서울은 지역 이름을 쓴다.
+	const region = route.areaName ?? t(REGION_KEYS[route.region]);
+	const kind = busKindOf(route.routeType, route.region);
+	const typeKey = kind === null ? undefined : BUS_KIND_KEYS[kind];
 	return {
 		badge: {
 			mode: "bus",

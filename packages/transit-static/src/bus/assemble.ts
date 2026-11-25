@@ -18,6 +18,7 @@ import {
 import {
 	type BusRegion,
 	type BusRouteEntry,
+	type BusSource,
 	isInScopeRouteId,
 	isInScopeRouteType,
 	regionOf,
@@ -29,6 +30,18 @@ import {
  */
 export const BUS_SHAPE_ATTRIBUTION = REPORT_SHAPE_ATTRIBUTION;
 
+/** 출처별 노선 모양 출처 표기. GBIS·TAGO는 모양 API가 없어 정류장 좌표를 이은 선이다(계획 설계 판단 3). */
+const SHAPE_ATTRIBUTION_BY_SOURCE: Readonly<Record<BusSource, string>> = {
+	gbis: "경기도 버스정보(GBIS)",
+	seoul: BUS_SHAPE_ATTRIBUTION,
+	tago: "국토교통부 TAGO",
+};
+
+/** 노선의 출처(없으면 seoul)에 맞는 모양 출처 표기. */
+export function busShapeAttribution(source: BusSource = "seoul"): string {
+	return SHAPE_ATTRIBUTION_BY_SOURCE[source];
+}
+
 /**
  * 조립 결과가 바뀌는 코드 변경마다 올린다. manifest에 들어간다.
  * 2: Task 8 — 범위(공항·셔틀·한강버스 유형, 자율주행 시범 ID), xlsx 최대 순번 비교, off-shape 옆 구간 불일치 예외, sect-dist-scale.
@@ -36,8 +49,9 @@ export const BUS_SHAPE_ATTRIBUTION = REPORT_SHAPE_ATTRIBUTION;
  * 4: MVP 2-D — 마을(2)·인천(7)·경기(8)를 범위에 넣고, 노선에 지역(region)과 지역을 뗀 이름(shortName)을 붙임.
  *    적재 가능 비율을 서울 면허 노선과 경기·인천 노선으로 나눠 봄.
  * 5: 노선 목록의 배차간격(term)·첫차·막차 시각을 노선에 싣음.
+ * 6: MVP 5-A — 서울에 들어오지 않는 경기(GBIS)·인천(TAGO) 노선을 정류장 좌표로 이은 모양으로 함께 적재(regional.ts).
  */
-export const BUS_ROUTE_LOGIC_VERSION = 5;
+export const BUS_ROUTE_LOGIC_VERSION = 6;
 
 /** 범위 안 서울 면허 노선(마을 포함) 중 적재 가능한 노선이 이 비율 이상이어야 배치를 적재한다. */
 export const MIN_VALID_ROUTE_RATIO = REPORT_MIN_LOADABLE_RATIO.seoul;
@@ -90,6 +104,8 @@ export interface BusIssue {
 }
 
 export interface AssembledBusRoute {
+	/** 같은 번호를 시·군으로 구분하는 지역 이름. 서울 노선은 없다. */
+	areaName?: string | null;
 	coords: [number, number][];
 	/** 첫차 시각(0시부터의 분). 노선 목록에 없으면 null. */
 	firstBusMinute: number | null;
@@ -109,6 +125,10 @@ export interface AssembledBusRoute {
 	segments: BusSegment[];
 	/** 지역을 뗀 이름. 노선 목록에 없으면(서울 노선) routeName과 같다. */
 	shortName: string;
+	/** 노선을 받은 출처. 없으면 seoul. */
+	source?: BusSource;
+	/** 출처의 도시 코드. 없으면 null. */
+	sourceCity?: string | null;
 	stops: (BusRouteStationRow & ProjectedStop)[];
 }
 

@@ -243,6 +243,12 @@ export const ko = {
 			branch: "지선",
 			circular: "순환",
 			express: "광역",
+			gbis: {
+				direct: "직행좌석",
+				general: "일반",
+				seat: "좌석",
+				wide: "광역급행",
+			},
 			trunk: "간선",
 			village: "마을",
 		},
@@ -276,6 +282,7 @@ export const ko = {
 		/** 실시간 버스가 아직 없을 때 승차 정류장 도착 예상(지도 설계 2.6). 단정하지 않는다. */
 		estimatedBoard: "{line} · 시간표 추정 · 약 {minutes}분 뒤",
 		nearby: "근처 지하철",
+		noRealtime: "실시간 정보 없음",
 		routeMenu: {
 			alternative: "대안 {n}",
 			base: "기본",

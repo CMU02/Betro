@@ -29,6 +29,11 @@ const SHAPE_COORDS: [number, number][] = [
 	[127.06, 37.5],
 ];
 
+const GBIS_SHAPE_COORDS: [number, number][] = [
+	[127.1, 37.4],
+	[127.11, 37.4],
+];
+
 let db: LibsqlDatabase;
 let app: ReturnType<typeof createApp>;
 let busBatchId: number;
@@ -81,6 +86,43 @@ async function seedBus(): Promise<void> {
 		busRouteId: route.id,
 		coords: SHAPE_COORDS,
 		lengthM: 6000,
+	});
+	const [gbisRoute] = await db
+		.insert(busRoute)
+		.values({
+			areaName: "성남",
+			batchId: batch.id,
+			qualityFlags: [],
+			region: "gyeonggi",
+			routeId: ROUTE_ID,
+			routeName: "11",
+			routeType: "30",
+			shortName: "11",
+			source: "gbis",
+		})
+		.returning({ id: busRoute.id });
+	if (!gbisRoute) {
+		throw new Error("seed gbis route missing");
+	}
+	await db.insert(busRouteShape).values({
+		attribution: "test",
+		busRouteId: gbisRoute.id,
+		coords: GBIS_SHAPE_COORDS,
+		lengthM: 1000,
+	});
+	await db.insert(busRouteStop).values({
+		apiSectDistM: 0,
+		arsId: null,
+		busRouteId: gbisRoute.id,
+		directionName: null,
+		distanceM: 0,
+		lat: 37.4,
+		lng: 127.1,
+		name: "경기첫째",
+		offsetM: 0,
+		qualityFlags: [],
+		seq: 1,
+		stationId: "S1",
 	});
 	await db.insert(busRouteStop).values(
 		[
@@ -302,6 +344,22 @@ describe("bus map", () => {
 				},
 			],
 		});
+	});
+
+	test("a GBIS route with the same id is served only under its prefix", async () => {
+		const res = await get(`/bus/gbis:${ROUTE_ID}`);
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			line: string;
+			shape: [number, number][];
+			stops: { stop: string }[];
+		};
+		expect(body.line).toBe(`gbis:${ROUTE_ID}`);
+		expect(body.shape).toEqual(GBIS_SHAPE_COORDS);
+		expect(body.stops.map((stop) => stop.stop)).toEqual(["gbis:S1"]);
+		const seoul = await get(`/bus/${ROUTE_ID}`);
+		const seoulBody = (await seoul.json()) as { shape: [number, number][] };
+		expect(seoulBody.shape).toEqual(SHAPE_COORDS);
 	});
 
 	test("bus map 404 for unknown route", async () => {

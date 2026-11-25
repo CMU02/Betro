@@ -1,0 +1,3281 @@
+{
+  "response": {
+    "header": { "resultCode": "00", "resultMsg": "NORMAL SERVICE." },
+    "body": {
+      "items": {
+        "item": [
+          {
+            "endnodenm": "인명여자고등학교",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000085",
+            "routeno": 523,
+            "routetp": "지선버스",
+            "startnodenm": "기점(미정차)_동춘동차고지",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "동암남부역",
+            "endvehicletime": "0000",
+            "routeid": "ICB365000088",
+            "routeno": 533,
+            "routetp": "마을버스",
+            "startnodenm": "만수신동아아파트.동인천고",
+            "startvehicletime": "0504"
+          },
+          {
+            "endnodenm": "롯데백화점(인천터미널)",
+            "endvehicletime": 2350,
+            "routeid": "ICB365000089",
+            "routeno": 534,
+            "routetp": "마을버스",
+            "startnodenm": "장수공영차고지",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "동암남부역",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000090",
+            "routeno": 535,
+            "routetp": "지선버스",
+            "startnodenm": "뒷방죽들",
+            "startvehicletime": "0450"
+          },
+          {
+            "endnodenm": "동암남부역",
+            "endvehicletime": 2320,
+            "routeid": "ICB365000092",
+            "routeno": 536,
+            "routetp": "지선버스",
+            "startnodenm": "인천대공원후문(장수동)",
+            "startvehicletime": "0430"
+          },
+          {
+            "endnodenm": "동암남부역",
+            "endvehicletime": 2320,
+            "routeid": "ICB365000093",
+            "routeno": 537,
+            "routetp": "지선버스",
+            "startnodenm": "남동국가산업단지입구",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "동암남부역",
+            "endvehicletime": 2350,
+            "routeid": "ICB365000094",
+            "routeno": 538,
+            "routetp": "지선버스",
+            "startnodenm": "한양공구",
+            "startvehicletime": "0413"
+          },
+          {
+            "endnodenm": "부평농장사무소",
+            "endvehicletime": "0000",
+            "routeid": "ICB365000095",
+            "routeno": 539,
+            "routetp": "지선버스",
+            "startnodenm": "백운역",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "남동중학교",
+            "endvehicletime": 2330,
+            "routeid": "ICB365000096",
+            "routeno": 540,
+            "routetp": "지선버스",
+            "startnodenm": "540번종점",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "부평역",
+            "endvehicletime": 2335,
+            "routeid": "ICB365000097",
+            "routeno": 551,
+            "routetp": "지선버스",
+            "startnodenm": "청천농장(종점)",
+            "startvehicletime": "0459"
+          },
+          {
+            "endnodenm": "부평역",
+            "endvehicletime": 2310,
+            "routeid": "ICB365000101",
+            "routeno": 555,
+            "routetp": "지선버스",
+            "startnodenm": "진산초등학교",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "범양아파트",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000102",
+            "routeno": 556,
+            "routetp": "지선버스",
+            "startnodenm": "삼산동차고지",
+            "startvehicletime": "0515"
+          },
+          {
+            "endnodenm": "부평시장(한남프라자)",
+            "endvehicletime": "0000",
+            "routeid": "ICB365000103",
+            "routeno": 557,
+            "routetp": "지선버스",
+            "startnodenm": "희망체육공원입구",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "부평역",
+            "endvehicletime": 2315,
+            "routeid": "ICB365000104",
+            "routeno": 558,
+            "routetp": "지선버스",
+            "startnodenm": "삼산동차고지",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "부평역(27번출구)",
+            "endvehicletime": "0005",
+            "routeid": "ICB365000106",
+            "routeno": 560,
+            "routetp": "지선버스",
+            "startnodenm": "부평구청",
+            "startvehicletime": "0605"
+          },
+          {
+            "endnodenm": "부평시장(한남프라자)",
+            "endvehicletime": 2343,
+            "routeid": "ICB365000107",
+            "routeno": 561,
+            "routetp": "지선버스",
+            "startnodenm": "희망체육공원입구",
+            "startvehicletime": "0600"
+          },
+          {
+            "endnodenm": "2001아울렛부평점",
+            "endvehicletime": "0000",
+            "routeid": "ICB365000110",
+            "routeno": 564,
+            "routetp": "지선버스",
+            "startnodenm": "간석북부역",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "백운역",
+            "endvehicletime": 2345,
+            "routeid": "ICB365000111",
+            "routeno": "564-1",
+            "routetp": "지선버스",
+            "startnodenm": "인천성광교회",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "부평역",
+            "endvehicletime": 2320,
+            "routeid": "ICB365000112",
+            "routeno": 565,
+            "routetp": "지선버스",
+            "startnodenm": "진산초등학교",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "시청광장입구",
+            "endvehicletime": 2305,
+            "routeid": "ICB365000113",
+            "routeno": 566,
+            "routetp": "지선버스",
+            "startnodenm": "염전공원",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "백운역",
+            "endvehicletime": "0000",
+            "routeid": "ICB365000114",
+            "routeno": 567,
+            "routetp": "지선버스",
+            "startnodenm": "청천푸르지오아파트",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "백운역",
+            "endvehicletime": "0006",
+            "routeid": "ICB365000116",
+            "routeno": 569,
+            "routetp": "지선버스",
+            "startnodenm": "태양주택",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "부평시장(가구의거리)",
+            "endvehicletime": "0000",
+            "routeid": "ICB365000117",
+            "routeno": 570,
+            "routetp": "지선버스",
+            "startnodenm": "태양주택",
+            "startvehicletime": "0540"
+          },
+          {
+            "endnodenm": "부평역",
+            "endvehicletime": 2330,
+            "routeid": "ICB365000118",
+            "routeno": 571,
+            "routetp": "지선버스",
+            "startnodenm": "삼산동차고지",
+            "startvehicletime": "0525"
+          },
+          {
+            "endnodenm": "부평역(27번출구)",
+            "endvehicletime": 2345,
+            "routeid": "ICB365000119",
+            "routeno": 574,
+            "routetp": "지선버스",
+            "startnodenm": "뉴서울1차아파트",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "부평역",
+            "endvehicletime": "0010",
+            "routeid": "ICB365000120",
+            "routeno": 579,
+            "routetp": "지선버스",
+            "startnodenm": "부개역",
+            "startvehicletime": "0525"
+          },
+          {
+            "endnodenm": "부평역",
+            "endvehicletime": 2320,
+            "routeid": "ICB365000121",
+            "routeno": 581,
+            "routetp": "지선버스",
+            "startnodenm": "오조산공원",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "부평역",
+            "endvehicletime": 2240,
+            "routeid": "ICB365000122",
+            "routeno": 582,
+            "routetp": "지선버스",
+            "startnodenm": "계산여고",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "부평역",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000123",
+            "routeno": 583,
+            "routetp": "지선버스",
+            "startnodenm": "아라역3번출구",
+            "startvehicletime": "0515"
+          },
+          {
+            "endnodenm": "계양역",
+            "endvehicletime": 2250,
+            "routeid": "ICB365000124",
+            "routeno": 584,
+            "routetp": "지선버스",
+            "startnodenm": "원창동(종점)",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "부평역",
+            "endvehicletime": 2330,
+            "routeid": "ICB365000125",
+            "routeno": 585,
+            "routetp": "지선버스",
+            "startnodenm": "백영아파트",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "부평역(12번출구)",
+            "endvehicletime": 2346,
+            "routeid": "ICB365000126",
+            "routeno": 586,
+            "routetp": "지선버스",
+            "startnodenm": "청천동차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "계산역",
+            "endvehicletime": 2340,
+            "routeid": "ICB365000127",
+            "routeno": 587,
+            "routetp": "지선버스",
+            "startnodenm": "계산역",
+            "startvehicletime": "0630"
+          },
+          {
+            "endnodenm": "서운일반산업단지(맞은편)",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000128",
+            "routeno": 588,
+            "routetp": "지선버스",
+            "startnodenm": "청천동차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "효성동동화운수차고지",
+            "endvehicletime": 2315,
+            "routeid": "ICB365000129",
+            "routeno": 590,
+            "routetp": "지선버스",
+            "startnodenm": "서운일반산업단지",
+            "startvehicletime": "0525"
+          },
+          {
+            "endnodenm": "검암역(원당방면)",
+            "endvehicletime": 2255,
+            "routeid": "ICB365000130",
+            "routeno": 591,
+            "routetp": "지선버스",
+            "startnodenm": "가좌동차고",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "경복예식장",
+            "endvehicletime": 2330,
+            "routeid": "ICB365000132",
+            "routeno": 592,
+            "routetp": "지선버스",
+            "startnodenm": "나비공원입구사거리",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "동암북부역광장",
+            "endvehicletime": "0005",
+            "routeid": "ICB365000133",
+            "routeno": 593,
+            "routetp": "지선버스",
+            "startnodenm": "배수지입구",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "홍대입구역",
+            "endvehicletime": 2320,
+            "routeid": "ICB365000145",
+            "routeno": 1000,
+            "routetp": "광역버스",
+            "startnodenm": "경남아너스빌",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "홍대입구역",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000146",
+            "routeno": 1100,
+            "routetp": "광역버스",
+            "startnodenm": "한전사거리",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "홍대입구역",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000147",
+            "routeno": 1101,
+            "routetp": "광역버스",
+            "startnodenm": "이든사거리",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "홍대입구역",
+            "endvehicletime": 2310,
+            "routeid": "ICB365000148",
+            "routeno": 1200,
+            "routetp": "광역버스",
+            "startnodenm": "범양아파트(종점)",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "동교동삼거리",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000149",
+            "routeno": 1300,
+            "routetp": "광역버스",
+            "startnodenm": "힐스테이트레이크송도4차",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "동교동삼거리",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000150",
+            "routeno": 1301,
+            "routetp": "광역버스",
+            "startnodenm": "송도공영차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "홍대입구역",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000151",
+            "routeno": 1400,
+            "routetp": "광역버스",
+            "startnodenm": "인천터미널",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "홍대입구역",
+            "endvehicletime": 2320,
+            "routeid": "ICB365000152",
+            "routeno": 1500,
+            "routetp": "광역버스",
+            "startnodenm": "롯데마트",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "홍대입구역",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000154",
+            "routeno": 1601,
+            "routetp": "광역버스",
+            "startnodenm": "인하대후문",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "강남역서초현대타워앞",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000160",
+            "routeno": 9100,
+            "routetp": "광역버스",
+            "startnodenm": "숭의역(1번출구)",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "강남역서초현대타워앞",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000161",
+            "routeno": 9200,
+            "routetp": "광역버스",
+            "startnodenm": "송도파크레인동일하이빌",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "강남역서초현대타워앞",
+            "endvehicletime": 2250,
+            "routeid": "ICB365000162",
+            "routeno": 9300,
+            "routetp": "광역버스",
+            "startnodenm": "청라BRT차고지입구",
+            "startvehicletime": "0430"
+          },
+          {
+            "endnodenm": "매헌시민의숲.양재꽃시장",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000163",
+            "routeno": 9500,
+            "routetp": "광역버스",
+            "startnodenm": "부평역",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "매헌시민의숲.양재꽃시장",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000164",
+            "routeno": 9501,
+            "routetp": "광역버스",
+            "startnodenm": "이든사거리",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "굴포천역(부평농협)",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000180",
+            "routeno": "111-2",
+            "routetp": "간선버스",
+            "startnodenm": "동춘동차고지",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "미추홀구청",
+            "endvehicletime": 2310,
+            "routeid": "ICB365000196",
+            "routeno": "28-1",
+            "routetp": "간선버스",
+            "startnodenm": "가좌동차고",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "송내역남부",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000201",
+            "routeno": "16-1",
+            "routetp": "간선버스",
+            "startnodenm": "항동7가버스차고지",
+            "startvehicletime": "0505"
+          },
+          {
+            "endnodenm": "강남역서초현대타워앞",
+            "endvehicletime": 2330,
+            "routeid": "ICB365000215",
+            "routeno": "M6405",
+            "routetp": "광역버스",
+            "startnodenm": "웰카운티",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "동춘동차고지",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000216",
+            "routeno": "103-1",
+            "routetp": "간선버스",
+            "startnodenm": "십정동차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "인천공항T1(3층13번)",
+            "endvehicletime": 2130,
+            "routeid": "ICB365000219",
+            "routeno": 303,
+            "routetp": "좌석버스",
+            "startnodenm": "십정동차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "청라디이스트",
+            "endvehicletime": 2220,
+            "routeid": "ICB365000230",
+            "routeno": 70,
+            "routetp": "간선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "삼보아파트(계양구청)",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000238",
+            "routeno": "2-1",
+            "routetp": "간선버스",
+            "startnodenm": "청라디이스트",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "주안역",
+            "endvehicletime": "0000",
+            "routeid": "ICB365000243",
+            "routeno": "515-1",
+            "routetp": "지선버스",
+            "startnodenm": "인천지방법원",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "강남역서초현대타워앞",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000245",
+            "routeno": 9201,
+            "routetp": "광역버스",
+            "startnodenm": "성호아파트",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "매헌시민의숲.양재꽃시장",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000303",
+            "routeno": 9802,
+            "routetp": "광역버스",
+            "startnodenm": "한전사거리",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "송도파크레인동일하이빌",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000310",
+            "routeno": "3-2",
+            "routetp": "간선버스",
+            "startnodenm": "인천아시아드주경기장(동문)",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "인천터미널역3번출구",
+            "endvehicletime": 2200,
+            "routeid": "ICB365000313",
+            "routeno": 800,
+            "routetp": "좌석버스",
+            "startnodenm": "강화산성서문",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "태평아파트1차(B)",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000324",
+            "routeno": 595,
+            "routetp": "지선버스",
+            "startnodenm": "서인천세무서",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "이화2동회차지",
+            "endvehicletime": 2000,
+            "routeid": "ICB365000325",
+            "routeno": "계양1",
+            "routetp": "순환버스",
+            "startnodenm": "계양역",
+            "startvehicletime": "0700"
+          },
+          {
+            "endnodenm": "둑실동회차지",
+            "endvehicletime": 2200,
+            "routeid": "ICB365000326",
+            "routeno": "계양2",
+            "routetp": "순환버스",
+            "startnodenm": "계양역",
+            "startvehicletime": "0645"
+          },
+          {
+            "endnodenm": "능허대공원",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000328",
+            "routeno": 72,
+            "routetp": "간선버스",
+            "startnodenm": "검암역로열파크씨티푸르지오1단지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "동암북부역광장",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000330",
+            "routeno": 530,
+            "routetp": "지선버스",
+            "startnodenm": "인천성광교회",
+            "startvehicletime": "0600"
+          },
+          {
+            "endnodenm": "원창동(종점)",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000334",
+            "routeno": 9,
+            "routetp": "간선버스",
+            "startnodenm": "송도제2차고지",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "인천공항T2(11)번출입구(3층)",
+            "endvehicletime": 2030,
+            "routeid": "ICB365000343",
+            "routeno": 307,
+            "routetp": "좌석버스",
+            "startnodenm": "십정동차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "인천공항T2(11)번출입구(3층)",
+            "endvehicletime": 2030,
+            "routeid": "ICB365000350",
+            "routeno": "303-1",
+            "routetp": "좌석버스",
+            "startnodenm": "십정동차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "송내역남부",
+            "endvehicletime": 2226,
+            "routeid": "ICB365000364",
+            "routeno": "8A",
+            "routetp": "간선버스",
+            "startnodenm": "인천대학교공과대학",
+            "startvehicletime": 2124
+          },
+          {
+            "endnodenm": "화곡역",
+            "endvehicletime": 2320,
+            "routeid": "ICB365000377",
+            "routeno": 7700,
+            "routetp": "광역버스",
+            "startnodenm": "청라BRT차고지입구",
+            "startvehicletime": "0450"
+          },
+          {
+            "endnodenm": "인하대병원",
+            "endvehicletime": 2250,
+            "routeid": "ICB365000379",
+            "routeno": 5,
+            "routetp": "간선버스",
+            "startnodenm": "신명아파트.대우3차아파트",
+            "startvehicletime": "0550"
+          },
+          {
+            "endnodenm": "신촌오거리.2호선신촌역",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000381",
+            "routeno": "M6724",
+            "routetp": "광역버스",
+            "startnodenm": "연세대",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "금마초등학교",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000382",
+            "routeno": 526,
+            "routetp": "지선버스",
+            "startnodenm": "가좌동차고",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "운서역",
+            "endvehicletime": 2200,
+            "routeid": "ICB365000389",
+            "routeno": 304,
+            "routetp": "좌석버스",
+            "startnodenm": "십정동차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "롯데몰.김포공항역",
+            "endvehicletime": 2100,
+            "routeid": "ICB365000391",
+            "routeno": "60-5",
+            "routetp": "좌석버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0450"
+          },
+          {
+            "endnodenm": "LH7단지",
+            "endvehicletime": 2200,
+            "routeid": "ICB365000392",
+            "routeno": 320,
+            "routetp": "좌석버스",
+            "startnodenm": "송도더샵센트럴시티.글로벌캠퍼스푸르지오",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "인천공항T1(3층14번)",
+            "endvehicletime": "0525",
+            "routeid": "ICB365000408",
+            "routeno": "223A",
+            "routetp": "좌석버스",
+            "startnodenm": "신북항고가교",
+            "startvehicletime": "0515"
+          },
+          {
+            "endnodenm": "연세대학교앞",
+            "endvehicletime": 2040,
+            "routeid": "ICB365000409",
+            "routeno": "M6628",
+            "routetp": "광역버스",
+            "startnodenm": "경남아너스빌",
+            "startvehicletime": "0600"
+          },
+          {
+            "endnodenm": "개화역광역환승센터",
+            "endvehicletime": 2200,
+            "routeid": "ICB365000412",
+            "routeno": 117,
+            "routetp": "좌석버스",
+            "startnodenm": "LH7단지",
+            "startvehicletime": "0540"
+          },
+          {
+            "endnodenm": "영종역(운북차고지.청라방향)",
+            "endvehicletime": 2250,
+            "routeid": "ICB365000415",
+            "routeno": "영종1",
+            "routetp": "순환버스",
+            "startnodenm": "영종중학교",
+            "startvehicletime": "0650"
+          },
+          {
+            "endnodenm": "영종중학교",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000418",
+            "routeno": "영종3",
+            "routetp": "순환버스",
+            "startnodenm": "힐스테이트",
+            "startvehicletime": "0608"
+          },
+          {
+            "endnodenm": "동교동삼거리",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000421",
+            "routeno": 1302,
+            "routetp": "광역버스",
+            "startnodenm": "극지연구소",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "부평시장역",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000439",
+            "routeno": "43-1",
+            "routetp": "간선버스",
+            "startnodenm": "검암역(시내방면)",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "인천성모병원종점지주차장",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000441",
+            "routeno": 43,
+            "routetp": "간선버스",
+            "startnodenm": "드림파크야생화단지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "송도제2차고지입구",
+            "endvehicletime": 2220,
+            "routeid": "ICB365000442",
+            "routeno": 81,
+            "routetp": "간선버스",
+            "startnodenm": "마니교통차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "입구지입구",
+            "endvehicletime": 2135,
+            "routeid": "ICB365000445",
+            "routeno": 204,
+            "routetp": "간선버스",
+            "startnodenm": "영종아레나",
+            "startvehicletime": "0450"
+          },
+          {
+            "endnodenm": "인천공항T1(3층13번)",
+            "endvehicletime": "0540",
+            "routeid": "ICB365000483",
+            "routeno": "306A",
+            "routetp": "좌석버스",
+            "startnodenm": "서부공단입구",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "KTX광명역4번출구",
+            "endvehicletime": 2200,
+            "routeid": "ICB365000497",
+            "routeno": 6770,
+            "routetp": "광역버스",
+            "startnodenm": "인천공항T2-B1층",
+            "startvehicletime": "0600"
+          },
+          {
+            "endnodenm": "가정(루원시티)역",
+            "endvehicletime": "0032",
+            "routeid": "ICB365000498",
+            "routeno": 701,
+            "routetp": "지선버스",
+            "startnodenm": "청라국제도시역",
+            "startvehicletime": "0435"
+          },
+          {
+            "endnodenm": "가정(루원시티)역",
+            "endvehicletime": "0030",
+            "routeid": "ICB365000499",
+            "routeno": 702,
+            "routetp": "지선버스",
+            "startnodenm": "청라국제도시역",
+            "startvehicletime": "0435"
+          },
+          {
+            "endnodenm": "부평시장(한남프라자)",
+            "endvehicletime": "0000",
+            "routeid": "ICB365000501",
+            "routeno": "557A",
+            "routetp": "지선버스",
+            "startnodenm": "희망체육공원입구",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "루원린스트라우스더린시티",
+            "endvehicletime": 2200,
+            "routeid": "ICB365000507",
+            "routeno": 44,
+            "routetp": "간선버스",
+            "startnodenm": "쉐보레출고사무소",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "인천공항T1(3층13번)",
+            "endvehicletime": 2130,
+            "routeid": "ICB365000508",
+            "routeno": 310,
+            "routetp": "좌석버스",
+            "startnodenm": "검단사거리역",
+            "startvehicletime": "0450"
+          },
+          {
+            "endnodenm": "인천공항T2(11)번출입구(3층)",
+            "endvehicletime": 2100,
+            "routeid": "ICB365000509",
+            "routeno": 330,
+            "routetp": "좌석버스",
+            "startnodenm": "신흥교통입구",
+            "startvehicletime": "0430"
+          },
+          {
+            "endnodenm": "동암남부역",
+            "endvehicletime": 2309,
+            "routeid": "ICB365000513",
+            "routeno": 532,
+            "routetp": "지선버스",
+            "startnodenm": "서창공영차고지입구",
+            "startvehicletime": "0445"
+          },
+          {
+            "endnodenm": "신정중학교",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000514",
+            "routeno": "순환41",
+            "routetp": "지선버스",
+            "startnodenm": "송도공영차고지",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "겐트대학교글로벌캠퍼스",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000515",
+            "routeno": "순환42",
+            "routetp": "지선버스",
+            "startnodenm": "송도공영차고지",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "송도스포츠센터(LNG야구장)",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000516",
+            "routeno": "순환43",
+            "routetp": "지선버스",
+            "startnodenm": "송도공영차고지",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "남동구청역",
+            "endvehicletime": 2150,
+            "routeid": "ICB365000518",
+            "routeno": "순환54",
+            "routetp": "지선버스",
+            "startnodenm": "운연동",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "인천터미널역3번출구",
+            "endvehicletime": 2320,
+            "routeid": "ICB365000519",
+            "routeno": "순환56",
+            "routetp": "지선버스",
+            "startnodenm": "서창공영차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "동춘동종점",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000520",
+            "routeno": 63,
+            "routetp": "간선버스",
+            "startnodenm": "청라BRT차고지입구",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "송내역남부",
+            "endvehicletime": 2340,
+            "routeid": "ICB365000522",
+            "routeno": "N50",
+            "routetp": "지선버스",
+            "startnodenm": "인천논현중학교",
+            "startvehicletime": 2310
+          },
+          {
+            "endnodenm": "부평역(27번출구)",
+            "endvehicletime": 2300,
+            "routeid": "ICB366000001",
+            "routeno": "584-1",
+            "routetp": "지선버스",
+            "startnodenm": "서운일반산업단지(맞은편)",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "인천공항T1(3층13번)",
+            "endvehicletime": "0525",
+            "routeid": "ICB366000004",
+            "routeno": "111B",
+            "routetp": "좌석버스",
+            "startnodenm": "계산역",
+            "startvehicletime": "0455"
+          },
+          {
+            "endnodenm": "호구포역2번출구",
+            "endvehicletime": 2300,
+            "routeid": "ICB366000006",
+            "routeno": "인천e음55",
+            "routetp": "지선버스",
+            "startnodenm": "인천상공회의소",
+            "startvehicletime": "0550"
+          },
+          {
+            "endnodenm": "금마초등학교",
+            "endvehicletime": 2300,
+            "routeid": "ICB366000007",
+            "routeno": "인천e음61",
+            "routetp": "지선버스",
+            "startnodenm": "삼산서해아파트",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "경인여대",
+            "endvehicletime": 2300,
+            "routeid": "ICB366000008",
+            "routeno": "인천e음71",
+            "routetp": "지선버스",
+            "startnodenm": "교통연수원",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "계양센트레빌1단지",
+            "endvehicletime": 2300,
+            "routeid": "ICB366000009",
+            "routeno": "순환83",
+            "routetp": "지선버스",
+            "startnodenm": "마전지구버스차고지",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "청라국제도시역(서부산단방향)",
+            "endvehicletime": 2210,
+            "routeid": "ICB366000010",
+            "routeno": "급행91",
+            "routetp": "급행버스",
+            "startnodenm": "동춘동차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "삼산체육관역(호수공원)",
+            "endvehicletime": 2330,
+            "routeid": "ICB366000011",
+            "routeno": 562,
+            "routetp": "지선버스",
+            "startnodenm": "희망체육공원입구",
+            "startvehicletime": "0550"
+          },
+          {
+            "endnodenm": "계양역",
+            "endvehicletime": 2310,
+            "routeid": "ICB366000012",
+            "routeno": "인천e음89",
+            "routetp": "지선버스",
+            "startnodenm": "검단예미지트리플에듀",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "염전공원",
+            "endvehicletime": 2300,
+            "routeid": "ICB366000014",
+            "routeno": 26,
+            "routetp": "간선버스",
+            "startnodenm": "가좌동차고",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "청라국제도시역(청라국제교방향)",
+            "endvehicletime": 2300,
+            "routeid": "ICB366000015",
+            "routeno": "인천e음85",
+            "routetp": "지선버스",
+            "startnodenm": "청라BRT통합차고지",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "인하대병원입구",
+            "endvehicletime": 2320,
+            "routeid": "ICB366000016",
+            "routeno": 1111,
+            "routetp": "지선버스",
+            "startnodenm": "항동7가버스차고지(삼거리)",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "청라국제도시역(청라국제교방향)",
+            "endvehicletime": 2355,
+            "routeid": "ICB366000019",
+            "routeno": "N81",
+            "routetp": "지선버스",
+            "startnodenm": "청라푸르지오라피아노",
+            "startvehicletime": 2335
+          },
+          {
+            "endnodenm": "검암역(원당방면)",
+            "endvehicletime": 2355,
+            "routeid": "ICB366000020",
+            "routeno": "N80",
+            "routetp": "지선버스",
+            "startnodenm": "가정(루원시티)역",
+            "startvehicletime": 2325
+          },
+          {
+            "endnodenm": "마곡나루역1번출구",
+            "endvehicletime": 2230,
+            "routeid": "ICB366000022",
+            "routeno": 931,
+            "routetp": "간선버스",
+            "startnodenm": "검단오류역",
+            "startvehicletime": "0430"
+          },
+          {
+            "endnodenm": "뫼골놀이공원",
+            "endvehicletime": 2340,
+            "routeid": "ICB366000023",
+            "routeno": 6601,
+            "routetp": "지선버스",
+            "startnodenm": "갈산대동아파트",
+            "startvehicletime": "0515"
+          },
+          {
+            "endnodenm": "매헌시민의숲.양재꽃시장",
+            "endvehicletime": 2030,
+            "routeid": "ICB366000024",
+            "routeno": "M6463",
+            "routetp": "광역버스",
+            "startnodenm": "e편한세상영종하늘도시",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "사리울중학교",
+            "endvehicletime": 2230,
+            "routeid": "ICB367000001",
+            "routeno": "급행95",
+            "routetp": "급행버스",
+            "startnodenm": "효성동동화운수차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "하나개해수욕장",
+            "endvehicletime": 2020,
+            "routeid": "ICB368000002",
+            "routeno": "영종6-1",
+            "routetp": "순환버스",
+            "startnodenm": "전소",
+            "startvehicletime": "0710"
+          },
+          {
+            "endnodenm": "인천공항T2(11)번출입구(3층)",
+            "endvehicletime": 2310,
+            "routeid": "ICB368000003",
+            "routeno": 205,
+            "routetp": "간선버스",
+            "startnodenm": "영종버스공영차고지",
+            "startvehicletime": "0450"
+          },
+          {
+            "endnodenm": "역삼역.포스코타워역삼",
+            "endvehicletime": 2310,
+            "routeid": "ICB368000005",
+            "routeno": "M6439",
+            "routetp": "광역버스",
+            "startnodenm": "인천터미널",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "인천공항T1(3층7번)",
+            "endvehicletime": "0500",
+            "routeid": "ICB368000006",
+            "routeno": "202A",
+            "routetp": "좌석버스",
+            "startnodenm": "신현여자중학교후문",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "영흥버스터미널",
+            "endvehicletime": 2100,
+            "routeid": "ICB368000010",
+            "routeno": 790,
+            "routetp": "좌석버스",
+            "startnodenm": "장수공영차고지",
+            "startvehicletime": "0415"
+          },
+          {
+            "endnodenm": "중산중고등학교",
+            "endvehicletime": "0035",
+            "routeid": "ICB368000013",
+            "routeno": "인천e음13",
+            "routetp": "지선버스",
+            "startnodenm": "영종역(하늘도시.전소방향)",
+            "startvehicletime": "0615"
+          },
+          {
+            "endnodenm": "영종하늘체육공원",
+            "endvehicletime": 2325,
+            "routeid": "ICB368000014",
+            "routeno": "인천e음15",
+            "routetp": "지선버스",
+            "startnodenm": "영종역(하늘도시.전소방향)",
+            "startvehicletime": "0525"
+          },
+          {
+            "endnodenm": "송도파크자이아파트",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000016",
+            "routeno": "인천e음45",
+            "routetp": "지선버스",
+            "startnodenm": "남촌농산물도매시장",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "동보아파트",
+            "endvehicletime": 2230,
+            "routeid": "ICB368000017",
+            "routeno": "인천e음53",
+            "routetp": "지선버스",
+            "startnodenm": "호구포역",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "계양역",
+            "endvehicletime": 2240,
+            "routeid": "ICB368000019",
+            "routeno": "인천e음88",
+            "routetp": "지선버스",
+            "startnodenm": "창신초등학교",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "삼목선착장(운서역행)",
+            "endvehicletime": 2200,
+            "routeid": "ICB368000020",
+            "routeno": "인천e음16",
+            "routetp": "지선버스",
+            "startnodenm": "영종버스공영차고지",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "청라국제도시역(서부산단방향)",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000027",
+            "routeno": "인천e음84",
+            "routetp": "지선버스",
+            "startnodenm": "청라1호문화공원",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "영흥버스터미널",
+            "endvehicletime": "0000",
+            "routeid": "ICB368000028",
+            "routeno": "790A",
+            "routetp": "좌석버스",
+            "startnodenm": "장수공영차고지",
+            "startvehicletime": "0715"
+          },
+          {
+            "endnodenm": "영흥버스터미널",
+            "endvehicletime": "0000",
+            "routeid": "ICB368000029",
+            "routeno": "790B",
+            "routetp": "좌석버스",
+            "startnodenm": "장수공영차고지",
+            "startvehicletime": 1315
+          },
+          {
+            "endnodenm": "송도역",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000030",
+            "routeno": "순환52",
+            "routetp": "지선버스",
+            "startnodenm": "소래포구역종점",
+            "startvehicletime": "0545"
+          },
+          {
+            "endnodenm": "국제성모병원(종점)",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000031",
+            "routeno": 594,
+            "routetp": "지선버스",
+            "startnodenm": "인천골프백화점.삼익제약",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "서창공영차고지",
+            "endvehicletime": 2200,
+            "routeid": "ICB368000033",
+            "routeno": 47,
+            "routetp": "간선버스",
+            "startnodenm": "마니교통차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "동인천역북광장",
+            "endvehicletime": 2240,
+            "routeid": "ICB368000034",
+            "routeno": 7,
+            "routetp": "간선버스",
+            "startnodenm": "청라BRT차고지입구",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "경남아파트",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000035",
+            "routeno": "인천e음11",
+            "routetp": "지선버스",
+            "startnodenm": "8부두",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "미래빌라",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000036",
+            "routeno": "인천e음21",
+            "routetp": "지선버스",
+            "startnodenm": "만석비치타운",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "도원고개(제물포구청방향)",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000037",
+            "routeno": "인천e음22",
+            "routetp": "지선버스",
+            "startnodenm": "만석비치타운",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "주안역환승정류장",
+            "endvehicletime": 2330,
+            "routeid": "ICB368000040",
+            "routeno": "인천e음31",
+            "routetp": "지선버스",
+            "startnodenm": "힐스테이트학익104동앞",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "인천공항T1(3층14번)",
+            "endvehicletime": 2250,
+            "routeid": "ICB368000041",
+            "routeno": 206,
+            "routetp": "간선버스",
+            "startnodenm": "영종버스공영차고지",
+            "startvehicletime": "0450"
+          },
+          {
+            "endnodenm": "걸포북변역.국민연금공단",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000042",
+            "routeno": 92,
+            "routetp": "간선버스",
+            "startnodenm": "검단오류공단",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "하늘문화센터",
+            "endvehicletime": 2150,
+            "routeid": "ICB368000043",
+            "routeno": "영종5",
+            "routetp": "순환버스",
+            "startnodenm": "영종역(하늘도시.전소방향)",
+            "startvehicletime": "0725"
+          },
+          {
+            "endnodenm": "석남역(5번출구)",
+            "endvehicletime": 2310,
+            "routeid": "ICB368000045",
+            "routeno": 29,
+            "routetp": "간선버스",
+            "startnodenm": "가좌동차고",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "신방화역7번출구",
+            "endvehicletime": 2230,
+            "routeid": "ICB368000047",
+            "routeno": 86,
+            "routetp": "간선버스",
+            "startnodenm": "원창동(기점)",
+            "startvehicletime": "0430"
+          },
+          {
+            "endnodenm": "한성아파트",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000048",
+            "routeno": 596,
+            "routetp": "지선버스",
+            "startnodenm": "원창동(종점)",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "강남역도시에빛",
+            "endvehicletime": 2310,
+            "routeid": "ICB368000049",
+            "routeno": "M6457",
+            "routetp": "광역버스",
+            "startnodenm": "검암역로열파크씨티푸르지오1단지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "계양역",
+            "endvehicletime": "0000",
+            "routeid": "ICB368000050",
+            "routeno": "N90",
+            "routetp": "지선버스",
+            "startnodenm": "원당사거리.검단선사박물관",
+            "startvehicletime": 2330
+          },
+          {
+            "endnodenm": "계양역",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000052",
+            "routeno": 9701,
+            "routetp": "지선버스",
+            "startnodenm": "완정역4번출구",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "이음대로.대성베르힐",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000053",
+            "routeno": 9901,
+            "routetp": "지선버스",
+            "startnodenm": "아이푸드파크산업단지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "인천공항T2(11)번출입구(3층)",
+            "endvehicletime": 2220,
+            "routeid": "ICB368000054",
+            "routeno": 221,
+            "routetp": "간선버스",
+            "startnodenm": "영종버스공영차고지",
+            "startvehicletime": "0430"
+          },
+          {
+            "endnodenm": "신명스카이뷰후문",
+            "endvehicletime": "0020",
+            "routeid": "ICB368000055",
+            "routeno": 2201,
+            "routetp": "지선버스",
+            "startnodenm": "영종버스공영차고지",
+            "startvehicletime": "0550"
+          },
+          {
+            "endnodenm": "인천공항T2(11)번출입구(3층)",
+            "endvehicletime": "0440",
+            "routeid": "ICB368000056",
+            "routeno": "203A",
+            "routetp": "간선버스",
+            "startnodenm": "영종서희스타힐스옆문",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "역삼역.포스코타워역삼",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000057",
+            "routeno": "M6461",
+            "routetp": "광역버스",
+            "startnodenm": "소래포구역종점",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "여의도환승센터",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000059",
+            "routeno": "M6659",
+            "routetp": "광역버스",
+            "startnodenm": "검단초등학교",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "구로디지털단지역(중)",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000060",
+            "routeno": "M6660",
+            "routetp": "광역버스",
+            "startnodenm": "검단초등학교",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "검단신안인스빌어반퍼스트",
+            "endvehicletime": 2230,
+            "routeid": "ICB368000061",
+            "routeno": 991,
+            "routetp": "간선버스",
+            "startnodenm": "뷰티풀파크관리공단",
+            "startvehicletime": "0430"
+          },
+          {
+            "endnodenm": "청라스타필드",
+            "endvehicletime": 2320,
+            "routeid": "ICB368000062",
+            "routeno": 8801,
+            "routetp": "지선버스",
+            "startnodenm": "인천아시아드주경기장(동문)",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "검단호수공원역",
+            "endvehicletime": 2345,
+            "routeid": "ICB368000063",
+            "routeno": 9902,
+            "routetp": "지선버스",
+            "startnodenm": "금호어울림아파트",
+            "startvehicletime": "0525"
+          },
+          {
+            "endnodenm": "검단예미지트리플에듀",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000064",
+            "routeno": "인천e음82",
+            "routetp": "지선버스",
+            "startnodenm": "금호어울림아파트",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "대우하나아파트",
+            "endvehicletime": 2200,
+            "routeid": "ICB368000065",
+            "routeno": 281,
+            "routetp": "간선버스",
+            "startnodenm": "인천공항T2(3)A(1층)",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "석남역(5번출구)",
+            "endvehicletime": 2230,
+            "routeid": "ICB368000066",
+            "routeno": 282,
+            "routetp": "간선버스",
+            "startnodenm": "우미린1단지후문",
+            "startvehicletime": "0540"
+          },
+          {
+            "endnodenm": "강남역서초현대타워앞",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000067",
+            "routeno": "M6464",
+            "routetp": "광역버스",
+            "startnodenm": "힐스테이트레이크송도2차(201동)",
+            "startvehicletime": "0505"
+          },
+          {
+            "endnodenm": "계양임광그대가아파트",
+            "endvehicletime": 2300,
+            "routeid": "ICB368000068",
+            "routeno": 8701,
+            "routetp": "지선버스",
+            "startnodenm": "인천국민안전체험관(북측)",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "금곡종점",
+            "endvehicletime": 2100,
+            "routeid": "ICB368100001",
+            "routeno": "대곡5",
+            "routetp": "순환버스",
+            "startnodenm": "황곡노인정",
+            "startvehicletime": "0640"
+          },
+          {
+            "endnodenm": "동인천(우리은행앞)",
+            "endvehicletime": 1440,
+            "routeid": "ICB368100002",
+            "routeno": "영종6",
+            "routetp": "순환버스",
+            "startnodenm": "광명항(샘꾸미)",
+            "startvehicletime": "0810"
+          },
+          {
+            "endnodenm": "서인천세무서",
+            "endvehicletime": 2230,
+            "routeid": "ICB369000028",
+            "routeno": 17,
+            "routetp": "간선버스",
+            "startnodenm": "마전지구버스차고지",
+            "startvehicletime": "0450"
+          },
+          {
+            "endnodenm": "인천아시아드주경기장(동문)",
+            "endvehicletime": 2200,
+            "routeid": "ICB369000029",
+            "routeno": 71,
+            "routetp": "간선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "신촌오거리.2호선신촌역",
+            "endvehicletime": 2300,
+            "routeid": "ICB369000037",
+            "routeno": 3000,
+            "routetp": "광역버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "강화터미널",
+            "endvehicletime": 2100,
+            "routeid": "ICB369000038",
+            "routeno": 5311,
+            "routetp": "좌석버스",
+            "startnodenm": "수산동",
+            "startvehicletime": "0430"
+          },
+          {
+            "endnodenm": "하늘초등학교후문.한신더휴2차후문",
+            "endvehicletime": "0000",
+            "routeid": "ICB372000004",
+            "routeno": "영종5-6",
+            "routetp": "순환버스",
+            "startnodenm": "운서중.과학고.국제고",
+            "startvehicletime": 1525
+          },
+          {
+            "endnodenm": "영종역(하늘도시.전소방향)",
+            "endvehicletime": 2340,
+            "routeid": "ICB372000005",
+            "routeno": 2202,
+            "routetp": "지선버스",
+            "startnodenm": "운서역2번출구",
+            "startvehicletime": "0540"
+          },
+          {
+            "endnodenm": "신도바다역",
+            "endvehicletime": 2330,
+            "routeid": "ICB372000006",
+            "routeno": 2251,
+            "routetp": "지선버스",
+            "startnodenm": "영종버스공영차고지",
+            "startvehicletime": "0540"
+          },
+          {
+            "endnodenm": "당하동행정복지센터",
+            "endvehicletime": 2300,
+            "routeid": "ICB374000001",
+            "routeno": 8901,
+            "routetp": "지선버스",
+            "startnodenm": "루원숲속마을",
+            "startvehicletime": "0540"
+          },
+          {
+            "endnodenm": "킨텍스역1번출구.현대모터스튜디오고양",
+            "endvehicletime": 2300,
+            "routeid": "ICB374000002",
+            "routeno": 941,
+            "routetp": "간선버스",
+            "startnodenm": "인천외국어마을",
+            "startvehicletime": "0540"
+          },
+          {
+            "endnodenm": "검단신안인스빌어반퍼스트",
+            "endvehicletime": 2300,
+            "routeid": "ICB374000003",
+            "routeno": 9903,
+            "routetp": "지선버스",
+            "startnodenm": "대우푸르지오",
+            "startvehicletime": "0540"
+          },
+          {
+            "endnodenm": "계양역",
+            "endvehicletime": 2300,
+            "routeid": "ICB374000004",
+            "routeno": 7701,
+            "routetp": "지선버스",
+            "startnodenm": "유승아파트(삼성홈타운아파트)",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "동춘동차고지",
+            "endvehicletime": 2200,
+            "routeid": "ICB365000058",
+            "routeno": 112,
+            "routetp": "간선버스",
+            "startnodenm": "십정동차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "대우하나아파트",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000059",
+            "routeno": 202,
+            "routetp": "좌석버스",
+            "startnodenm": "인천공항T1(1층2B)",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "인천공항T2(11)번출입구(3층)",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000060",
+            "routeno": 203,
+            "routetp": "간선버스",
+            "startnodenm": "영종버스공영차고지",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "인천공항T1(3층14번)",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000063",
+            "routeno": 223,
+            "routetp": "간선버스",
+            "startnodenm": "영종버스공영차고지",
+            "startvehicletime": "0450"
+          },
+          {
+            "endnodenm": "인천공항T2(11)번출입구(3층)",
+            "endvehicletime": 2100,
+            "routeid": "ICB365000067",
+            "routeno": 302,
+            "routetp": "좌석버스",
+            "startnodenm": "십정동차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "왕산차고지",
+            "endvehicletime": 2040,
+            "routeid": "ICB365000068",
+            "routeno": 306,
+            "routetp": "좌석버스",
+            "startnodenm": "십정동차고지",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "인천공항T2(11)번출입구(3층)",
+            "endvehicletime": 2050,
+            "routeid": "ICB365000070",
+            "routeno": 308,
+            "routetp": "좌석버스",
+            "startnodenm": "북변환승센터.구터미널",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "명가빌라(회차)",
+            "endvehicletime": 2235,
+            "routeid": "ICB365000071",
+            "routeno": 506,
+            "routetp": "지선버스",
+            "startnodenm": "원창동차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "도화역",
+            "endvehicletime": 2340,
+            "routeid": "ICB365000072",
+            "routeno": 510,
+            "routetp": "지선버스",
+            "startnodenm": "510번차고지",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "주안역환승정류장",
+            "endvehicletime": 2320,
+            "routeid": "ICB365000073",
+            "routeno": 511,
+            "routetp": "지선버스",
+            "startnodenm": "독배로317번길(삼거리)",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "삼성빌라(종점)",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000074",
+            "routeno": 512,
+            "routetp": "지선버스",
+            "startnodenm": "인하대후문",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "주안역환승정류장",
+            "endvehicletime": 2340,
+            "routeid": "ICB365000076",
+            "routeno": "514-1",
+            "routetp": "지선버스",
+            "startnodenm": "남촌농산물도매시장",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "주안역",
+            "endvehicletime": 2340,
+            "routeid": "ICB365000077",
+            "routeno": 515,
+            "routetp": "지선버스",
+            "startnodenm": "인천지방법원",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "주안역환승정류장",
+            "endvehicletime": "0000",
+            "routeid": "ICB365000078",
+            "routeno": 516,
+            "routetp": "지선버스",
+            "startnodenm": "현광아파트후문",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "동인천",
+            "endvehicletime": 2320,
+            "routeid": "ICB365000079",
+            "routeno": 517,
+            "routetp": "지선버스",
+            "startnodenm": "기점(미정차)_517.519",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "주안역",
+            "endvehicletime": "0000",
+            "routeid": "ICB365000080",
+            "routeno": 518,
+            "routetp": "지선버스",
+            "startnodenm": "신선초등학교앞",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "동인천",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000081",
+            "routeno": 519,
+            "routetp": "지선버스",
+            "startnodenm": "기점(미정차)_517.519",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "롯데백화점(인천터미널)",
+            "endvehicletime": "0000",
+            "routeid": "ICB365000082",
+            "routeno": 520,
+            "routetp": "지선버스",
+            "startnodenm": "현광아파트후문",
+            "startvehicletime": "0505"
+          },
+          {
+            "endnodenm": "동인천",
+            "endvehicletime": 2340,
+            "routeid": "ICB365000083",
+            "routeno": 521,
+            "routetp": "지선버스",
+            "startnodenm": "옥련중학교",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "주안역",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000084",
+            "routeno": 522,
+            "routetp": "지선버스",
+            "startnodenm": "남동인더스파크역",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "강화터미널",
+            "endvehicletime": 2045,
+            "routeid": "ICB165000249",
+            "routeno": "3(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0605"
+          },
+          {
+            "endnodenm": "강화터미널",
+            "endvehicletime": 1825,
+            "routeid": "ICB165000250",
+            "routeno": "4(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0610"
+          },
+          {
+            "endnodenm": "돌머루(대산종점)",
+            "endvehicletime": 2040,
+            "routeid": "ICB165000251",
+            "routeno": "10(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0610"
+          },
+          {
+            "endnodenm": "범허리종점",
+            "endvehicletime": 2100,
+            "routeid": "ICB165000252",
+            "routeno": "11(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0615"
+          },
+          {
+            "endnodenm": "강화터미널",
+            "endvehicletime": 1910,
+            "routeid": "ICB165000253",
+            "routeno": "12(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0640"
+          },
+          {
+            "endnodenm": "강화터미널",
+            "endvehicletime": 2055,
+            "routeid": "ICB165000254",
+            "routeno": "13(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0745"
+          },
+          {
+            "endnodenm": "강화터미널",
+            "endvehicletime": 2035,
+            "routeid": "ICB165000255",
+            "routeno": "14(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0835"
+          },
+          {
+            "endnodenm": "강화터미널",
+            "endvehicletime": 1910,
+            "routeid": "ICB165000256",
+            "routeno": "15(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0630"
+          },
+          {
+            "endnodenm": "금월리종점",
+            "endvehicletime": 1930,
+            "routeid": "ICB165000258",
+            "routeno": "17(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0720"
+          },
+          {
+            "endnodenm": "우뢰촌",
+            "endvehicletime": 2030,
+            "routeid": "ICB165000259",
+            "routeno": "20(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0730"
+          },
+          {
+            "endnodenm": "우뢰촌",
+            "endvehicletime": 2030,
+            "routeid": "ICB165000260",
+            "routeno": "21(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0600"
+          },
+          {
+            "endnodenm": "부대아래",
+            "endvehicletime": 1820,
+            "routeid": "ICB165000261",
+            "routeno": "22(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": 1025
+          },
+          {
+            "endnodenm": "모름말",
+            "endvehicletime": "0815",
+            "routeid": "ICB165000262",
+            "routeno": "23(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0645"
+          },
+          {
+            "endnodenm": "인화리종점",
+            "endvehicletime": 2115,
+            "routeid": "ICB165000263",
+            "routeno": "24(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0630"
+          },
+          {
+            "endnodenm": "인화리종점",
+            "endvehicletime": 2010,
+            "routeid": "ICB165000264",
+            "routeno": "25(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0640"
+          },
+          {
+            "endnodenm": "생설미",
+            "endvehicletime": 1905,
+            "routeid": "ICB165000265",
+            "routeno": "26(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0625"
+          },
+          {
+            "endnodenm": "생설미",
+            "endvehicletime": 2030,
+            "routeid": "ICB165000266",
+            "routeno": "27(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0605"
+          },
+          {
+            "endnodenm": "외포리",
+            "endvehicletime": 2135,
+            "routeid": "ICB165000267",
+            "routeno": "30(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0655"
+          },
+          {
+            "endnodenm": "창후리종점",
+            "endvehicletime": 2020,
+            "routeid": "ICB165000269",
+            "routeno": "32(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0615"
+          },
+          {
+            "endnodenm": "망월종점",
+            "endvehicletime": 2040,
+            "routeid": "ICB165000270",
+            "routeno": "33(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0610"
+          },
+          {
+            "endnodenm": "망월종점",
+            "endvehicletime": "0630",
+            "routeid": "ICB165000271",
+            "routeno": "34(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0630"
+          },
+          {
+            "endnodenm": "항청리종점",
+            "endvehicletime": 2030,
+            "routeid": "ICB165000274",
+            "routeno": "37(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0615"
+          },
+          {
+            "endnodenm": "화도터미널",
+            "endvehicletime": 2130,
+            "routeid": "ICB165000276",
+            "routeno": "40(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0610"
+          },
+          {
+            "endnodenm": "정수사입구",
+            "endvehicletime": 2035,
+            "routeid": "ICB165000277",
+            "routeno": "41(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0800"
+          },
+          {
+            "endnodenm": "화도터미널",
+            "endvehicletime": 2000,
+            "routeid": "ICB165000278",
+            "routeno": "42(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0700"
+          },
+          {
+            "endnodenm": "화도터미널",
+            "endvehicletime": 1920,
+            "routeid": "ICB165000280",
+            "routeno": "44(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0650"
+          },
+          {
+            "endnodenm": "산문종점",
+            "endvehicletime": 1930,
+            "routeid": "ICB165000281",
+            "routeno": "45(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0905"
+          },
+          {
+            "endnodenm": "양도면사무소(쉘터)",
+            "endvehicletime": 2025,
+            "routeid": "ICB165000284",
+            "routeno": "48(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0625"
+          },
+          {
+            "endnodenm": "길상보건지소",
+            "endvehicletime": 2130,
+            "routeid": "ICB165000285",
+            "routeno": "50(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0610"
+          },
+          {
+            "endnodenm": "동검리종점",
+            "endvehicletime": 1930,
+            "routeid": "ICB165000286",
+            "routeno": "51(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0900"
+          },
+          {
+            "endnodenm": "온수리",
+            "endvehicletime": 2035,
+            "routeid": "ICB165000287",
+            "routeno": "52(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0610"
+          },
+          {
+            "endnodenm": "온수리",
+            "endvehicletime": 2010,
+            "routeid": "ICB165000288",
+            "routeno": "53(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0610"
+          },
+          {
+            "endnodenm": "고능종점(지래)",
+            "endvehicletime": "0840",
+            "routeid": "ICB165000289",
+            "routeno": "54(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0615"
+          },
+          {
+            "endnodenm": "온수리",
+            "endvehicletime": 2040,
+            "routeid": "ICB165000290",
+            "routeno": "55(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0610"
+          },
+          {
+            "endnodenm": "장안말(온천스파)",
+            "endvehicletime": "0805",
+            "routeid": "ICB165000292",
+            "routeno": "57(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0805"
+          },
+          {
+            "endnodenm": "화도터미널",
+            "endvehicletime": "0730",
+            "routeid": "ICB165000306",
+            "routeno": "43(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0730"
+          },
+          {
+            "endnodenm": "장흥리종점",
+            "endvehicletime": 1635,
+            "routeid": "ICB165000466",
+            "routeno": "58(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0955"
+          },
+          {
+            "endnodenm": "장흥리종점",
+            "endvehicletime": 2030,
+            "routeid": "ICB165000467",
+            "routeno": "59(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0730"
+          },
+          {
+            "endnodenm": "월선포",
+            "endvehicletime": 2030,
+            "routeid": "ICB165000473",
+            "routeno": "18(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0610"
+          },
+          {
+            "endnodenm": "화도터미널",
+            "endvehicletime": 2015,
+            "routeid": "ICB165000474",
+            "routeno": "49(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0600"
+          },
+          {
+            "endnodenm": "돌머루(대산종점)",
+            "endvehicletime": "0700",
+            "routeid": "ICB165000477",
+            "routeno": "10A(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0610"
+          },
+          {
+            "endnodenm": "범허리종점",
+            "endvehicletime": "0810",
+            "routeid": "ICB165000478",
+            "routeno": "11A(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0715"
+          },
+          {
+            "endnodenm": "강화터미널",
+            "endvehicletime": "0640",
+            "routeid": "ICB165000479",
+            "routeno": "12A(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0640"
+          },
+          {
+            "endnodenm": "황산도",
+            "endvehicletime": "0630",
+            "routeid": "ICB165000481",
+            "routeno": "53A(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0630"
+          },
+          {
+            "endnodenm": "석모대교(석포리방향)",
+            "endvehicletime": 2030,
+            "routeid": "ICB165000487",
+            "routeno": "31A(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": 1200
+          },
+          {
+            "endnodenm": "보문사",
+            "endvehicletime": 1900,
+            "routeid": "ICB165000488",
+            "routeno": "31B(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0730"
+          },
+          {
+            "endnodenm": "강화터미널",
+            "endvehicletime": 1820,
+            "routeid": "ICB165000491",
+            "routeno": "9(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0815"
+          },
+          {
+            "endnodenm": "강남중교",
+            "endvehicletime": 2050,
+            "routeid": "ICB165000496",
+            "routeno": "44A(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0750"
+          },
+          {
+            "endnodenm": "보문사",
+            "endvehicletime": "0000",
+            "routeid": "ICB165000504",
+            "routeno": "35A(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": 1510
+          },
+          {
+            "endnodenm": "보문사",
+            "endvehicletime": "0000",
+            "routeid": "ICB165000505",
+            "routeno": "35B(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0000"
+          },
+          {
+            "endnodenm": "강화산성서문",
+            "endvehicletime": 2300,
+            "routeid": "ICB169000009",
+            "routeno": "19(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "부대아래",
+            "endvehicletime": 2300,
+            "routeid": "ICB169000010",
+            "routeno": "23A(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "내가시장",
+            "endvehicletime": 2300,
+            "routeid": "ICB169000011",
+            "routeno": "39(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "보문사",
+            "endvehicletime": 2300,
+            "routeid": "ICB169000012",
+            "routeno": "39A(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "더리미장어마을",
+            "endvehicletime": 1815,
+            "routeid": "ICB169000014",
+            "routeno": "16(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0555"
+          },
+          {
+            "endnodenm": "신봉삼거리",
+            "endvehicletime": 1945,
+            "routeid": "ICB169000015",
+            "routeno": "28(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0745"
+          },
+          {
+            "endnodenm": "고능2리 종점",
+            "endvehicletime": 1825,
+            "routeid": "ICB169000016",
+            "routeno": "29(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0650"
+          },
+          {
+            "endnodenm": "탑재",
+            "endvehicletime": 1545,
+            "routeid": "ICB169000017",
+            "routeno": "46(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0900"
+          },
+          {
+            "endnodenm": "선수여객선착장",
+            "endvehicletime": 1300,
+            "routeid": "ICB169000018",
+            "routeno": "47(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0730"
+          },
+          {
+            "endnodenm": "외포리",
+            "endvehicletime": 1945,
+            "routeid": "ICB169000019",
+            "routeno": "61(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": 1000
+          },
+          {
+            "endnodenm": "외포리",
+            "endvehicletime": 1955,
+            "routeid": "ICB169000020",
+            "routeno": "62(강화)",
+            "routetp": "지선버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0635"
+          },
+          {
+            "endnodenm": "외포리(싱싱마트)",
+            "endvehicletime": 1700,
+            "routeid": "ICB169000021",
+            "routeno": "905-1(강화)",
+            "routetp": "마을버스",
+            "startnodenm": "보문사",
+            "startvehicletime": "0900"
+          },
+          {
+            "endnodenm": "외포리(싱싱마트)",
+            "endvehicletime": 1400,
+            "routeid": "ICB169000022",
+            "routeno": "905-2(강화)",
+            "routetp": "마을버스",
+            "startnodenm": "보문사",
+            "startvehicletime": "0700"
+          },
+          {
+            "endnodenm": "외포리(싱싱마트)",
+            "endvehicletime": 1140,
+            "routeid": "ICB169000023",
+            "routeno": "906-1(강화)",
+            "routetp": "마을버스",
+            "startnodenm": "보문사",
+            "startvehicletime": "0625"
+          },
+          {
+            "endnodenm": "외포리(싱싱마트)",
+            "endvehicletime": 1610,
+            "routeid": "ICB169000024",
+            "routeno": "906-2(강화)",
+            "routetp": "마을버스",
+            "startnodenm": "보문사",
+            "startvehicletime": "0915"
+          },
+          {
+            "endnodenm": "우뢰촌",
+            "endvehicletime": 1435,
+            "routeid": "ICB169000030",
+            "routeno": "20A(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": 1435
+          },
+          {
+            "endnodenm": "우뢰촌",
+            "endvehicletime": "0755",
+            "routeid": "ICB169000031",
+            "routeno": "21A(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "강화터미널",
+            "startvehicletime": "0755"
+          },
+          {
+            "endnodenm": "풍물시장",
+            "endvehicletime": 1330,
+            "routeid": "ICB169000034",
+            "routeno": "901-2(강화)",
+            "routetp": "마을버스",
+            "startnodenm": "대산-기점",
+            "startvehicletime": 1010
+          },
+          {
+            "endnodenm": "풍물시장",
+            "endvehicletime": 1930,
+            "routeid": "ICB169000036",
+            "routeno": "901-1(강화)",
+            "routetp": "마을버스",
+            "startnodenm": "대산-기점",
+            "startvehicletime": "0720"
+          },
+          {
+            "endnodenm": "인사리인현경로당앞",
+            "endvehicletime": 2300,
+            "routeid": "ICB169100002",
+            "routeno": "904(강화)",
+            "routetp": "마을버스",
+            "startnodenm": "대룡시장",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "서한리구마을회관",
+            "endvehicletime": 2300,
+            "routeid": "ICB169100003",
+            "routeno": "903(강화)",
+            "routetp": "마을버스",
+            "startnodenm": "대룡시장",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "용진진",
+            "endvehicletime": 2300,
+            "routeid": "ICB169100004",
+            "routeno": "902(강화)",
+            "routetp": "마을버스",
+            "startnodenm": "연지-기점",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "돌머루(대산종점)",
+            "endvehicletime": 2300,
+            "routeid": "ICB169100005",
+            "routeno": "901(강화)",
+            "routetp": "마을버스",
+            "startnodenm": "풍물시장",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "강화터미널",
+            "endvehicletime": 2300,
+            "routeid": "ICB169200008",
+            "routeno": "30A(강화)",
+            "routetp": "순환버스",
+            "startnodenm": "외포리",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "영흥버스터미널",
+            "endvehicletime": 2110,
+            "routeid": "ICB170000003",
+            "routeno": "십리포행",
+            "routetp": "순환버스",
+            "startnodenm": "영흥-기점",
+            "startvehicletime": "0630"
+          },
+          {
+            "endnodenm": "영흥버스터미널",
+            "endvehicletime": 2120,
+            "routeid": "ICB170000004",
+            "routeno": "방개골 순환행",
+            "routetp": "순환버스",
+            "startnodenm": "영흥-기점",
+            "startvehicletime": "0620"
+          },
+          {
+            "endnodenm": "선재대교",
+            "endvehicletime": 1730,
+            "routeid": "ICB170000005",
+            "routeno": "선재리행",
+            "routetp": "순환버스",
+            "startnodenm": "영흥-기점",
+            "startvehicletime": "0830"
+          },
+          {
+            "endnodenm": "인하대병원",
+            "endvehicletime": 1500,
+            "routeid": "ICB170000009",
+            "routeno": "인하대병원행",
+            "routetp": "지선버스",
+            "startnodenm": "영흥버스터미널",
+            "startvehicletime": "0700"
+          },
+          {
+            "endnodenm": "모도리주차장",
+            "endvehicletime": 1735,
+            "routeid": "ICB170000010",
+            "routeno": "신시모도(신도1리방향)",
+            "routetp": "순환버스",
+            "startnodenm": "신도바다역",
+            "startvehicletime": "0632"
+          },
+          {
+            "endnodenm": "모도리주차장",
+            "endvehicletime": 1910,
+            "routeid": "ICB170000011",
+            "routeno": "신시모도(신도4리방향)",
+            "routetp": "순환버스",
+            "startnodenm": "신도바다역",
+            "startvehicletime": "0835"
+          },
+          {
+            "endnodenm": "동인천(우리은행앞)",
+            "endvehicletime": 1600,
+            "routeid": "ICB170000014",
+            "routeno": "동인천행",
+            "routetp": "좌석버스",
+            "startnodenm": "모도리주차장",
+            "startvehicletime": "0750"
+          },
+          {
+            "endnodenm": "동인천(우리은행앞)",
+            "endvehicletime": 1510,
+            "routeid": "ICB170000018",
+            "routeno": "동인천행(신도3리방향)",
+            "routetp": "좌석버스",
+            "startnodenm": "모도리주차장",
+            "startvehicletime": "0710"
+          },
+          {
+            "endnodenm": "영흥버스터미널",
+            "endvehicletime": 2300,
+            "routeid": "ICB170100001",
+            "routeno": "영흥도",
+            "routetp": "순환버스",
+            "startnodenm": "영흥-기점",
+            "startvehicletime": "0510"
+          },
+          {
+            "endnodenm": "인천공항T2-3층",
+            "endvehicletime": 2000,
+            "routeid": "ICB361000002",
+            "routeno": 6777,
+            "routetp": "공항버스",
+            "startnodenm": "인천항신국제여객터미널(송도방향)",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "한국무역센터.삼성역",
+            "endvehicletime": 2300,
+            "routeid": "ICB361000004",
+            "routeno": "M6450",
+            "routetp": "광역버스",
+            "startnodenm": "e편한세상정문",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "동인천역북광장",
+            "endvehicletime": 2220,
+            "routeid": "ICB361000005",
+            "routeno": 82,
+            "routetp": "간선버스",
+            "startnodenm": "신흥교통",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "인천이음초등학교",
+            "endvehicletime": 2220,
+            "routeid": "ICB361000006",
+            "routeno": 93,
+            "routetp": "간선버스",
+            "startnodenm": "국제성모병원",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "주안역환승정류장",
+            "endvehicletime": 2300,
+            "routeid": "ICB361000007",
+            "routeno": 58,
+            "routetp": "간선버스",
+            "startnodenm": "송도제2차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "송내역남부",
+            "endvehicletime": 2200,
+            "routeid": "ICB361000008",
+            "routeno": "급행99",
+            "routetp": "급행버스",
+            "startnodenm": "송도제2차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "풍림아파트104동",
+            "endvehicletime": 2220,
+            "routeid": "ICB361000011",
+            "routeno": "급행97",
+            "routetp": "급행버스",
+            "startnodenm": "왕길동(기점)",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "계양역",
+            "endvehicletime": 2250,
+            "routeid": "ICB361000012",
+            "routeno": 77,
+            "routetp": "간선버스",
+            "startnodenm": "왕길동(기점)",
+            "startvehicletime": "0450"
+          },
+          {
+            "endnodenm": "귤현차량사업소",
+            "endvehicletime": 2300,
+            "routeid": "ICB361000014",
+            "routeno": 75,
+            "routetp": "간선버스",
+            "startnodenm": "왕길동(기점)",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "공덕역6번출구",
+            "endvehicletime": 2130,
+            "routeid": "ICB361000015",
+            "routeno": "M6751",
+            "routetp": "광역버스",
+            "startnodenm": "e편한세상정문",
+            "startvehicletime": "0540"
+          },
+          {
+            "endnodenm": "영종복합문화센터.베르힐정문",
+            "endvehicletime": "0040",
+            "routeid": "ICB361000017",
+            "routeno": "영종5-2",
+            "routetp": "순환버스",
+            "startnodenm": "영종역(하늘도시.전소방향)",
+            "startvehicletime": "0040"
+          },
+          {
+            "endnodenm": "인천공항T2-3층",
+            "endvehicletime": 1930,
+            "routeid": "ICB361000022",
+            "routeno": "6777-1",
+            "routetp": "공항버스",
+            "startnodenm": "인천터미널",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "용유초등학교",
+            "endvehicletime": 2030,
+            "routeid": "ICB361000025",
+            "routeno": "영종7",
+            "routetp": "순환버스",
+            "startnodenm": "영종고등학교",
+            "startvehicletime": "0630"
+          },
+          {
+            "endnodenm": "왕산차고지",
+            "endvehicletime": 2140,
+            "routeid": "ICB361000026",
+            "routeno": "영종8",
+            "routetp": "순환버스",
+            "startnodenm": "롯데마트",
+            "startvehicletime": "0630"
+          },
+          {
+            "endnodenm": "인천포스코고등학교",
+            "endvehicletime": 2300,
+            "routeid": "ICB361000027",
+            "routeno": 4401,
+            "routetp": "지선버스",
+            "startnodenm": "송도제2차고지",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "랜드마크시티1호수변공원",
+            "endvehicletime": 2300,
+            "routeid": "ICB361000028",
+            "routeno": 4402,
+            "routetp": "지선버스",
+            "startnodenm": "셀트리온(주)",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "강남역서초현대타워앞",
+            "endvehicletime": 1900,
+            "routeid": "ICB361000029",
+            "routeno": "M6462",
+            "routetp": "광역버스",
+            "startnodenm": "우미린1단지후문",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "영종복합문화센터.베르힐정문",
+            "endvehicletime": 2240,
+            "routeid": "ICB361000030",
+            "routeno": "영종9",
+            "routetp": "순환버스",
+            "startnodenm": "예단포물양장",
+            "startvehicletime": "0700"
+          },
+          {
+            "endnodenm": "동원로얄듀크마리나포레",
+            "endvehicletime": 1535,
+            "routeid": "ICB361000031",
+            "routeno": "영종2",
+            "routetp": "순환버스",
+            "startnodenm": "영종중학교",
+            "startvehicletime": 1525
+          },
+          {
+            "endnodenm": "왕산차고지",
+            "endvehicletime": 2040,
+            "routeid": "ICB361000032",
+            "routeno": "영종8-1",
+            "routetp": "순환버스",
+            "startnodenm": "영종구청동편",
+            "startvehicletime": "0630"
+          },
+          {
+            "endnodenm": "영종역(운북차고지.청라방향)",
+            "endvehicletime": 2200,
+            "routeid": "ICB361000033",
+            "routeno": "영종10",
+            "routetp": "순환버스",
+            "startnodenm": "동보노빌리티",
+            "startvehicletime": "0620"
+          },
+          {
+            "endnodenm": "송도달빛축제공원역",
+            "endvehicletime": 2030,
+            "routeid": "ICB361000034",
+            "routeno": "연수01",
+            "routetp": "순환버스",
+            "startnodenm": "인천대입구역",
+            "startvehicletime": "0630"
+          },
+          {
+            "endnodenm": "롯데캐슬",
+            "endvehicletime": 2050,
+            "routeid": "ICB361000035",
+            "routeno": "연수02",
+            "routetp": "순환버스",
+            "startnodenm": "연수구청제2청사",
+            "startvehicletime": "0630"
+          },
+          {
+            "endnodenm": "서해그랑블.옹암체육센터",
+            "endvehicletime": 1400,
+            "routeid": "ICB361000036",
+            "routeno": "연수03",
+            "routetp": "순환버스",
+            "startnodenm": "테크노파크역",
+            "startvehicletime": 1000
+          },
+          {
+            "endnodenm": "영종역(운북차고지.청라방향)",
+            "endvehicletime": "0840",
+            "routeid": "ICB361000037",
+            "routeno": "영종5-5",
+            "routetp": "순환버스",
+            "startnodenm": "영종국제병원",
+            "startvehicletime": "0620"
+          },
+          {
+            "endnodenm": "호반써밋송도(109동)",
+            "endvehicletime": 2300,
+            "routeid": "ICB361000038",
+            "routeno": 4403,
+            "routetp": "지선버스",
+            "startnodenm": "연수구청제2청사",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "무의공영주차장",
+            "endvehicletime": 2000,
+            "routeid": "ICB361100001",
+            "routeno": "무의1",
+            "routetp": "마을버스",
+            "startnodenm": "인천공항T1(3층7번)",
+            "startvehicletime": "0630"
+          },
+          {
+            "endnodenm": "예술회관사거리",
+            "endvehicletime": 2300,
+            "routeid": "ICB363000001",
+            "routeno": "순환51",
+            "routetp": "지선버스",
+            "startnodenm": "구월아시아드1단지",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "동암남부역",
+            "endvehicletime": "0000",
+            "routeid": "ICB363000002",
+            "routeno": 568,
+            "routetp": "지선버스",
+            "startnodenm": "2001아울렛부평점",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "인천대학교공과대학",
+            "endvehicletime": 2300,
+            "routeid": "ICB364000004",
+            "routeno": "순환46",
+            "routetp": "지선버스",
+            "startnodenm": "기점(미정차)_동춘동차고지",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "주안역",
+            "endvehicletime": 2300,
+            "routeid": "ICB364000005",
+            "routeno": 55,
+            "routetp": "간선버스",
+            "startnodenm": "동막역(3번출구)",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "매헌시민의숲.양재꽃시장",
+            "endvehicletime": 2220,
+            "routeid": "ICB364000007",
+            "routeno": "M6458",
+            "routetp": "광역버스",
+            "startnodenm": "청라센텀로제비앙",
+            "startvehicletime": "0420"
+          },
+          {
+            "endnodenm": "부평역",
+            "endvehicletime": 2240,
+            "routeid": "ICB365000001",
+            "routeno": 1,
+            "routetp": "간선버스",
+            "startnodenm": "뷰티풀파크버스공영차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "월미도(시티투어)",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000002",
+            "routeno": 2,
+            "routetp": "간선버스",
+            "startnodenm": "효성동동화운수차고지",
+            "startvehicletime": "0445"
+          },
+          {
+            "endnodenm": "가좌동차고",
+            "endvehicletime": 2220,
+            "routeid": "ICB365000004",
+            "routeno": 4,
+            "routetp": "간선버스",
+            "startnodenm": "송도제2차고지",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "주안역환승정류장",
+            "endvehicletime": 2320,
+            "routeid": "ICB365000006",
+            "routeno": "5-1",
+            "routetp": "간선버스",
+            "startnodenm": "용현2동행정복지센터",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "남동체육관",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000007",
+            "routeno": 6,
+            "routetp": "간선버스",
+            "startnodenm": "송도공영차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "남동체육관(체조경기장)",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000008",
+            "routeno": "6-1",
+            "routetp": "간선버스",
+            "startnodenm": "송도공영차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "송내역남부",
+            "endvehicletime": 2306,
+            "routeid": "ICB365000012",
+            "routeno": 8,
+            "routetp": "간선버스",
+            "startnodenm": "인천대학교공과대학",
+            "startvehicletime": "0505"
+          },
+          {
+            "endnodenm": "삼산주공1단지(상가앞)",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000013",
+            "routeno": 10,
+            "routetp": "간선버스",
+            "startnodenm": "월미문화의거리",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "문학경기장(월드컵경기장)",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000014",
+            "routeno": 11,
+            "routetp": "간선버스",
+            "startnodenm": "가좌동차고",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "금마초등학교",
+            "endvehicletime": 2220,
+            "routeid": "ICB365000015",
+            "routeno": 12,
+            "routetp": "간선버스",
+            "startnodenm": "항동7가버스차고지(삼거리)",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "검암역(원당방면)",
+            "endvehicletime": 2210,
+            "routeid": "ICB365000016",
+            "routeno": 13,
+            "routetp": "간선버스",
+            "startnodenm": "신흥교통",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "오조산공원",
+            "endvehicletime": 2240,
+            "routeid": "ICB365000017",
+            "routeno": 14,
+            "routetp": "간선버스",
+            "startnodenm": "항동7가버스차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "인천나비공원",
+            "endvehicletime": 2310,
+            "routeid": "ICB365000018",
+            "routeno": "14-1",
+            "routetp": "간선버스",
+            "startnodenm": "서창공영차고지",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "서창공영차고지",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000019",
+            "routeno": 15,
+            "routetp": "간선버스",
+            "startnodenm": "가좌동차고",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "가좌동차고지",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000020",
+            "routeno": 16,
+            "routetp": "간선버스",
+            "startnodenm": "송도제2차고지",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "문화교회",
+            "endvehicletime": 2240,
+            "routeid": "ICB365000022",
+            "routeno": 20,
+            "routetp": "간선버스",
+            "startnodenm": "소래포구역종점",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "만석비치타운",
+            "endvehicletime": 2240,
+            "routeid": "ICB365000023",
+            "routeno": 21,
+            "routetp": "간선버스",
+            "startnodenm": "서창공영차고지",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "신명아파트.대우3차아파트",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000025",
+            "routeno": 22,
+            "routetp": "간선버스",
+            "startnodenm": "원진운수차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "부개역",
+            "endvehicletime": 2240,
+            "routeid": "ICB365000026",
+            "routeno": 23,
+            "routetp": "간선버스",
+            "startnodenm": "항동7가버스차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "금강마을",
+            "endvehicletime": 2310,
+            "routeid": "ICB365000027",
+            "routeno": 24,
+            "routetp": "간선버스",
+            "startnodenm": "항동7가버스차고지(삼거리)",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "청라국제도시역(서부산단방향)",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000028",
+            "routeno": "24-1",
+            "routetp": "간선버스",
+            "startnodenm": "가좌동차고",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "월곶어울림센터",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000029",
+            "routeno": 27,
+            "routetp": "간선버스",
+            "startnodenm": "항동7가버스차고지",
+            "startvehicletime": "0525"
+          },
+          {
+            "endnodenm": "계양체육관.대동아파트",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000030",
+            "routeno": 28,
+            "routetp": "간선버스",
+            "startnodenm": "가좌동차고",
+            "startvehicletime": "0520"
+          },
+          {
+            "endnodenm": "송내역남부",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000031",
+            "routeno": 30,
+            "routetp": "간선버스",
+            "startnodenm": "왕길동(기점)",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "인하대병원",
+            "endvehicletime": 2250,
+            "routeid": "ICB365000032",
+            "routeno": 33,
+            "routetp": "간선버스",
+            "startnodenm": "장수공영차고지",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "휴먼시아1단지",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000033",
+            "routeno": 34,
+            "routetp": "간선버스",
+            "startnodenm": "기점(미정차)_동춘동차고지",
+            "startvehicletime": "0430"
+          },
+          {
+            "endnodenm": "청천푸르지오아파트",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000034",
+            "routeno": 35,
+            "routetp": "간선버스",
+            "startnodenm": "기점(미정차)_동춘동차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "항동7가버스차고지",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000035",
+            "routeno": 36,
+            "routetp": "간선버스",
+            "startnodenm": "장수공영차고지",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "수현마을",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000036",
+            "routeno": 37,
+            "routetp": "간선버스",
+            "startnodenm": "삼산고등학교(미래타운4단지)",
+            "startvehicletime": "0450"
+          },
+          {
+            "endnodenm": "시티오씨엘1단지.3단지",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000037",
+            "routeno": 38,
+            "routetp": "간선버스",
+            "startnodenm": "서창공영차고지입구",
+            "startvehicletime": "0530"
+          },
+          {
+            "endnodenm": "승기2교",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000039",
+            "routeno": 42,
+            "routetp": "간선버스",
+            "startnodenm": "청라BRT통합차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "청천동차고지",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000041",
+            "routeno": 45,
+            "routetp": "간선버스",
+            "startnodenm": "월미도",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "두산아파트",
+            "endvehicletime": 2220,
+            "routeid": "ICB365000042",
+            "routeno": 46,
+            "routetp": "간선버스",
+            "startnodenm": "신흥교통입구",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "동인천역",
+            "endvehicletime": 2250,
+            "routeid": "ICB365000043",
+            "routeno": 62,
+            "routetp": "간선버스",
+            "startnodenm": "서창공영차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "주안역환승정류장",
+            "endvehicletime": 2250,
+            "routeid": "ICB365000045",
+            "routeno": 65,
+            "routetp": "간선버스",
+            "startnodenm": "기점(미정차)_동춘동차고지",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "주안역환승정류장",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000046",
+            "routeno": "65-1",
+            "routetp": "간선버스",
+            "startnodenm": "기점(미정차)_동춘동차고지",
+            "startvehicletime": "0440"
+          },
+          {
+            "endnodenm": "부개역",
+            "endvehicletime": 2300,
+            "routeid": "ICB365000048",
+            "routeno": "67-1",
+            "routetp": "간선버스",
+            "startnodenm": "가좌동차고",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "박촌역",
+            "endvehicletime": 2250,
+            "routeid": "ICB365000050",
+            "routeno": 76,
+            "routetp": "간선버스",
+            "startnodenm": "마전지구버스차고지",
+            "startvehicletime": "0455"
+          },
+          {
+            "endnodenm": "송정역",
+            "endvehicletime": 2250,
+            "routeid": "ICB365000052",
+            "routeno": 78,
+            "routetp": "간선버스",
+            "startnodenm": "마전지구버스차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "인천성모병원종점지주차장",
+            "endvehicletime": 2220,
+            "routeid": "ICB365000053",
+            "routeno": 79,
+            "routetp": "간선버스",
+            "startnodenm": "뷰티풀파크버스공영차고지",
+            "startvehicletime": "0430"
+          },
+          {
+            "endnodenm": "송내역.로데오거리",
+            "endvehicletime": 2230,
+            "routeid": "ICB365000054",
+            "routeno": 80,
+            "routetp": "간선버스",
+            "startnodenm": "청라BRT통합차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "송내역.로데오거리",
+            "endvehicletime": 2240,
+            "routeid": "ICB365000055",
+            "routeno": 87,
+            "routetp": "간선버스",
+            "startnodenm": "드림파크야생화단지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "상정중학교",
+            "endvehicletime": 2210,
+            "routeid": "ICB365000056",
+            "routeno": 103,
+            "routetp": "간선버스",
+            "startnodenm": "동춘동차고지",
+            "startvehicletime": "0500"
+          },
+          {
+            "endnodenm": "왕산차고지",
+            "endvehicletime": 2040,
+            "routeid": "ICB365000057",
+            "routeno": 111,
+            "routetp": "좌석버스",
+            "startnodenm": "십정동차고지",
+            "startvehicletime": "0450"
+          }
+        ]
+      },
+      "numOfRows": 3000,
+      "pageNo": 1,
+      "totalCount": 363
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "response": {
+    "comMsgHeader": "",
+    "msgHeader": {
+      "queryTime": "2026-11-20 23:56:08.528",
+      "resultCode": 0,
+      "resultMessage": "정상적으로 처리되었습니다."
+    },
+    "msgBody": {
+      "busRouteInfoItem": {
+        "adminName": "경기도 고양시",
+        "companyId": 4130800,
+        "companyName": "고양-자안운수",
+        "companyTel": "031-979-2223",
+        "districtCd": 2,
+        "downFirstTime": "06:30",
+        "downLastTime": "23:10",
+        "endMobileNo": 19392,
+        "endStationId": 218001046,
+        "endStationName": "화정역3호선",
+        "garageName": "본사",
+        "garageTel": "031-979-2223",
+        "multiFlag": "N",
+        "peekAlloc": 10,
+        "regionName": "고양",
+        "routeId": 241308701,
+        "routeName": "011",
+        "routeTypeCd": 30,
+        "routeTypeName": "마을버스",
+        "satDownFirstTime": "06:30",
+        "satDownLastTime": "23:10",
+        "satNPeekAlloc": 25,
+        "satPeekAlloc": 10,
+        "satUpFirstTime": "06:00",
+        "satUpLastTime": "22:40",
+        "startMobileNo": 19012,
+        "startStationId": 218000033,
+        "startStationName": "나루터",
+        "sunDownFirstTime": "06:30",
+        "sunDownLastTime": "23:10",
+        "sunNPeekAlloc": 25,
+        "sunPeekAlloc": 10,
+        "sunUpFirstTime": "06:00",
+        "sunUpLastTime": "22:40",
+        "turnStID": 218001046,
+        "turnStNm": "화정역3호선",
+        "upFirstTime": "06:00",
+        "upLastTime": "22:40",
+        "nPeekAlloc": 25,
+        "nightAlloc": 0
+      }
+    }
+  }
+}

@@ -22,6 +22,8 @@ export function refStaleTime(query: {
 const regionSchema = z.enum(["seoul", "gyeonggi", "incheon"]);
 
 const busRouteMatchSchema = z.object({
+	/** 경기·인천 노선의 시·군 이름. 같은 번호를 구분한다. 서울이나 옛 응답은 null. */
+	areaName: z.string().nullable().default(null),
 	line: z.string(),
 	name: z.string(),
 	region: regionSchema,

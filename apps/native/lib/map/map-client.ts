@@ -189,15 +189,18 @@ async function fetchRefMap<S extends z.ZodType>(
 	};
 }
 
-/** 버스 노선 지도. 저장해 둔 ETag를 `If-None-Match`로 보내고 304는 `"not-modified"`다. */
+/**
+ * 버스 노선 지도. 출처 접두사가 붙은 전체 노선 ID(`seoul-bus:…`, `gbis:…`, `tago:…`)를 받는다.
+ * 저장해 둔 ETag를 `If-None-Match`로 보내고 304는 `"not-modified"`다.
+ */
 export function fetchBusMap(
 	client: ServerClient,
-	busRouteId: string,
+	busLine: string,
 	etag: string | null
 ): Promise<RefResult<RefMapBody<BusMap> | "not-modified">> {
 	return fetchRefMap(
 		client,
-		`/v1/ref/map/bus/${encodeURIComponent(busRouteId)}`,
+		`/v1/ref/map/bus/${encodeURIComponent(busLine)}`,
 		etag,
 		busMapSchema
 	);

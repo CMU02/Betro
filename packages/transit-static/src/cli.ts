@@ -12,6 +12,10 @@ import { fetchBusRouteXlsx } from "./jobs/fetch-bus-route-xlsx";
 import { fetchBusRoutes } from "./jobs/fetch-bus-routes";
 import { fetchOsm } from "./jobs/fetch-osm";
 import { fetchRealtimeSample } from "./jobs/fetch-realtime-sample";
+import {
+	fetchRegionalRoutes,
+	type RegionalSource,
+} from "./jobs/fetch-regional-bus";
 import { fetchStationMaster } from "./jobs/fetch-station-master";
 import { fetchStationSearch } from "./jobs/fetch-station-search";
 import { fetchStationXlsx } from "./jobs/fetch-station-xlsx";
@@ -48,6 +52,26 @@ const SERVICE_DAYS: readonly string[] = ["weekday", "saturday", "holiday"];
 
 const isServiceDay = (value: string): value is ServiceDay =>
 	SERVICE_DAYS.includes(value);
+
+async function runFetchRegional(source: RegionalSource): Promise<void> {
+	const key = process.env.DATA_GO_KR_API_KEY;
+	if (!key) {
+		console.error(BUS_MISSING_KEY_MESSAGE);
+		process.exit(1);
+	}
+	const result = await fetchRegionalRoutes({
+		dataDir: resolveDataDir(process.env),
+		key,
+		source,
+	});
+	console.log(
+		`${source}: 노선 ${result.routes}개, 이번에 받음 ${JSON.stringify(result.fetched)}, 멈춤 ${result.stoppedBy ?? "없음"}`
+	);
+	// 호출 상한(budget)은 다음 실행이 이어 받으므로 실패로 보지 않는다.
+	if (result.stoppedBy === "quota" || result.stoppedBy === "auth") {
+		process.exitCode = 1;
+	}
+}
 
 type CommandHandler = (args: string[]) => Promise<void>;
 
@@ -176,6 +200,9 @@ const commands: Record<string, CommandHandler> = {
 			process.exitCode = 1;
 		}
 	},
+	"fetch:gbis-routes": async () => {
+		await runFetchRegional("gbis");
+	},
 	"fetch:osm": async () => {
 		await fetchOsm({ dataDir: resolveDataDir(process.env) });
 	},
@@ -200,6 +227,9 @@ const commands: Record<string, CommandHandler> = {
 			throw new Error(`invalid --seq: ${values.seq}`);
 		}
 		await fetchStationXlsx({ dataDir: resolveDataDir(process.env), seq });
+	},
+	"fetch:tago-routes": async () => {
+		await runFetchRegional("tago");
 	},
 	"fetch:timetable-sources": async (args) => {
 		const { values } = parseArgs({

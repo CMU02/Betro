@@ -4,6 +4,7 @@ import type {
 	BusAssembleResult,
 	LoadableGroup,
 } from "./assemble";
+import type { RegionalSourceResult } from "./regional";
 import {
 	AUTONOMOUS_PILOT_ROUTES,
 	AUTONOMOUS_ROUTE_NAME,
@@ -486,6 +487,70 @@ function renderTopMismatches(routes: readonly AssembledBusRoute[]): string[] {
 		}),
 		"",
 	];
+}
+
+/** 출처별 보고서 입력. listed가 null이면 그 출처의 노선 목록(routes.json)을 아직 받지 않았다. */
+export type RegionalReportInput = Omit<RegionalSourceResult, "routes"> & {
+	attribution: string;
+	listed: number | null;
+};
+
+const ratioText = (loadable: number, inScope: number): string =>
+	inScope === 0
+		? "-"
+		: `${((loadable / inScope) * PERCENT).toFixed(PERCENT_DIGITS)}%`;
+
+/**
+ * 경기(GBIS)·인천(TAGO) 정적 노선의 출처별 적재·제외 수. 서울 API 노선 표(지역별, 적재 가능 비율)와 섞지 않는다.
+ * GBIS 노선유형 코드(14, 15 등)가 서울 routeType과 겹치고, 공표 수치 대조는 서울 API 노선만 본다.
+ */
+export function renderRegionalReport(
+	sources: readonly RegionalReportInput[]
+): string[] {
+	const lines = [
+		"## 경기·인천 정적 노선 (GBIS·TAGO)",
+		"",
+		"모양은 경유 정류장 좌표를 이은 선이다. 서울 노선과 겹치는 노선은 서울 쪽만 남기고 비율에 넣지 않는다.",
+		"",
+		"| 출처 | ok | 목록 | 범위 밖 | 서울과 겹침 | 범위 안 | 적재 | 제외 | 원본 없음 | 비율 | 기준 |",
+		"| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+		...sources.map((s) =>
+			s.listed === null
+				? `| ${s.source} | ${s.ok} | 목록 없음 | - | - | - | - | - | - | - | ${s.minRatio * PERCENT}% |`
+				: `| ${s.source} | ${s.ok} | ${s.listed} | ${s.outOfScope} | ${s.duplicates} | ${s.inScope} | ${s.loadable} | ${s.excluded.length} | ${s.missingRaw.length} | ${ratioText(s.loadable, s.inScope)} | ${s.minRatio * PERCENT}% |`
+		),
+		"",
+		...sources.map((s) => `- ${s.source} 출처: ${s.attribution}`),
+		"",
+	];
+	for (const s of sources) {
+		if (s.excluded.length > 0) {
+			lines.push(
+				`### ${s.source} 제외 노선 (${s.excluded.length})`,
+				"",
+				"| 노선명 | ID | error | detail |",
+				"| --- | --- | --- | --- |",
+				...s.excluded.map(
+					(route) =>
+						`| ${cell(route.routeName)} | ${cell(route.routeId)} | ${cell(route.issues.map((issue) => issue.code).join(", "))} | ${cell(route.issues.map((issue) => issue.detail).join("; "))} |`
+				),
+				""
+			);
+		}
+		if (s.missingRaw.length > 0) {
+			const rest = s.missingRaw.length - MISSING_LIST_MAX;
+			lines.push(
+				`### ${s.source} 원본 없는 노선 (${s.missingRaw.length})`,
+				"",
+				...s.missingRaw
+					.slice(0, MISSING_LIST_MAX)
+					.map((routeId) => `- ${cell(routeId)}`),
+				...(rest > 0 ? [`- 외 ${rest}개`] : []),
+				""
+			);
+		}
+	}
+	return lines;
 }
 
 /** build-bus-routes 보고서 Markdown. */

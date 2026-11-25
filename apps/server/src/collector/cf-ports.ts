@@ -292,7 +292,7 @@ export class D1ReferenceSource implements ReferenceSource {
 						.prepare(
 							`SELECT r.id AS id, r.route_id AS routeId, s.length_m AS lengthM
 							   FROM bus_route r LEFT JOIN bus_route_shape s ON s.bus_route_id = r.id
-							  WHERE r.batch_id = ? AND r.route_id IN (${placeholders(part.length)})`
+							  WHERE r.batch_id = ? AND r.source = 'seoul' AND r.route_id IN (${placeholders(part.length)})`
 						)
 						.bind(batchId, ...part)
 						.all<BusRouteRow>();
@@ -318,6 +318,7 @@ export class D1ReferenceSource implements ReferenceSource {
 
 	/**
 	 * `prod` 설정용: 현재 버스 배치에서 지도용 상시 관측 대상인 노선 ID.
+	 * GBIS·TAGO 노선(`source`가 seoul이 아닌 행)은 보는 동안만 관측한다(5-B).
 	 * 인천(7)·경기(8) 노선은 출퇴근 세션에서만 관측하므로 뺀다(스펙 3장 "버스 범위",
 	 * transit-static bus/scope.ts의 REGIONAL_ROUTE_TYPES·isMapObservedRouteType과 같은 규칙).
 	 */
@@ -325,7 +326,7 @@ export class D1ReferenceSource implements ReferenceSource {
 		const { bus_route: batchId } = await this.currentBatchIds();
 		const { results } = await this.#db
 			.prepare(
-				"SELECT route_id AS routeId FROM bus_route WHERE batch_id = ? AND route_type NOT IN ('7', '8') ORDER BY route_id"
+				"SELECT route_id AS routeId FROM bus_route WHERE batch_id = ? AND source = 'seoul' AND route_type NOT IN ('7', '8') ORDER BY route_id"
 			)
 			.bind(batchId)
 			.all<{ routeId: string }>();

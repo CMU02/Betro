@@ -6,9 +6,10 @@ import {
 	busRouteStop,
 	referenceBatch,
 } from "@Betro/db/schema/transit";
-import { busLine, busStop } from "./ids";
+import { busLine, busStop, parseBusRef } from "./ids";
 
 export interface BusRouteMatch {
+	areaName: string | null;
 	line: string;
 	name: string;
 	region: BusRegion;
@@ -25,6 +26,7 @@ export interface BusRouteStopView {
 }
 
 export interface BusRouteDetail {
+	areaName: string | null;
 	line: string;
 	name: string;
 	region: BusRegion;
@@ -77,11 +79,13 @@ export async function searchBusRoutes(
 		when 'seoul' then 0 when 'gyeonggi' then 1 else 2 end`;
 	const rows = await db
 		.select({
+			areaName: busRoute.areaName,
 			name: busRoute.routeName,
 			region: busRoute.region,
 			routeId: busRoute.routeId,
 			routeType: busRoute.routeType,
 			shortName: busRoute.shortName,
+			source: busRoute.source,
 		})
 		.from(busRoute)
 		.where(
@@ -94,38 +98,52 @@ export async function searchBusRoutes(
 			matchRank,
 			regionRank,
 			asc(busRoute.shortName),
+			asc(busRoute.areaName),
 			asc(busRoute.routeName),
+			asc(busRoute.source),
 			asc(busRoute.routeId)
 		)
 		.limit(limit);
 	return {
 		batchId,
-		routes: rows.map(({ routeId, ...rest }) => ({
-			line: busLine(routeId),
+		routes: rows.map(({ routeId, source, ...rest }) => ({
+			line: busLine(source, routeId),
 			...rest,
 		})),
 	};
 }
 
-/** 현재 배치의 노선과 그 정류장(순번 순). 노선이 없으면 `route`가 null. */
+/**
+ * 현재 배치의 노선과 그 정류장(순번 순). 노선이 없으면 `route`가 null.
+ * `busRef`는 출처 접두사가 붙은 ID이고, 접두사가 없으면 서울 노선이다.
+ */
 export async function findBusRouteStops(
 	db: Database,
-	busRouteId: string
+	busRef: string
 ): Promise<{ batchId: number; route: BusRouteDetail | null } | null> {
 	const batchId = await currentBusBatchId(db);
 	if (batchId === null) {
 		return null;
 	}
+	const { id: routeId, source } = parseBusRef(busRef);
 	const [route] = await db
 		.select({
+			areaName: busRoute.areaName,
 			id: busRoute.id,
 			name: busRoute.routeName,
 			region: busRoute.region,
 			routeId: busRoute.routeId,
 			shortName: busRoute.shortName,
+			source: busRoute.source,
 		})
 		.from(busRoute)
-		.where(and(eq(busRoute.batchId, batchId), eq(busRoute.routeId, busRouteId)))
+		.where(
+			and(
+				eq(busRoute.batchId, batchId),
+				eq(busRoute.source, source),
+				eq(busRoute.routeId, routeId)
+			)
+		)
 		.limit(1);
 	if (!route) {
 		return { batchId, route: null };
@@ -144,13 +162,14 @@ export async function findBusRouteStops(
 	return {
 		batchId,
 		route: {
-			line: busLine(route.routeId),
+			areaName: route.areaName,
+			line: busLine(route.source, route.routeId),
 			name: route.name,
 			region: route.region,
 			shortName: route.shortName,
 			stops: stops.map(({ stationId, ...rest }) => ({
 				...rest,
-				stop: busStop(stationId),
+				stop: busStop(route.source, stationId),
 			})),
 		},
 	};

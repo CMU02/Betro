@@ -22,7 +22,11 @@ import {
 	install,
 	pushToken,
 } from "@Betro/db/schema/commute";
-import { busRoute, referenceBatch } from "@Betro/db/schema/transit";
+import {
+	type BusSource,
+	busRoute,
+	referenceBatch,
+} from "@Betro/db/schema/transit";
 import { fcmAccessTokenRequest } from "@Betro/realtime/alerts";
 import { KOREAN_PUBLIC_HOLIDAYS } from "@Betro/realtime/holidays";
 import { serviceDayAt } from "@Betro/realtime/time";
@@ -38,6 +42,7 @@ import { liveUpstream } from "../collector/cf-ports";
 import { collectorClient } from "../collector/client";
 import type { Upstream } from "../collector/ports";
 import { safeFetch } from "../collector/upstream-call";
+import { busLine, parseBusRef } from "../ref/ids";
 import type { Env } from "../worker-env";
 import type { PushTokenRow } from "./auth";
 import {
@@ -336,27 +341,54 @@ export class D1TokenStore implements TokenStore {
 /** 한 번에 묻는 노선 수. D1은 한 문장의 바인딩 값을 100개까지만 받는다. */
 const BUS_SCHEDULE_IDS_PER_QUERY = 90;
 
+/** 전체 노선 ID를 출처별 맨 노선 ID로 나누고, 출처마다 한 번에 물을 만큼씩 자른다. */
+function busScheduleQueries(
+	lines: string[]
+): { routeIds: string[]; source: BusSource }[] {
+	const bySource = new Map<BusSource, string[]>();
+	for (const line of new Set(lines)) {
+		const { id, source } = parseBusRef(line);
+		const ids = bySource.get(source);
+		if (ids) {
+			ids.push(id);
+		} else {
+			bySource.set(source, [id]);
+		}
+	}
+	const queries: { routeIds: string[]; source: BusSource }[] = [];
+	for (const [source, ids] of bySource) {
+		for (
+			let start = 0;
+			start < ids.length;
+			start += BUS_SCHEDULE_IDS_PER_QUERY
+		) {
+			queries.push({
+				routeIds: ids.slice(start, start + BUS_SCHEDULE_IDS_PER_QUERY),
+				source,
+			});
+		}
+	}
+	return queries;
+}
+
 /**
- * 현재 `bus_route` 배치에서 노선의 배차간격·첫차·막차를 읽는다. 키는 접두사 없는 `busRouteId`.
- * 배치에 없거나 배차간격이 없는(0 이하 포함) 노선은 빠진다.
+ * 현재 `bus_route` 배치에서 노선의 배차간격·첫차·막차를 읽는다. 인자와 키는 전체 노선 ID
+ * (`seoul-bus:…`, `gbis:…`, `tago:…`)이고, `(source, route_id)`로 찾는다. GBIS와 서울은
+ * 노선 ID가 겹칠 수 있기 때문이다. 배치에 없거나 배차간격이 없는(0 이하 포함) 노선은 빠진다.
  */
 export async function readBusSchedules(
 	db: Database,
-	busRouteIds: string[]
+	lines: string[]
 ): Promise<Record<string, BusSchedule>> {
-	const ids = [...new Set(busRouteIds)];
-	const chunks: string[][] = [];
-	for (let start = 0; start < ids.length; start += BUS_SCHEDULE_IDS_PER_QUERY) {
-		chunks.push(ids.slice(start, start + BUS_SCHEDULE_IDS_PER_QUERY));
-	}
 	const found = await Promise.all(
-		chunks.map((chunk) =>
+		busScheduleQueries(lines).map(({ routeIds, source }) =>
 			db
 				.select({
 					firstBusMinute: busRoute.firstBusMinute,
 					headwayMin: busRoute.headwayMin,
 					lastBusMinute: busRoute.lastBusMinute,
 					routeId: busRoute.routeId,
+					source: busRoute.source,
 				})
 				.from(busRoute)
 				.innerJoin(referenceBatch, eq(referenceBatch.id, busRoute.batchId))
@@ -364,7 +396,8 @@ export async function readBusSchedules(
 					and(
 						eq(referenceBatch.kind, "bus_route"),
 						eq(referenceBatch.isCurrent, true),
-						inArray(busRoute.routeId, chunk),
+						eq(busRoute.source, source),
+						inArray(busRoute.routeId, routeIds),
 						gt(busRoute.headwayMin, 0)
 					)
 				)
@@ -373,7 +406,7 @@ export async function readBusSchedules(
 	const schedules: Record<string, BusSchedule> = {};
 	for (const row of found.flat()) {
 		if (row.headwayMin !== null) {
-			schedules[row.routeId] = {
+			schedules[busLine(row.source, row.routeId)] = {
 				firstBusMinute: row.firstBusMinute,
 				headwayMin: row.headwayMin,
 				lastBusMinute: row.lastBusMinute,
@@ -685,7 +718,7 @@ export function runnerPorts(
 				env,
 				upstreamMode === "live" ? liveUpstream : arrivalFixtureUpstream
 			),
-			busSchedules: (busRouteIds) => readBusSchedules(db, busRouteIds),
+			busSchedules: (lines) => readBusSchedules(db, lines),
 			clock: () => Date.now(),
 			config: runnerConfig(env),
 			log,

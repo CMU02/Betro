@@ -1,0 +1,6 @@
+{
+  "constructed": true,
+  "note": "실제 한도 초과는 일으키지 않았다. 관측한 인증 실패 봉투(403, returnReasonCode 30)와 같은 모양에 data.go.kr 게이트웨이 문서의 코드 22를 넣어 만들었다. HTTP 상태는 확인하지 못했다.",
+  "httpStatus": 200,
+  "body": "{\n  \"OpenAPI_ServiceResponse\": {\n    \"cmmMsgHeader\": {\n      \"errMsg\": \"SERVICE ERROR\",\n      \"returnAuthMsg\": \"LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR\",\n      \"returnReasonCode\": \"22\"\n    }\n  }\n}\n"
+}

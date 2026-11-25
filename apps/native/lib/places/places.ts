@@ -1,7 +1,7 @@
 import { type CommutePlan, parsePlan } from "@Betro/commute/plan";
 import { z } from "zod";
 
-import type { BusRegion } from "../transit/line-badge-model";
+import type { BusRegion } from "../transit/bus-route-type";
 
 export type PlaceKind = "home" | "work" | "school" | "other";
 

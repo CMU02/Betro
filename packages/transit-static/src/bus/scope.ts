@@ -72,6 +72,36 @@ export function comparePublishedCount(
 
 export type BusRegion = "seoul" | "gyeonggi" | "incheon";
 
+/** bus_route.source. packages/db schema의 BusSource와 같다. */
+export type BusSource = "seoul" | "gbis" | "tago";
+
+/** 서울 버스 API 밖에서 받는 출처. GBIS는 경기, TAGO는 인천이다. */
+export type RegionalBusSource = Exclude<BusSource, "seoul">;
+
+/**
+ * GBIS 노선유형 중 범위 밖: 시외(41·42·43)·공항(51·52·53). 서울 쪽에서 공항버스를 빼는 것과 같은 기준이다
+ * (실험 1절 5-A 확인의 코드표). 수집(fetch-regional-bus)과 조립(regional)이 같은 규칙을 쓴다.
+ */
+export const GBIS_OUT_OF_SCOPE_ROUTE_TYPES: ReadonlySet<string> = new Set([
+	"41",
+	"42",
+	"43",
+	"51",
+	"52",
+	"53",
+]);
+
+/** GBIS·TAGO 목록 행이 범위 안인지. TAGO(인천)는 모두 범위 안이다. */
+export function isInScopeRegionalRoute(
+	source: RegionalBusSource,
+	routeTypeCode: string
+): boolean {
+	return (
+		source === "tago" ||
+		!GBIS_OUT_OF_SCOPE_ROUTE_TYPES.has(routeTypeCode.trim())
+	);
+}
+
 /** routeType으로 노선 면허 지역을 정한다. 7 → incheon, 8 → gyeonggi, 그 밖(마을 2 포함) → seoul. */
 export function regionOf(routeType: string): BusRegion {
 	switch (routeType.trim()) {

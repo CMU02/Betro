@@ -19,7 +19,7 @@ import { currentBusBatch } from "./bus";
 import {
 	busLine,
 	busStop,
-	stripBusPrefix,
+	parseBusRef,
 	stripSubwayPrefix,
 	subwayLine,
 	subwayStation,
@@ -103,7 +103,7 @@ async function currentBatchOf(
 /** 현재 배치의 노선 선과 정류장(순번 순). 배치가 없으면 null, 노선이 없으면 `map`이 null. */
 export async function findBusMap(
 	db: Database,
-	busRouteId: string,
+	busRef: string,
 	isNotModified: (batchId: number) => boolean
 ): Promise<{
 	batchId: number;
@@ -114,10 +114,21 @@ export async function findBusMap(
 	if (batchId === null) {
 		return null;
 	}
+	const { id: routeId, source } = parseBusRef(busRef);
 	const [route] = await db
-		.select({ id: busRoute.id, routeId: busRoute.routeId })
+		.select({
+			id: busRoute.id,
+			routeId: busRoute.routeId,
+			source: busRoute.source,
+		})
 		.from(busRoute)
-		.where(and(eq(busRoute.batchId, batchId), eq(busRoute.routeId, busRouteId)))
+		.where(
+			and(
+				eq(busRoute.batchId, batchId),
+				eq(busRoute.source, source),
+				eq(busRoute.routeId, routeId)
+			)
+		)
 		.limit(1);
 	if (!route) {
 		return { batchId, map: null, notModified: false };
@@ -147,11 +158,11 @@ export async function findBusMap(
 		batchId,
 		map: {
 			batchId,
-			line: busLine(route.routeId),
+			line: busLine(route.source, route.routeId),
 			shape: shape?.coords ?? [],
 			stops: stops.map(({ stationId, ...rest }) => ({
 				...rest,
-				stop: busStop(stationId),
+				stop: busStop(route.source, stationId),
 			})),
 		},
 		notModified: false,
@@ -357,14 +368,10 @@ export function createMapRefRoutes(db: Database): Hono {
 
 	routes.get("/bus/:busRouteId", async (c) => {
 		let etag = "";
-		const found = await findBusMap(
-			db,
-			stripBusPrefix(c.req.param("busRouteId")),
-			(batchId) => {
-				etag = `"busmap-${BUS_MAP_FORMAT}-${batchId}"`;
-				return ifNoneMatchMatches(c.req.header("if-none-match"), etag);
-			}
-		);
+		const found = await findBusMap(db, c.req.param("busRouteId"), (batchId) => {
+			etag = `"busmap-${BUS_MAP_FORMAT}-${batchId}"`;
+			return ifNoneMatchMatches(c.req.header("if-none-match"), etag);
+		});
 		if (!found) {
 			return c.json({ error: "reference unavailable" }, 503);
 		}

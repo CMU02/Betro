@@ -238,7 +238,7 @@ bun transit report:match-rate                # 표본 열차번호를 현재 tim
 
 서울 시내·마을버스와 서울을 오가는 경기·인천 버스 노선마다 정류소 목록(`getStaionByRoute`)과 노선 모양(`getRoutePath`)을 받아, 정류소를 모양 위에 seq 순으로 투영하고 정류소 구간을 만들어 적재한다. 노선 목록은 OA-1095 노선별 정류소 엑셀의 노선에, `getBusRouteList` 검색으로 얻은 routeType 7·8 노선을 더한 것이다(경기·인천 노선은 엑셀에 없다).
 
-- 출처 표기: `서울특별시 버스노선정보(공공데이터포털)`. 모양은 getRoutePath에서만 가져온다. OSM이 아니므로 ODbL 표기를 붙이지 않는다.
+- 출처 표기: `서울특별시 버스노선정보(공공데이터포털)`. 모양은 getRoutePath에서만 가져온다. OSM이 아니므로 ODbL 표기를 붙이지 않는다. 경기(GBIS)·인천(TAGO) 정적 노선은 아래 "경기·인천 정적 노선"을 본다.
 - 키: `DATA_GO_KR_API_KEY`. [공공데이터포털](https://www.data.go.kr)에서 서울특별시_노선정보조회 서비스(15000193)를 활용신청하고 받은 서비스키(일반 인증키)다. `packages/transit-static/.env`(Bun이 읽는다, 커밋하지 않는다)나 셸 환경 변수로 넣는다. OA-1095 엑셀은 키가 없어도 된다.
 - 키와 키가 든 URL은 로그·오류 메시지·보고서·원본 파일 어디에도 남기지 않는다. 오류 메시지의 URL은 `<key>`로 가린다.
 
@@ -246,6 +246,8 @@ bun transit report:match-rate                # 표본 열차번호를 현재 tim
 bun transit fetch:bus-route-xlsx [--seq 58]       # OA-1095 노선별 정류소 엑셀 (키 불필요, 기본 seq 58 = 20260902판)
 bun transit fetch:bus-route-list                  # getBusRouteList 검색어 16개로 노선 목록 (경기·인천 노선 ID 출처). 키 필요
 bun transit fetch:bus-routes [--max-age-days 7]   # 노선마다 getStaionByRoute, 범위 안 노선만 getRoutePath. 키 필요
+bun transit fetch:gbis-routes                     # 경기 GBIS 노선 목록·노선 정보·경유 정류장. 키 필요
+bun transit fetch:tago-routes                     # 인천 TAGO(cityCode 23) 노선 목록·노선 정보·경유 정류장. 키 필요
 bun transit build:bus-routes --dry-run            # 조립·검증하고 보고서만 쓴다 (DB에 쓰지 않는다)
 bun transit build:bus-routes                      # ok이면 DB에 적재한다
 ```
@@ -254,8 +256,8 @@ bun transit build:bus-routes                      # ok이면 DB에 적재한다
 - `fetch:bus-routes`는 `--max-age-days`(기본 7일) 안에 받은 원본을 다시 부르지 않는다. API가 노선 없음(headerCd 4)으로 답한 노선은 고정 본문을 저장해, 다음 실행에서 다시 부르지 않고 조립 단계도 "아직 안 받음"과 구분한다.
 - 출력의 `stoppedBy`가 `none`이 될 때까지 다시 실행한다. `failed`가 남으면 보고서에 원인을 적는다.
 - `fetch:bus-route-list`가 쓴 `data/raw/bus-route-list/<UTC 날짜>/routes.json`이 없으면 `fetch:bus-routes`는 먼저 그 명령을 돌리라고 안내하고 exit 1이다. 7일 안에 받은 검색어는 다시 부르지 않는다.
-- `build:bus-routes`의 `ok` = 원본 없는 노선 0개 **그리고** 서울 면허 노선(마을 포함, `seoul`)의 적재 가능한(error 없는) 비율 98% 이상 **그리고** 경기·인천 노선(`regional`)의 적재 가능 비율 90% 이상(`REPORT_MIN_LOADABLE_RATIO`). 경기·인천 노선이 0개면 서울 기준만 본다. ok가 아니면 exit 1이고 적재하지 않는다. error가 난 노선은 그 노선만 빼고 보고서 "제외 노선"에 남긴다.
-- 적재는 한 트랜잭션으로 `reference_batch(kind="bus_route")`를 만들고 `bus_route`, `bus_route_shape`, `bus_route_stop`, `bus_route_segment`를 넣은 뒤 현재 배치로 바꾼다. `bus_route.region`은 `regionOf(routeType)`(8 → `gyeonggi`, 7 → `incheon`, 그 밖 → `seoul`), `short_name`은 노선 목록의 `busRouteAbrv`(지역을 뗀 이름, 예: `M5107광주` → `M5107`)이고 목록에 없는 서울 노선은 `route_name`과 같다. manifest는 노선 엑셀 해시, 노선별 원본 해시 묶음, 로직 버전(`busRouteLogicVersion` = `BUS_ROUTE_LOGIC_VERSION`, 현재 4)이다. 모두 같으면 다시 적재하지 않는다. 조립 결과가 달라지는 코드를 고치면 그 상수를 올린다.
+- `build:bus-routes`의 `ok` = 원본 없는 노선 0개 **그리고** 서울 면허 노선(마을 포함, `seoul`)의 적재 가능한(error 없는) 비율 98% 이상 **그리고** 경기·인천 노선(`regional`)의 적재 가능 비율 90% 이상(`REPORT_MIN_LOADABLE_RATIO`). 경기·인천 노선이 0개면 서울 기준만 본다. **그리고** GBIS·TAGO 출처마다 적재 가능 비율 90% 이상(`regionalMinLoadableRatio`, 목록을 받지 않은 출처는 보지 않음). ok가 아니면 exit 1이고 적재하지 않는다. error가 난 노선은 그 노선만 빼고 보고서 "제외 노선"에 남긴다.
+- 적재는 한 트랜잭션으로 `reference_batch(kind="bus_route")`를 만들고 `bus_route`, `bus_route_shape`, `bus_route_stop`, `bus_route_segment`를 넣은 뒤 현재 배치로 바꾼다. `bus_route.region`은 `regionOf(routeType)`(8 → `gyeonggi`, 7 → `incheon`, 그 밖 → `seoul`), `short_name`은 노선 목록의 `busRouteAbrv`(지역을 뗀 이름, 예: `M5107광주` → `M5107`)이고 목록에 없는 서울 노선은 `route_name`과 같다. `bus_route.source`는 `seoul`, `gbis`, `tago`이고 서울 API 노선은 `seoul`이다. manifest는 노선 엑셀 해시, 노선별 원본 해시 묶음, 서울 노선 목록 해시(`regionalRouteList`), GBIS·TAGO 목록과 노선별 원본 해시(`gbisRouteList`, `tagoRouteList`, 목록을 받은 출처만), 로직 버전(`busRouteLogicVersion` = `BUS_ROUTE_LOGIC_VERSION`, 현재 6)이다. 모두 같으면 다시 적재하지 않는다. 조립 결과가 달라지는 코드를 고치면 그 상수를 올린다.
 - 보고서는 `data/reports/build-bus-routes/`에 쓴다.
 
 ### 한도와 이어받기
@@ -273,16 +275,29 @@ bun transit build:bus-routes                      # ok이면 DB에 적재한다
 - 유형은 OA-1095가 아니라 `getStaionByRoute` 응답의 `routeType`으로만 정한다(노선 ID 앞자리로는 알 수 없다). 수집과 조립이 같은 규칙(`src/bus/scope.ts`)을 쓴다.
 - routeType `1`(공항), `9`(폐지), `10`(관광·한강버스 셔틀), `14`(한강버스 선박)은 제외한다(`OUT_OF_SCOPE_ROUTE_TYPES`). 그 밖의 값(`2` 마을, `7` 인천, `8` 경기, 가이드에 없는 `15` 심야 포함)은 포함한다. 유형별 근거는 `scope.ts` 주석에 있다.
 - **경기·인천 노선(routeType 7·8, `REGIONAL_ROUTE_TYPES`)은 출퇴근 등록과 세션에만 쓴다.** 수집기의 `prod` 모드 위치 관측 대상(`D1ReferenceSource.currentBusRouteIds()`)에서 빠지고(`isMapObservedRouteType`), 조회 API(`/v1/ref/bus/*`)는 등록 화면 전용이다.
-- 서울에 들어오지 않는 경기·인천 노선(TAGO)과 경기 마을버스(GBIS)는 범위 밖이다. 노선 ID 형식(`seoul-bus:…`)은 나중에 `tago:…`, `gbis:…`를 더할 수 있게 출처를 앞에 붙인다.
+- 서울에 들어오지 않는 경기·인천 노선과 경기 마을버스는 GBIS(경기)·TAGO(인천)에서 정적 데이터로 받는다(MVP 5-A, 아래 "경기·인천 정적 노선"). 실시간 연결은 5-B다. 노선 ID 형식은 출처를 앞에 붙인다(`seoul-bus:…`, `gbis:…`, `tago:…`).
 - 실측(2026-11-11 적재, 배치 10, OA-1095 20260902 + `getBusRouteList` 2026-11-10): 노선 1,346개 중 범위 안 1,302개(적재 1,283, 제외 19), 범위 밖 44개(1: 38, 10: 3, 14: 3). routeType별 2: 247, 3: 152, 4: 242, 5: 5, 6: 13, 7: 38, 8: 590, 15: 15. 지역별 적재 seoul 674(674 중 100%), gyeonggi 574, incheon 35(경기·인천 628 중 609, 97.0%). 정류소 84,944, 구간 83,661. 공표 수치 대조: 마을 247(공표 253), 경기·인천 628(공표 645), 둘 다 ±10% 안. 노선 목록(16건 호출)은 1,349개(routeType 7: 38, 8: 590)였다.
 - 자율주행 시범버스 11개(`AUTONOMOUS_PILOT_ROUTES`, 새벽A160·청와대A01 등)는 서울시 시내버스 396노선에 들지 않지만 실제 운행 노선이라 범위에 넣는다(2026-11-02 결정). 유형(3·5·15)으로는 거를 수 없으므로, 다시 빼려면 `OUT_OF_SCOPE_ROUTE_IDS`를 `AUTONOMOUS_PILOT_ROUTES`로 바꾸고 `BUS_ROUTE_LOGIC_VERSION`을 올린 뒤 `build:bus-routes`를 다시 돌린다. 이전 배치는 DB에 남는다. 실시간 위치 API가 이 노선들을 주는지는 4단계에서 확인한다.
 - 기점·종점이 서울 밖인지는 범위 기준이 아니다. 동행버스 서울01~10(기점이 경기)처럼 서울 밖에서 끝나는 서울 면허 노선도 포함한다.
 - 실측(2026-11-02 적재, OA-1095 20260902): 포함 427 ID(3: 152, 4: 242, 5: 5, 6: 13, 15: 15) = 자율주행 시범 11 + 시내버스 416 ID(3: 145, 4: 242, 5: 2, 6: 13, 15: 14). 시내버스 416 ID 중 출근/퇴근으로 나뉜 쌍 14개(동행 서울01~10, 맞춤 8442·8762·8773·8775)를 한 노선으로 세면 402 노선이다. 서울시 공표 396(2026-01, 합계만 확인)과의 차이 +6은 A/B 분기 6쌍(110A/B, 702A/B, 750A/B, 5522A/B, 6640A/B, 7013A/B)을 한 노선으로 세면 맞지만, 이는 추정이고 기준월 차이(1월 대 9~11월)일 수도 있다. 노선 ID는 DB에서 합치지 않는다(ID마다 정류소와 모양이 따로 있다).
 - 보고서 "범위 안 자율주행 시범버스" 표에 "새 노선"(이름 패턴이 맞는데 `AUTONOMOUS_PILOT_ROUTES`에 없음)이 뜨면 목록에 더할지 검토한다.
 
+### 경기·인천 정적 노선 (GBIS·TAGO)
+
+- 출처 배분: 경기 노선(마을버스 포함)은 GBIS, 인천 노선은 TAGO에서 받는다. 서울에 들어오는 경기·인천 노선(routeType 7·8)은 지금처럼 서울 API로 받는다.
+- 원본: `data/raw/<source>-route-list/<UTC 날짜>/<검색어>.json`과 합친 목록 `routes.json`, `<source>-route-info/<routeId>.json`, `<source>-route-stations/<routeId>.json`. 받은 원본은 다시 부르지 않으므로 하루 한도로 멈춰도 다음 실행이 이어 받는다(오퍼레이션마다 실행 한 번에 950건).
+- 범위: GBIS 노선유형 시외·고속·공항(41, 42, 43, 51, 52, 53)은 뺀다(`GBIS_OUT_OF_SCOPE_ROUTE_TYPES`, `src/bus/scope.ts`). TAGO 인천 노선은 모두 범위 안이다.
+- 모양: 두 출처 모두 모양 API가 없어 경유 정류장 좌표를 순서대로 이은 선을 쓴다(`src/bus/regional.ts`, 품질 표시 `shape-from-stops`). 정류장 `distance_m`은 이 선 위 누적 거리, `offset_m`과 `api_sect_dist_m`은 0이다. 정류장이 2개 미만이거나 좌표가 0인 정류장이 있거나 순번이 겹치면 그 노선을 뺀다.
+- 출처 표기(`bus_route_shape.attribution`): GBIS `경기도 버스정보(GBIS)`, TAGO `국토교통부 TAGO`.
+- `bus_route`: `region`은 GBIS `gyeonggi`, TAGO `incheon`. `area_name`은 GBIS `regionName`의 첫 시·군(같은 번호가 시·군마다 있다. 예: 마을버스 `11`), TAGO는 `인천`. `source_city`는 TAGO cityCode(`23`), GBIS는 비어 있다. `route_type`은 출처의 노선유형 값 그대로다(GBIS `30`, TAGO `지선버스`). 배차간격·첫차·막차는 노선 정보(GBIS 평일 `peekAlloc`, TAGO `intervaltime`)에서 온다. 노선·정류장 ID는 원본 그대로 넣고 접두사는 참조 API에서 붙인다.
+- 서울과 겹치는 노선: 이번 배치의 서울 `bus_route.route_id`에 있는 노선은 서울 쪽만 남긴다(저장된 장소의 `seoul-bus:` 참조가 그대로 산다). GBIS는 `routeId`가 같으면, TAGO는 `ICB` 뒤 첫 자리에서 2를 뺀 ID(`ICB365000215` → `165000215`, 첫 자리가 2 미만이면 변환하지 않음)가 같으면 겹친다(실험 1절 5-A 확인). 겹친 노선은 비율에 넣지 않는다.
+- 적재 여부: 출처마다 범위 안(겹침 제외) 노선 중 적재 가능한 노선이 90% 이상이어야 한다. 경유 정류장 원본이 아직 없는 노선은 적재 가능 수에 들지 않으므로, 수집이 덜 끝나면 받은 만큼만 적재하지 않고 비율 기준으로 막는다. 노선 정보만 없는 노선은 배차간격·시각 없이 적재한다. 보고서 "경기·인천 정적 노선" 표에 출처별 목록·범위 밖·겹침·적재·제외·원본 없음 수가 나온다.
+
 ### 검증 결과 코드
 
 error(그 노선을 적재에서 뺀다): `missing-stations`·`missing-path`(원본 없음), `route-not-found`(API가 노선 없음으로 답함), `bad-envelope`(응답 봉투가 정상이 아님), `bad-station-row`(정류소 행 하나라도 못 읽음. seq로 잇는 구간이 틀어지므로 뺀다), `no-stops`, `seq-not-contiguous`(seq가 1..N이 아님), `shape-too-short`(모양 2점 미만 또는 100m 미만). 2026-11-01에는 모두 0건이다. 2026-11-11 적재에서는 경기·인천 노선 19개가 빠졌다: `route-not-found` 17(`getRoutePath`가 headerCd 4로 답함. 7007-1용인, 4401용인, 4402안성, 4305안성, 60김포, 5101화성, 39연천, 1330-4가평, 8842광주, 8844남양주, 5100성남, 5500하남, 4300수원, 4300-1수원, 4300-2군포, 8840화성, M6751인천), `shape-too-short` 2(M6463인천, M6464인천, 모양 0m). 서울 면허 노선은 0건이다.
+
+GBIS·TAGO 노선의 error: `too-few-stops`(경유 정류장 2개 미만), `bad-stop-coordinate`(좌표가 0이거나 숫자가 아님), `seq-not-increasing`(순번이 겹치거나 줄어듦), `stations-no-data`·`stations-malformed`·`bad-envelope`(경유 정류장 원본을 쓸 수 없음). 경유 정류장 원본이 없는 노선은 error가 아니라 출처별 "원본 없음"으로 센다.
 
 warning(적재하고 `qualityFlags`에 남긴다). `window-miss`와 `zero-length-segment`도 배치 오류가 아니라 원천 데이터 결함에서 나올 수 있다. 2026-11-02 적재(427개 노선, 정류소 32,098, 구간 31,671) 실측:
 
