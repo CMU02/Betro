@@ -18,9 +18,20 @@ export interface WatchRegistry {
 	release: (owner: string) => void;
 }
 
+/** ref(ASCII)를 코드 단위 순서로 비교한다. 로캘에 따라 달라지지 않는다. */
+function compareCodeUnits(a: string, b: string): number {
+	if (a < b) {
+		return -1;
+	}
+	if (a > b) {
+		return 1;
+	}
+	return 0;
+}
+
 /** 합집합 비교 키. 서버는 순서를 보지 않으므로 정렬해 같은 묶음이면 같은 키다. */
 function keyOf(refs: readonly string[]): string {
-	return refs.slice().sort().join(",");
+	return refs.slice().sort(compareCodeUnits).join(",");
 }
 
 const EMPTY_KEY = keyOf([]);
