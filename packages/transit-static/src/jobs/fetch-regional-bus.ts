@@ -1,6 +1,7 @@
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { isInScopeRegionalRoute } from "../bus/scope";
+import { compareCodeUnits } from "../compare";
 import { rawPath } from "../paths";
 import { readRaw, saveRaw } from "../raw-store";
 import {
@@ -288,7 +289,8 @@ async function findFreshListRaw(
 		.filter(
 			(dir) => now.getTime() - Date.parse(dir) <= LIST_FRESH_DAYS * DAY_MS
 		)
-		.sort()
+		// 날짜 폴더 이름(ASCII)을 코드 단위 순서로 정렬한다.
+		.sort(compareCodeUnits)
 		.reverse();
 	for (const dir of fresh) {
 		// biome-ignore lint/performance/noAwaitInLoops: 가장 최근 폴더부터 하나씩 확인한다

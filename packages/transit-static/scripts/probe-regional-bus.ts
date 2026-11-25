@@ -1,9 +1,11 @@
 // 5-A Task 1 일회성 확인 스크립트. 경기 GBIS와 인천 TAGO 응답을 한 번씩 받아 테스트 자료로 남긴다.
 // 서울행 인천 노선의 정류장 대조(ICB 역변환)는 getRouteAcctoThrghSttnList를 노선 여섯 개에 더 불러 같은 방식으로 확인했다.
-// 실행: bun run scripts/probe-regional-bus.ts <output-dir>
+// 실행: bun run scripts/probe-regional-bus.ts <output-name>
+// 결과는 실행 위치 아래 probe-out/<output-name>/에만 쓴다. 이름은 영문·숫자·-·_만 받는다.
 // 키는 packages/transit-static/.env의 DATA_GO_KR_API_KEY에서 읽고, 출력에는 maskKey를 쓴다.
-import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { compareCodeUnits } from "../src/compare";
 import { maskKey } from "../src/sources/seoul-bus-api";
 
 const GBIS_BASE = "https://apis.data.go.kr/6410000/busrouteservice/v2";
@@ -13,10 +15,14 @@ const ENV_PATH = new URL("../.env", import.meta.url).pathname;
 const KEY_LINE_RE = /^DATA_GO_KR_API_KEY\s*=\s*"?([^"\s]+)"?/m;
 const GBIS_SEARCH_TERMS = [..."0123456789", "M", "G", "N", "P"];
 
-const [, , outDir] = process.argv;
-if (!outDir) {
-	throw new Error("출력 폴더를 인자로 주세요");
+const OUTPUT_NAME_RE = /^[\w-]+$/;
+const [, , outputName] = process.argv;
+if (!(outputName && OUTPUT_NAME_RE.test(outputName))) {
+	throw new Error("출력 이름(영문·숫자·-·_)을 인자로 주세요");
 }
+// 인자는 폴더 이름으로만 쓰고 경로로 해석하지 않는다(상위 폴더로 벗어나지 못하게 한다).
+const outDir = join(resolve("probe-out"), outputName);
+mkdirSync(outDir, { recursive: true });
 const key = KEY_LINE_RE.exec(readFileSync(ENV_PATH, "utf8"))?.[1];
 if (!key) {
 	throw new Error("DATA_GO_KR_API_KEY가 .env에 없습니다");
@@ -139,7 +145,11 @@ for (const term of GBIS_SEARCH_TERMS) {
 	}
 }
 console.log(`GBIS unique routes ${seen.size}`);
-console.log(JSON.stringify([...typeCounts.entries()].sort()));
+console.log(
+	JSON.stringify(
+		[...typeCounts.entries()].sort(([a], [b]) => compareCodeUnits(a, b))
+	)
+);
 console.log(JSON.stringify([...regionSamples].slice(0, 10)));
 
 // 인증 실패 봉투(잘못된 키 한 번)
