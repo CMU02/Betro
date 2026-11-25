@@ -109,6 +109,23 @@ function halfHeadwayAfter(
 }
 
 /**
+ * 위치를 모를 때 쓸 배차간격. 도착판의 값을 먼저 쓰고, 도착판이 없거나 간격을 모르면
+ * readyAt 시각의 정적 배차간격을 쓴다.
+ */
+function fallbackHeadway(
+	leg: Leg,
+	board: StopBoard | null,
+	readyAt: number | null,
+	boards: TransitBoards
+): number | null {
+	const fromBoard = board ? knownHeadway(board) : null;
+	if (fromBoard !== null || readyAt === null) {
+		return fromBoard;
+	}
+	return boards.scheduledHeadwayMs?.(leg, readyAt) ?? null;
+}
+
+/**
  * 도착판이 보여 주는 차량이 모두 readyAt 전이면, 마지막 차량 뒤로 배차간격을 쌓아
  * readyAt 이후의 첫 차량 시각을 낸다(대개 한 번).
  */
@@ -282,9 +299,10 @@ function estimateLeg(
 				vehicleId: fixedId,
 			};
 		}
-		const boardEtaAt = board
-			? halfHeadwayAfter(readyAt, knownHeadway(board))
-			: null;
+		const boardEtaAt = halfHeadwayAfter(
+			readyAt,
+			fallbackHeadway(leg, board, readyAt, boards)
+		);
 		const pick: Pick = {
 			boardEtaAt,
 			method: "headway",

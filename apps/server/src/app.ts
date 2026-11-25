@@ -15,6 +15,7 @@ import type { SnapshotKind } from "./collector/core";
 import { INSTALL_HEADER } from "./commute/auth";
 import type { CommuteRunnerClient } from "./commute/client";
 import { createCommuteRoutes } from "./commute/routes";
+import { createMapRoutes } from "./map/routes";
 import { ifNoneMatchMatches } from "./ref/if-none-match";
 import { createRefRoutes } from "./ref/routes";
 import { renderStatusPage } from "./status-page";
@@ -31,11 +32,17 @@ export interface AppDeps {
 	commute?: CommuteRunnerClient;
 	corsOrigins: string[];
 	db: Database;
+	/** 설치 하나가 한 번에 관측을 요청할 수 있는 버스 노선 수(`MAP_WATCH_MAX_PER_INSTALL`). */
+	mapWatchMaxPerInstall?: number;
+	/** 관측 요청 유지 시간 ms(`MAP_WATCH_TTL_MS`). */
+	mapWatchTtlMs?: number;
 	statusHost: string;
 }
 
 const CORS_MAX_AGE_SECONDS = 86_400;
 const SNAPSHOT_MAX_AGE_SECONDS = 10;
+const DEFAULT_MAP_WATCH_TTL_MS = 90_000;
+const DEFAULT_MAP_WATCH_MAX_PER_INSTALL = 6;
 
 /** 라우팅 접두사. 호스트로 API와 상태 페이지를 나눈다. */
 const API_SCOPE = "/api-host";
@@ -146,6 +153,17 @@ function createApiRoutes(deps: AppDeps): Hono {
 
 	routes.route("/v1/ref", createRefRoutes(db));
 	routes.route("/", createCommuteRoutes({ commute: deps.commute, db }));
+	routes.route(
+		"/",
+		createMapRoutes({
+			collector: deps.collector,
+			commute: deps.commute,
+			db,
+			maxRoutesPerInstall:
+				deps.mapWatchMaxPerInstall ?? DEFAULT_MAP_WATCH_MAX_PER_INSTALL,
+			watchTtlMs: deps.mapWatchTtlMs ?? DEFAULT_MAP_WATCH_TTL_MS,
+		})
+	);
 
 	return routes;
 }

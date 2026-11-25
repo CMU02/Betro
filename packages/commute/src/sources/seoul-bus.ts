@@ -49,8 +49,11 @@ const HEADER_OK = "0";
 const HEADER_NO_DATA = "4";
 /** 차량 칸의 `arrmsg`: 그 차량이 아직 노선 기점에서 떠나지 않았다. */
 const AWAITING_DEPARTURE_MESSAGE = "출발대기";
-/** 출처 시각은 서울 버스의 현지 시각이다. 시간대는 설정값 한 곳에서 가져온다. */
-const SOURCE_TIMEZONE = DEFAULT_TIMEZONE;
+/**
+ * 출처 시각(도착정보 `mkTm`, 노선 목록의 첫차·막차)은 서울 버스의 현지 시각이다.
+ * 시간대는 설정값 한 곳에서 가져온다.
+ */
+export const SOURCE_TIMEZONE = DEFAULT_TIMEZONE;
 const MADE_AT = /^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?$/;
 
 const envelopeSchema = z.object({

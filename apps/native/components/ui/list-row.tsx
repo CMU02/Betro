@@ -35,6 +35,8 @@ export interface ListRowProps {
 	 */
 	accessibilityRole?: "button" | "link";
 	icon?: ListRowIcon;
+	/** 아이콘 자리에 넣는 임의 요소(노선 배지 등). `icon`보다 우선한다. */
+	leading?: ReactNode;
 	onPress?: () => void;
 	subtitle?: string;
 	title: string;
@@ -63,18 +65,21 @@ function Trailing({ trailing }: { trailing: ListRowTrailing }) {
 
 function RowContent({
 	icon: Icon,
+	leading,
 	subtitle,
 	title,
 	trailing,
 }: {
 	icon?: ListRowIcon;
+	leading?: ReactNode;
 	subtitle?: string;
 	title: string;
 	trailing: ReactNode;
 }) {
 	return (
 		<>
-			{Icon ? (
+			{leading ? <View className="min-w-6 items-center">{leading}</View> : null}
+			{!leading && Icon ? (
 				<View className="size-6 items-center justify-center">
 					<Icon colorClassName="accent-icon-primary" size={LEADING_ICON_SIZE} />
 				</View>
@@ -98,11 +103,13 @@ function RowContent({
  */
 function ToggleRow({
 	icon,
+	leading,
 	subtitle,
 	title,
 	trailing,
 }: {
 	icon?: ListRowIcon;
+	leading?: ReactNode;
 	subtitle?: string;
 	title: string;
 	trailing: ToggleTrailing;
@@ -121,6 +128,7 @@ function ToggleRow({
 		>
 			<RowContent
 				icon={icon}
+				leading={leading}
 				subtitle={subtitle}
 				title={title}
 				trailing={
@@ -145,6 +153,7 @@ function ToggleRow({
 export function ListRow({
 	accessibilityRole = "button",
 	icon,
+	leading,
 	onPress,
 	subtitle,
 	title,
@@ -154,6 +163,7 @@ export function ListRow({
 		return (
 			<ToggleRow
 				icon={icon}
+				leading={leading}
 				subtitle={subtitle}
 				title={title}
 				trailing={trailing}
@@ -163,6 +173,7 @@ export function ListRow({
 	const content = (
 		<RowContent
 			icon={icon}
+			leading={leading}
 			subtitle={subtitle}
 			title={title}
 			trailing={<Trailing trailing={trailing} />}

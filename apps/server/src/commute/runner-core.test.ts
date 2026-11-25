@@ -4,9 +4,10 @@ import {
 	commuteConfig,
 	DEFAULT_TIMEZONE,
 } from "@Betro/commute/config";
-import type { CommutePlan } from "@Betro/commute/plan";
+import type { BusLeg, CommutePlan, Route } from "@Betro/commute/plan";
 import type { ContentState } from "@Betro/commute/session/content";
 import type { EndReason } from "@Betro/commute/session/stage";
+import type { BusSchedule } from "@Betro/commute/sources/bus-schedule";
 import type { RouteStopArrival } from "@Betro/commute/sources/seoul-bus";
 import type {
 	StationRow,
@@ -499,6 +500,21 @@ const emptyTimetable: TimetablePort = {
 	rideMs: () => Promise.resolve(null),
 };
 
+/** 정적 버스 일정 포트. 기본은 일정이 없다. 부른 노선 목록을 남긴다. */
+class FakeBusSchedules {
+	readonly calls: string[][] = [];
+	handler: (busRouteIds: string[]) => Record<string, BusSchedule> | Error =
+		() => ({});
+
+	read = (busRouteIds: string[]): Promise<Record<string, BusSchedule>> => {
+		this.calls.push(busRouteIds);
+		const result = this.handler(busRouteIds);
+		return result instanceof Error
+			? Promise.reject(result)
+			: Promise.resolve(result);
+	};
+}
+
 function harness(overrides: Partial<CommuteConfig> = {}) {
 	const clock = { now: T0 };
 	const logs: string[] = [];
@@ -508,11 +524,14 @@ function harness(overrides: Partial<CommuteConfig> = {}) {
 	const boards = new FakeBoards(clock);
 	const records = new MemoryRecords();
 	const blobs = new MemoryBlobs();
+	const busSchedules = new FakeBusSchedules();
+	const timetable: TimetablePort = { ...emptyTimetable };
 	const config: CommuteConfig = { ...commuteConfig({}), ...overrides };
 	const core = () =>
 		new RunnerCore({
 			blobs,
 			boards,
+			busSchedules: busSchedules.read,
 			clock: () => clock.now,
 			config,
 			log: (line) => logs.push(line),
@@ -528,13 +547,14 @@ function harness(overrides: Partial<CommuteConfig> = {}) {
 			},
 			sleep: () => Promise.resolve(),
 			store,
-			timetable: emptyTimetable,
+			timetable,
 			timezones: [DEFAULT_TIMEZONE],
 			tokens: db,
 		});
 	return {
 		blobs,
 		boards,
+		busSchedules,
 		clock,
 		config,
 		core,
@@ -543,6 +563,7 @@ function harness(overrides: Partial<CommuteConfig> = {}) {
 		push,
 		records,
 		store,
+		timetable,
 	};
 }
 
@@ -1354,6 +1375,50 @@ describe("RunnerCore 도착판", () => {
 		expect(await savedOf()).toEqual({ cur: late, prev: null });
 	});
 
+	test("버스 도착판이 없으면 정적 배차간격의 반을 더한 추정을 쓴다", async () => {
+		const h = harness();
+		addAndroid(h);
+		h.boards.handler = () => new UpstreamStoppedError("auth");
+		h.busSchedules.handler = (ids) =>
+			Object.fromEntries(
+				ids.map((id) => [
+					id,
+					{ firstBusMinute: null, headwayMin: 10, lastBusMinute: null },
+				])
+			);
+		await tickAt(h, h.core(), T0);
+		expect(h.busSchedules.calls.at(-1)).toEqual([ROUTE_ID]);
+		const [, entry] = await onlySession(h);
+		const leg = entry.state.estimates[0]?.legs[0];
+		expect(leg?.method).toBe("headway");
+		expect(leg?.positionState).toBe("none");
+		expect(leg?.etaState).toBe("estimated");
+		expect(leg?.boardEtaAt).not.toBeNull();
+	});
+
+	test("정적 일정을 읽지 못해도 tick은 계속 가고 시각은 null로 둔다", async () => {
+		const h = harness();
+		addAndroid(h);
+		h.boards.handler = () => new UpstreamStoppedError("auth");
+		h.busSchedules.handler = () => new Error("D1 down");
+		await tickAt(h, h.core(), T0);
+		const [, entry] = await onlySession(h);
+		const leg = entry.state.estimates[0]?.legs[0];
+		expect(leg?.method).toBe("headway");
+		expect(leg?.boardEtaAt).toBeNull();
+		expect(h.logs.some((line) => line.includes("bus schedules"))).toBe(true);
+		expect(h.push.sent.length).toBeGreaterThan(0);
+	});
+
+	test("버스 구간이 없으면 정적 일정을 읽지 않는다", async () => {
+		const h = harness();
+		h.db.addPlan(ANDROID_INSTALL, makeSubwayPlan(PLAN_ANDROID));
+		h.db.addToken(ANDROID_INSTALL, "fcm", FCM_TOKEN, { env: "production" });
+		await tickAt(h, h.core(), T0);
+		expect(await sessions(h)).toHaveLength(1);
+		expect(h.busSchedules.calls).toEqual([]);
+	});
+
 	test("상류가 응답하지 못하면 1초, 2초 뒤 두 번까지 다시 부르고 시도마다 예산을 쓴다", async () => {
 		const h = harness();
 		addAndroid(h);
@@ -1617,6 +1682,37 @@ describe("RunnerCore 진행 중 세션의 경로별 예상", () => {
 		});
 	});
 
+	test("active session exposes legVehicleIds per route, using fixed for boarded legs", async () => {
+		const h = suggestHarness();
+		const core = h.core();
+		await tickAt(h, core, T0);
+		const [sessionId, entry] = await onlySession(h);
+		const estimateOf = (rank: number) =>
+			entry.state.estimates.find((estimate) => estimate.rank === rank);
+		const before = await core.activeSession(ANDROID_INSTALL);
+		expect(before?.routes[0]?.legVehicleIds).toEqual(
+			estimateOf(0)?.legs.map((leg) => leg.vehicleId)
+		);
+		expect(before?.routes[1]?.legVehicleIds).toEqual(
+			estimateOf(1)?.legs.map((leg) => leg.vehicleId)
+		);
+		expect(before?.routes[1]?.legVehicleIds[0]).toBe("A1");
+		await h.store.put(`session:${sessionId}`, {
+			...entry,
+			state: {
+				...entry.state,
+				fixed: entry.state.fixed.map(() => "BOARDED"),
+			},
+		});
+		const after = await core.activeSession(ANDROID_INSTALL);
+		expect(after?.routes[0]?.legVehicleIds).toEqual(
+			entry.state.fixed.map(() => "BOARDED")
+		);
+		expect(after?.routes[1]?.legVehicleIds).toEqual(
+			before?.routes[1]?.legVehicleIds
+		);
+	});
+
 	test("추정이 아직 없으면 시각은 null이고 etaState는 estimated, positionState는 none이다", async () => {
 		const h = suggestHarness();
 		const core = h.core();
@@ -1632,6 +1728,7 @@ describe("RunnerCore 진행 중 세션의 경로별 예상", () => {
 				boardEtaEpoch: null,
 				destinationEtaEpoch: null,
 				etaState: "estimated",
+				legVehicleIds: [],
 				positionState: "none",
 				rank,
 				stopsAway: null,
@@ -1647,6 +1744,206 @@ describe("RunnerCore 진행 중 세션의 경로별 예상", () => {
 		const active = await core.activeSession(ANDROID_INSTALL);
 		expect(active?.routes).toHaveLength(1);
 		expect(active?.routes[0]?.rank).toBe(0);
+	});
+});
+
+describe("RunnerCore 경로 보기", () => {
+	const MISSING_ROUTE_ID = "999999999";
+
+	function busRoute(): Route {
+		return makePlan(PLAN_ANDROID).routes[0] as Route;
+	}
+
+	test("지도 용도는 daily − reserve에 닿으면 부르지 않고 캐시만 쓰며, 세션 용도는 계속 부른다", async () => {
+		const h = harness({
+			busArrivalSessionReserve: 2,
+			dailyBudgetBusArrival: 3,
+		});
+		const core = h.core();
+		await core.routeView(busRoute(), T0);
+		expect(h.boards.busCalls).toHaveLength(1);
+
+		const later = T0 + h.config.busPollMs;
+		h.clock.now = later;
+		const cached = await core.routeView(busRoute(), later);
+		expect(h.boards.busCalls).toHaveLength(1);
+		expect(await h.store.get<number>(`budget:${SERVICE_DATE}`)).toBe(1);
+		expect(cached.legs[0]?.approaching.length).toBeGreaterThan(0);
+		expect(h.logs.some((line) => line.includes("map share"))).toBe(true);
+
+		// 거절된 지도 호출이 폴링 시각을 찍지 않아야 바로 뒤 세션 tick이 상류를 부른다.
+		addAndroid(h);
+		await tickAt(h, core, later);
+		expect(await sessions(h)).toHaveLength(1);
+		expect(h.boards.busCalls).toHaveLength(2);
+
+		await tickRange(h, core, later + TICK_STEP, later + 6 * MINUTE);
+		expect(h.boards.busCalls).toHaveLength(3);
+		expect(await h.store.get<number>(`budget:${SERVICE_DATE}`)).toBe(3);
+	});
+
+	test("경로 보기는 노선별 도착정보 캐시를 함께 쓴다: busPollMs 안의 두 번은 한 번만 부른다", async () => {
+		const h = harness();
+		const core = h.core();
+		await core.routeView(busRoute(), T0);
+		h.clock.now = T0 + h.config.busPollMs - SECOND;
+		await core.routeView(busRoute(), h.clock.now);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID]);
+
+		// 같은 노선의 출퇴근 세션도 그 캐시를 쓴다.
+		addAndroid(h);
+		await tickAt(h, core, T0 + TICK_STEP);
+		expect(await sessions(h)).toHaveLength(1);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID]);
+
+		h.clock.now = T0 + h.config.busPollMs;
+		await core.routeView(busRoute(), h.clock.now);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID, ROUTE_ID]);
+	});
+
+	test("경로 보기는 승차 정류장으로 다가오는 차량과 도착 예상을 돌려준다", async () => {
+		const h = harness();
+		const view = await h.core().routeView(busRoute(), T0);
+		const [leg] = view.legs;
+		expect(view.legs).toHaveLength(1);
+		expect(leg?.approaching.map((vehicle) => vehicle.vehicleId)).toEqual([
+			"V1",
+			"V2",
+		]);
+		const first = leg?.approaching[0];
+		expect(Object.keys(first ?? {}).sort()).toEqual([
+			"etaAt",
+			"method",
+			"stopsAway",
+			"vehicleId",
+		]);
+		expect(first?.etaAt).toBe(V1_AT_BOARD);
+		expect(first?.stopsAway).not.toBeNull();
+		expect(leg).toMatchObject({
+			boardEtaAt: V1_AT_BOARD,
+			etaState: "live",
+			positionState: "live",
+			vehicleId: "V1",
+		});
+		expect(view.destinationEtaAt).not.toBeNull();
+		expect(view.destinationEtaAt ?? 0).toBeGreaterThan(V1_AT_BOARD);
+	});
+
+	test("지하철 구간은 역 도착판과 시간표 주행 시간으로 계산하고 역을 수집기에 등록한다", async () => {
+		const h = harness();
+		const RIDE_MS = 2 * MINUTE;
+		h.timetable.rideMs = () => Promise.resolve(RIDE_MS);
+		h.boards.stationRows[GANGNAM] = {
+			fetchedAt: T0 - 5 * SECOND,
+			rows: [
+				{
+					arvlCd: "99",
+					barvlSec: 300,
+					direction: "down",
+					ordkey: "01005역삼0",
+					sourceAt: T0 - 5 * SECOND,
+					trainNo: "T1",
+				},
+			],
+		};
+		const route: Route = {
+			...(makeSubwayPlan(PLAN_ANDROID).routes[0] as Route),
+			walkMinutes: [0, 3],
+		};
+		const view = await h.core().routeView(route, T0);
+		expect(h.boards.watched.at(-1)).toContain(GANGNAM);
+		const [leg] = view.legs;
+		expect(leg?.approaching.map((vehicle) => vehicle.vehicleId)).toContain(
+			"T1"
+		);
+		expect(leg?.boardEtaAt).not.toBeNull();
+		expect(view.destinationEtaAt).toBe(
+			(leg?.boardEtaAt ?? 0) + RIDE_MS + 3 * MINUTE
+		);
+	});
+
+	test("D1에 없는 노선의 경로 보기는 던지지 않고 시각이 null인 estimated 구간을 돌려준다", async () => {
+		const h = harness();
+		h.boards.handler = () => new Error("unknown route");
+		const base = busRoute();
+		const [leg] = base.legs;
+		const route: Route = {
+			...base,
+			legs: [
+				{
+					...(leg as BusLeg),
+					line: `seoul-bus:${MISSING_ROUTE_ID}`,
+				},
+			],
+		};
+		const view = await h.core().routeView(route, T0);
+		expect(h.busSchedules.calls.at(-1)).toEqual([MISSING_ROUTE_ID]);
+		expect(view).toEqual({
+			destinationEtaAt: null,
+			legs: [
+				expect.objectContaining({
+					approaching: [],
+					boardEtaAt: null,
+					etaState: "estimated",
+					positionState: "none",
+				}),
+			],
+		});
+	});
+});
+
+describe("RunnerCore 경로 보기의 캐시와 이상한 응답", () => {
+	function busRoute(): Route {
+		return makePlan(PLAN_ANDROID).routes[0] as Route;
+	}
+
+	test("세션이 없는 tick이 끼어도 경로 보기 캐시는 busPollMs 동안 남는다", async () => {
+		const h = harness();
+		const core = h.core();
+		await core.routeView(busRoute(), T0);
+		await tickAt(h, core, T0 + 10 * SECOND);
+		h.clock.now = T0 + 20 * SECOND;
+		await core.routeView(busRoute(), h.clock.now);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID]);
+
+		// 간격이 지난 캐시는 세션이 없는 tick이 지운다.
+		await tickAt(h, core, T0 + h.config.busPollMs);
+		expect(await h.store.get(`busRoute:${ROUTE_ID}`)).toBeUndefined();
+	});
+
+	test("상류가 빈 목록(운행 끝)을 주면 던지지 않고 시각 없는 추정이다", async () => {
+		const h = harness();
+		h.boards.handler = () => [];
+		const view = await h.core().routeView(busRoute(), T0);
+		expect(view.destinationEtaAt).toBeNull();
+		expect(view.legs[0]).toMatchObject({
+			approaching: [],
+			boardEtaAt: null,
+			etaState: "estimated",
+		});
+	});
+
+	test("정류장 순번이 노선에 없으면(배치가 바뀜) 던지지 않고 시각 없는 추정이다", async () => {
+		const h = harness();
+		const base = busRoute();
+		const leg = base.legs[0] as BusLeg;
+		const route: Route = {
+			...base,
+			legs: [
+				{
+					...leg,
+					alight: { ...leg.alight, seq: LAST_SEQ + 20 },
+					board: { ...leg.board, seq: LAST_SEQ + 10 },
+				},
+			],
+		};
+		const view = await h.core().routeView(route, T0);
+		expect(view.destinationEtaAt).toBeNull();
+		expect(view.legs[0]).toMatchObject({
+			approaching: [],
+			boardEtaAt: null,
+			etaState: "estimated",
+		});
 	});
 });
 

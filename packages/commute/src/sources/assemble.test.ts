@@ -177,6 +177,59 @@ describe("assembleBoards", () => {
 	});
 });
 
+describe("assembleBoards: scheduled bus headway", () => {
+	/** 현지(서울 버스 출처 시간대) 12:00 = UTC 03:00. 운행 시간 안이다. */
+	const NOON = Date.UTC(2026, 10, 21, 3, 0);
+	/** 현지 03:00 = 전날 UTC 18:00. 첫차 전이다. */
+	const BEFORE_FIRST = Date.UTC(2026, 10, 20, 18, 0);
+	const schedule = { firstBusMinute: 270, headwayMin: 10, lastBusMinute: 1370 };
+
+	it("gives a bus leg the headway from the route's schedule", () => {
+		const boards = assembleBoards(
+			{ ...raw(), busSchedules: { "100100290": schedule } },
+			config
+		);
+		expect(boards.scheduledHeadwayMs?.(busLeg, NOON)).toBe(10 * MINUTE_MS);
+		expect(boards.scheduledHeadwayMs?.(busLeg, BEFORE_FIRST)).toBeNull();
+	});
+
+	it("returns null for a route without a schedule and for subway legs", () => {
+		const boards = assembleBoards(
+			{ ...raw(), busSchedules: { "100100118": schedule } },
+			config
+		);
+		expect(boards.scheduledHeadwayMs?.(busLeg, NOON)).toBeNull();
+		expect(boards.scheduledHeadwayMs?.(subwayLeg, NOON)).toBeNull();
+	});
+
+	it("returns null when the raw boards carry no schedules", () => {
+		const boards = assembleBoards(raw(), config);
+		expect(boards.scheduledHeadwayMs?.(busLeg, NOON) ?? null).toBeNull();
+	});
+
+	it("estimates a bus leg with no board from the schedule", () => {
+		const boards = assembleBoards(
+			{
+				bus: {},
+				busSchedules: { "100100290": schedule },
+				subway: {},
+				timetable: { arrivals: {}, rideMs: {} },
+			},
+			config
+		);
+		const route: Route = { legs: [busLeg], rank: 0, walkMinutes: [0, 0] };
+		const [leg] = estimateRoute(
+			route,
+			boards,
+			{ fixed: [], now: NOON, readyAt: NOON, skip: new Set() },
+			config
+		).legs;
+		expect(leg?.boardEtaAt).toBe(NOON + 5 * MINUTE_MS);
+		expect(leg?.method).toBe("headway");
+		expect(leg?.positionState).toBe("none");
+	});
+});
+
 describe("estimate at a route's origin stop", () => {
 	// 2026-11-12 운영: 6411 기점(정랑고개.양천벤처타운, 1번)은 "출발대기"(vehId 0)뿐이라
 	// 승차 정류장에 차량이 없어 주행 시간을 몰랐고, 하차·목적지 시각이 모두 null이었다.

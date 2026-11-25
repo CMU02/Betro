@@ -1,7 +1,13 @@
 import type { CommuteConfig } from "../config";
 import type { BusLeg, Leg, SubwayLeg } from "../plan";
 import { parseRef } from "../refs";
-import { type BusBoards, busBoards, type RouteStopArrival } from "./seoul-bus";
+import { type BusSchedule, scheduledHeadwayMs } from "./bus-schedule";
+import {
+	type BusBoards,
+	busBoards,
+	type RouteStopArrival,
+	SOURCE_TIMEZONE as SEOUL_BUS_TIMEZONE,
+} from "./seoul-bus";
 import {
 	fillFromTimetable,
 	type StationRow,
@@ -22,6 +28,8 @@ export interface RawBoards {
 			prev: RouteStopArrival[] | null;
 		}
 	>;
+	/** 버스 노선의 정적 배차간격·첫차·막차. 키는 접두사 없는 `busRouteId`. 읽지 못했으면 없다. */
+	busSchedules?: Record<string, BusSchedule>;
 	subway: Record<
 		string,
 		{ fetchedAt: number; prev: StationRow[] | null; rows: StationRow[] }
@@ -143,5 +151,17 @@ export function assembleBoards(
 		return adapter ? (raw.timetable.rideMs[legKey(adapter.leg)] ?? null) : null;
 	};
 
-	return { board, progress, rideMs };
+	// 첫차·막차는 출처(서울 버스)의 현지 시각이라 세션마다가 아니라 출처 시간대로 본다.
+	const scheduled = (leg: Leg, atEpochMs: number): number | null => {
+		const adapter = adapterOf(leg);
+		if (adapter?.kind !== "seoul-bus") {
+			return null;
+		}
+		const schedule = raw.busSchedules?.[parseRef(adapter.leg.line).id];
+		return schedule
+			? scheduledHeadwayMs(schedule, atEpochMs, SEOUL_BUS_TIMEZONE)
+			: null;
+	};
+
+	return { board, progress, rideMs, scheduledHeadwayMs: scheduled };
 }

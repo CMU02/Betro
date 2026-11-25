@@ -32,3 +32,19 @@ it("passes the saved theme straight to Uniwind", () => {
 	expect(toUniwindTheme("system")).toBe("system");
 	expect(toUniwindTheme("light")).toBe("light");
 });
+
+it("parses hiddenMapLines and defaults to []", () => {
+	expect(DEFAULT_PREFERENCES.hiddenMapLines).toEqual([]);
+	const raw = JSON.stringify({
+		hiddenMapLines: ["seoul-bus:R1", "seoul-subway:2"],
+		version: 1,
+	});
+	expect(parsePreferences(raw).hiddenMapLines).toEqual([
+		"seoul-bus:R1",
+		"seoul-subway:2",
+	]);
+	expect(
+		parsePreferences(JSON.stringify({ hiddenMapLines: [1], version: 1 }))
+			.hiddenMapLines
+	).toEqual([]);
+});

@@ -35,7 +35,7 @@ it("attaches both auth headers and a JSON body", async () => {
 	);
 	const result = await clientWith(fetchFn).request("POST", "/v1/x", { a: 1 });
 
-	expect(result).toEqual({ json: { ok: true }, status: 201 });
+	expect(result).toEqual({ etag: null, json: { ok: true }, status: 201 });
 	const headers = new Headers(calls[0]?.init.headers);
 	expect(headers.get("X-Betro-Install")).toBe("install-1");
 	expect(headers.get("Authorization")).toBe("Bearer secret-1");
@@ -65,7 +65,7 @@ it("sends no body for a request without one", async () => {
 	);
 	const result = await clientWith(fetchFn).request("DELETE", "/v1/installs/me");
 
-	expect(result).toEqual({ json: null, status: 204 });
+	expect(result).toEqual({ etag: null, json: null, status: 204 });
 	expect(calls[0]?.init.body).toBeUndefined();
 });
 
@@ -96,7 +96,7 @@ it("returns null json for a body that is not JSON", async () => {
 	);
 	const result = await clientWith(fetchFn).request("GET", "/v1/x");
 
-	expect(result).toEqual({ json: null, status: 502 });
+	expect(result).toEqual({ etag: null, json: null, status: 502 });
 });
 
 it("aborts a request that takes longer than 10 seconds", async () => {
@@ -161,4 +161,18 @@ it("does not call a locked identity a network problem", async () => {
 	}).request("GET", "/v1/x");
 
 	expect(seen).toEqual([]);
+});
+
+it("passes extra headers without letting them override auth, and reads the ETag", async () => {
+	const { calls, fetch: fetchFn } = recordingFetch(
+		() => new Response("{}", { headers: { ETag: '"v1"' }, status: 200 })
+	);
+	const result = await clientWith(fetchFn).request("GET", "/v1/x", undefined, {
+		headers: { Authorization: "Bearer evil", "If-None-Match": '"v0"' },
+	});
+
+	const headers = calls[0]?.init.headers as Record<string, string>;
+	expect(headers["If-None-Match"]).toBe('"v0"');
+	expect(headers.Authorization).toBe("Bearer secret-1");
+	expect(result.etag).toBe('"v1"');
 });

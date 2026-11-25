@@ -18,6 +18,15 @@ export interface CollectorClient {
 	snapshot: (kind: SnapshotKind) => Promise<SnapshotResponse>;
 	start: () => Promise<CollectorStartResult>;
 	status: () => Promise<CollectorStatus>;
+	/**
+	 * 설치 하나의 지도 버스 관측 요청을 `until`까지로 통째로 바꾼다(빈 배열이면 지운다).
+	 * `routeIds`는 접두사 없는 숫자 노선 ID다. 설치별 상한을 넘으면 예외를 던진다.
+	 */
+	watchBusRoutes: (
+		installId: string,
+		routeIds: string[],
+		until: number
+	) => Promise<void>;
 }
 
 /** cron과 출퇴근 실행기가 쓰는 메서드까지 포함한 클라이언트. */
@@ -48,6 +57,8 @@ export function collectorClient(
 		start: () => stub().start(),
 		stationRows: (statnIds) => stub().stationRows(statnIds),
 		status: () => stub().status(),
+		watchBusRoutes: (installId, routeIds, until) =>
+			stub().watchBusRoutes(installId, routeIds, until),
 		watchStations: (statnIds, until) => stub().watchStations(statnIds, until),
 	};
 }

@@ -8,6 +8,7 @@ test("defaults", () => {
 	expect(config.busNearPollMs).toBe(30_000);
 	expect(config.busNearWindowMs).toBe(360_000);
 	expect(config.dailyBudgetBusArrival).toBe(900);
+	expect(config.busArrivalSessionReserve).toBe(300);
 	expect(config.suggestMinGainMs).toBe(180_000);
 	expect(config.endGraceMs).toBe(600_000);
 	expect(config.maxSessionMs).toBe(10_800_000);
@@ -19,12 +20,14 @@ test("defaults", () => {
 
 test("env overrides and ignores garbage", () => {
 	const config = commuteConfig({
+		COMMUTE_BUS_ARRIVAL_SESSION_RESERVE: "120",
 		COMMUTE_BUS_POLL_MS: "abc",
 		COMMUTE_SUBWAY_ETA_BIAS_SEC: '{"line2":30,"line9":"x"}',
 		COMMUTE_TICK_MS: "5000",
 	});
 	expect(config.tickMs).toBe(5000);
 	expect(config.busPollMs).toBe(60_000);
+	expect(config.busArrivalSessionReserve).toBe(120);
 	expect(config.subwayEtaBiasSec).toEqual({ line2: 30 });
 });
 

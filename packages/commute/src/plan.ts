@@ -126,7 +126,7 @@ const legSchema = z
 		}
 	});
 
-const routeSchema = z
+const routeSchema: z.ZodType<Route> = z
 	.object({
 		legs: z.array(legSchema).min(1).max(MAX_LEGS),
 		rank: z.number().int().min(0),
@@ -141,7 +141,7 @@ const routeSchema = z
 				path: ["walkMinutes"],
 			});
 		}
-	});
+	}) as unknown as z.ZodType<Route>;
 
 function isValidTimezone(value: string): boolean {
 	try {
@@ -197,6 +197,12 @@ export const commutePlanSchema = z
 		}
 	}) as unknown as z.ZodType<CommutePlan>;
 
+function issuesOf(error: z.ZodError): string[] {
+	return error.issues.map(
+		(issue) => `${issue.path.join(".")}: ${issue.message}`
+	);
+}
+
 export function parsePlan(
 	input: unknown
 ): { ok: true; plan: CommutePlan } | { ok: false; issues: string[] } {
@@ -204,10 +210,16 @@ export function parsePlan(
 	if (result.success) {
 		return { ok: true, plan: result.data };
 	}
-	return {
-		issues: result.error.issues.map(
-			(issue) => `${issue.path.join(".")}: ${issue.message}`
-		),
-		ok: false,
-	};
+	return { issues: issuesOf(result.error), ok: false };
+}
+
+/** 경로 하나(지도의 경로 보기 요청). 출퇴근 경로의 `routes[]` 항목과 같은 규칙이다. */
+export function parseRoute(
+	input: unknown
+): { ok: true; route: Route } | { ok: false; issues: string[] } {
+	const result = routeSchema.safeParse(input);
+	if (result.success) {
+		return { ok: true, route: result.data };
+	}
+	return { issues: issuesOf(result.error), ok: false };
 }

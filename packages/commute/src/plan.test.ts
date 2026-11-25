@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type CommutePlan, parsePlan } from "./plan";
+import { type CommutePlan, parsePlan, parseRoute } from "./plan";
 
 const PLAN_ID = "3f2b8c1e-5d4a-4b7e-9c10-1a2b3c4d5e6f";
 
@@ -185,5 +185,20 @@ describe("parsePlan", () => {
 		const inSchedule = clone();
 		inSchedule.schedule.address = "x";
 		expect(parsePlan(inSchedule).ok).toBe(false);
+	});
+});
+
+describe("parseRoute", () => {
+	test("accepts one route of a plan", () => {
+		const [route] = basePlan().routes;
+		const result = parseRoute(route);
+		expect(result).toEqual({ ok: true, route: route as never });
+	});
+
+	test("rejects walkMinutes whose length is not legs.length + 1", () => {
+		const route = { ...clone().routes[0], walkMinutes: [5, 3, 2] };
+		const result = parseRoute(route);
+		expect(result.ok).toBe(false);
+		expect(result.ok ? "" : result.issues.join("\n")).toContain("walkMinutes");
 	});
 });

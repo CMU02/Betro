@@ -14,6 +14,7 @@ export const STATE_KEYS = {
 	alerts: "alerts",
 	boards: "boards",
 	budget: "budget",
+	busWatch: "busWatch",
 	core: "core",
 	latest: "latest",
 	schedule: "schedule",
@@ -39,6 +40,17 @@ export const emptyStationBoards = (): StationBoardsSaved => ({
 	stations: {},
 	watch: {},
 });
+
+/** 설치 하나의 버스 관측 요청. 하트비트마다 통째로 바뀐다. */
+export interface BusWatchEntry {
+	/** 접두사 없는 노선 ID(`busRouteId`). 중복이 없다. */
+	routeIds: string[];
+	/** 이 시각이 지나면 요청이 풀린다. */
+	until: number;
+}
+
+/** 지도 관측 요청(`STATE_KEYS.busWatch`). 설치 ID → 요청. DO가 잠들어도 남게 저장한다. */
+export type BusWatchSaved = Record<string, BusWatchEntry>;
 
 /** 그날(KST) 소스를 멈춘 이유. 다음 KST 날 다시 시도한다. */
 export type StopReason = "auth" | "quota-exhausted";

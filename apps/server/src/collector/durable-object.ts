@@ -97,6 +97,30 @@ export class Collector extends DurableObject<Env> {
 		await core.watchStations(statnIds, until);
 	}
 
+	/**
+	 * 설치 하나의 지도 버스 관측 요청을 `until`까지로 바꾼다. 숫자가 아닌 노선 ID나 설치별
+	 * 상한(`MAP_WATCH_MAX_PER_INSTALL`)을 넘는 요청은 예외를 던진다.
+	 */
+	async watchBusRoutes(
+		installId: string,
+		routeIds: string[],
+		until: number
+	): Promise<void> {
+		const valid =
+			typeof installId === "string" &&
+			installId !== "" &&
+			Array.isArray(routeIds) &&
+			routeIds.every((id) => typeof id === "string") &&
+			Number.isFinite(until);
+		if (!valid) {
+			throw new Error(
+				"watchBusRoutes needs an install id, route ids and an end time"
+			);
+		}
+		const core = await this.#getCore();
+		await core.watchBusRoutes(installId, routeIds, until);
+	}
+
 	/** 등록한 역의 최근 ALL 행. */
 	async stationRows(
 		statnIds: string[]

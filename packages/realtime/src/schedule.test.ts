@@ -27,6 +27,8 @@ describe("config", () => {
 			busMinIntervalMs: 160_000,
 			busRouteIds: ["100100290", "100100029"],
 			dailyBudget: { bus: 900, subway: 900 },
+			mapWatchMaxPerInstall: 6,
+			mapWatchMaxTotal: 40,
 			mode: "dev",
 			operatingEnd: "01:00",
 			operatingStart: "05:00",
@@ -39,12 +41,16 @@ describe("config", () => {
 		const config = devConfig({
 			DAILY_BUDGET_BUS: "400",
 			DAILY_BUDGET_SUBWAY: "500",
+			MAP_WATCH_MAX_PER_INSTALL: "3",
+			MAP_WATCH_MAX_TOTAL: "10",
 			OPERATING_END_KST: "00:30",
 			OPERATING_START_KST: "06:00",
 		});
 		expect(config.operatingStart).toBe("06:00");
 		expect(config.operatingEnd).toBe("00:30");
 		expect(config.dailyBudget).toEqual({ bus: 400, subway: 500 });
+		expect(config.mapWatchMaxPerInstall).toBe(3);
+		expect(config.mapWatchMaxTotal).toBe(10);
 		expect(() => devConfig({ DAILY_BUDGET_BUS: "lots" })).toThrow();
 		expect(() => devConfig({ OPERATING_START_KST: "5am" })).toThrow();
 	});
@@ -194,6 +200,61 @@ describe("schedule", () => {
 		expect(
 			capped.due.filter((call) => call.kind === "subway-position")
 		).toHaveLength(5);
+	});
+});
+
+describe("extra bus routes", () => {
+	const busDue = (plan: { due: CallPlan[] }): string[] =>
+		plan.due.flatMap((call) => (call.kind === "bus" ? [call.routeId] : []));
+
+	it("puts extra bus routes before configured routes and counts them in the interval", () => {
+		const now = at("2026-11-04 12:00:00");
+		const budget = emptyBudget(now);
+		const config = prodConfig({}, ["r1", "r2"]);
+		const plan = planTick(now, { nextAt: {} }, budget, config, ["x1", "r2"]);
+		expect(busDue(plan)).toEqual(["x1", "r2", "r1"]);
+		// 요청 노선까지 합친 소스 수(3)로 예산을 편다.
+		const three = prodConfig({}, ["r1", "r2", "r3"]);
+		expect(interval("bus", now, budget, config, ["x1", "r2"])).toBe(
+			interval("bus", now, budget, three)
+		);
+		expect(interval("bus", now, budget, config, ["x1"])).toBeGreaterThan(
+			interval("bus", now, budget, config)
+		);
+		expect(plan.schedule.nextAt["bus:x1"]).toBe(
+			now + interval("bus", now, budget, config, ["x1"])
+		);
+	});
+
+	it("in dev, the one due bus per tick prefers an extra route over a test route when both are due", () => {
+		const now = at("2026-11-04 12:00:00");
+		const schedule: ScheduleState = {
+			nextAt: {
+				"bus:123": now - 1000,
+				"bus:100100029": now - 10 * MINUTE_MS,
+				"bus:100100290": now - 20 * MINUTE_MS,
+				subway: now + MINUTE_MS,
+			},
+		};
+		const plan = planTick(now, schedule, emptyBudget(now), dev, ["123"]);
+		expect(busDue(plan)).toEqual(["123"]);
+		// 남은 시험 노선은 미뤄질 뿐 빠지지 않는다.
+		expect(plan.schedule.nextAt["bus:100100290"]).toBeGreaterThan(now);
+		expect(plan.schedule.nextAt["bus:100100029"]).toBeGreaterThan(now);
+	});
+
+	it("forgets past schedule keys of bus routes nobody polls any more", () => {
+		const now = at("2026-11-04 12:00:00");
+		const schedule: ScheduleState = {
+			nextAt: {
+				"bus:gone-due": now - 1000,
+				"bus:gone-later": now + MINUTE_MS,
+			},
+		};
+		const plan = planTick(now, schedule, emptyBudget(now), dev);
+		expect(plan.schedule.nextAt).not.toHaveProperty("bus:gone-due");
+		// 아직 오지 않은 시각은 남긴다(곧 다시 요청되면 간격을 지킨다).
+		expect(plan.schedule.nextAt["bus:gone-later"]).toBe(now + MINUTE_MS);
 	});
 });
 

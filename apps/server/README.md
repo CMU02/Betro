@@ -67,6 +67,7 @@ vars는 `wrangler.jsonc`, secret은 `wrangler secret put <NAME>`(로컬은 `.dev
 | `COLLECTOR_MODE` | `dev` | `dev`는 지하철 ALL과 버스 2개 노선, `prod`는 전체 |
 | `UPSTREAM_MODE` | `fixture` | `live`일 때만 상류 호출 |
 | `DAILY_BUDGET_SUBWAY`, `DAILY_BUDGET_BUS` | 900 | 소스별 하루 호출 예산 |
+| `MAP_WATCH_MAX_PER_INSTALL`, `MAP_WATCH_MAX_TOTAL` | 6, 40 | 지도 버스 관측 요청 상한(설치 하나, 모든 설치 합). 요청 노선은 설정 노선보다 먼저 부르고 같은 버스 예산을 쓴다 |
 | `OPERATING_START_KST`, `OPERATING_END_KST` | `05:00`, `01:00` | 운행 시간 |
 | `HISTORY_IDLE_FLUSH_MS` | 5000 | 다음 alarm까지 이 시간 이상 남으면 이력을 미리 R2에 쓴다 |
 | `PUSH_MODE` | `send` | 출퇴근 푸시. `send`일 때만 APNs·FCM에 보내고, 그 밖의 값은 로그만 남긴다 |
@@ -191,7 +192,7 @@ curl 'https://betro.cmu02-studio.com/v1/ref/bus/routes?q=M5107'
 
 - alarm 하나가 돌며 `tick`을 부른다(기본 30초, `COMMUTE_TICK_MS`). 처음 alarm과 사라진 alarm은 cron의 `healthCheck`가 건다.
 - 5분 cron이 아니라 tick이 예약 시작 시각을 확인한다. 시작 3분 창 안에 든 계획(요일, 공휴일 포함 여부 반영)마다 세션을 연다. 같은 계획·같은 서비스일에는 세션이 하나뿐이다(D1 고유 인덱스).
-- 설정은 `COMMUTE_*` 환경 변수에서 읽고, 없거나 잘못된 값은 기본값으로 돌아간다. 이름과 기본값은 `packages/commute/src/config.ts`의 `commuteConfig`. 예: `COMMUTE_TICK_MS`, `COMMUTE_BUS_POLL_MS`, `COMMUTE_HEARTBEAT_MS`, `COMMUTE_DAILY_BUDGET_BUS_ARRIVAL`(버스 도착 API 하루 예산, 기본 900), `COMMUTE_SUBWAY_ETA_BIAS_SEC`(JSON). 예약을 확인할 시간대는 `COMMUTE_TIMEZONES`(쉼표로 구분, 기본 `Asia/Seoul`).
+- 설정은 `COMMUTE_*` 환경 변수에서 읽고, 없거나 잘못된 값은 기본값으로 돌아간다. 이름과 기본값은 `packages/commute/src/config.ts`의 `commuteConfig`. 예: `COMMUTE_TICK_MS`, `COMMUTE_BUS_POLL_MS`, `COMMUTE_HEARTBEAT_MS`, `COMMUTE_DAILY_BUDGET_BUS_ARRIVAL`(버스 도착 API 하루 예산, 기본 900), `COMMUTE_BUS_ARRIVAL_SESSION_RESERVE`(그중 출퇴근 세션 몫, 기본 300. 지도 용도 호출은 `예산 − 몫`에서 멈춘다), `COMMUTE_SUBWAY_ETA_BIAS_SEC`(JSON). 예약을 확인할 시간대는 `COMMUTE_TIMEZONES`(쉼표로 구분, 기본 `Asia/Seoul`).
 - 지하철은 수집기의 역별 도착 행을 받아 쓰고, 버스는 노선별 도착 API를 직접 부른다. 상류 401·429, 한도 초과가 나면 그날은 버스 호출을 멈춘다.
 - 로컬 `.dev.vars`의 `UPSTREAM_MODE=fixture`에서는 상류를 부르지 않고 `packages/commute/src/__fixtures__`의 표본을 쓴다.
 
