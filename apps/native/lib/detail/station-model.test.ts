@@ -203,4 +203,34 @@ describe("stationModel", () => {
 		const [line] = stationModel(estimatedOnlyView, {}, NOW);
 		expect(line?.directions).toHaveLength(2);
 	});
+
+	it("방면 이름이 비어도 방향 key가 겹치지 않고, 같은 분의 시간표 행도 key가 겹치지 않는다", () => {
+		const [line] = stationModel(estimatedOnlyView, {}, NOW);
+		const directionKeys = line?.directions.map((d) => d.key) ?? [];
+		expect(new Set(directionKeys).size).toBe(2);
+		const sameMinute = view("seoul-subway:line2", "seoul-subway:s2", [
+			direction("up", {
+				approaching: [
+					{
+						etaAt: NOW + 3 * MIN,
+						method: "timetable",
+						stopsAway: null,
+						vehicleId: "timetable:7",
+					},
+					{
+						etaAt: NOW + 3 * MIN,
+						method: "timetable",
+						stopsAway: null,
+						vehicleId: "timetable:8",
+					},
+				],
+				etaState: "estimated",
+			}),
+		]);
+		const rowKeys =
+			stationModel(sameMinute, {}, NOW)[0]?.directions[0]?.rows.map(
+				(r) => r.key
+			) ?? [];
+		expect(new Set(rowKeys).size).toBe(2);
+	});
 });

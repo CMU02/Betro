@@ -266,7 +266,7 @@ const StationCard = memo(function StationCardView({
 					return first === undefined ? (
 						<AppText
 							className="px-4 py-3 text-text-secondary"
-							key={`${model.line}-${direction.directionLabel}`}
+							key={`${model.line}-${direction.key}`}
 							variant="bodyS"
 						>
 							{`${direction.directionLabel} · ${t("favorites.noArrivals")}`}
@@ -274,7 +274,7 @@ const StationCard = memo(function StationCardView({
 					) : (
 						<ArrivalRow
 							eta={first.status.text}
-							key={`${model.line}-${direction.directionLabel}`}
+							key={`${model.line}-${direction.key}`}
 							leading={
 								<LineBadge
 									line={model.line}

@@ -16,8 +16,11 @@ const TIMETABLE_PREFIX = "timetable:";
 export interface StationDirectionRow {
 	directionLabel: string;
 	firstLabel: string | null;
+	/** React key. 방면 이름은 지도를 받기 전 비어 있어 겹치므로 방향으로 만든다. */
+	key: "up" | "down";
 	lastLabel: string | null;
-	rows: { status: EtaStatus; trainNo: string | null }[];
+	/** `key`는 응답의 차량 ID다. 같은 분에 오는 시간표 열차도 겹치지 않는다. */
+	rows: { key: string; status: EtaStatus; trainNo: string | null }[];
 }
 
 export interface StationLineModel {
@@ -92,12 +95,14 @@ function directionRow(
 			entry.stop
 		),
 		firstLabel: clockOf(direction.firstAt, timezone),
+		key: direction.direction,
 		lastLabel: clockOf(direction.lastAt, timezone),
 		// 도착 시각을 모르는 칸은 글자가 비어 그리지 않으므로 줄에서 뺀다.
 		rows: direction.approaching
 			.filter((arrival) => arrival.etaAt !== null)
 			.slice(0, ROWS_PER_DIRECTION)
 			.map((arrival) => ({
+				key: arrival.vehicleId,
 				status: arrivalStatus({
 					etaAt: arrival.etaAt,
 					etaState: direction.etaState,

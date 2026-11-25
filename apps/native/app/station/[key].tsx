@@ -147,7 +147,7 @@ function DirectionRows({
 	return direction.rows.map((row) => (
 		<ArrivalRow
 			eta={row.status.text}
-			key={`${row.trainNo ?? "timetable"}-${row.status.text}`}
+			key={row.key}
 			leading={<LineBadge line={line} mode="subway" name={lineLabel(line)} />}
 			onPress={
 				row.trainNo === null
@@ -196,7 +196,7 @@ function FirstLastRows({
 	return directions.map((direction) => (
 		<View
 			className="flex-row items-center justify-between px-4 py-3"
-			key={direction.directionLabel}
+			key={direction.key}
 		>
 			<AppText variant="bodyM">{direction.directionLabel}</AppText>
 			<AppText className="text-text-secondary" variant="bodyS">
@@ -247,7 +247,7 @@ function ArrivalsBody({
 	return directions.map((direction) => (
 		<DirectionRows
 			direction={direction}
-			key={direction.directionLabel}
+			key={direction.key}
 			line={line}
 			onOpenTrain={onOpenTrain}
 		/>
