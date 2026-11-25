@@ -14,6 +14,11 @@ import { D1Timetable, runnerConfig } from "./commute/cf-ports";
 import { commuteClient } from "./commute/client";
 import { refreshHolidaysIfDue } from "./commute/holidays";
 import { prunePushTokens, shouldPrune } from "./commute/push-token-prune";
+import {
+	pruneSessionBlobs,
+	pruneSessionRows,
+	recordCutoffDate,
+} from "./commute/record-prune";
 import { commuteReportDate } from "./commute/runner-core";
 import type { Env } from "./worker-env";
 
@@ -57,13 +62,23 @@ function getApp(env: Env): Hono {
 	return cachedApp;
 }
 
-/** 하루 한 번만 묵은 푸시 토큰을 지운다. 로그에는 지운 수만 남긴다. */
+/**
+ * 하루 한 번만 묵은 푸시 토큰과 보관 기간(90일)이 지난 출퇴근 안내 기록을 지운다.
+ * 로그에는 지운 수만 남긴다.
+ */
 async function pruneTokensIfDue(env: Env, now: number): Promise<void> {
 	if (!shouldPrune(now, DEFAULT_TIMEZONE)) {
 		return;
 	}
-	const count = await prunePushTokens(createD1Db(env.DB), now);
+	const db = createD1Db(env.DB);
+	const count = await prunePushTokens(db, now);
 	console.log(`push token prune: ${count}`);
+	const cutoff = recordCutoffDate(now, DEFAULT_TIMEZONE);
+	const rows = await pruneSessionRows(db, cutoff);
+	const blobs = await pruneSessionBlobs(env.DATA, cutoff);
+	console.log(
+		`commute record prune before ${cutoff}: rows=${rows} blobs=${blobs}`
+	);
 }
 
 export default {
