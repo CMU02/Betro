@@ -15,6 +15,16 @@ function bareId(ref: string): string {
 	return index === -1 ? ref : ref.slice(index + 1);
 }
 
+/**
+ * 스냅샷 차량의 `routeId`와 비교하는 노선 키. 서울은 맨 ID, 경기·인천은 출처를 붙인 전체 참조다.
+ * 숫자가 같은 서울 노선과 섞이지 않게 한다.
+ */
+export function vehicleRouteKey(line: string): string {
+	return line.startsWith("gbis:") || line.startsWith("tago:")
+		? line
+		: bareId(line);
+}
+
 /** 같은 정류장이 두 번 나오면 순환 노선으로 본다. */
 function isCircular(map: BusMap): boolean {
 	const seen = new Set<string>();
@@ -38,7 +48,7 @@ export function busVehiclesForLeg(
 	boardedId: string | null,
 	map: BusMap | null = null
 ): BusSnapshotVehicle[] {
-	const routeId = bareId(leg.line);
+	const routeId = vehicleRouteKey(leg.line);
 	const onLine = vehicles.filter((vehicle) => vehicle.routeId === routeId);
 	if (boardedId !== null) {
 		return onLine.filter(

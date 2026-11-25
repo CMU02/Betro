@@ -1,10 +1,16 @@
 import { LINES } from "@Betro/transit-static/lines";
 import { describe, expect, it } from "bun:test";
-import { type BudgetState, consume, emptyBudget } from "./budget";
+import {
+	type BudgetKind,
+	type BudgetState,
+	consume,
+	emptyBudget,
+} from "./budget";
 import {
 	type CallPlan,
 	devConfig,
 	interval,
+	planKey,
 	planTick,
 	prodConfig,
 	remainingOperatingMs,
@@ -18,15 +24,24 @@ const HOUR_MS = 3_600_000;
 const MINUTE_MS = 60_000;
 const dev = devConfig({});
 
-const budgetKind = (plan: CallPlan): "subway" | "bus" =>
-	plan.kind === "bus" ? "bus" : "subway";
+const budgetKind = (plan: CallPlan): BudgetKind => {
+	if (plan.kind === "bus") {
+		return "bus";
+	}
+	return plan.kind === "regional-bus" ? `${plan.source}-position` : "subway";
+};
 
 describe("config", () => {
 	it("dev defaults", () => {
 		expect(dev).toEqual({
 			busMinIntervalMs: 160_000,
 			busRouteIds: ["100100290", "100100029"],
-			dailyBudget: { bus: 900, subway: 900 },
+			dailyBudget: {
+				bus: 900,
+				gbisPosition: 300,
+				subway: 900,
+				tagoPosition: 3000,
+			},
 			mapWatchMaxPerInstall: 6,
 			mapWatchMaxTotal: 40,
 			mode: "dev",
@@ -40,7 +55,9 @@ describe("config", () => {
 	it("reads overrides from env", () => {
 		const config = devConfig({
 			DAILY_BUDGET_BUS: "400",
+			DAILY_BUDGET_GBIS_LOCATION_COLLECTOR: "200",
 			DAILY_BUDGET_SUBWAY: "500",
+			DAILY_BUDGET_TAGO_LOCATION_COLLECTOR: "2000",
 			MAP_WATCH_MAX_PER_INSTALL: "3",
 			MAP_WATCH_MAX_TOTAL: "10",
 			OPERATING_END_KST: "00:30",
@@ -48,7 +65,12 @@ describe("config", () => {
 		});
 		expect(config.operatingStart).toBe("06:00");
 		expect(config.operatingEnd).toBe("00:30");
-		expect(config.dailyBudget).toEqual({ bus: 400, subway: 500 });
+		expect(config.dailyBudget).toEqual({
+			bus: 400,
+			gbisPosition: 200,
+			subway: 500,
+			tagoPosition: 2000,
+		});
 		expect(config.mapWatchMaxPerInstall).toBe(3);
 		expect(config.mapWatchMaxTotal).toBe(10);
 		expect(() => devConfig({ DAILY_BUDGET_BUS: "lots" })).toThrow();
@@ -255,6 +277,82 @@ describe("extra bus routes", () => {
 		expect(plan.schedule.nextAt).not.toHaveProperty("bus:gone-due");
 		// 아직 오지 않은 시각은 남긴다(곧 다시 요청되면 간격을 지킨다).
 		expect(plan.schedule.nextAt["bus:gone-later"]).toBe(now + MINUTE_MS);
+	});
+});
+
+describe("regional bus routes", () => {
+	const GBIS = "gbis:100100290";
+	const TAGO = "tago:ICB361000005";
+
+	it("지역 노선은 감시로만 들어와 출처를 붙인 스케줄 키로 계획된다", () => {
+		const now = at("2026-11-04 12:00:00");
+		const config = prodConfig({}, ["100100290"]);
+		const plan = planTick(now, { nextAt: {} }, emptyBudget(now), config, [
+			GBIS,
+			TAGO,
+		]);
+		expect(plan.due.filter((call) => call.kind !== "subway-position")).toEqual([
+			{ kind: "bus", routeId: "100100290" },
+			{
+				cityCode: null,
+				kind: "regional-bus",
+				routeId: "100100290",
+				source: "gbis",
+			},
+			{
+				cityCode: null,
+				kind: "regional-bus",
+				routeId: "ICB361000005",
+				source: "tago",
+			},
+		]);
+		expect(plan.due.map(planKey)).toContain("bus:gbis:100100290");
+		expect(plan.due.map(planKey)).toContain("bus:tago:ICB361000005");
+		expect(plan.schedule.nextAt["bus:100100290"]).toBeGreaterThan(now);
+		expect(plan.schedule.nextAt["bus:gbis:100100290"]).toBe(
+			now + interval("gbis-position", now, emptyBudget(now), config, [GBIS])
+		);
+	});
+
+	it("지역 노선은 서울 버스 간격을 나누지 않고 제 예산으로 간격을 편다", () => {
+		const now = at("2026-11-04 12:00:00");
+		const budget = emptyBudget(now);
+		const config = prodConfig({}, ["100100290"]);
+		expect(interval("bus", now, budget, config, [GBIS, TAGO])).toBe(
+			interval("bus", now, budget, config)
+		);
+		// GBIS 300건을 남은 운행 시간(12:00~24:00)에 편다.
+		expect(interval("gbis-position", now, budget, config, [GBIS])).toBe(
+			(12 * HOUR_MS) / 300
+		);
+	});
+
+	it("GBIS 예산이 바닥나도 서울 버스와 TAGO는 계획된다", () => {
+		const now = at("2026-11-04 12:00:00");
+		const config = prodConfig({}, ["100100290"]);
+		const budget = consume(emptyBudget(now), "gbis-position", now, 300);
+		const plan = planTick(now, { nextAt: {} }, budget, config, [GBIS, TAGO]);
+		const keys = plan.due.map(planKey);
+		expect(keys).toContain("bus:100100290");
+		expect(keys).toContain("bus:tago:ICB361000005");
+		expect(keys).not.toContain("bus:gbis:100100290");
+	});
+
+	it("감시 중인 지역 노선의 지난 스케줄 키는 지우지 않는다", () => {
+		const now = at("2026-11-04 12:00:00");
+		const config = prodConfig({}, []);
+		const budget = consume(emptyBudget(now), "gbis-position", now, 300);
+		const plan = planTick(
+			now,
+			{
+				nextAt: { "bus:gbis:9": now - 1000, "bus:gbis:100100290": now - 1000 },
+			},
+			budget,
+			config,
+			[GBIS]
+		);
+		expect(plan.schedule.nextAt["bus:gbis:100100290"]).toBe(now - 1000);
+		expect(plan.schedule.nextAt).not.toHaveProperty("bus:gbis:9");
 	});
 });
 

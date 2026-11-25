@@ -241,6 +241,31 @@ describe("LatestState", () => {
 		);
 	});
 
+	it("버스 스냅샷은 그날 멈춘 지역 출처를 싣는다", () => {
+		const state = new LatestState();
+		state.applyBus("100100290", [bus()], T);
+		expect(state.snapshot("bus", T).stoppedSources).toEqual([]);
+		expect(state.snapshot("bus", T, ["gbis"]).stoppedSources).toEqual(["gbis"]);
+	});
+
+	it("멈춘 지역 차량은 TTL을 기다리지 않고 바로 뺀다", () => {
+		const state = new LatestState();
+		const routeId = "gbis:100100290";
+		state.applyBus(
+			routeId,
+			[bus({ routeId, vehId: "a" }), bus({ routeId, vehId: "b" })],
+			T
+		);
+		state.applyBus("100100290", [bus({ vehId: "a" })], T);
+		expect(state.forgetBusVehicles(routeId, ["a", "missing"])).toBe(1);
+		expect(
+			state
+				.snapshot("bus", T + SECOND_MS)
+				.vehicles.map((v) => `${v.routeId}|${v.vehId}`)
+		).toEqual(["100100290|a", "gbis:100100290|b"]);
+		expect(state.forgetBusVehicles(routeId, [])).toBe(0);
+	});
+
 	it("exposes previous bus positions for normalization", () => {
 		const state = new LatestState();
 		state.applyBus("100100290", [bus()], T);

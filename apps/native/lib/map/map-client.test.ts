@@ -6,6 +6,7 @@ import type {
 	ServerResponse,
 } from "@/lib/server/api-client";
 import {
+	type BusSnapshot,
 	createMapRefCache,
 	fetchBusMap,
 	fetchSnapshot,
@@ -221,6 +222,34 @@ describe("fetchSnapshot", () => {
 		if (result.ok && result.value !== "not-modified") {
 			expect(result.value.etag).toBe('"def"');
 			expect(result.value.snapshot.vehicles).toEqual([BUS_VEHICLE]);
+		}
+	});
+
+	it("stoppedSources가 없는 옛 스냅샷도 읽고, 있으면 그대로 싣는다", async () => {
+		const base = {
+			generatedAt: 1,
+			staleRoutes: {},
+			staleSince: null,
+			vehicles: [],
+		};
+		const old = fakeClient({ etag: '"o"', json: base, status: 200 });
+		const oldResult = await fetchSnapshot(old.client, "bus", null);
+		expect(oldResult.ok).toBe(true);
+		if (oldResult.ok && oldResult.value !== "not-modified") {
+			expect((oldResult.value.snapshot as BusSnapshot).stoppedSources).toEqual(
+				[]
+			);
+		}
+		const fresh = fakeClient({
+			etag: '"n"',
+			json: { ...base, stoppedSources: ["gbis"] },
+			status: 200,
+		});
+		const freshResult = await fetchSnapshot(fresh.client, "bus", null);
+		if (freshResult.ok && freshResult.value !== "not-modified") {
+			expect(
+				(freshResult.value.snapshot as BusSnapshot).stoppedSources
+			).toEqual(["gbis"]);
 		}
 	});
 

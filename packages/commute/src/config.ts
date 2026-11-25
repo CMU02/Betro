@@ -13,6 +13,14 @@ export interface CommuteConfig {
 	busNearWindowMs: number;
 	busPollMs: number;
 	dailyBudgetBusArrival: number;
+	/**
+	 * 지역 버스 오퍼레이션별 실행기 하루 예산(개발 계정 한도의 실행기 몫, 5-B 설계 결정 1). 위치 목록은
+	 * 수집기와 나눠 쓰므로 실행기 몫만 둔다. 지도 용도 호출은 각 예산의 3분의 1을 세션 몫으로 남긴다.
+	 */
+	dailyBudgetGbisArrival: number;
+	dailyBudgetGbisLocation: number;
+	dailyBudgetTagoArrival: number;
+	dailyBudgetTagoLocation: number;
 	endGraceMs: number;
 	heartbeatMs: number;
 	leaveMarginByLine: Record<string, number>;
@@ -141,6 +149,16 @@ export function commuteConfig(
 		dailyBudgetBusArrival: numberFrom(
 			env.COMMUTE_DAILY_BUDGET_BUS_ARRIVAL,
 			900
+		),
+		dailyBudgetGbisArrival: numberFrom(env.DAILY_BUDGET_GBIS_ARRIVAL, 900),
+		dailyBudgetGbisLocation: numberFrom(
+			env.DAILY_BUDGET_GBIS_LOCATION_RUNNER,
+			600
+		),
+		dailyBudgetTagoArrival: numberFrom(env.DAILY_BUDGET_TAGO_ARRIVAL, 9000),
+		dailyBudgetTagoLocation: numberFrom(
+			env.DAILY_BUDGET_TAGO_LOCATION_RUNNER,
+			6000
 		),
 		endGraceMs: numberFrom(env.COMMUTE_END_GRACE_MS, 600_000),
 		heartbeatMs: numberFrom(env.COMMUTE_HEARTBEAT_MS, 110_000),

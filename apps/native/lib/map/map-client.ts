@@ -111,6 +111,8 @@ const busSnapshotSchema = z.object({
 	generatedAt: z.number(),
 	staleRoutes: z.record(z.string(), z.number()),
 	staleSince: z.number().nullable(),
+	/** 그날 멈춘 지역 출처. 옛 스냅샷에는 없다. */
+	stoppedSources: z.array(z.enum(["gbis", "tago"])).default([]),
 	vehicles: z.array(busVehicleSchema),
 });
 

@@ -206,11 +206,15 @@ const nonNegative = (ms: number): number | null => (ms >= 0 ? ms : null);
 /**
  * 직전·지금 노선 도착 → 정류장 도착판, 탄 차량의 하차 도착, 주행 시간.
  * `prev`는 같은 노선의 직전 응답(없으면 null)이고 `passed`를 찾는 데만 쓴다.
+ * `positionsAt`은 위치 목록을 받은 시각이다. 위치 목록이 직전 poll에서 이어 온 것이면
+ * `fetchedAt`보다 이르고, 위치 목록의 순번으로 외삽할 때는 이 시각부터 잰다.
  */
 export function busBoards(
 	prev: RouteStopArrival[] | null,
 	now: RouteStopArrival[],
-	fetchedAt: number
+	fetchedAt: number,
+	positions?: ReadonlyMap<string, number>,
+	positionsAt: number = fetchedAt
 ): BusBoards {
 	const bySeq = new Map(now.map((stop) => [stop.seq, stop]));
 	const prevBySeq = new Map((prev ?? []).map((stop) => [stop.seq, stop]));
@@ -222,6 +226,10 @@ export function busBoards(
 				seqNowOf.set(vehicle.vehicleId, vehicle.seqNow);
 			}
 		}
+	}
+	// 위치 목록(차량 ID → 지금 순번)은 도착에서 얻은 순번보다 우선한다.
+	for (const [vehicleId, seq] of positions ?? []) {
+		seqNowOf.set(vehicleId, seq);
 	}
 	const latestMadeAt =
 		now.length === 0 ? fetchedAt : Math.max(...now.map((stop) => stop.madeAt));
@@ -280,6 +288,8 @@ export function busBoards(
 		return found;
 	};
 
+	const pacePerStopMs = routePacePerStopMs(now);
+
 	const progress = (vehicleId: string, alightSeq: number): Progress | null => {
 		const alight = bySeq.get(alightSeq);
 		const listed = alight?.vehicles.find((v) => v.vehicleId === vehicleId);
@@ -298,7 +308,23 @@ export function busBoards(
 			// 하차 정류장을 이미 지났다.
 			return { etaAt: null, method: null, stopsAway: 0 };
 		}
+		if (positions?.has(vehicleId) && pacePerStopMs !== null) {
+			// 위치 목록의 순번이 도착의 순번보다 새롭다. 노선 정거장당 시간으로 외삽한다.
+			return {
+				etaAt: positionsAt + Math.round((alightSeq - seqNow) * pacePerStopMs),
+				method: "extrapolated",
+				stopsAway: alightSeq - seqNow,
+			};
+		}
 		const far = farthestFirst(vehicleId, alightSeq);
+		// 위치 목록을 주는 지역 노선만 외삽한다. 서울(위치 목록 없음)은 전처럼 모른다고 둔다.
+		if (far === null && positions !== undefined && pacePerStopMs !== null) {
+			return {
+				etaAt: fetchedAt + Math.round((alightSeq - seqNow) * pacePerStopMs),
+				method: "extrapolated",
+				stopsAway: alightSeq - seqNow,
+			};
+		}
 		const travelled = far ? far.stop.seq - far.vehicle.seqNow : 0;
 		if (far === null || travelled <= 0) {
 			return null;
@@ -325,8 +351,6 @@ export function busBoards(
 		}
 		return nonNegative(alightAt - etaAtOf(boardStop, listed));
 	};
-
-	const pacePerStopMs = routePacePerStopMs(now);
 
 	/**
 	 * 같은 응답의 차량들로 잰 정류장당 시간 × 정류장 수. 승차·하차 정류장에 차량이 없을 때(기점 근처의

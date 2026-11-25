@@ -1,0 +1,5 @@
+{
+  "at": "2026-11-23T08:33:36.022Z",
+  "status": 200,
+  "body": "{\n  \"OpenAPI_ServiceResponse\": {\n    \"cmmMsgHeader\": {\n      \"errMsg\": \"HTTP_ERROR\",\n      \"returnAuthMsg\": \"HTTP 에러\",\n      \"returnReasonCode\": \"04\"\n    }\n  }\n}\n"
+}

@@ -17,6 +17,9 @@ import arrivalSample from "../../../../packages/realtime/src/__fixtures__/arriva
 import bus150 from "../../../../packages/realtime/src/__fixtures__/bus-150.json";
 import bus6411 from "../../../../packages/realtime/src/__fixtures__/bus-6411.json";
 import busReferenceFixture from "../../../../packages/realtime/src/__fixtures__/bus-reference-6411-150.json";
+import gbisLocation from "../../../../packages/realtime/src/__fixtures__/regional/gbis-location.json";
+import tagoGateway04 from "../../../../packages/realtime/src/__fixtures__/regional/tago-gateway-04.json";
+import tagoLocation from "../../../../packages/realtime/src/__fixtures__/regional/tago-location.json";
 import subwayReferenceFixture from "../../../../packages/realtime/src/__fixtures__/subway-reference-sample.json";
 import { SERVICE_ENDED_RECHECK_MS } from "./apply-call";
 import { BACKLOG_RETRY_MS, CollectorCore, DEFAULT_IDLE_FLUSH_MS } from "./core";
@@ -49,6 +52,9 @@ const ROUTE_150 = "100100029";
 const ALL_URL = /realtimeStationArrival\/ALL/;
 const ROUTE_PARAM = /busRouteId=(\d+)/;
 const HISTORY_PART = /^(.*)-(\d+)\.ndjson\.gz$/;
+const GBIS_URL = /\/6410000\/buslocationservice\/v2\/getBusLocationListv2\?/;
+const TAGO_URL = /\/1613000\/BusLcInfoInqireService\/getRouteAcctoBusLcList\?/;
+const SEOUL_URL = /^http:\/\/ws\.bus\.go\.kr\//;
 
 const ALL_BODY = JSON.stringify(arrivalSample);
 const BUS_BODIES: Record<string, string> = {
@@ -1121,5 +1127,256 @@ describe("CollectorCore bus watches", () => {
 			T0 + MINUTE
 		);
 		expect(await busRoutesOfTick(h)).toEqual(["1", "2", "3", "4", "5", "6"]);
+	});
+});
+
+describe("CollectorCore regional bus watches", () => {
+	const GBIS_6411 = "gbis:100100290";
+	const TAGO_82 = "tago:ICB361000005";
+	/** 지하철 없이 관측 요청 노선만 부르는 설정. */
+	const watchOnly: CollectorConfig = { ...prodConfig({}, []), subwayLines: [] };
+
+	/** 서울 표본 참조에 6411 모양을 빌린 지역 노선을 더한다. 요청한 노선만 돌려준다. */
+	function regionalReference(
+		routeIds: readonly string[],
+		tagoCity: string | null
+	): BusReference {
+		const seoul = busReference();
+		const shape = seoul.routes.get(ROUTE_6411) as BusRouteRef;
+		const routes = new Map<string, BusRouteRef>(seoul.routes);
+		routes.set(GBIS_6411, { ...shape, routeId: GBIS_6411 });
+		routes.set(TAGO_82, {
+			...shape,
+			routeId: TAGO_82,
+			...(tagoCity ? { cityCode: tagoCity } : {}),
+		});
+		return {
+			batchId: seoul.batchId,
+			routes: new Map(
+				[...routes].filter(([routeId]) => routeIds.includes(routeId))
+			),
+		};
+	}
+
+	const regionalResponder =
+		(overrides: { gbis?: UpstreamResponse; tago?: UpstreamResponse } = {}) =>
+		(url: string): UpstreamResponse | Promise<UpstreamResponse> => {
+			if (GBIS_URL.test(url)) {
+				return (
+					overrides.gbis ?? {
+						body: gbisLocation.body,
+						status: gbisLocation.status,
+					}
+				);
+			}
+			if (TAGO_URL.test(url)) {
+				return (
+					overrides.tago ?? {
+						body: tagoLocation.body,
+						status: tagoLocation.status,
+					}
+				);
+			}
+			return fixtureResponder(url);
+		};
+
+	function regionalHarness(
+		options: {
+			respond?: Responder;
+			state?: MemoryState;
+			clock?: { now: number };
+			/** 참조의 TAGO 도시 코드. 기본 "23"(인천), null이면 없다. */
+			tagoCity?: string | null;
+		} = {}
+	): Harness {
+		const h = makeHarness({
+			clock: options.clock,
+			config: watchOnly,
+			respond: options.respond ?? regionalResponder(),
+			state: options.state,
+		});
+		h.ports.reference.loadBus = (routeIds) => {
+			h.busLoads.push([...routeIds]);
+			return Promise.resolve(
+				regionalReference(
+					routeIds,
+					options.tagoCity === undefined ? "23" : options.tagoCity
+				)
+			);
+		};
+		return h;
+	}
+
+	interface SnapshotBody {
+		stoppedSources: string[];
+		vehicles: { routeId: string; vehId: string; qualityFlags: string[] }[];
+	}
+
+	async function busSnapshot(h: Harness): Promise<SnapshotBody> {
+		return JSON.parse((await h.core.snapshot("bus")).body) as SnapshotBody;
+	}
+
+	const callsTo = (h: Harness, pattern: RegExp) =>
+		h.calls.filter((call) => pattern.test(call.url));
+
+	it("gbis:100100290 감시는 서울 100100290과 다른 스케줄 키와 차량 키를 쓴다", async () => {
+		const h = regionalHarness();
+		await h.core.watchBusRoutes(
+			"install-1",
+			[ROUTE_6411, GBIS_6411],
+			T0 + 10 * MINUTE
+		);
+		await h.core.tick();
+		const seoul = callsTo(h, SEOUL_URL);
+		const gbis = callsTo(h, GBIS_URL);
+		expect(seoul).toHaveLength(1);
+		expect(seoul[0]?.url).toContain("busRouteId=100100290");
+		expect(gbis).toHaveLength(1);
+		expect(gbis[0]?.url).toContain("routeId=100100290");
+		const schedule = JSON.parse(
+			h.state.kv.get(STATE_KEYS.schedule) ?? "{}"
+		) as {
+			nextAt: Record<string, number>;
+		};
+		expect(Object.keys(schedule.nextAt).sort()).toEqual([
+			"bus:100100290",
+			"bus:gbis:100100290",
+		]);
+		const { stoppedSources, vehicles } = await busSnapshot(h);
+		expect(stoppedSources).toEqual([]);
+		const routeIds = new Set(vehicles.map((vehicle) => vehicle.routeId));
+		expect([...routeIds].sort()).toEqual([ROUTE_6411, GBIS_6411]);
+		const regional = vehicles.find(
+			(vehicle) =>
+				vehicle.routeId === GBIS_6411 && vehicle.vehId === "200011171"
+		);
+		expect(regional?.qualityFlags).toEqual([
+			"position-from-stop",
+			"no-source-time",
+		]);
+		expect(h.logs.filter((line) => line.includes("failed"))).toEqual([]);
+	});
+
+	it("GBIS 한도 초과는 gbis-position만 멈추고 서울 버스는 다음 tick에도 부른다", async () => {
+		const h = regionalHarness({
+			respond: regionalResponder({ gbis: { body: "", status: 429 } }),
+		});
+		await h.core.watchBusRoutes(
+			"install-1",
+			[ROUTE_6411, GBIS_6411, TAGO_82],
+			T0 + 30 * MINUTE
+		);
+		// 멈추기 전 스냅샷을 먼저 읽어 캐시가 무효화되는지 본다.
+		expect((await busSnapshot(h)).stoppedSources).toEqual([]);
+		await h.core.tick();
+		expect(callsTo(h, GBIS_URL)).toHaveLength(1);
+		expect((await busSnapshot(h)).stoppedSources).toEqual(["gbis"]);
+		h.calls.splice(0);
+		h.clock.now += 10 * MINUTE;
+		await h.core.tick();
+		expect(callsTo(h, GBIS_URL)).toHaveLength(0);
+		expect(callsTo(h, SEOUL_URL)).toHaveLength(1);
+		expect(callsTo(h, TAGO_URL)).toHaveLength(1);
+		expect(callsTo(h, TAGO_URL)[0]?.url).toContain("cityCode=23");
+		const budget = JSON.parse(h.state.kv.get(STATE_KEYS.budget) ?? "{}") as {
+			used: Record<string, number>;
+		};
+		expect(budget.used).toMatchObject({ bus: 2, "gbis-position": 1 });
+		expect(h.sent).toEqual([]);
+		// 다음 KST 날에는 다시 부르고 멈춤 표시도 풀린다.
+		h.clock.now = NEXT_KST_DAY;
+		h.calls.splice(0);
+		await h.core.watchBusRoutes(
+			"install-1",
+			[GBIS_6411],
+			NEXT_KST_DAY + 10 * MINUTE
+		);
+		expect((await busSnapshot(h)).stoppedSources).toEqual([]);
+		await h.core.tick();
+		expect(callsTo(h, GBIS_URL)).toHaveLength(1);
+	});
+
+	it("GBIS XML 게이트웨이 한도 초과(22)도 그날 GBIS를 멈춘다", async () => {
+		const quota = {
+			body: "<OpenAPI_ServiceResponse><cmmMsgHeader><errMsg>SERVICE ERROR</errMsg><returnReasonCode>22</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>",
+			status: 200,
+		};
+		const h = regionalHarness({
+			respond: regionalResponder({ gbis: quota }),
+		});
+		await h.core.watchBusRoutes("install-1", [GBIS_6411], T0 + 30 * MINUTE);
+		await h.core.tick();
+		expect(callsTo(h, GBIS_URL)).toHaveLength(1);
+		expect((await busSnapshot(h)).stoppedSources).toEqual(["gbis"]);
+		h.calls.splice(0);
+		h.clock.now += 10 * MINUTE;
+		await h.core.tick();
+		expect(callsTo(h, GBIS_URL)).toHaveLength(0);
+	});
+
+	it("TAGO 게이트웨이 04는 한 번만 다시 부르고 출처를 멈추지 않는다", async () => {
+		const gateway = { body: tagoGateway04.body, status: tagoGateway04.status };
+		const h = regionalHarness({
+			respond: regionalResponder({ tago: gateway }),
+		});
+		await h.core.watchBusRoutes("install-1", [TAGO_82], T0 + 30 * MINUTE);
+		await h.core.tick();
+		expect(callsTo(h, TAGO_URL)).toHaveLength(2);
+		expect((await busSnapshot(h)).stoppedSources).toEqual([]);
+		h.calls.splice(0);
+		h.clock.now += 10 * MINUTE;
+		await h.core.tick();
+		expect(callsTo(h, TAGO_URL)).toHaveLength(2);
+	});
+
+	it("도시 코드를 모르는 TAGO 노선은 예산을 쓰지 않고 건너뛴다", async () => {
+		const h = regionalHarness({ tagoCity: null });
+		await h.core.watchBusRoutes("install-1", [TAGO_82], T0 + 30 * MINUTE);
+		await h.core.tick();
+		expect(callsTo(h, TAGO_URL)).toHaveLength(0);
+		const budget = JSON.parse(h.state.kv.get(STATE_KEYS.budget) ?? "{}") as {
+			used: Record<string, number>;
+		};
+		expect(budget.used["tago-position"]).toBe(0);
+	});
+
+	it("순번이 5분 넘게 그대로인 GBIS 차량은 재시작을 거쳐도 스냅샷에서 바로 빠진다", async () => {
+		const first = regionalHarness();
+		await first.core.watchBusRoutes("install-1", [GBIS_6411], T0 + 30 * MINUTE);
+		await first.core.tick();
+		const before = (await busSnapshot(first)).vehicles.filter(
+			(vehicle) => vehicle.routeId === GBIS_6411
+		);
+		expect(before.length).toBeGreaterThan(0);
+		// 4분 뒤(마지막으로 본 시각)에도 같은 순번이다. DO가 잠들었다 깨어난다.
+		first.clock.now = T0 + 4 * MINUTE;
+		await first.core.tick();
+		const second = regionalHarness({ clock: first.clock, state: first.state });
+		second.clock.now = T0 + 5 * MINUTE + 30 * SECOND;
+		await second.core.tick();
+		second.clock.now = T0 + 9 * MINUTE;
+		await second.core.tick();
+		expect(callsTo(second, GBIS_URL).length).toBeGreaterThan(0);
+		// BUS_TTL(마지막으로 본 뒤 5분)이 지나기 전이지만 멈춘 차량은 남지 않는다.
+		const after = (await busSnapshot(second)).vehicles.filter(
+			(vehicle) => vehicle.routeId === GBIS_6411
+		);
+		expect(after).toEqual([]);
+	});
+
+	it("숫자가 아닌 tago 키도 감시를 받는다", async () => {
+		const h = regionalHarness();
+		await h.core.watchBusRoutes("install-1", [TAGO_82], T0 + MINUTE);
+		const rejected = await Promise.allSettled(
+			["gbis:abc", "tago:icb1", "kakao:1", "tago:ICB1/x"].map((bad) =>
+				h.core.watchBusRoutes("install-1", [bad], T0 + MINUTE)
+			)
+		);
+		expect(rejected.map((result) => result.status)).toEqual([
+			"rejected",
+			"rejected",
+			"rejected",
+			"rejected",
+		]);
 	});
 });

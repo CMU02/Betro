@@ -219,6 +219,23 @@ TAGO는 서울 API와 같은 차량 좌표를 조금 늦게, 일부는 건너뛰
 - 그래서 5-A는 노선 ID 규칙으로 버린다. 정류장 역변환은 `ICB` 뒤 첫 자리가 2 이상일 때만 한다(`ICB1…`로 시작하는 인천 노선이 있어 뺀 값이 음수가 된다).
 - 같은 이름의 서울 노선이 없는데 인천 정류장만 서울 정류장과 겹치는 노선(급행91)은 서울 노선이 아니므로 그대로 TAGO로 둔다.
 
+### 5-B 확인 (2026-11-23)
+
+실험일: 2026-11-23 17:32~17:38 KST. GBIS는 수원 13번(`200000037`), TAGO는 인천 82번(`ICB361000005`)으로 확인했다. 승차 순번은 15, 하차 순번은 35로 두고 50초 간격으로 6번 불렀다. 응답 원본에서 키는 가렸고, 대표 응답을 `packages/commute/src/sources/__fixtures__/regional/`과 `packages/realtime/src/__fixtures__/regional/`에 남겼다.
+
+1. **GBIS 도착의 차량 위치가 위치 목록과 맞는다.** `getBusArrivalItemv2`의 `staOrder − locationNoN`이 같은 `vehIdN`의 `getBusLocationListv2` `stationSeq`와 24건 모두 같았다. 도착 응답에는 `vehId1/2`, `plateNo1/2`, `predictTimeSec1/2`, `locationNo1/2`, `flag`, `turnSeq`가 있다.
+2. **하차 정류소 도착에는 탄 차가 나오지 않는다.** 도착 응답은 그 정류소에 가장 가까운 두 대만 준다. 승차 정류소의 첫 차(순번 12)는 하차 정류소(35)의 도착 응답에 6번 모두 없었다(그 사이에 다른 차가 있었다). 그래서 탄 뒤의 진행은 위치 목록으로 따라간다.
+3. **GBIS 차량이 5분 동안 그대로인 경우가 있다.** `vehId 200011170`은 6번 모두 순번 12, `stateCd 0`, 예측 491~507초였다. 원천이 멈춘 것인지 실제 정체인지 응답만으로는 가릴 수 없다. 5-B는 "멈춘 차량" 기준으로 다룬다.
+4. **TAGO는 게이트웨이 오류가 잦다.**
+   - 프로브 18번 중 11번이 약 6~9초 뒤 `OpenAPI_ServiceResponse.cmmMsgHeader.returnReasonCode "04"`(`HTTP_ERROR`)였다.
+   - 따로 http와 https를 10번씩 번갈아 불렀을 때 http 4/10, https 2/10이 같은 오류였다. https로 바꾼 탓은 아니다.
+   - 2026-11-09 실험(40번 중 1번)보다 훨씬 잦다. 일시 오류로 다룬다.
+5. **TAGO 도착에는 차량 식별자가 없다.**
+   - `arrprevstationcnt`(몇 정거장 전)와 `arrtime`(초)만 온다.
+   - `정류장 nodeord − arrprevstationcnt`를 위치 목록의 `nodeord`와 맞춰 보면, 같은 시각에 받은 6쌍 중 정확히 맞은 것이 3쌍이고 나머지는 1~2 정거장 차이였다. 위치가 늦게 갱신되기 때문이다(1절).
+6. **TAGO 위치 응답:** `gpslati`, `gpslong`(문자열일 때가 있음), `nodeid`, `nodeord`, `vehicleno`. 수신 시각은 없다.
+7. **차량이 없는 TAGO 노선(강화 마을 `ICB169000021`):** 이번에는 게이트웨이 오류 `04`가 왔다. 빈 응답(`items: ""`)은 5-A 파서처럼 `no-data`로 본다.
+
 ## 2. APNs 발송 경로
 
 실험일: 2026-11-09(월) 18:10~18:50 KST. 실험 코드는 로컬 브랜치 `spike/mvp2-apns`(병합·push 안 함)에 있다.

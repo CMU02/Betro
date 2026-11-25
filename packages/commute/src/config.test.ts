@@ -31,6 +31,24 @@ test("env overrides and ignores garbage", () => {
 	expect(config.subwayEtaBiasSec).toEqual({ line2: 30 });
 });
 
+test("지역 버스 출처별 실행기 예산은 GBIS 도착 900·위치 600, TAGO 도착 9,000·위치 6,000이고 환경 변수로 바꾼다", () => {
+	const defaults = commuteConfig({});
+	expect(defaults.dailyBudgetGbisArrival).toBe(900);
+	expect(defaults.dailyBudgetGbisLocation).toBe(600);
+	expect(defaults.dailyBudgetTagoArrival).toBe(9000);
+	expect(defaults.dailyBudgetTagoLocation).toBe(6000);
+	const config = commuteConfig({
+		DAILY_BUDGET_GBIS_ARRIVAL: "5",
+		DAILY_BUDGET_GBIS_LOCATION_RUNNER: "6",
+		DAILY_BUDGET_TAGO_ARRIVAL: "7",
+		DAILY_BUDGET_TAGO_LOCATION_RUNNER: "x",
+	});
+	expect(config.dailyBudgetGbisArrival).toBe(5);
+	expect(config.dailyBudgetGbisLocation).toBe(6);
+	expect(config.dailyBudgetTagoArrival).toBe(7);
+	expect(config.dailyBudgetTagoLocation).toBe(6000);
+});
+
 test("여유 폭 기본값은 임시값 bus 180·subway 120, 상한 300, 깜빡임 30", () => {
 	const config = commuteConfig({});
 	expect(config.leaveMarginSec).toEqual({ bus: 180, subway: 120 });

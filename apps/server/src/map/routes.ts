@@ -22,6 +22,8 @@ export interface MapRoutesDeps {
 
 const BUS_REF_PREFIX = "seoul-bus:";
 const NUMERIC_ID = /^\d+$/;
+/** 지역 노선 참조. 수집기가 받는 출처 키와 같은 모양이다. */
+const REGIONAL_REF = /^(?:gbis:\d+|tago:[A-Z]{3}\d+)$/;
 const MAX_REFS_IN_BODY = 200;
 
 const watchBodySchema = z
@@ -41,10 +43,20 @@ async function readJson(request: Request): Promise<unknown> {
 	}
 }
 
-/** `seoul-bus:<id>` ref에서 접두사 없는 노선 ID만 뽑는다. 다른 출처는 건너뛰고, 숫자가 아니면 null. */
+/**
+ * `seoul-bus:<id>` ref는 접두사 없는 노선 ID로, `gbis:`·`tago:` ref는 출처 키 그대로 뽑는다.
+ * 다른 출처는 건너뛰고, 서울 ID가 숫자가 아니거나 지역 ref 모양이 틀리면 null.
+ */
 function busRouteIdsOf(refs: readonly string[]): string[] | null {
 	const ids = new Set<string>();
 	for (const ref of refs) {
+		if (ref.startsWith("gbis:") || ref.startsWith("tago:")) {
+			if (!REGIONAL_REF.test(ref)) {
+				return null;
+			}
+			ids.add(ref);
+			continue;
+		}
 		if (!ref.startsWith(BUS_REF_PREFIX)) {
 			continue;
 		}

@@ -1,4 +1,4 @@
-import type { ReferenceBatchKind } from "@Betro/db/schema/transit";
+import type { BusSource, ReferenceBatchKind } from "@Betro/db/schema/transit";
 import {
 	FCM_PROJECT_ID,
 	fcmAccessTokenRequest,
@@ -17,6 +17,7 @@ import {
 	type CollectorConfig,
 	devConfig,
 	type EnvLike,
+	parseRegionalRouteKey,
 	prodConfig,
 } from "@Betro/realtime/schedule";
 import type {
@@ -29,6 +30,8 @@ import bus150Sample from "../../../../packages/realtime/src/__fixtures__/bus-150
 import bus6411Sample from "../../../../packages/realtime/src/__fixtures__/bus-6411.json";
 import positionLine2Sample from "../../../../packages/realtime/src/__fixtures__/position-line2.json";
 import positionLine7Sample from "../../../../packages/realtime/src/__fixtures__/position-line7.json";
+import gbisLocationSample from "../../../../packages/realtime/src/__fixtures__/regional/gbis-location.json";
+import tagoLocationSample from "../../../../packages/realtime/src/__fixtures__/regional/tago-location.json";
 import type { Env } from "../worker-env";
 import type {
 	BlobStore,
@@ -42,6 +45,11 @@ import { errorText } from "./util";
 
 /** 상류 요청 하나의 제한 시간(본문 읽기 포함). */
 export const UPSTREAM_TIMEOUT_MS = 10_000;
+/**
+ * GBIS·TAGO 요청 하나의 제한 시간. TAGO 게이트웨이 오류가 약 8초 뒤에 오므로 tick이 늘어지지
+ * 않게 짧게 끊는다(5-B 설계 결정 5, 출퇴근 실행기의 `REGIONAL_FETCH_TIMEOUT_MS`와 같은 값).
+ */
+export const REGIONAL_UPSTREAM_TIMEOUT_MS = 8000;
 /** FCM 요청 제한 시간. */
 const FCM_TIMEOUT_MS = 10_000;
 /** OAuth 액세스 토큰(유효 1시간)을 다시 받기 전까지 쓰는 시간. */
@@ -161,8 +169,12 @@ export class R2BlobStore implements BlobStore {
 
 interface BusRouteRow {
 	id: number;
+	/** 서울은 맨 ID, 지역은 출처를 붙인 키. 조회 뒤에 채운다. */
+	key: string;
 	lengthM: number | null;
 	routeId: string;
+	source: BusSource;
+	sourceCity: string | null;
 }
 
 interface BusSegmentRow {
@@ -280,40 +292,70 @@ export class D1ReferenceSource implements ReferenceSource {
 		});
 	}
 
+	/**
+	 * `routeIds`는 서울 맨 ID와 출처를 붙인 지역 키(`gbis:…`, `tago:…`)가 섞여 있다. 출처마다
+	 * 그 출처의 행에서 찾고, 돌려주는 노선 맵의 키는 받은 키 그대로다(같은 숫자의 서울·GBIS
+	 * 노선이 섞이지 않게). GBIS 노선은 위치에 좌표가 없어 `withShapes`와 관계없이 모양을 읽는다.
+	 */
 	async loadBus(
 		routeIds: string[],
 		withShapes: boolean
 	): Promise<BusReference> {
 		const { bus_route: batchId } = await this.currentBatchIds();
+		const bySource = new Map<BusSource, string[]>();
+		for (const key of new Set(routeIds)) {
+			const regional = parseRegionalRouteKey(key);
+			const source: BusSource = regional?.source ?? "seoul";
+			const ids = bySource.get(source) ?? [];
+			ids.push(regional?.routeId ?? key);
+			bySource.set(source, ids);
+		}
 		const routeRows = (
 			await Promise.all(
-				chunks(routeIds, D1_IN_CHUNK).map(async (part) => {
-					const { results } = await this.#db
-						.prepare(
-							`SELECT r.id AS id, r.route_id AS routeId, s.length_m AS lengthM
-							   FROM bus_route r LEFT JOIN bus_route_shape s ON s.bus_route_id = r.id
-							  WHERE r.batch_id = ? AND r.source = 'seoul' AND r.route_id IN (${placeholders(part.length)})`
-						)
-						.bind(batchId, ...part)
-						.all<BusRouteRow>();
-					return results;
-				})
+				[...bySource].flatMap(([source, ids]) =>
+					chunks(ids, D1_IN_CHUNK).map((part) =>
+						this.#selectRoutes(batchId, source, part)
+					)
+				)
 			)
 		).flat();
 		const internalIds = routeRows.map((row) => row.id);
+		const shapeIds = withShapes
+			? internalIds
+			: routeRows.filter((row) => row.source === "gbis").map((row) => row.id);
 		const [segments, shapes] = await Promise.all([
 			this.#selectByRoute<BusSegmentRow>(
 				"SELECT bus_route_id AS busRouteId, from_seq AS fromSeq, start_m AS startM, end_m AS endM FROM bus_route_segment WHERE bus_route_id IN",
 				internalIds
 			),
-			withShapes
+			shapeIds.length > 0
 				? this.#selectByRoute<BusShapeRow>(
 						"SELECT bus_route_id AS busRouteId, coords FROM bus_route_shape WHERE bus_route_id IN",
-						internalIds
+						shapeIds
 					)
 				: Promise.resolve([]),
 		]);
 		return { batchId, routes: assembleBusRoutes(routeRows, segments, shapes) };
+	}
+
+	async #selectRoutes(
+		batchId: number,
+		source: BusSource,
+		routeIds: readonly string[]
+	): Promise<BusRouteRow[]> {
+		const { results } = await this.#db
+			.prepare(
+				`SELECT r.id AS id, r.route_id AS routeId, r.source AS source,
+				        r.source_city AS sourceCity, s.length_m AS lengthM
+				   FROM bus_route r LEFT JOIN bus_route_shape s ON s.bus_route_id = r.id
+				  WHERE r.batch_id = ? AND r.source = ? AND r.route_id IN (${placeholders(routeIds.length)})`
+			)
+			.bind(batchId, source, ...routeIds)
+			.all<Omit<BusRouteRow, "key">>();
+		return results.map((row) => ({
+			...row,
+			key: source === "seoul" ? row.routeId : `${source}:${row.routeId}`,
+		}));
 	}
 
 	/**
@@ -384,14 +426,17 @@ function assembleBusRoutes(
 		}
 		const route: BusRouteRef = {
 			lengthM: row.lengthM ?? lastEndM,
-			routeId: row.routeId,
+			routeId: row.key,
 			segmentsBySeq,
 		};
 		const coords = coordsByRoute.get(row.id);
 		if (coords) {
 			route.coords = coords;
 		}
-		routes.set(row.routeId, route);
+		if (row.source === "tago" && row.sourceCity) {
+			route.cityCode = row.sourceCity;
+		}
+		routes.set(row.key, route);
 	}
 	return routes;
 }
@@ -399,28 +444,50 @@ function assembleBusRoutes(
 // ---------------------------------------------------------------------------
 // 상류
 
-/** 실제 상류. HTTP 오류도 응답으로 돌려주고, 연결 실패·시간 초과는 `status: null`. 던지지 않는다. */
+/**
+ * 실제 상류(호출마다 `timeoutMs`로 끊는다). HTTP 오류도 응답으로 돌려주고, 연결 실패·시간 초과는
+ * `status: null`. 던지지 않는다.
+ */
+export function liveUpstreamWithin(timeoutMs: number): Upstream {
+	return {
+		async fetch(url: string): Promise<UpstreamResponse> {
+			let response: Response;
+			try {
+				response = await globalThis.fetch(url, {
+					signal: AbortSignal.timeout(timeoutMs),
+				});
+			} catch (error) {
+				return { body: "", error: errorText(error), status: null };
+			}
+			try {
+				return { body: await response.text(), status: response.status };
+			} catch (error) {
+				return { body: "", error: errorText(error), status: response.status };
+			}
+		},
+	};
+}
+
+const REGIONAL_URL =
+	/^https?:\/\/apis\.data\.go\.kr\/(?:6410000\/buslocationservice|1613000\/BusLcInfoInqireService)\//;
+
+const seoulLive = liveUpstreamWithin(UPSTREAM_TIMEOUT_MS);
+const regionalLive = liveUpstreamWithin(REGIONAL_UPSTREAM_TIMEOUT_MS);
+
+/** 실제 상류(10초 제한, GBIS·TAGO 위치는 8초 제한). */
 export const liveUpstream: Upstream = {
-	async fetch(url: string): Promise<UpstreamResponse> {
-		let response: Response;
-		try {
-			response = await globalThis.fetch(url, {
-				signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-			});
-		} catch (error) {
-			return { body: "", error: errorText(error), status: null };
-		}
-		try {
-			return { body: await response.text(), status: response.status };
-		} catch (error) {
-			return { body: "", error: errorText(error), status: response.status };
-		}
-	},
+	fetch: (url) =>
+		REGIONAL_URL.test(url) ? regionalLive.fetch(url) : seoulLive.fetch(url),
 };
 
 const ALL_URL = /\/realtimeStationArrival\/ALL(?:$|[/?])/;
 const POSITION_URL = /\/realtimePosition\/\d+\/\d+\/([^/?]+)/;
 const BUS_ROUTE_PARAM = /[?&]busRouteId=([^&]+)/;
+const GBIS_POSITION_URL =
+	/\/6410000\/buslocationservice\/v2\/getBusLocationListv2\?/;
+const TAGO_POSITION_URL =
+	/\/1613000\/BusLcInfoInqireService\/getRouteAcctoBusLcList\?/;
+const REGIONAL_ROUTE_PARAM = /[?&]routeId=([^&]+)/;
 
 const NO_SUBWAY_DATA = JSON.stringify({
 	errorMessage: {
@@ -433,6 +500,54 @@ const NO_BUS_DATA = JSON.stringify({
 	msgBody: { itemList: null },
 	msgHeader: { headerCd: "4", headerMsg: "결과가 없습니다." },
 });
+
+const NO_GBIS_DATA = JSON.stringify({
+	response: {
+		msgBody: null,
+		msgHeader: { resultCode: 4, resultMessage: "결과가 존재하지 않습니다." },
+	},
+});
+const NO_TAGO_DATA = JSON.stringify({
+	response: {
+		body: { items: "", numOfRows: 200, pageNo: 1, totalCount: 0 },
+		header: { resultCode: "00", resultMsg: "NORMAL SERVICE." },
+	},
+});
+
+/** 지역 표본(`{at, status, body}`)의 노선 → 응답. 수원 13번(GBIS), 인천 82번(TAGO). */
+const REGIONAL_FIXTURES = {
+	gbis: new Map<string, UpstreamResponse>([
+		[
+			"200000037",
+			{ body: gbisLocationSample.body, status: gbisLocationSample.status },
+		],
+	]),
+	tago: new Map<string, UpstreamResponse>([
+		[
+			"ICB361000005",
+			{ body: tagoLocationSample.body, status: tagoLocationSample.status },
+		],
+	]),
+};
+
+function regionalFixture(url: string): UpstreamResponse | null {
+	const source = (() => {
+		if (GBIS_POSITION_URL.test(url)) {
+			return "gbis";
+		}
+		return TAGO_POSITION_URL.test(url) ? "tago" : null;
+	})();
+	if (source === null) {
+		return null;
+	}
+	const routeId = REGIONAL_ROUTE_PARAM.exec(url)?.[1] ?? "";
+	return (
+		REGIONAL_FIXTURES[source].get(routeId) ?? {
+			body: source === "gbis" ? NO_GBIS_DATA : NO_TAGO_DATA,
+			status: 200,
+		}
+	);
+}
 
 const FIXTURE_BODIES = {
 	all: JSON.stringify(arrivalAllSample),
@@ -456,10 +571,14 @@ function decodeSegment(segment: string): string {
 
 /**
  * `UPSTREAM_MODE=fixture`: 상류를 부르지 않고 `packages/realtime/src/__fixtures__` 표본을 돌려준다.
- * 표본이 없는 노선은 "데이터 없음" 봉투(INFO-200, headerCd 4).
+ * 표본이 없는 노선은 "데이터 없음" 봉투(INFO-200, headerCd 4, GBIS resultCode 4, TAGO 빈 items).
  */
 export const fixtureUpstream: Upstream = {
 	fetch(url: string): Promise<UpstreamResponse> {
+		const regional = regionalFixture(url);
+		if (regional) {
+			return Promise.resolve(regional);
+		}
 		if (ALL_URL.test(url)) {
 			return Promise.resolve({ body: FIXTURE_BODIES.all, status: 200 });
 		}
@@ -569,7 +688,11 @@ function configEnv(env: Env): EnvLike {
 	return {
 		BUS_REQUESTS_PER_SECOND: env.BUS_REQUESTS_PER_SECOND,
 		DAILY_BUDGET_BUS: env.DAILY_BUDGET_BUS,
+		DAILY_BUDGET_GBIS_LOCATION_COLLECTOR:
+			env.DAILY_BUDGET_GBIS_LOCATION_COLLECTOR,
 		DAILY_BUDGET_SUBWAY: env.DAILY_BUDGET_SUBWAY,
+		DAILY_BUDGET_TAGO_LOCATION_COLLECTOR:
+			env.DAILY_BUDGET_TAGO_LOCATION_COLLECTOR,
 		MAP_WATCH_MAX_PER_INSTALL: env.MAP_WATCH_MAX_PER_INSTALL,
 		MAP_WATCH_MAX_TOTAL: env.MAP_WATCH_MAX_TOTAL,
 		OPERATING_END_KST: env.OPERATING_END_KST,

@@ -121,6 +121,31 @@ describe("POST /v1/map/watch", () => {
 		]);
 	});
 
+	test("watch는 gbis·tago 참조를 출처 키로 수집기에 넘긴다", async () => {
+		const res = await post("/v1/map/watch", {
+			busRoutes: ["seoul-bus:100100290", "gbis:100100290", "tago:ICB361000005"],
+		});
+		expect(res.status).toBe(204);
+		expect(watchCalls).toEqual([
+			[
+				INSTALL_A,
+				["100100290", "gbis:100100290", "tago:ICB361000005"],
+				nowMs + TTL_MS,
+			],
+		]);
+	});
+
+	test("400 for a malformed gbis or tago ref", async () => {
+		const statuses = await Promise.all(
+			["gbis:abc", "tago:123", "tago:icb1"].map(
+				async (ref) =>
+					(await post("/v1/map/watch", { busRoutes: [ref] })).status
+			)
+		);
+		expect(statuses).toEqual([400, 400, 400]);
+		expect(watchCalls).toHaveLength(0);
+	});
+
 	test("400 on a malformed body", async () => {
 		const res = await post("/v1/map/watch", { nope: 1 });
 		expect(res.status).toBe(400);

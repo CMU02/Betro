@@ -1,0 +1,5 @@
+{
+  "at": "2026-11-23T08:32:45.602Z",
+  "status": 200,
+  "body": "{\"response\":{\"comMsgHeader\":\"\",\"msgHeader\":{\"queryTime\":\"2026-11-23 17:33:21.755\",\"resultCode\":0,\"resultMessage\":\"정상적으로 처리되었습니다.\"},\"msgBody\":{\"busArrivalItem\":{\"crowded1\":1,\"crowded2\":1,\"flag\":\"PASS\",\"locationNo1\":3,\"locationNo2\":7,\"lowPlate1\":1,\"lowPlate2\":1,\"plateNo1\":\"경기70바2334\",\"plateNo2\":\"경기70바1693\",\"predictTime1\":8,\"predictTime2\":12,\"remainSeatCnt1\":0,\"remainSeatCnt2\":0,\"routeDestId\":200000171,\"routeDestName\":\"광교산종점\",\"routeId\":200000037,\"routeName\":13,\"routeTypeCd\":13,\"staOrder\":15,\"stationId\":202000224,\"stationNm1\":\"더함파크\",\"stationNm2\":\"구운동주민센터.서수원도서관\",\"taglessCd1\":0,\"taglessCd2\":0,\"turnSeq\":39,\"vehId1\":200011170,\"vehId2\":200010795,\"predictTimeSec1\":491,\"predictTimeSec2\":734}}}}"
+}

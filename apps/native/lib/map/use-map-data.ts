@@ -51,7 +51,7 @@ import {
 	type TrackPoint,
 } from "./motion";
 import { createPoller } from "./polling";
-import { mapLegFlags, watchRefsOf } from "./regional-legs";
+import { mapLegFlags, snapshotKinds, watchRefsOf } from "./regional-legs";
 import type { MapSelection } from "./selection";
 import { viewFromSession } from "./session-view";
 import { useMapVisible } from "./use-map-visible";
@@ -130,6 +130,9 @@ interface Snapshots {
 	bus: BusSnapshot | null;
 	subway: SubwaySnapshot | null;
 }
+
+/** 스냅샷 전의 빈 값. 렌더마다 새 배열이 되지 않게 모듈에 둔다. */
+const NO_STOPPED_SOURCES: BusSnapshot["stoppedSources"] = [];
 
 type RefMap = BusMap | SubwayMap | null;
 
@@ -387,9 +390,17 @@ export function useMapData(
 	const source = sessionRoute === null ? "route-view" : "session";
 	const hiddenLines = preferences.hiddenMapLines;
 
+	// 스냅샷. 차량을 보일 구간이 있는 종류만 받는다.
+	const [snapshots, setSnapshots] = useState<Snapshots>({
+		bus: null,
+		subway: null,
+	});
+	const stoppedSources = snapshots.bus?.stoppedSources ?? NO_STOPPED_SOURCES;
+
 	const legsWithFlags = useMemo(
-		() => (route === null ? [] : mapLegFlags(route, hiddenLines)),
-		[route, hiddenLines]
+		() =>
+			route === null ? [] : mapLegFlags(route, hiddenLines, stoppedSources),
+		[route, hiddenLines, stoppedSources]
 	);
 	const allHidden = route !== null && allLinesHidden(route, hiddenLines);
 
@@ -456,24 +467,15 @@ export function useMapData(
 		}
 	);
 
-	// 스냅샷. 차량을 보일 구간이 있는 종류만 받는다.
-	const [snapshots, setSnapshots] = useState<Snapshots>({
-		bus: null,
-		subway: null,
-	});
 	const etags = useRef<{ bus: string | null; subway: string | null }>({
 		bus: null,
 		subway: null,
 	});
-	const kinds = useMemo(() => {
-		const wanted = new Set<"bus" | "subway">();
-		for (const { leg, showVehicles } of legsWithFlags) {
-			if (showVehicles) {
-				wanted.add(leg.mode);
-			}
-		}
-		return [...wanted].sort((a, b) => a.localeCompare(b));
-	}, [legsWithFlags]);
+	// 멈춘 출처와 무관하게 구한다. 멈춘 구간만 남아도 스냅샷을 받아야 멈춤이 풀린 걸 안다.
+	const kinds = useMemo(
+		() => (route === null ? [] : snapshotKinds(route, hiddenLines)),
+		[route, hiddenLines]
+	);
 	useVisiblePoll(
 		visible && kinds.length > 0,
 		`snapshot:${kinds.join(",")}`,

@@ -28,9 +28,11 @@ import { evaluateAlerts, writeReportIfDue } from "./reporting";
 import {
 	budgetKindOf,
 	isRetryable,
+	metricsSourceOf,
 	parseCall,
-	RETRY_BACKOFF_MS,
 	rawStreamOf,
+	regionalRouteKey,
+	retryBackoffOf,
 	safeFetch,
 	urlOf,
 } from "./upstream-call";
@@ -63,8 +65,11 @@ const SUBWAY_REFERENCE_KINDS: readonly ReferenceBatchKind[] = [
 	"timetable",
 ];
 const BUS_REFERENCE_KINDS: readonly ReferenceBatchKind[] = ["bus_route"];
-/** 관측 요청이 받는 노선 ID(`busRouteId`). 상류 URL에 그대로 들어가므로 숫자만 받는다. */
-const BUS_ROUTE_ID = /^\d+$/;
+/**
+ * 관측 요청이 받는 노선 키. 서울은 맨 숫자 ID, 지역은 출처를 붙인 키(`gbis:<숫자>`,
+ * `tago:<영문 3자><숫자>`). 상류 URL에 그대로 들어가므로 이 꼴만 받는다.
+ */
+const BUS_ROUTE_ID = /^\d+$|^gbis:\d+$|^tago:[A-Z]{3}\d+$/;
 
 /** 버스 참조와 그 참조를 읽을 때 요청한 노선(D1에 없던 노선도 든다). */
 interface LoadedBus {
@@ -100,7 +105,7 @@ export class CollectorCore {
 	readonly #warned = new Set<string>();
 	readonly #snapshots = new Map<
 		SnapshotKind,
-		{ version: number; response: SnapshotResponse }
+		{ version: number; stopped: string; response: SnapshotResponse }
 	>();
 
 	constructor(ports: CollectorPorts) {
@@ -127,19 +132,27 @@ export class CollectorCore {
 		});
 	}
 
-	/** `GET /v1/snapshot/:kind` 본문. 최신 상태가 바뀌지 않았으면 같은 본문·ETag. */
+	/**
+	 * `GET /v1/snapshot/:kind` 본문. 최신 상태와 그날 멈춘 지역 출처가 바뀌지 않았으면 같은
+	 * 본문·ETag. 멈춤은 다음 KST 날 저절로 풀리므로 캐시 키에 넣는다.
+	 */
 	async snapshot(kind: SnapshotKind): Promise<SnapshotResponse> {
 		const state = await this.#state();
 		const version = state.versions[kind];
+		const stoppedSources =
+			kind === "bus" ? state.stoppedSources(this.#ports.clock()) : [];
+		const stopped = stoppedSources.join(",");
 		const cached = this.#snapshots.get(kind);
-		if (cached?.version === version) {
+		if (cached?.version === version && cached.stopped === stopped) {
 			return cached.response;
 		}
 		const generatedAt = state.core.changedAt[kind] ?? state.loadedAt;
-		const body = JSON.stringify(state.latest.snapshot(kind, generatedAt));
+		const body = JSON.stringify(
+			state.latest.snapshot(kind, generatedAt, stoppedSources)
+		);
 		const etag = (await sha256Hex(body)).slice(0, ETAG_LENGTH);
 		const response = { body, etag };
-		this.#snapshots.set(kind, { response, version });
+		this.#snapshots.set(kind, { response, stopped, version });
 		return response;
 	}
 
@@ -165,7 +178,9 @@ export class CollectorCore {
 	): Promise<void> {
 		const { clock, config } = this.#ports;
 		if (!routeIds.every((routeId) => BUS_ROUTE_ID.test(routeId))) {
-			throw new Error("bus route ids must be numeric");
+			throw new Error(
+				"bus route ids must be numeric, gbis:<digits> or tago:<AAA><digits>"
+			);
 		}
 		const unique = [...new Set(routeIds)];
 		if (unique.length > config.mapWatchMaxPerInstall) {
@@ -427,13 +442,40 @@ export class CollectorCore {
 			state.watchedBusRouteIds(now, config.mapWatchMaxTotal)
 		);
 		state.schedule = plan.schedule;
-		const due = plan.due.filter(
-			(call) => !state.isStopped(budgetKindOf(call), now)
-		);
+		const due = plan.due
+			.filter((call) => !state.isStopped(budgetKindOf(call), now))
+			.flatMap((call) => {
+				const resolved = this.#resolveRegional(refs, call);
+				return resolved ? [resolved] : [];
+			});
 		await runLimited(due, MAX_PARALLEL_CALLS, (call) =>
 			this.#call(state, refs, call)
 		);
 		return plan.nextAlarmAt;
+	}
+
+	/**
+	 * 지역 호출에 참조의 TAGO 도시 코드를 채운다. 참조에 없는 노선(지도에 놓을 수 없다)이나
+	 * 도시 코드를 모르는 TAGO 노선은 예산을 쓰지 않고 건너뛴다(null). 다른 호출은 그대로.
+	 */
+	#resolveRegional(refs: References, call: CallPlan): CallPlan | null {
+		if (call.kind !== "regional-bus") {
+			return call;
+		}
+		const key = regionalRouteKey(call.source, call.routeId);
+		const route = refs.bus.routes.get(key);
+		if (!route) {
+			this.#warnOnce(`missing:${key}`, `${key} skipped: not in bus references`);
+			return null;
+		}
+		if (call.source === "gbis") {
+			return call;
+		}
+		if (!route.cityCode) {
+			this.#warnOnce(`city:${key}`, `${key} skipped: no TAGO city code`);
+			return null;
+		}
+		return { ...call, cityCode: route.cityCode };
 	}
 
 	#retryLater(state: CollectorState, now: number): number {
@@ -499,14 +541,17 @@ export class CollectorCore {
 			stream: rawStreamOf(plan),
 			url,
 		});
-		const backoff = RETRY_BACKOFF_MS[attempt];
+		const backoff = retryBackoffOf(plan, attempt);
 		const retry =
 			backoff !== undefined &&
 			isRetryable(outcome) &&
 			remaining(state.budget, kind, config, clock()) > 0;
 		this.#logOutcome(plan, response, outcome, attempt, retry);
+		const source = metricsSourceOf(plan);
 		if (retry) {
-			state.recordAttempt(kind, at, outcome, []);
+			if (source) {
+				state.recordAttempt(source, at, outcome, []);
+			}
 			await this.#sleep(backoff);
 			await this.#attempt(state, refs, plan, attempt + 1);
 			return;
@@ -527,8 +572,14 @@ export class CollectorCore {
 		if (outcome === "auth" || outcome === "quota-exhausted") {
 			state.stop(kind, outcome, at);
 			this.#log(`${kind} stopped for the day: ${outcome}`);
+			if (plan.kind === "regional-bus") {
+				// 스냅샷 `stoppedSources`가 바뀌었다.
+				state.touch("bus", at);
+			}
 		}
-		state.recordAttempt(kind, at, outcome, observations);
+		if (source) {
+			state.recordAttempt(source, at, outcome, observations);
+		}
 	}
 
 	/** `prod` 버스는 초당 호출 수를 토큰 버킷으로 막는다. */

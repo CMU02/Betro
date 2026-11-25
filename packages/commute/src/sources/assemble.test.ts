@@ -302,6 +302,172 @@ describe("assembleBoards: GBIS and TAGO legs", () => {
 	});
 });
 
+describe("assembleBoards: 지역 버스 실시간", () => {
+	const veh = (vehicleId: string, seqNow: number, etaSec: number) => ({
+		etaSec,
+		isArrived: false,
+		lastOfDay: false,
+		plate: "",
+		seqNow,
+		vehicleId,
+	});
+	const stopAt = (seq: number, vehicles: ReturnType<typeof veh>[]) => ({
+		headwayMin: null,
+		madeAt: T,
+		seq,
+		stopId: `gbis:s${seq}`,
+		vehicles,
+	});
+	const NOON = Date.UTC(2026, 10, 21, 3, 0);
+
+	it("gbis 구간은 서울 원자료에 같은 ID가 있어도 regionalBus만 본다", () => {
+		const boards = assembleBoards(
+			{
+				...raw(),
+				regionalBus: {
+					"gbis:100100290": {
+						fetchedAt: T,
+						now: [
+							stopAt(2, [veh("G1", 1, 120)]),
+							stopAt(9, [veh("G2", 7, 200)]),
+						],
+						positions: { G1: 1, G2: 7 },
+						prev: null,
+					},
+				},
+			},
+			config
+		);
+		expect(boards.board(gbisLeg, "board")?.approaching[0]?.vehicleId).toBe(
+			"G1"
+		);
+		expect(boards.board(busLeg, "board")?.approaching[0]?.vehicleId).not.toBe(
+			"G1"
+		);
+	});
+
+	it("도착판에 없는 차량도 positions로 하차까지 진행을 낸다", () => {
+		const boards = assembleBoards(
+			{
+				...raw(),
+				regionalBus: {
+					"gbis:100100290": {
+						fetchedAt: T,
+						now: [
+							stopAt(2, [veh("G1", 1, 60)]),
+							stopAt(9, [veh("G2", 7, 200)]),
+						],
+						positions: { G1: 5, G2: 7 },
+						prev: null,
+					},
+				},
+			},
+			config
+		);
+		expect(boards.progress(gbisLeg, "G1")?.stopsAway).toBe(4);
+	});
+
+	it("positions의 외삽은 fetchedAt이 아니라 위치 목록을 받은 positionsAt부터 잰다", () => {
+		const entry = (positionsAt?: number) => ({
+			fetchedAt: T,
+			now: [stopAt(2, [veh("G1", 1, 60)]), stopAt(9, [veh("G2", 7, 200)])],
+			positions: { G1: 5, G2: 7 },
+			...(positionsAt === undefined ? {} : { positionsAt }),
+			prev: null,
+		});
+		const etaOf = (positionsAt?: number) =>
+			assembleBoards(
+				{ ...raw(), regionalBus: { "gbis:100100290": entry(positionsAt) } },
+				config
+			).progress(gbisLeg, "G1")?.etaAt ?? null;
+		const fresh = etaOf();
+		expect(fresh).not.toBeNull();
+		expect(etaOf(T - 2 * MINUTE_MS)).toBe((fresh ?? 0) - 2 * MINUTE_MS);
+	});
+
+	it("regionalBus가 없으면 board는 null이고 배차간격 추정만 남는다", () => {
+		const boards = assembleBoards(
+			{
+				...raw(),
+				busSchedules: {
+					"gbis:100100290": {
+						firstBusMinute: 270,
+						headwayMin: 10,
+						lastBusMinute: 1370,
+					},
+				},
+			},
+			config
+		);
+		expect(boards.board(gbisLeg, "board")).toBeNull();
+		expect(boards.scheduledHeadwayMs?.(gbisLeg, NOON)).toBe(10 * MINUTE_MS);
+	});
+});
+
+describe("assembleBoards: 지역 버스 배차간격 대체", () => {
+	const NOON = Date.UTC(2026, 10, 21, 3, 0);
+	const tenMinutes = {
+		firstBusMinute: 270,
+		headwayMin: 10,
+		lastBusMinute: 1370,
+	};
+	const veh = (vehicleId: string, seqNow: number, etaSec: number) => ({
+		etaSec,
+		isArrived: false,
+		lastOfDay: false,
+		plate: "",
+		seqNow,
+		vehicleId,
+	});
+	const stopAt = (seq: number, vehicles: ReturnType<typeof veh>[]) => ({
+		headwayMin: null,
+		madeAt: NOON,
+		seq,
+		stopId: `gbis:s${seq}`,
+		vehicles,
+	});
+	const route: Route = { legs: [gbisLeg], rank: 0, walkMinutes: [0, 0] };
+	const estimate = (
+		now: ReturnType<typeof stopAt>[],
+		positions: Record<string, number>,
+		readyAt: number
+	) => {
+		const boards = assembleBoards(
+			{
+				bus: {},
+				busSchedules: { "gbis:100100290": tenMinutes },
+				regionalBus: {
+					"gbis:100100290": { fetchedAt: NOON, now, positions, prev: null },
+				},
+				subway: {},
+				timetable: { arrivals: {}, rideMs: {} },
+			},
+			config
+		);
+		return estimateRoute(
+			route,
+			boards,
+			{ fixed: [], now: NOON, readyAt, skip: new Set() },
+			config
+		).legs[0];
+	};
+
+	it("승차 정류장에 차량이 없으면 정적 배차간격의 절반으로 추정한다", () => {
+		const leg = estimate([stopAt(2, []), stopAt(9, [])], {}, NOON);
+		expect(leg?.boardEtaAt).toBe(NOON + 5 * MINUTE_MS);
+	});
+
+	it("나열된 차량이 모두 readyAt 전이면 배차간격을 쌓아 다음 차를 낸다", () => {
+		const leg = estimate(
+			[stopAt(2, [veh("G1", 1, 120)]), stopAt(9, [veh("G2", 7, 300)])],
+			{ G1: 1, G2: 7 },
+			NOON + 20 * MINUTE_MS
+		);
+		expect(leg?.boardEtaAt).not.toBeNull();
+		expect(leg?.boardEtaAt).toBeGreaterThanOrEqual(NOON + 20 * MINUTE_MS);
+	});
+});
+
 describe("estimate at a route's origin stop", () => {
 	// 2026-11-12 운영: 6411 기점(정랑고개.양천벤처타운, 1번)은 "출발대기"(vehId 0)뿐이라
 	// 승차 정류장에 차량이 없어 주행 시간을 몰랐고, 하차·목적지 시각이 모두 null이었다.

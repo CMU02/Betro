@@ -1,5 +1,10 @@
 import type { BudgetKind } from "@Betro/realtime/budget";
-import type { CallPlan } from "@Betro/realtime/schedule";
+import type { MetricsSource } from "@Betro/realtime/metrics";
+import {
+	type CallPlan,
+	type RegionalSource,
+	regionalBudgetKind,
+} from "@Betro/realtime/schedule";
 import {
 	type BusPositionRow,
 	parseBusPositions,
@@ -9,6 +14,12 @@ import {
 	classifySubway,
 	type UpstreamOutcome,
 } from "@Betro/realtime/upstream/classify";
+import {
+	gbisPositionUrl,
+	parseRegionalPositions,
+	type RegionalPositionRow,
+	tagoPositionUrl,
+} from "@Betro/realtime/upstream/regional-position";
 import {
 	type ArrivalRow,
 	parseStationArrivalAll,
@@ -30,12 +41,53 @@ const RETRYABLE: ReadonlySet<UpstreamOutcome> = new Set([
 	"rate-limited",
 ]);
 
+/** 지역 호출은 서울과 같은 첫 백오프 뒤 한 번만 다시 부른다(5-B 설계 결정 5). */
+const REGIONAL_RETRIES = 1;
+
 export function isRetryable(outcome: UpstreamOutcome): boolean {
 	return RETRYABLE.has(outcome);
 }
 
+/** 이 호출이 `attempt`번째 시도 뒤 다시 부를 수 있는 백오프. 더 부르지 않으면 undefined. */
+export function retryBackoffOf(
+	plan: CallPlan,
+	attempt: number
+): number | undefined {
+	if (plan.kind === "regional-bus" && attempt >= REGIONAL_RETRIES) {
+		return;
+	}
+	return RETRY_BACKOFF_MS[attempt];
+}
+
 export function budgetKindOf(plan: CallPlan): BudgetKind {
-	return plan.kind === "bus" ? "bus" : "subway";
+	switch (plan.kind) {
+		case "bus":
+			return "bus";
+		case "regional-bus":
+			return regionalBudgetKind(plan.source);
+		default:
+			return "subway";
+	}
+}
+
+/** 5분 지표·소스 진행에 넣는 소스. 지역 버스는 지표·알림에 넣지 않으므로 null(5-B). */
+export function metricsSourceOf(plan: CallPlan): MetricsSource | null {
+	switch (plan.kind) {
+		case "bus":
+			return "bus";
+		case "regional-bus":
+			return null;
+		default:
+			return "subway";
+	}
+}
+
+/** 지역 노선의 출처를 붙인 키(`gbis:<id>`, `tago:<id>`). 스냅샷·최신 상태의 `routeId`. */
+export function regionalRouteKey(
+	source: RegionalSource,
+	routeId: string
+): string {
+	return `${source}:${routeId}`;
 }
 
 /** 원본 이력 스트림 이름(`raw/<stream>/...`). */
@@ -45,6 +97,8 @@ export function rawStreamOf(plan: CallPlan): string {
 			return "subway-all";
 		case "subway-position":
 			return `subway-position-${plan.lineNameKo}`;
+		case "regional-bus":
+			return `bus-${plan.source}-${plan.routeId}`;
 		default:
 			return `bus-${plan.routeId}`;
 	}
@@ -56,6 +110,11 @@ export function urlOf(plan: CallPlan, keys: CollectorKeys): string {
 			return subwayArrivalAllUrl(keys.subway);
 		case "subway-position":
 			return subwayPositionUrl(keys.subway, plan.lineNameKo);
+		case "regional-bus":
+			// TAGO 도시 코드는 수집기가 참조에서 채운 뒤에만 부른다.
+			return plan.source === "gbis"
+				? gbisPositionUrl(keys.bus, plan.routeId)
+				: tagoPositionUrl(keys.bus, plan.cityCode ?? "", plan.routeId);
 		default:
 			return busPositionUrl(keys.bus, plan.routeId);
 	}
@@ -89,6 +148,14 @@ export type ParsedCall =
 			outcome: UpstreamOutcome;
 			routeId: string;
 			rows: BusPositionRow[];
+	  }
+	| {
+			kind: "regional-bus";
+			outcome: UpstreamOutcome;
+			/** 출처를 붙인 키(`gbis:<id>`, `tago:<id>`). */
+			routeKey: string;
+			rows: RegionalPositionRow[];
+			source: RegionalSource;
 	  };
 
 function parseJson(body: string): unknown {
@@ -148,6 +215,28 @@ function positionEnvelope(
 	};
 }
 
+/** GBIS·TAGO 위치 응답. 응답이 없으면 `network`, 읽지 못한 본문은 `request-error`. */
+function parseRegionalCall(
+	source: RegionalSource,
+	routeId: string,
+	response: UpstreamResponse
+): Extract<ParsedCall, { kind: "regional-bus" }> {
+	const routeKey = regionalRouteKey(source, routeId);
+	if (response.status === null) {
+		return {
+			kind: "regional-bus",
+			outcome: "network",
+			routeKey,
+			rows: [],
+			source,
+		};
+	}
+	const parsed = parseRegionalPositions(source, response.status, response.body);
+	const outcome: UpstreamOutcome =
+		parsed.outcome === "malformed" ? "request-error" : parsed.outcome;
+	return { kind: "regional-bus", outcome, routeKey, rows: parsed.rows, source };
+}
+
 /** 응답 → 7.5절 분류와 행. 행은 `ok`일 때만 채운다. */
 export function parseCall(
 	plan: CallPlan,
@@ -166,6 +255,8 @@ export function parseCall(
 			const parsed = json === undefined ? null : positionEnvelope(json);
 			return { kind: plan.kind, outcome: classifySubway(status, parsed) };
 		}
+		case "regional-bus":
+			return parseRegionalCall(plan.source, plan.routeId, response);
 		default: {
 			const parsed = json === undefined ? null : parseBusPositions(json);
 			const outcome = classifyBus(

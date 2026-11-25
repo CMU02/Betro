@@ -5,6 +5,7 @@ import {
 	type BudgetState,
 	emptyBudget,
 } from "@Betro/realtime/budget";
+import type { RegionalPrev } from "@Betro/realtime/bus/regional-normalize";
 import { dedupeRaw, sha256Hex } from "@Betro/realtime/history";
 import {
 	type AnyObservation,
@@ -16,7 +17,12 @@ import {
 	type MetricsSource,
 	recordCall,
 } from "@Betro/realtime/metrics";
-import type { CollectorConfig, ScheduleState } from "@Betro/realtime/schedule";
+import {
+	type CollectorConfig,
+	type RegionalSource,
+	regionalBudgetKind,
+	type ScheduleState,
+} from "@Betro/realtime/schedule";
 import { LatestState, type SavedState } from "@Betro/realtime/state";
 import { arrivalDirection } from "@Betro/realtime/subway/reduce-arrivals";
 import { kstParts, kstToEpochMs } from "@Betro/realtime/time";
@@ -210,13 +216,38 @@ export class CollectorState {
 		this.busWatch[installId] = { routeIds: unique, until };
 	}
 
-	/** 만료 시각이 지난 설치의 관측 요청을 지운다. */
+	/** 만료 시각이 지난 설치의 관측 요청과, 아무도 보지 않는 지역 노선의 멈춤 판단 기록을 지운다. */
 	expireBusWatches(now: number): void {
 		for (const [installId, entry] of Object.entries(this.busWatch)) {
 			if (entry.until < now) {
 				delete this.busWatch[installId];
 			}
 		}
+		const prev = this.core.regionalPrev;
+		if (!prev) {
+			return;
+		}
+		const watched = new Set(
+			Object.values(this.busWatch).flatMap((entry) => entry.routeIds)
+		);
+		for (const routeKey of Object.keys(prev)) {
+			if (!watched.has(routeKey)) {
+				delete prev[routeKey];
+			}
+		}
+	}
+
+	/** 지역 노선 하나의 차량별 마지막 순번(`normalizeRegionalPositions`의 `prev`). */
+	regionalPrev(routeKey: string): Map<string, RegionalPrev> {
+		return new Map(Object.entries(this.core.regionalPrev?.[routeKey] ?? {}));
+	}
+
+	setRegionalPrev(
+		routeKey: string,
+		prev: ReadonlyMap<string, RegionalPrev>
+	): void {
+		this.core.regionalPrev ??= {};
+		this.core.regionalPrev[routeKey] = Object.fromEntries(prev);
 	}
 
 	/**
@@ -291,6 +322,14 @@ export class CollectorState {
 	isStoppedByAuth(kind: BudgetKind, now: number): boolean {
 		return (
 			this.isStopped(kind, now) && this.core.stopped[kind]?.reason === "auth"
+		);
+	}
+
+	/** 그날(KST) 멈춘 지역 출처(버스 스냅샷 `stoppedSources`). */
+	stoppedSources(now: number): RegionalSource[] {
+		const sources: RegionalSource[] = ["gbis", "tago"];
+		return sources.filter((source) =>
+			this.isStopped(regionalBudgetKind(source), now)
 		);
 	}
 

@@ -16,8 +16,14 @@ import {
 	localParts,
 	startMinutesToCheck,
 } from "@Betro/commute/calendar";
-import { DEFAULT_TIMEZONE } from "@Betro/commute/config";
-import type { CommutePlan, Leg, Route, SubwayLeg } from "@Betro/commute/plan";
+import { type CommuteConfig, DEFAULT_TIMEZONE } from "@Betro/commute/config";
+import type {
+	BusLeg,
+	CommutePlan,
+	Leg,
+	Route,
+	SubwayLeg,
+} from "@Betro/commute/plan";
 import {
 	type ApnsJwtCache,
 	apnsEndRequest,
@@ -55,6 +61,18 @@ import {
 	legKey,
 	type RawBoards,
 } from "@Betro/commute/sources/assemble";
+import {
+	dropFrozen,
+	dropFrozenPositions,
+	updateSeen,
+	type VehicleSeen,
+} from "@Betro/commute/sources/frozen";
+import {
+	matchTagoVehicles,
+	type RegionalPosition,
+	type RegionalSource,
+	type RegionalStop,
+} from "@Betro/commute/sources/regional-bus";
 import type { RouteStopArrival } from "@Betro/commute/sources/seoul-bus";
 import type { StationRow } from "@Betro/commute/sources/seoul-subway";
 import type {
@@ -67,7 +85,11 @@ import { redactKeys } from "@Betro/realtime/upstream/urls";
 import { RETRY_BACKOFF_MS } from "../collector/upstream-call";
 import { errorText, runLimited, secretVariants } from "../collector/util";
 import type { PushTokenRow } from "./auth";
-import { type RunnerPorts, UpstreamStoppedError } from "./ports";
+import {
+	type RegionalRouteRef,
+	type RunnerPorts,
+	UpstreamStoppedError,
+} from "./ports";
 
 const SESSION_PREFIX = "session:";
 /** 끝난 세션(설치 ID, 종료 시각). 끝난 세션의 입력에 "ended"를 돌려주려고 하루 남긴다. */
@@ -75,8 +97,21 @@ const ENDED_PREFIX = "ended:";
 const BUS_PREFIX = "busRoute:";
 /** 역별 직전·지금 행. 수집기는 최근 행만 주므로 `passed`를 찾으려고 직전 것을 둔다. */
 const STATION_PREFIX = "station:";
+/**
+ * 하루 예산. 서울 버스 도착은 `budget:<day>`, 지역 버스는 `budget:<source>-<op>:<day>`
+ * (`op` = `arrival` | `location`)다.
+ */
 const BUDGET_PREFIX = "budget:";
+/** 그날 멈춘 출처. 서울 버스는 `stopped:<day>`, 지역 버스는 `stopped:<source>:<day>`다. */
 const STOPPED_PREFIX = "stopped:";
+/** 지역(GBIS·TAGO) 노선의 직전·지금 도착과 위치(`regionalBus:<전체 노선 ID>`). */
+const REGIONAL_PREFIX = "regionalBus:";
+/** 지역 노선 차량별 순번이 마지막으로 바뀐 시각(`regionalSeen:<전체 노선 ID>`). 멈춘 차량을 거른다. */
+const SEEN_PREFIX = "regionalSeen:";
+/** 지도 용도 지역 호출이 남기는 세션 몫: 각 출처·오퍼레이션 예산의 3분의 1(5-B 설계 결정 1). */
+const REGIONAL_SESSION_SHARE = 1 / 3;
+/** 지역 호출은 응답이 없으면 서울과 같은 첫 백오프 뒤 한 번만 다시 부른다(5-B 설계 결정 5). */
+const REGIONAL_RETRIES = 1;
 const APNS_JWT_KEY = "apnsJwt";
 const FCM_ACCESS_KEY = "fcmAccess";
 /** 제안 판정을 위해 하차 정류장까지 따라가는 차량(`follow:<세션ID>`). */
@@ -176,6 +211,39 @@ interface BusRouteSaved {
 	} | null;
 	/** 마지막으로 부르려고 한 tick 시각. 간격은 이것으로 잰다. */
 	polledAt: number;
+}
+
+type RegionalData = NonNullable<RawBoards["regionalBus"]>[LineRef];
+
+interface RegionalSaved {
+	data: RegionalData | null;
+	/** 마지막으로 부르려고 한 tick 시각. 간격은 이것으로 잰다. */
+	polledAt: number;
+}
+
+type RegionalOp = "arrival" | "location";
+
+/** 지역 호출 한 번(재시도 포함)의 조건. */
+interface RegionalCall<T> {
+	day: string;
+	fetch: () => Promise<T | null>;
+	now: number;
+	op: RegionalOp;
+	purpose: BusArrivalPurpose;
+	source: RegionalSource;
+}
+
+/** 한 tick에 부를 지역 노선 하나. 같은 노선·정류장은 세션이 여럿이어도 한 번만 부른다. */
+interface RegionalTarget {
+	line: LineRef;
+	/** 탄 구간이나 따라가는 구간이 있어 위치 목록이 필요한가. */
+	locations: boolean;
+	/** 그 노선의 탈 차량이 가까운 탑승 전 세션이 있는가. */
+	near: boolean;
+	routeId: string;
+	source: RegionalSource;
+	/** 부를 정류장(순번 → 정류장). */
+	stops: Map<number, RegionalStop>;
 }
 
 interface StationEntry {
@@ -445,8 +513,8 @@ function watchedLegs(state: SessionState, plan: CommutePlan): Leg[] {
 
 /**
  * 실시간 도착 정보를 부르는 서울 버스 구간이면 맨 노선 ID(`busRouteId`), 아니면 null.
- * GBIS·TAGO 구간은 아직 실시간 연결이 없어 정적 배차간격으로만 추정한다(5-B에서 잇는다).
- * GBIS 노선 ID는 서울 것과 같은 값일 수 있으니 ID만 보고 서울 도착 정보를 부르면 안 된다.
+ * GBIS·TAGO 구간은 `regionalSourceOf`로 따로 부른다. GBIS 노선 ID는 서울 것과 같은 값일 수
+ * 있으니 ID만 보고 서울 도착 정보를 부르면 안 된다.
  */
 function seoulBusRouteIdOf(leg: Leg): string | null {
 	if (leg.mode !== "bus") {
@@ -456,12 +524,205 @@ function seoulBusRouteIdOf(leg: Leg): string | null {
 	return source === "seoul-bus" ? id : null;
 }
 
+/** GBIS·TAGO 버스 구간이면 그 출처, 아니면 null. */
+function regionalSourceOf(leg: Leg): RegionalSource | null {
+	if (leg.mode !== "bus") {
+		return null;
+	}
+	const { source } = parseRef(leg.line);
+	return source === "gbis" || source === "tago" ? source : null;
+}
+
+/**
+ * 지역 구간의 정류장 하나를 대상에 더한다. 승차 전 구간은 승차 정류장, 탄 구간과 따라가는 구간은
+ * 하차 정류장과 위치 목록이다(탄 차량은 하차 정류장 도착에 나오지 않을 수 있다, 5-B 확인 2).
+ */
+function addRegionalTarget(
+	targets: Map<LineRef, RegionalTarget>,
+	leg: BusLeg,
+	source: RegionalSource,
+	at: "board" | "alight",
+	near: boolean
+): void {
+	const target = targets.get(leg.line) ?? {
+		line: leg.line,
+		locations: false,
+		near: false,
+		routeId: parseRef(leg.line).id,
+		source,
+		stops: new Map<number, RegionalStop>(),
+	};
+	const { seq, stop } = leg[at];
+	target.stops.set(seq, { seq, stopId: parseRef(stop).id });
+	target.near = target.near || near;
+	target.locations = target.locations || at === "alight";
+	targets.set(leg.line, target);
+}
+
+/**
+ * 탑승 전 기본 경로의 지금 구간이 지역 버스이고, 잡아 둔 차량이 새 승차 정류장 도착판에 없고 지나지도
+ * 않았으면 그 차량을 놓는다(건너뛴 차량으로 보지 않는다). 다음 걸음이 다음 차량이나 배차간격 추정을
+ * 고른다. 멈춘 차량을 뺐거나(5-B 설계 결정 6), TAGO 차량 ID가 위치 목록 없이 `tago-pos:`로
+ * 바뀐 경우다(결정 7). 서울 구간은 그대로 둔다.
+ */
+function releaseVanishedRegional(
+	state: SessionState,
+	plan: CommutePlan,
+	boards: TransitBoards
+): SessionState {
+	const index = state.legIndex;
+	const fixedId = state.fixed[index] ?? null;
+	const leg = plan.routes.find((route) => route.rank === 0)?.legs[index];
+	const isPinnedRegional =
+		isBeforeBoarding(state) &&
+		fixedId !== null &&
+		leg !== undefined &&
+		regionalSourceOf(leg) !== null;
+	if (!isPinnedRegional) {
+		return state;
+	}
+	const board = boards.board(leg, "board");
+	const isListed =
+		board === null ||
+		board.approaching.some((vehicle) => vehicle.vehicleId === fixedId) ||
+		board.passed.some((entry) => entry.vehicleId === fixedId);
+	if (isListed) {
+		return state;
+	}
+	return {
+		...state,
+		fixed: state.fixed.map((id, at) => (at === index ? null : id)),
+	};
+}
+
+/** 기본 경로에서 지금 타고 있는 구간. 탑승 전이거나 끝났으면 null. */
+function ridingLeg(state: SessionState, plan: CommutePlan): Leg | null {
+	if (state.stage !== "ride") {
+		return null;
+	}
+	const primary = plan.routes.find((route) => route.rank === 0);
+	return primary?.legs[state.legIndex] ?? null;
+}
+
+/**
+ * 위치 목록을 못 읽은 poll이 이어 쓸 직전 위치와 그 위치를 받은 시각. 받은 지 묵음 기준보다 오래됐으면
+ * null이다. `positionsAt`이 없는 원자료(이전 형식)는 `fetchedAt`으로 본다.
+ */
+function carriedPositions(
+	prev: RegionalData | null,
+	now: number,
+	staleAfterMs: number
+): { at: number; positions: Record<string, number> } | null {
+	if (prev === null) {
+		return null;
+	}
+	const at = prev.positionsAt ?? prev.fetchedAt;
+	return now - at <= staleAfterMs ? { at, positions: prev.positions } : null;
+}
+
+/** 저장한 위치(차량 ID → 순번) → TAGO 차량 맞추기 입력. TAGO 위치의 차량 ID는 차량 번호다. */
+function tagoPositionsOf(
+	bySeq: Readonly<Record<string, number>>
+): RegionalPosition[] {
+	return Object.entries(bySeq).map(([vehicleId, seq]) => ({
+		plate: vehicleId,
+		seq,
+		vehicleId,
+	}));
+}
+
+/** 직전 도착에 있던 차량이 같은 정류장의 지금 도착에서 빠졌는가(그 정류장을 지났을 수 있다). */
+function vehicleLeft(
+	prev: RegionalData | null,
+	fetched: readonly RouteStopArrival[]
+): boolean {
+	const before = new Map((prev?.now ?? []).map((stop) => [stop.seq, stop]));
+	return fetched.some((stop) => {
+		const listed = new Set(stop.vehicles.map((vehicle) => vehicle.vehicleId));
+		return (
+			before
+				.get(stop.seq)
+				?.vehicles.some((vehicle) => !listed.has(vehicle.vehicleId)) ?? false
+		);
+	});
+}
+
+/**
+ * GBIS 직전 도착의 차량이 지금 도착에서 빠졌는데 그 정류장을 지났는지 모르는 정류장 순번. 위치 목록을
+ * 읽지 못했고 직전 위치로도 지난 것을 모르거나, 위치 목록에서 아직 그 정류장 앞에 있으면 그렇다. 이런
+ * 정류장은 이번에 부르지 않은 것으로 보고 직전 도착을 둔다. 그래야 잡아 둔 차량을 놓지 않고 다음 poll이
+ * 다시 지났는지 본다. 위치 목록을 읽었는데 없는 차량(운행을 마쳤다)은 기다리지 않는다. 둔 정류장의 차량은
+ * 순번이 그대로라 5분 넘게 이어지면 멈춘 차량으로 빠진다.
+ */
+function unsettledStops(
+	prev: RegionalData | null,
+	fetched: readonly RouteStopArrival[],
+	positions: Readonly<Record<string, number>>,
+	isFresh: boolean
+): Set<number> {
+	const before = new Map((prev?.now ?? []).map((stop) => [stop.seq, stop]));
+	const unsettled = new Set<number>();
+	for (const stop of fetched) {
+		const listed = new Set(stop.vehicles.map((vehicle) => vehicle.vehicleId));
+		const isUnknown =
+			before.get(stop.seq)?.vehicles.some((vehicle) => {
+				if (listed.has(vehicle.vehicleId)) {
+					return false;
+				}
+				const seq = positions[vehicle.vehicleId];
+				return seq === undefined ? !isFresh : seq < stop.seq;
+			}) ?? false;
+		if (isUnknown) {
+			unsettled.add(stop.seq);
+		}
+	}
+	return unsettled;
+}
+
+/**
+ * 버스 구간 하나를 대상에 더한다. 서울 노선은 노선 전체를 부르고(가까운 차량 여부만 OR), 지역 노선은
+ * `at` 정류장을 부른다. 정적 일정은 출처와 상관없이 읽는다.
+ */
+function addBusTarget(
+	targets: BoardTargets,
+	leg: BusLeg,
+	at: "board" | "alight",
+	near: boolean
+): void {
+	targets.busLines.add(leg.line);
+	const routeId = seoulBusRouteIdOf(leg);
+	const source = regionalSourceOf(leg);
+	if (routeId !== null) {
+		const { busRoutes } = targets;
+		busRoutes.set(routeId, (busRoutes.get(routeId) ?? false) || near);
+	} else if (source !== null) {
+		addRegionalTarget(targets.regional, leg, source, at, near);
+	}
+}
+
+function regionalBudgetOf(
+	config: CommuteConfig,
+	source: RegionalSource,
+	op: RegionalOp
+): number {
+	if (source === "gbis") {
+		return op === "arrival"
+			? config.dailyBudgetGbisArrival
+			: config.dailyBudgetGbisLocation;
+	}
+	return op === "arrival"
+		? config.dailyBudgetTagoArrival
+		: config.dailyBudgetTagoLocation;
+}
+
 /** 한 tick에 모을 도착판의 대상. */
 interface BoardTargets {
 	/** 정적 일정을 읽을 버스 노선(전체 노선 ID). 실시간 연결이 없는 노선도 들어간다. */
 	busLines: Set<LineRef>;
 	/** 서울 busRouteId → 탈 차량이 가까운 탑승 전 세션이 있는가. */
 	busRoutes: Map<string, boolean>;
+	/** 지역(GBIS·TAGO) 노선(전체 노선 ID) → 부를 정류장과 위치 목록. */
+	regional: Map<LineRef, RegionalTarget>;
 	stations: Set<string>;
 }
 
@@ -531,6 +792,8 @@ export class RunnerCore {
 	/** 세션별로 이번 걸음에 모은 정확도 기록. 걸음이 끝나기 전에 `records`에 쓴다. */
 	readonly #pending = new Map<string, AccuracyRecord[]>();
 	readonly #warned = new Set<string>();
+	/** 찾은 TAGO 노선 도시 코드(전체 노선 ID → 도시 코드). 없는 노선은 두지 않고 다시 묻는다. */
+	readonly #cities = new Map<LineRef, string>();
 	#queue: Promise<unknown> = Promise.resolve();
 
 	constructor(ports: RunnerPorts) {
@@ -678,13 +941,17 @@ export class RunnerCore {
 		const { config } = this.#ports;
 		const busRouteIds = new Set<string>();
 		const busLines = new Set<LineRef>();
+		const regional = new Map<LineRef, RegionalTarget>();
 		const stations = new Set<string>();
 		for (const leg of route.legs) {
 			if (leg.mode === "bus") {
 				busLines.add(leg.line);
 				const routeId = seoulBusRouteIdOf(leg);
+				const source = regionalSourceOf(leg);
 				if (routeId !== null) {
 					busRouteIds.add(routeId);
+				} else if (source !== null) {
+					addRegionalTarget(regional, leg, source, "board", false);
 				}
 			} else {
 				stations.add(parseRef(leg.board.stop).id);
@@ -702,6 +969,13 @@ export class RunnerCore {
 		await this.#collectStations([...stations], raw, now);
 		await runLimited([...busRouteIds], 1, (routeId) =>
 			this.#collectBus(routeId, false, raw, now, true, "map")
+		);
+		await this.#collectRegionalBus(
+			[...regional.values()],
+			raw,
+			now,
+			true,
+			"map"
 		);
 		await this.#collectBusSchedules([...busLines], raw);
 		const boards = assembleBoards(raw, config);
@@ -986,7 +1260,7 @@ export class RunnerCore {
 				withPlans.push([entry, plan]);
 			}
 		}
-		const { busLines, busRoutes, stations } = this.#boardTargets(
+		const { busLines, busRoutes, regional, stations } = this.#boardTargets(
 			withPlans,
 			followed,
 			now
@@ -1003,11 +1277,21 @@ export class RunnerCore {
 		await runLimited([...busRoutes], 1, ([routeId, near]) =>
 			this.#collectBus(routeId, near, raw, now, pollBus, "session")
 		);
+		await this.#collectRegionalBus(
+			[...regional.values()],
+			raw,
+			now,
+			pollBus,
+			"session"
+		);
 		await this.#collectBusSchedules([...busLines], raw);
 		return raw;
 	}
 
-	/** 이 tick에 볼 서울 버스 노선(가까운 차량 여부), 정적 일정을 읽을 버스 노선, 지하철역. */
+	/**
+	 * 이 tick에 볼 서울 버스 노선(가까운 차량 여부), 지역 버스 노선(정류장·위치 목록), 정적 일정을
+	 * 읽을 버스 노선, 지하철역.
+	 */
 	#boardTargets(
 		withPlans: [SessionEntry, CommutePlan][],
 		followed: Leg[],
@@ -1016,22 +1300,20 @@ export class RunnerCore {
 		const targets: BoardTargets = {
 			busLines: new Set(),
 			busRoutes: new Map(),
+			regional: new Map(),
 			stations: new Set(),
 		};
-		const { busLines, busRoutes, stations } = targets;
+		const { stations } = targets;
 		for (const [entry, plan] of withPlans) {
+			const riding = ridingLeg(entry.state, plan);
 			for (const leg of watchedLegs(entry.state, plan)) {
 				if (leg.mode === "subway") {
 					stations.add(parseRef(leg.board.stop).id);
 					stations.add(parseRef(leg.alight.stop).id);
 					continue;
 				}
-				busLines.add(leg.line);
-				const routeId = seoulBusRouteIdOf(leg);
-				if (routeId !== null) {
-					const near = this.#isNear(entry, plan, leg.line, now);
-					busRoutes.set(routeId, (busRoutes.get(routeId) ?? false) || near);
-				}
+				const near = this.#isNear(entry, plan, leg.line, now);
+				addBusTarget(targets, leg, leg === riding ? "alight" : "board", near);
 			}
 		}
 		// 제안을 따라가는 구간은 하차 정류장만 본다(탈 차량이 가깝다고 보지 않는다).
@@ -1040,11 +1322,7 @@ export class RunnerCore {
 				stations.add(parseRef(leg.alight.stop).id);
 				continue;
 			}
-			busLines.add(leg.line);
-			const routeId = seoulBusRouteIdOf(leg);
-			if (routeId !== null) {
-				busRoutes.set(routeId, busRoutes.get(routeId) ?? false);
-			}
+			addBusTarget(targets, leg, "alight", false);
 		}
 		return targets;
 	}
@@ -1303,6 +1581,276 @@ export class RunnerCore {
 		return await this.#attemptBus(routeId, day, now, attempt + 1, purpose);
 	}
 
+	/**
+	 * 지역(GBIS·TAGO) 노선의 도착과 위치 목록. 노선마다 차례로 부른다(하루 예산을 시도마다 센다).
+	 * 부르지 않는 걸음(`poll`이 false)도 저장해 둔 원자료는 싣는다.
+	 */
+	async #collectRegionalBus(
+		targets: RegionalTarget[],
+		raw: RawBoards,
+		now: number,
+		poll: boolean,
+		purpose: BusArrivalPurpose
+	): Promise<void> {
+		if (targets.length === 0) {
+			return;
+		}
+		const tagoLines = targets
+			.filter((target) => target.source === "tago")
+			.map((target) => target.line);
+		const cities =
+			poll && tagoLines.length > 0
+				? await this.#citiesOf(tagoLines)
+				: this.#cities;
+		await runLimited(targets, 1, (target) =>
+			this.#collectRegional(
+				target,
+				cities.get(target.line) ?? null,
+				raw,
+				now,
+				poll,
+				purpose
+			)
+		);
+	}
+
+	/** TAGO 노선의 도시 코드. 읽지 못하면 로그만 남기고 그 노선은 이번에 부르지 않는다. */
+	async #citiesOf(lines: LineRef[]): Promise<Map<LineRef, string>> {
+		const missing = lines.filter((line) => !this.#cities.has(line));
+		if (missing.length === 0) {
+			return this.#cities;
+		}
+		try {
+			const found = await this.#ports.regionalRouteCities(missing);
+			for (const line of missing) {
+				const city = found[line];
+				if (city !== null && city !== undefined) {
+					this.#cities.set(line, city);
+				}
+			}
+		} catch (error) {
+			this.#log(`commute regional route cities failed: ${errorText(error)}`);
+		}
+		return this.#cities;
+	}
+
+	/**
+	 * 지역 노선 하나. 서울처럼 탈 차량이 가까운 세션이 있으면 `busNearPollMs`, 아니면 `busPollMs`가
+	 * 지났을 때만 부르고, 세션과 지도의 경로 보기가 캐시 `regionalBus:<노선>`을 함께 쓴다. 도시 코드가
+	 * 없는 TAGO 노선은 부르지 않는다(배차간격 추정으로 둔다). 부르지 못했으면 직전 원자료를 그대로 둔다.
+	 */
+	async #collectRegional(
+		target: RegionalTarget,
+		cityCode: string | null,
+		raw: RawBoards,
+		now: number,
+		poll: boolean,
+		purpose: BusArrivalPurpose
+	): Promise<void> {
+		const { config, store } = this.#ports;
+		const key = `${REGIONAL_PREFIX}${target.line}`;
+		let saved = (await store.get<RegionalSaved>(key)) ?? null;
+		const interval = target.near ? config.busNearPollMs : config.busPollMs;
+		const isDue = saved === null || now - saved.polledAt >= interval;
+		const isCallable = target.source === "gbis" || cityCode !== null;
+		if (poll && isDue && isCallable) {
+			const route: RegionalRouteRef = {
+				cityCode,
+				routeId: target.routeId,
+				source: target.source,
+			};
+			const polled = await this.#pollRegional(
+				route,
+				target,
+				saved?.data ?? null,
+				now,
+				purpose
+			);
+			// 지도 몫에 막혔으면 부르지 않았으니 캐시만 쓴다.
+			if (polled !== RESERVED) {
+				saved = { data: polled ?? saved?.data ?? null, polledAt: now };
+				await store.put(key, saved);
+			}
+		}
+		if (saved?.data) {
+			raw.regionalBus = raw.regionalBus ?? {};
+			raw.regionalBus[target.line] = saved.data;
+		}
+	}
+
+	/**
+	 * 정류장마다 도착 1건, 필요하면 위치 목록 1건을 부른다. 위치 목록은 탄 구간·따라가는 구간, TAGO
+	 * 차량 번호 붙이기, 그리고 GBIS에서 직전 도착의 차량이 빠졌을 때(지났는지 보려고) 부른다.
+	 * GBIS에서 빠진 차량이 지났는지 모르는 정류장은 직전 도착을 둔다(`unsettledStops`). 저장 전에
+	 * 멈춘 차량을 뺀다. 부른 것이 모두 실패하면 null(직전 원자료를 둔다).
+	 */
+	async #pollRegional(
+		route: RegionalRouteRef,
+		target: RegionalTarget,
+		prev: RegionalData | null,
+		now: number,
+		purpose: BusArrivalPurpose
+	): Promise<RegionalData | null | typeof RESERVED> {
+		const { boards, clock, config, store } = this.#ports;
+		const base = { day: dayOf(now), now, purpose, source: route.source };
+		const fetched: RouteStopArrival[] = [];
+		let reserved = false;
+		await runLimited([...target.stops.values()], 1, async (stop) => {
+			const arrival = await this.#attemptRegional({
+				...base,
+				fetch: () => boards.regionalArrival(route, stop),
+				op: "arrival",
+			});
+			if (arrival === RESERVED) {
+				reserved = true;
+			} else if (arrival !== null) {
+				fetched.push(arrival);
+			}
+		});
+		if (reserved && fetched.length === 0) {
+			return RESERVED;
+		}
+		const needsLocations =
+			target.locations ||
+			(fetched.length > 0 &&
+				(route.source === "tago" || vehicleLeft(prev, fetched)));
+		let positions: RegionalPosition[] | null = null;
+		let positionsAt = now;
+		if (needsLocations) {
+			const found = await this.#attemptRegional({
+				...base,
+				fetch: () => boards.regionalLocations(route),
+				op: "location",
+			});
+			positions = found === RESERVED ? null : found;
+			positionsAt = clock();
+		}
+		if (fetched.length === 0 && positions === null) {
+			return null;
+		}
+		let bySeq: Record<string, number> = {};
+		if (positions !== null) {
+			bySeq = Object.fromEntries(
+				positions.map((position) => [position.vehicleId, position.seq])
+			);
+		} else if (needsLocations) {
+			// 직전 위치는 받은 시각을 그대로 지니고 묵음 기준까지만 잇는다. 그래야 받은 지 오래된 순번으로
+			// 외삽한 하차 ETA가 새 값처럼 보이지 않는다.
+			const carried = carriedPositions(prev, now, config.staleAfterMs);
+			bySeq = carried?.positions ?? {};
+			positionsAt = carried?.at ?? positionsAt;
+		}
+		// TAGO 도착에는 차량 ID가 없다. 위치 목록으로 붙이고, 없으면 `tago-pos:`다. 이번 위치 목록을 못
+		// 읽었으면 묵음 기준 안의 직전 위치로 붙인다. 그래야 잡은 차량의 ID가 한 번 실패로 바뀌지 않는다.
+		const arrivals =
+			route.source === "tago"
+				? fetched.map((arrival) =>
+						matchTagoVehicles(arrival, positions ?? tagoPositionsOf(bySeq))
+					)
+				: fetched;
+		const unsettled =
+			route.source === "gbis"
+				? unsettledStops(prev, arrivals, bySeq, positions !== null)
+				: new Set<number>();
+		const settled = arrivals.filter((stop) => !unsettled.has(stop.seq));
+		// 이번에 부르지 못한 정류장과 빠진 차량이 지났는지 모르는 정류장은 직전 값을 둔다(묵음 기준은
+		// 그 정류장의 madeAt으로 잰다).
+		const fresh = new Set(settled.map((stop) => stop.seq));
+		const kept = (prev?.now ?? []).filter(
+			(stop) => target.stops.has(stop.seq) && !fresh.has(stop.seq)
+		);
+		const merged = [...kept, ...settled].sort((a, b) => a.seq - b.seq);
+		// 순번이 5분 넘게 그대로인 차량은 도착과 위치 목록에서 뺀다(예측 초는 보지 않는다). 위치 목록은
+		// 이번에 받은 것만 관측으로 센다.
+		const seenKey = `${SEEN_PREFIX}${target.line}`;
+		const seen = updateSeen(
+			(await store.get<Record<string, VehicleSeen>>(seenKey)) ?? {},
+			merged,
+			now,
+			positions === null ? undefined : bySeq
+		);
+		await store.put(seenKey, seen);
+		const live = dropFrozen(merged, seen, now);
+		const liveIds = new Set(
+			live.flatMap((stop) => stop.vehicles.map((vehicle) => vehicle.vehicleId))
+		);
+		const frozen = new Set(
+			merged
+				.flatMap((stop) => stop.vehicles.map((vehicle) => vehicle.vehicleId))
+				.filter((vehicleId) => !liveIds.has(vehicleId))
+		);
+		return {
+			fetchedAt: clock(),
+			now: live,
+			positions: dropFrozenPositions(
+				Object.fromEntries(
+					Object.entries(bySeq).filter(([vehicleId]) => !frozen.has(vehicleId))
+				),
+				seen,
+				now
+			),
+			positionsAt,
+			prev: prev?.now ?? null,
+		};
+	}
+
+	/**
+	 * 지역 호출 한 번. 시도마다 그 출처·오퍼레이션의 하루 예산 1건을 쓰고, 응답이 없으면 한 번만 다시
+	 * 부른다. 그날 멈출 오류는 그 출처만 멈춘다(`stopped:<source>:<day>`). 지도 용도는 예산의
+	 * 3분의 1을 세션 몫으로 남긴다.
+	 */
+	async #attemptRegional<T>(
+		call: RegionalCall<T>,
+		attempt = 0
+	): Promise<T | null | typeof RESERVED> {
+		const { config, store } = this.#ports;
+		const { day, now, op, purpose, source } = call;
+		const stoppedKey = `${STOPPED_PREFIX}${source}:${day}`;
+		if ((await store.get(stoppedKey)) !== undefined) {
+			return null;
+		}
+		const budgetKey = `${BUDGET_PREFIX}${source}-${op}:${day}`;
+		const limit = regionalBudgetOf(config, source, op);
+		const used = (await store.get<number>(budgetKey)) ?? 0;
+		const mapLimit = limit - Math.ceil(limit * REGIONAL_SESSION_SHARE);
+		if (purpose === "map" && used >= mapLimit) {
+			this.#warnOnce(
+				`map-share:${source}-${op}:${day}`,
+				`commute ${source} ${op} map share exhausted day=${day} used=${used}`
+			);
+			return RESERVED;
+		}
+		if (used >= limit) {
+			this.#warnOnce(
+				`budget:${source}-${op}:${day}`,
+				`commute ${source} ${op} budget exhausted day=${day}`
+			);
+			return null;
+		}
+		await store.put(budgetKey, used + 1);
+		try {
+			const value = await call.fetch();
+			if (value !== null) {
+				return value;
+			}
+		} catch (error) {
+			if (error instanceof UpstreamStoppedError) {
+				await store.put(stoppedKey, { at: now, outcome: error.outcome });
+				this.#log(`commute ${source} stopped for the day: ${error.outcome}`);
+				return null;
+			}
+			this.#log(`commute ${source} ${op} failed: ${errorText(error)}`);
+			return null;
+		}
+		const backoff = RETRY_BACKOFF_MS[attempt];
+		if (attempt >= REGIONAL_RETRIES || backoff === undefined) {
+			this.#log(`commute ${source} ${op} no response`);
+			return null;
+		}
+		await this.#sleep(backoff);
+		return await this.#attemptRegional(call, attempt + 1);
+	}
+
 	// -------------------------------------------------------------------------
 	// 세션 한 걸음
 
@@ -1338,7 +1886,14 @@ export class RunnerCore {
 		const plan = owned ? record.plan : null;
 		const prev = entry.state;
 		entry.state = plan
-			? advance(entry.state, plan, boards, now, config, input)
+			? advance(
+					releaseVanishedRegional(entry.state, plan, boards),
+					plan,
+					boards,
+					now,
+					config,
+					input
+				)
 			: endedState(entry.state, "plan-removed");
 		if (plan) {
 			const { timezone } = plan.schedule;
@@ -1985,12 +2540,10 @@ export class RunnerCore {
 	async #prune(now: number, open: number): Promise<void> {
 		const { store } = this.#ports;
 		const day = dayOf(now);
-		const [ended, budgets, stops, buses, stations] = await Promise.all([
+		const [ended, budgets, stops] = await Promise.all([
 			store.list<EndedMark>(ENDED_PREFIX),
 			store.list(BUDGET_PREFIX),
 			store.list(STOPPED_PREFIX),
-			store.list<BusRouteSaved>(BUS_PREFIX),
-			store.list<StationSaved>(STATION_PREFIX),
 		]);
 		const stale: string[] = [];
 		for (const [key, mark] of ended) {
@@ -1998,31 +2551,51 @@ export class RunnerCore {
 				stale.push(key);
 			}
 		}
-		for (const key of budgets.keys()) {
-			if (key !== `${BUDGET_PREFIX}${day}`) {
-				stale.push(key);
-			}
-		}
-		for (const key of stops.keys()) {
-			if (key !== `${STOPPED_PREFIX}${day}`) {
+		// 예산·멈춤 키는 모두 `:<day>`로 끝난다(서울 `budget:<day>`, 지역 `budget:gbis-arrival:<day>`).
+		const today = `:${day}`;
+		for (const key of [...budgets.keys(), ...stops.keys()]) {
+			if (!key.endsWith(today)) {
 				stale.push(key);
 			}
 		}
 		if (open === 0) {
-			// 세션이 없으면 도착판을 들고 있을 이유가 없다. 다만 지도의 경로 보기가 막 채운 캐시는
-			// 다음 경로 보기가 다시 부르지 않도록 간격(busPollMs)이나 묵음 기준 동안 둔다.
-			const { config } = this.#ports;
-			for (const [key, saved] of buses) {
-				if (now - saved.polledAt >= config.busPollMs) {
-					stale.push(key);
-				}
-			}
-			for (const [key, saved] of stations) {
-				if (now - saved.cur.fetchedAt >= config.staleAfterMs) {
-					stale.push(key);
-				}
-			}
+			stale.push(...(await this.#staleBoards(now)));
 		}
 		await Promise.all(stale.map((key) => store.delete(key)));
+	}
+
+	/**
+	 * 세션이 없을 때 지울 도착판 캐시. 세션이 없으면 도착판을 들고 있을 이유가 없다. 다만 지도의 경로
+	 * 보기가 막 채운 캐시는 다음 경로 보기가 다시 부르지 않도록 간격(busPollMs)이나 묵음 기준 동안 둔다.
+	 * 지역 노선의 멈춘 차량 기록은 그 노선 캐시와 함께 지운다.
+	 */
+	async #staleBoards(now: number): Promise<string[]> {
+		const { config, store } = this.#ports;
+		const [buses, stations, regionals, seens] = await Promise.all([
+			store.list<BusRouteSaved>(BUS_PREFIX),
+			store.list<StationSaved>(STATION_PREFIX),
+			store.list<RegionalSaved>(REGIONAL_PREFIX),
+			store.list(SEEN_PREFIX),
+		]);
+		const stale: string[] = [];
+		const keptLines = new Set<string>();
+		for (const [key, saved] of [...buses, ...regionals]) {
+			if (now - saved.polledAt >= config.busPollMs) {
+				stale.push(key);
+			} else if (key.startsWith(REGIONAL_PREFIX)) {
+				keptLines.add(key.slice(REGIONAL_PREFIX.length));
+			}
+		}
+		for (const [key, saved] of stations) {
+			if (now - saved.cur.fetchedAt >= config.staleAfterMs) {
+				stale.push(key);
+			}
+		}
+		for (const key of seens.keys()) {
+			if (!keptLines.has(key.slice(SEEN_PREFIX.length))) {
+				stale.push(key);
+			}
+		}
+		return stale;
 	}
 }

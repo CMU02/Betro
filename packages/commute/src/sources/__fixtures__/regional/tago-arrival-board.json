@@ -1,0 +1,5 @@
+{
+  "at": "2026-11-23T08:32:45.602Z",
+  "status": 200,
+  "body": "{\"response\":{\"header\":{\"resultCode\":\"00\",\"resultMsg\":\"NORMAL SERVICE.\"},\"body\":{\"items\":{\"item\":[{\"arrprevstationcnt\":12,\"arrtime\":1261,\"nodeid\":\"ICB364000528\",\"nodenm\":\"국제업무지구역\",\"routeid\":\"ICB361000005\",\"routeno\":82,\"routetp\":\"간선버스\",\"vehicletp\":\"저상버스\"},{\"arrprevstationcnt\":2,\"arrtime\":72,\"nodeid\":\"ICB364000528\",\"nodenm\":\"국제업무지구역\",\"routeid\":\"ICB361000005\",\"routeno\":82,\"routetp\":\"간선버스\",\"vehicletp\":\"일반차량\"}]},\"numOfRows\":20,\"pageNo\":1,\"totalCount\":2}}}"
+}
