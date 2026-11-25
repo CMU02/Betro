@@ -19,6 +19,14 @@ describe("busFreshnessOf", () => {
 		});
 	});
 
+	test("실시간 도착이어도 지도에 차량이 아직 없으면 0대 운행 중을 보이지 않는다", () => {
+		expect(busFreshnessOf({ etaState: "live", running: 0 })).toEqual({
+			live: true,
+			showNotice: true,
+			showRunning: false,
+		});
+	});
+
 	test("실시간 자료가 없을 때 0대 운행 중과 실시간 안내를 보이지 않는다", () => {
 		expect(busFreshnessOf({ etaState: null, running: 0 })).toEqual({
 			live: false,
