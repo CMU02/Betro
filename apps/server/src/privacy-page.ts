@@ -1,3 +1,11 @@
+import {
+	ACTIVITY_TOKEN_KEEP_MS,
+	IDLE_TOKEN_KEEP_MS,
+} from "./commute/push-token-prune";
+import { SESSION_RECORD_KEEP_DAYS } from "./commute/record-prune";
+
+const DAY_MS = 86_400_000;
+
 const HTML_ESCAPES: Readonly<Record<string, string>> = {
 	"'": "&#39;",
 	'"': "&quot;",
@@ -14,8 +22,11 @@ function escapeHtml(text: string): string {
 const STYLE =
 	"body{font:16px/1.65 -apple-system,system-ui,sans-serif;max-width:40rem;margin:0 auto;padding:1.5rem 1rem 3rem;color:#1c1c1e;background:#fff}h1{font-size:1.5rem}h2{font-size:1.1rem;margin-top:2rem}li{margin:.25rem 0}.meta{color:#6b6b70;font-size:.875rem}@media(prefers-color-scheme:dark){body{color:#f2f2f7;background:#000}.meta{color:#a1a1a6}}";
 
+/** `needsContact` 항목은 문의처가 있을 때만 보인다. */
+type SectionItem = string | { needsContact: true; text: string };
+
 interface Section {
-	items: readonly string[];
+	items: readonly SectionItem[];
 	title: string;
 }
 
@@ -26,7 +37,8 @@ const SECTIONS: readonly Section[] = [
 			"설치 ID(앱을 설치할 때 만들어지는 임의의 값)와 플랫폼(iOS 또는 Android)",
 			"푸시 알림을 보내기 위한 기기 푸시 토큰",
 			"출퇴근 경로의 구간(노선·정류장·역)과 나가는 시각·요일",
-			"지도에서 보는 노선과 즐겨찾기한 정류장의 ID(실시간 정보를 가져오는 동안에만 쓰고 저장하지 않아요)",
+			"지도와 상세 화면에서 보는 노선·역, 즐겨찾기한 정류장의 ID(실시간 정보를 가져오는 동안만 잠시 보관하고, 요청이 끝나면 지워요)",
+			"출퇴근 안내 기록: 안내한 날짜와 경로, 예측한 도착 시각과 실제 차량 위치예요. 안내 정확도를 점검하는 데만 써요.",
 		],
 		title: "서버가 받는 정보",
 	},
@@ -46,7 +58,27 @@ const SECTIONS: readonly Section[] = [
 		title: "받지 않는 정보",
 	},
 	{
-		items: ["앱에서 장소를 지우면 그 장소의 경로가 서버에서 함께 지워져요."],
+		items: [
+			"출퇴근 경로(구간·시각·요일): 앱에서 장소를 지울 때까지 보관해요.",
+			`출퇴근 안내 기록: 안내한 날부터 ${SESSION_RECORD_KEEP_DAYS}일이 지나면 자동으로 지워요.`,
+			`푸시 토큰: 끝난 안내의 잠금화면 토큰은 ${ACTIVITY_TOKEN_KEEP_MS / DAY_MS}일 뒤에 지우고, 켜진 출퇴근 경로 없이 ${IDLE_TOKEN_KEEP_MS / DAY_MS}일 동안 앱을 열지 않으면 모든 토큰을 지워요.`,
+			"크래시 보고: Sentry의 보관 기간이 지나면 지워져요.",
+			"설치 ID와 플랫폼: 앱이 서버와 통신하는 데 쓰여서 정해진 삭제 기한이 없어요.",
+			{
+				needsContact: true,
+				text: "설치 ID와 남은 기록을 지우고 싶으면 아래 문의로 요청해 주세요.",
+			},
+		],
+		title: "보관 기간",
+	},
+	{
+		items: [
+			"앱에서 장소를 지우면 그 장소의 경로가 서버에서 함께 지워져요.",
+			{
+				needsContact: true,
+				text: "그 밖의 정보를 지우고 싶으면 아래 문의로 요청해 주세요.",
+			},
+		],
 		title: "정보를 지우는 방법",
 	},
 	{
@@ -63,10 +95,17 @@ export function renderPrivacyPage(input: {
 	contact: string | null;
 	updatedOn: string;
 }): string {
+	const hasContact = Boolean(input.contact);
 	const sections = SECTIONS.map(
 		(section) =>
 			`<h2>${escapeHtml(section.title)}</h2><ul>${section.items
-				.map((item) => `<li>${escapeHtml(item)}</li>`)
+				.flatMap((item) => {
+					if (typeof item === "string") {
+						return [item];
+					}
+					return hasContact ? [item.text] : [];
+				})
+				.map((text) => `<li>${escapeHtml(text)}</li>`)
 				.join("")}</ul>`
 	).join("");
 	const contact = input.contact

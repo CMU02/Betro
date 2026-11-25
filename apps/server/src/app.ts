@@ -55,7 +55,7 @@ const API_SCOPE = "/api-host";
 const STATUS_SCOPE = "/status-host";
 
 /** 개인정보 처리방침을 마지막으로 고친 날. 내용을 고칠 때 함께 바꾼다. */
-const PRIVACY_UPDATED_ON = "2026-11-24";
+const PRIVACY_UPDATED_ON = "2026-11-25";
 
 const PORT_SUFFIX = /:\d+$/;
 /** 상태 페이지는 스크립트·외부 자원을 쓰지 않는다(인라인 스타일만). */
