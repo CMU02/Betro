@@ -54,6 +54,8 @@ const config: ExpoConfig = {
 		reactCompiler: true,
 		typedRoutes: true,
 	},
+	// `eas init`으로 만든 EAS 프로젝트.
+	extra: { eas: { projectId: "4119b4df-f46d-4e97-9251-b19bf38a9b9c" } },
 	icon: "./assets/images/icon.png",
 	ios: {
 		appleTeamId: "5JKMP6D4C5",
