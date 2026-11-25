@@ -24,6 +24,7 @@ import {
 } from "@/lib/crash/crash-reporting";
 import { ensureInstallIdentity } from "@/lib/device/app-install-identity";
 import { t } from "@/lib/i18n/t";
+import { useWatchHeartbeat } from "@/lib/map/app-watch-registry";
 import { appReachability } from "@/lib/network/app-reachability";
 import { onReconnect } from "@/lib/network/reachability";
 import { shouldShowOnboarding } from "@/lib/onboarding/onboarding";
@@ -170,10 +171,16 @@ function StackLayout() {
 				<Stack.Protected guard={!showOnboarding}>
 					<Stack.Screen name="(tabs)" />
 					<Stack.Screen name="settings/data-sources" />
+					<Stack.Screen name="settings/licenses" />
 					<Stack.Screen name="places/new" />
 					<Stack.Screen name="places/[placeId]" />
 					<Stack.Screen name="places/leg" />
 					<Stack.Screen name="commute/[placeId]" />
+					<Stack.Screen name="search" />
+					<Stack.Screen name="station/[key]" />
+					<Stack.Screen name="stop/[stop]" />
+					<Stack.Screen name="bus/[line]" />
+					<Stack.Screen name="train/[trainNo]" />
 				</Stack.Protected>
 				{/* 개발용 표본 화면은 EXPO_PUBLIC_LOCK_SAMPLES=1일 때만 열린다(딥링크로도). */}
 				<Stack.Protected guard={!showOnboarding && showLockSamples}>
@@ -213,6 +220,8 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 }
 
 function Layout() {
+	// 버스 관측 요청의 하트비트는 앱 전체에서 한 번만 돈다. 화면은 claim·release만 한다.
+	useWatchHeartbeat();
 	return (
 		<QueryClientProvider client={queryClient}>
 			<GestureHandlerRootView style={{ flex: 1 }}>

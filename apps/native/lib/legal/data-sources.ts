@@ -9,7 +9,22 @@ export interface StatusLegendItem {
 	labelKey: MessageKey;
 }
 
+/** 앱이 데이터를 받아 쓰는 모든 출처. 버스·지하철 출처 ID는 `@Betro/commute/refs`와 같다. */
+export const USED_SOURCES = [
+	"seoul-subway",
+	"seoul-bus",
+	"gbis",
+	"tago",
+	"kric",
+	"osm",
+	"naver-map",
+] as const;
+
+export type UsedSource = (typeof USED_SOURCES)[number];
+
 export interface DataProvider {
+	/** 이 제공 기관이 맡는 출처. 모든 `USED_SOURCES`가 한 곳 이상에 들어 있어야 한다. */
+	sources: readonly UsedSource[];
 	subtitleKey: MessageKey;
 	titleKey: MessageKey;
 	url: string;
@@ -40,24 +55,46 @@ export const STATUS_LEGEND: StatusLegendItem[] = [
 
 export const DATA_PROVIDERS: DataProvider[] = [
 	{
+		sources: ["seoul-subway"],
 		subtitleKey: "dataSources.providers.seoul.subtitle",
 		titleKey: "dataSources.providers.seoul.title",
 		url: "https://data.seoul.go.kr",
 	},
 	{
+		sources: ["seoul-bus"],
 		subtitleKey: "dataSources.providers.dataGoKr.subtitle",
 		titleKey: "dataSources.providers.dataGoKr.title",
 		url: "https://www.data.go.kr",
 	},
 	{
+		sources: ["gbis"],
+		subtitleKey: "dataSources.providers.gyeonggi.subtitle",
+		titleKey: "dataSources.providers.gyeonggi.title",
+		url: "https://www.data.go.kr",
+	},
+	{
+		sources: ["tago"],
+		subtitleKey: "dataSources.providers.molit.subtitle",
+		titleKey: "dataSources.providers.molit.title",
+		url: "https://www.data.go.kr",
+	},
+	{
+		sources: ["kric"],
 		subtitleKey: "dataSources.providers.kric.subtitle",
 		titleKey: "dataSources.providers.kric.title",
 		url: "https://data.kric.go.kr",
 	},
 	{
+		sources: ["osm"],
 		subtitleKey: "dataSources.providers.openStreetMap.subtitle",
 		titleKey: "dataSources.providers.openStreetMap.title",
 		url: "https://www.openstreetmap.org/copyright",
+	},
+	{
+		sources: ["naver-map"],
+		subtitleKey: "dataSources.providers.naverMap.subtitle",
+		titleKey: "dataSources.providers.naverMap.title",
+		url: "https://www.ncloud.com/product/applicationService/maps",
 	},
 ];
 

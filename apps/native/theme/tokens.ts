@@ -12,6 +12,8 @@ export const COLOR_TOKENS = {
 	"bg/hover": { dark: "#ffffff14", light: "#0000000f" },
 	"bg/inverse": { dark: "#f6f6f7", light: "#0e0f10" },
 	"bg/scrim": { dark: "#00000080", light: "#00000080" },
+	/** Segmented에서 고른 칸. 다크는 바탕(bg/control)보다 밝은 border/strong 원색이다. */
+	"bg/segment-selected": { dark: "#393b40", light: "#ffffff" },
 	"bg/surface": { dark: "#161719", light: "#ffffff" },
 	"bg/surface-raised": { dark: "#1e1f22", light: "#ffffff" },
 	"bg/surface-sunken": { dark: "#070708", light: "#eeeef0" },

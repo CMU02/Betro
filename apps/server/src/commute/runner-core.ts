@@ -61,6 +61,7 @@ import {
 	legKey,
 	type RawBoards,
 } from "@Betro/commute/sources/assemble";
+import { scheduledHeadwayMs } from "@Betro/commute/sources/bus-schedule";
 import {
 	dropFrozen,
 	dropFrozenPositions,
@@ -73,7 +74,11 @@ import {
 	type RegionalSource,
 	type RegionalStop,
 } from "@Betro/commute/sources/regional-bus";
-import type { RouteStopArrival } from "@Betro/commute/sources/seoul-bus";
+import {
+	busBoards,
+	type RouteStopArrival,
+	SOURCE_TIMEZONE,
+} from "@Betro/commute/sources/seoul-bus";
 import type { StationRow } from "@Betro/commute/sources/seoul-subway";
 import type {
 	ArrivalMethod,
@@ -112,6 +117,11 @@ const SEEN_PREFIX = "regionalSeen:";
 const REGIONAL_SESSION_SHARE = 1 / 3;
 /** 지역 호출은 응답이 없으면 서울과 같은 첫 백오프 뒤 한 번만 다시 부른다(5-B 설계 결정 5). */
 const REGIONAL_RETRIES = 1;
+/**
+ * 지역 노선 하나에서 동시에 부르는 정류장 수. 노선은 차례로 부르므로 동시에 나가는 지역 호출도 이
+ * 값을 넘지 않는다(수집기 `MAX_PARALLEL_CALLS`보다 작게 둔다).
+ */
+export const REGIONAL_CONCURRENCY = 3;
 const APNS_JWT_KEY = "apnsJwt";
 const FCM_ACCESS_KEY = "fcmAccess";
 /** 제안 판정을 위해 하차 정류장까지 따라가는 차량(`follow:<세션ID>`). */
@@ -127,7 +137,7 @@ const JSON_TYPE = "application/json";
 const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
 /** 세션이 보는 역을 수집기에 등록해 두는 시간. tick마다 늘린다. */
-const WATCH_MS = 5 * MINUTE_MS;
+export const WATCH_MS = 5 * MINUTE_MS;
 const TIMETABLE_REFRESH_MS = 10 * MINUTE_MS;
 const TIMETABLE_ARRIVALS = 6;
 const ENDED_KEEP_MS = DAY_MS;
@@ -344,6 +354,45 @@ export interface RouteViewLeg {
 export interface RouteView {
 	destinationEtaAt: number | null;
 	legs: RouteViewLeg[];
+}
+
+/** 버스 노선 보기의 정류장 하나. 차량은 그 정류장으로 다가오는 순서(가까운 순)다. */
+export interface BusRouteViewStop {
+	seq: number;
+	vehicles: {
+		/** 그 정류장 도착 예상. 그 정류장의 `madeAt` 기준이다. */
+		etaAt: number | null;
+		plate: string | null;
+		stopsAway: number | null;
+		vehicleId: string;
+	}[];
+}
+
+/**
+ * 서울 버스 노선 하나의 전 정류장 도착(07 버스 노선 상세). `stops`는 원자료가 없으면 비어 있다.
+ * `headwayMs`는 정적 배차간격이고 운행 시간 밖이거나 일정이 없으면 null이다.
+ */
+export interface BusRouteView {
+	etaState: "live" | "estimated";
+	fetchedAt: number | null;
+	headwayMs: number | null;
+	stops: BusRouteViewStop[];
+}
+
+/** 원자료 → 정류장마다 다가오는 차량. 세션 도착판과 같은 `busBoards`로 만든다. */
+function busRouteViewStops(
+	data: NonNullable<RawBoards["bus"][string]>
+): BusRouteViewStop[] {
+	const boards = busBoards(data.prev, data.now, data.fetchedAt);
+	return data.now.map((stop) => ({
+		seq: stop.seq,
+		vehicles: boards.board(stop.seq).approaching.map((vehicle) => ({
+			etaAt: vehicle.etaAt,
+			plate: vehicle.plate,
+			stopsAway: vehicle.stopsAway,
+			vehicleId: vehicle.vehicleId,
+		})),
+	}));
 }
 
 function routeViewLeg(
@@ -794,6 +843,11 @@ export class RunnerCore {
 	readonly #warned = new Set<string>();
 	/** 찾은 TAGO 노선 도시 코드(전체 노선 ID → 도시 코드). 없는 노선은 두지 않고 다시 묻는다. */
 	readonly #cities = new Map<LineRef, string>();
+	/**
+	 * 지역 예산 키(`budget:<source>-<op>:<day>`)별 직렬 큐의 꼬리. 정류장을 동시에 불러도 예산을 읽고
+	 * 쓰는 일은 차례로 해서, 같은 `used`를 읽고 한도를 넘기지 않게 한다. 비면 지운다.
+	 */
+	readonly #budgetLocks = new Map<string, Promise<unknown>>();
 	#queue: Promise<unknown> = Promise.resolve();
 
 	constructor(ports: RunnerPorts) {
@@ -884,6 +938,15 @@ export class RunnerCore {
 	}
 
 	/**
+	 * 서울 버스 노선 하나의 전 정류장 도착(07). 경로 보기와 같은 노선별 도착정보 캐시(`busRoute:<id>`)와
+	 * 지도 몫 규칙을 쓴다. 지도 몫에 닿았거나 출처가 멈췄으면 부르지 않고, 배차간격만으로 추정이다.
+	 * 서울 버스가 아닌 노선은 던진다.
+	 */
+	busRouteView(line: LineRef, now: number): Promise<BusRouteView> {
+		return this.#exclusive(() => this.#busRouteView(line, now));
+	}
+
+	/**
 	 * `commute/summaries/<date>/`를 모아 `commute/reports/<date>.json`을 쓴다. 마지막으로 쓴 날짜를
 	 * 저장해 같은 날(또는 그 전 날)은 다시 쓰지 않는다. 썼으면 true.
 	 */
@@ -912,6 +975,20 @@ export class RunnerCore {
 		const run = this.#queue.then(fn, fn);
 		this.#queue = run.catch(() => undefined);
 		return run;
+	}
+
+	/** `key`의 직렬 큐에서 `fn`을 부른다. 실패해도 큐는 이어지고, 결과와 오류는 부른 쪽이 받는다. */
+	async #withBudgetLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+		const run = (this.#budgetLocks.get(key) ?? Promise.resolve()).then(fn, fn);
+		const tail = run.catch(() => undefined);
+		this.#budgetLocks.set(key, tail);
+		try {
+			return await run;
+		} finally {
+			if (this.#budgetLocks.get(key) === tail) {
+				this.#budgetLocks.delete(key);
+			}
+		}
 	}
 
 	#redact(text: string): string {
@@ -995,6 +1072,39 @@ export class RunnerCore {
 			legs: route.legs.map((leg, index) =>
 				routeViewLeg(estimate.legs[index], boards.board(leg, "board"))
 			),
+		};
+	}
+
+	async #busRouteView(line: LineRef, now: number): Promise<BusRouteView> {
+		const { id: routeId, source } = parseRef(line);
+		if (source !== "seoul-bus") {
+			throw new Error(`busRouteView needs a seoul-bus line: ${line}`);
+		}
+		const raw: RawBoards = {
+			bus: {},
+			subway: {},
+			timetable: { arrivals: {}, rideMs: {} },
+		};
+		await this.#collectBus(routeId, false, raw, now, true, "map");
+		await this.#collectBusSchedules([line], raw);
+		const schedule = raw.busSchedules?.[line];
+		const headwayMs = schedule
+			? scheduledHeadwayMs(schedule, now, SOURCE_TIMEZONE)
+			: null;
+		const data = raw.bus[routeId];
+		if (!data) {
+			return { etaState: "estimated", fetchedAt: null, headwayMs, stops: [] };
+		}
+		const stops = busRouteViewStops(data);
+		// 운행 종료(`now: []`)나 차량이 한 대도 없는 응답은 실시간이 아니다. 정류장 하나의 `madeAt`이
+		// 늦다고 노선 전체를 추정으로 돌리지는 않는다.
+		const hasVehicle = stops.some((stop) => stop.vehicles.length > 0);
+		const isFresh = now - data.fetchedAt <= this.#ports.config.staleAfterMs;
+		return {
+			etaState: hasVehicle && isFresh ? "live" : "estimated",
+			fetchedAt: data.fetchedAt,
+			headwayMs,
+			stops,
 		};
 	}
 
@@ -1582,7 +1692,8 @@ export class RunnerCore {
 	}
 
 	/**
-	 * 지역(GBIS·TAGO) 노선의 도착과 위치 목록. 노선마다 차례로 부른다(하루 예산을 시도마다 센다).
+	 * 지역(GBIS·TAGO) 노선의 도착과 위치 목록. 노선은 차례로 부른다(한 노선의 정류장만 동시에 불러,
+	 * 동시에 나가는 호출이 `REGIONAL_CONCURRENCY`를 넘지 않게 한다). 하루 예산은 시도마다 센다.
 	 * 부르지 않는 걸음(`poll`이 false)도 저장해 둔 원자료는 싣는다.
 	 */
 	async #collectRegionalBus(
@@ -1679,8 +1790,9 @@ export class RunnerCore {
 	}
 
 	/**
-	 * 정류장마다 도착 1건, 필요하면 위치 목록 1건을 부른다. 위치 목록은 탄 구간·따라가는 구간, TAGO
-	 * 차량 번호 붙이기, 그리고 GBIS에서 직전 도착의 차량이 빠졌을 때(지났는지 보려고) 부른다.
+	 * 정류장마다 도착 1건(정류장 `REGIONAL_CONCURRENCY`곳씩 동시에), 필요하면 위치 목록 1건을 부른다.
+	 * 받은 순서는 정류장 순서와 다를 수 있다(뒤에서 순번으로 정렬한다). 위치 목록은 탄 구간·따라가는
+	 * 구간, TAGO 차량 번호 붙이기, 그리고 GBIS에서 직전 도착의 차량이 빠졌을 때(지났는지 보려고) 부른다.
 	 * GBIS에서 빠진 차량이 지났는지 모르는 정류장은 직전 도착을 둔다(`unsettledStops`). 저장 전에
 	 * 멈춘 차량을 뺀다. 부른 것이 모두 실패하면 null(직전 원자료를 둔다).
 	 */
@@ -1695,18 +1807,22 @@ export class RunnerCore {
 		const base = { day: dayOf(now), now, purpose, source: route.source };
 		const fetched: RouteStopArrival[] = [];
 		let reserved = false;
-		await runLimited([...target.stops.values()], 1, async (stop) => {
-			const arrival = await this.#attemptRegional({
-				...base,
-				fetch: () => boards.regionalArrival(route, stop),
-				op: "arrival",
-			});
-			if (arrival === RESERVED) {
-				reserved = true;
-			} else if (arrival !== null) {
-				fetched.push(arrival);
+		await runLimited(
+			[...target.stops.values()],
+			REGIONAL_CONCURRENCY,
+			async (stop) => {
+				const arrival = await this.#attemptRegional({
+					...base,
+					fetch: () => boards.regionalArrival(route, stop),
+					op: "arrival",
+				});
+				if (arrival === RESERVED) {
+					reserved = true;
+				} else if (arrival !== null) {
+					fetched.push(arrival);
+				}
 			}
-		});
+		);
 		if (reserved && fetched.length === 0) {
 			return RESERVED;
 		}
@@ -1797,37 +1913,23 @@ export class RunnerCore {
 	/**
 	 * 지역 호출 한 번. 시도마다 그 출처·오퍼레이션의 하루 예산 1건을 쓰고, 응답이 없으면 한 번만 다시
 	 * 부른다. 그날 멈출 오류는 그 출처만 멈춘다(`stopped:<source>:<day>`). 지도 용도는 예산의
-	 * 3분의 1을 세션 몫으로 남긴다.
+	 * 3분의 1을 세션 몫으로 남긴다. 예산은 큐 안에서 잡고, 상류 호출은 큐 밖이라 정류장 여러 곳이
+	 * 동시에 나간다. 재시도도 큐를 다시 거친다.
 	 */
 	async #attemptRegional<T>(
 		call: RegionalCall<T>,
 		attempt = 0
 	): Promise<T | null | typeof RESERVED> {
-		const { config, store } = this.#ports;
-		const { day, now, op, purpose, source } = call;
-		const stoppedKey = `${STOPPED_PREFIX}${source}:${day}`;
-		if ((await store.get(stoppedKey)) !== undefined) {
-			return null;
-		}
+		const { store } = this.#ports;
+		const { day, now, op, source } = call;
 		const budgetKey = `${BUDGET_PREFIX}${source}-${op}:${day}`;
-		const limit = regionalBudgetOf(config, source, op);
-		const used = (await store.get<number>(budgetKey)) ?? 0;
-		const mapLimit = limit - Math.ceil(limit * REGIONAL_SESSION_SHARE);
-		if (purpose === "map" && used >= mapLimit) {
-			this.#warnOnce(
-				`map-share:${source}-${op}:${day}`,
-				`commute ${source} ${op} map share exhausted day=${day} used=${used}`
-			);
-			return RESERVED;
+		const taken = await this.#withBudgetLock(budgetKey, () =>
+			this.#takeRegionalBudget(call, budgetKey)
+		);
+		if (taken !== true) {
+			return taken;
 		}
-		if (used >= limit) {
-			this.#warnOnce(
-				`budget:${source}-${op}:${day}`,
-				`commute ${source} ${op} budget exhausted day=${day}`
-			);
-			return null;
-		}
-		await store.put(budgetKey, used + 1);
+		const stoppedKey = `${STOPPED_PREFIX}${source}:${day}`;
 		try {
 			const value = await call.fetch();
 			if (value !== null) {
@@ -1849,6 +1951,40 @@ export class RunnerCore {
 		}
 		await this.#sleep(backoff);
 		return await this.#attemptRegional(call, attempt + 1);
+	}
+
+	/**
+	 * 지역 호출 한 번의 예산을 잡는다(`#withBudgetLock` 안에서 부른다). 그 출처가 그날 멈췄거나 예산을
+	 * 다 썼으면 null, 지도 몫에 막혔으면 `RESERVED`, 잡았으면 `used + 1`을 쓰고 true다.
+	 */
+	async #takeRegionalBudget(
+		call: RegionalCall<unknown>,
+		budgetKey: string
+	): Promise<true | null | typeof RESERVED> {
+		const { config, store } = this.#ports;
+		const { day, op, purpose, source } = call;
+		if ((await store.get(`${STOPPED_PREFIX}${source}:${day}`)) !== undefined) {
+			return null;
+		}
+		const limit = regionalBudgetOf(config, source, op);
+		const used = (await store.get<number>(budgetKey)) ?? 0;
+		const mapLimit = limit - Math.ceil(limit * REGIONAL_SESSION_SHARE);
+		if (purpose === "map" && used >= mapLimit) {
+			this.#warnOnce(
+				`map-share:${source}-${op}:${day}`,
+				`commute ${source} ${op} map share exhausted day=${day} used=${used}`
+			);
+			return RESERVED;
+		}
+		if (used >= limit) {
+			this.#warnOnce(
+				`budget:${source}-${op}:${day}`,
+				`commute ${source} ${op} budget exhausted day=${day}`
+			);
+			return null;
+		}
+		await store.put(budgetKey, used + 1);
+		return true;
 	}
 
 	// -------------------------------------------------------------------------

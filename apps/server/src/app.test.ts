@@ -1,10 +1,12 @@
 import { createAuth } from "@Betro/auth";
+import { install } from "@Betro/db/schema/commute";
 import { createTestDb } from "@Betro/db/test-db";
 import type { CollectorStatus } from "@Betro/realtime/metrics";
 import { beforeAll, describe, expect, test } from "bun:test";
 
 import { createApp, ifNoneMatchMatches } from "./app";
 import type { CollectorClient } from "./collector/client";
+import { sha256Hex } from "./commute/auth";
 
 const API_HOST = "betro.cmu02-studio.com";
 const STATUS_HOST = "betro-status.cmu02-studio.com";
@@ -86,6 +88,7 @@ beforeAll(async () => {
 		auth,
 		corsOrigins: [LOCAL_ORIGIN],
 		db,
+		privacyContact: "privacy@example.test",
 		statusHost: STATUS_HOST,
 	});
 	appWithCollector = createApp({
@@ -94,6 +97,7 @@ beforeAll(async () => {
 		collector: fakeCollector,
 		corsOrigins: [LOCAL_ORIGIN],
 		db,
+		privacyContact: "privacy@example.test",
 		statusHost: STATUS_HOST,
 	});
 });
@@ -244,6 +248,21 @@ describe("createApp", () => {
 		expect(unknown.status).toBe(404);
 	});
 
+	test("/privacy는 API 호스트에서만 200이고 상태 호스트에서는 404다", async () => {
+		const page = await appWithCollector.request(`${API}/privacy`);
+		expect(page.status).toBe(200);
+		expect(page.headers.get("content-type")).toContain("text/html");
+		expect(page.headers.get("content-security-policy")).toContain(
+			"default-src 'none'"
+		);
+		const html = await page.text();
+		expect(html).toContain("privacy@example.test");
+		expect(html).not.toContain("<script");
+
+		const onStatus = await appWithCollector.request(`${STATUS}/privacy`);
+		expect(onStatus.status).toBe(404);
+	});
+
 	test("status page only on status host", async () => {
 		const page = await appWithCollector.request(`${STATUS}/`);
 		expect(page.status).toBe(200);
@@ -295,6 +314,65 @@ describe("createApp", () => {
 			alreadyRunning: false,
 		});
 		expect(collectorCalls.start).toBe(before + 1);
+	});
+});
+
+describe("POST /v1/map/station-view", () => {
+	const INSTALL_ID = "22222222-2222-4222-8222-222222222222";
+	const INSTALL_SECRET = "secret-b-secret-b-secret-b-secret-b-0002";
+
+	test("createApp이 stationView를 지도 라우트로 넘겨 200으로 답한다", async () => {
+		const db = await createTestDb();
+		const nowMs = Date.now();
+		await db.insert(install).values({
+			createdAt: nowMs,
+			id: INSTALL_ID,
+			lastSeenAt: nowMs,
+			platform: "ios",
+			secretHash: await sha256Hex(INSTALL_SECRET),
+		});
+		const wired = createApp({
+			apiHost: API_HOST,
+			auth: createAuth(
+				{
+					BETTER_AUTH_SECRET: TEST_SECRET,
+					BETTER_AUTH_URL: API,
+					CORS_ORIGIN: LOCAL_ORIGIN,
+				},
+				db
+			),
+			corsOrigins: [LOCAL_ORIGIN],
+			db,
+			stationView: {
+				collector: {
+					stationRows: () => Promise.resolve({}),
+					watchStations: () => Promise.resolve(),
+				},
+				config: { staleAfterMs: 150_000, subwayEtaBiasSec: {} },
+				timetable: {
+					firstLast: () => Promise.resolve({ firstAt: null, lastAt: null }),
+					nextArrivals: () => Promise.resolve([]),
+					rideMs: () => Promise.resolve(null),
+				},
+				timezone: "test/zone",
+			},
+			statusHost: STATUS_HOST,
+		});
+		const res = await wired.request(`${API}/v1/map/station-view`, {
+			body: JSON.stringify({
+				stations: [
+					{ line: "seoul-subway:line2", stop: "seoul-subway:1002000222" },
+				],
+			}),
+			headers: {
+				Authorization: `Bearer ${INSTALL_SECRET}`,
+				"Content-Type": "application/json",
+				"X-Betro-Install": INSTALL_ID,
+			},
+			method: "POST",
+		});
+		expect(res.status).toBe(200);
+		expect(await res.json()).toMatchObject({ timezone: "test/zone" });
 	});
 });
 

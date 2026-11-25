@@ -6,6 +6,24 @@
  * - 문구를 바꿀 때는 Figma 문구 표(`docs/superpowers/plans/2026-11-05-mvp-1-app-foundation.md`의 "문구 변경")를 함께 고친다.
  */
 export const ko = {
+	/** 07 버스 노선 상세 */
+	busDetail: {
+		arrival: "도착",
+		direction: "{name} 방면",
+		favorite: "즐겨찾기",
+		favoriteRemove: "즐겨찾기 해제",
+		loading: "노선 정보를 불러오는 중이에요",
+		lowFloor: "저상",
+		nextStop: "다음 정류장",
+		notice: "버스 위치는 실시간으로 갱신돼요",
+		route: "운행 경로",
+		running: "{n}대 운행 중",
+		title: "{shortName}번",
+		unavailable: {
+			body: "검색에서 다시 찾아 주세요",
+			title: "찾을 수 없는 노선이에요",
+		},
+	},
 	common: {
 		back: "뒤로",
 		minutes: "{m}분",
@@ -118,12 +136,24 @@ export const ko = {
 		legendTitle: "위치 표시 방식",
 		providers: {
 			dataGoKr: {
-				subtitle: "버스 위치·노선·정류소, 서울교통공사 시간표",
+				subtitle: "서울 버스 위치·노선·정류소, 서울교통공사 시간표",
 				title: "공공데이터포털",
+			},
+			gyeonggi: {
+				subtitle: "경기도 버스정보 · 경기 버스 노선·정류소·도착·위치",
+				title: "경기도",
 			},
 			kric: {
 				subtitle: "철도산업정보센터 · 광역철도 시간표",
 				title: "국가철도공단",
+			},
+			molit: {
+				subtitle: "TAGO · 인천 버스 노선·정류소·도착·위치",
+				title: "국토교통부",
+			},
+			naverMap: {
+				subtitle: "배경 지도",
+				title: "NAVER 지도",
 			},
 			openStreetMap: {
 				subtitle: "선로·지도 형상 (ODbL)",
@@ -159,6 +189,36 @@ export const ko = {
 		body: "잠시 후 다시 시도해 주세요.",
 		retry: "다시 시도",
 		title: "화면을 그리지 못했어요",
+	},
+	/** 도착 한 칸의 글자(`lib/transit/eta-status.ts`). 단정하지 않는다. */
+	eta: {
+		arriving: "곧 도착",
+		ended: "운행 종료",
+		headway: "배차 약 {minutes}분",
+		minutes: "{minutes}분",
+		minutesEstimated: "약 {minutes}분",
+	},
+	/** 09 즐겨찾기 */
+	favorites: {
+		cancel: "취소",
+		empty: {
+			action: "검색하기",
+			body: "검색에서 별을 눌러 추가해요",
+			title: "즐겨찾기가 없어요",
+		},
+		filter: {
+			all: "전체",
+			route: "노선",
+			station: "역",
+			stop: "정류장",
+		},
+		filteredEmpty: "이 종류의 즐겨찾기가 없어요",
+		manage: "관리",
+		menu: "더보기",
+		myPlaces: "내 장소",
+		noArrivals: "도착 정보가 없어요",
+		remove: "즐겨찾기에서 빼기",
+		title: "즐겨찾기",
 	},
 	/** 16 구간 고르기(수단 → 노선 → 승차 → 하차) */
 	legPicker: {
@@ -266,6 +326,11 @@ export const ko = {
 		},
 		towards: "{name} 방면",
 	},
+	/** 오픈소스 라이선스 화면(`app/settings/licenses.tsx`). */
+	licenses: {
+		intro: "Betro는 아래 오픈소스를 쓰고 있어요.",
+		title: "오픈소스 라이선스",
+	},
 	map: {
 		allHidden: "이 경로의 노선이 모두 꺼져 있어요",
 		chips: {
@@ -281,6 +346,8 @@ export const ko = {
 		},
 		/** 실시간 버스가 아직 없을 때 승차 정류장 도착 예상(지도 설계 2.6). 단정하지 않는다. */
 		estimatedBoard: "{line} · 시간표 추정 · 약 {minutes}분 뒤",
+		/** 실시간이 그날 멈췄거나 3분 넘게 끊겨 시간표로 추정하는 중(14, 지도 설계 5장). */
+		estimatedMode: "시간표 추정 모드",
 		nearby: "근처 지하철",
 		noRealtime: "실시간 정보 없음",
 		routeMenu: {
@@ -306,6 +373,7 @@ export const ko = {
 			mineStation: "내가 탈 역",
 			minutes: "{minutes}분",
 			minutesEstimated: "시간표 추정 · 약 {minutes}분",
+			more: "자세히",
 			/** 실시간으로 볼 수 없을 만큼 오래된 위치. "실시간"이라고 쓰지 않는다(지도 설계 7장). */
 			stale: "{minutes}분 전 위치",
 			trainNo: "열차 {no}",
@@ -480,6 +548,60 @@ export const ko = {
 	push: {
 		defaultTitle: "알림",
 	},
+	search: {
+		back: "뒤로",
+		clearRecents: "모두 지우기",
+		clearText: "검색어 지우기",
+		empty: {
+			body: "역 이름, 정류장 이름이나 번호, 버스 번호로 찾아보세요",
+			title: "검색 결과가 없어요",
+		},
+		failed: {
+			body: "인터넷 연결을 확인하고 다시 시도해 주세요",
+			title: "검색 자료를 불러오지 못했어요",
+		},
+		/** 역 배지에 쓰는 노선 이름. 키는 노선 키(`seoul-subway:line2`의 `line2`)다. */
+		lineName: {
+			airport: "공항철도",
+			gtxA: "GTX-A",
+			gyeongchun: "경춘선",
+			gyeonggang: "경강선",
+			gyeonguiJungang: "경의중앙선",
+			line1: "1호선",
+			line2: "2호선",
+			line3: "3호선",
+			line4: "4호선",
+			line5: "5호선",
+			line6: "6호선",
+			line7: "7호선",
+			line8: "8호선",
+			line9: "9호선",
+			seohae: "서해선",
+			shinbundang: "신분당선",
+			sillim: "신림선",
+			suinBundang: "수인분당선",
+			uiSinseol: "우이신설선",
+		},
+		loading: "검색 자료를 불러오는 중이에요",
+		placeholder: "역, 정류장, 버스 번호 검색",
+		retry: "다시 시도",
+		scope: {
+			all: "전체",
+			label: "검색 범위",
+			route: "버스 노선",
+			station: "역",
+			stop: "정류장",
+		},
+		section: {
+			recents: "최근 검색",
+			routes: "버스 노선",
+			stations: "역",
+			stops: "정류장",
+		},
+		stopSubtitle: "{arsId} · {towards} 방면",
+		stopSubtitleArsId: "{arsId}",
+		stopSubtitleTowards: "{towards} 방면",
+	},
 	settings: {
 		buildings3d: {
 			title: "3D 건물",
@@ -505,6 +627,9 @@ export const ko = {
 		dataSources: {
 			title: "데이터 출처",
 		},
+		licenses: {
+			title: "오픈소스 라이선스",
+		},
 		/** `EXPO_PUBLIC_LOCK_SAMPLES=1`일 때만 보이는 행과 화면. 표본 값으로 잠금화면을 띄운다. */
 		lockSamples: {
 			endAll: "표본 모두 끝내기",
@@ -529,6 +654,9 @@ export const ko = {
 				"오늘 갱신 {updates}건 · 뒤로 {backward} · 순간이동 {jump} · {percent}%",
 			title: "지도 움직임 지표",
 		},
+		privacy: {
+			title: "개인정보 처리방침",
+		},
 		sections: {
 			about: "정보",
 			developer: "개발",
@@ -550,11 +678,62 @@ export const ko = {
 			title: "버전",
 		},
 	},
+	/** 08 역 상세 */
+	stationDetail: {
+		arrivals: "{line} 도착 정보",
+		direction: "{name} 방면",
+		favorite: "즐겨찾기",
+		favoriteRemove: "즐겨찾기 해제",
+		first: "첫차",
+		firstLast: "첫차 · 막차",
+		last: "막차",
+		loading: "도착 정보를 불러오는 중이에요",
+		noArrivals: "곧 도착하는 열차 정보가 없어요",
+		noService: "오늘은 운행 정보가 없어요",
+		notFound: {
+			body: "검색에서 다시 찾아 주세요",
+			title: "찾을 수 없는 역이에요",
+		},
+		retry: "다시 시도",
+		unavailable: {
+			body: "인터넷 연결을 확인하고 다시 시도해 주세요",
+			title: "도착 정보를 불러오지 못했어요",
+		},
+	},
+	/** 08 정류장 상세 */
+	stopDetail: {
+		direction: "{name} 방면",
+		favorite: "즐겨찾기",
+		favoriteRemove: "즐겨찾기 해제",
+		loading: "노선 정보를 불러오는 중이에요",
+		noRoutes: "지나는 노선 정보가 없어요",
+		notice: "버스 노선을 누르면 실시간 도착을 볼 수 있어요",
+		retry: "다시 시도",
+		routes: "지나는 노선",
+		unavailable: {
+			body: "인터넷 연결을 확인하고 다시 시도해 주세요",
+			title: "노선 정보를 불러오지 못했어요",
+		},
+	},
 	tabs: {
 		commute: "출퇴근",
 		favorites: "즐겨찾기",
 		map: "지도",
 		settings: "설정",
+	},
+	/** 06 열차 상세 */
+	trainDetail: {
+		direction: {
+			down: "하행",
+			up: "상행",
+		},
+		express: "급행",
+		gone: "이 열차의 위치를 더 받지 못했어요",
+		nextStation: "다음 역",
+		noTimetable: "이 열차의 시간표 정보가 없어요",
+		notice: "열차 위치는 역 도착 신호와 시간표로 계산돼요",
+		subtitle: "{destination}행 · {direction}",
+		title: "{trainNo} 열차",
 	},
 	transit: {
 		region: {

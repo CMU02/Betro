@@ -1,12 +1,20 @@
-import { busRoute, referenceBatch } from "@Betro/db/schema/transit";
+import {
+	busRoute,
+	referenceBatch,
+	timetableStopTime,
+	timetableTrip,
+} from "@Betro/db/schema/transit";
 import { createTestDb } from "@Betro/db/test-db";
+import { kstToEpochMs } from "@Betro/realtime/time";
 import { beforeAll, describe, expect, it } from "bun:test";
 import gbisArrivalBoard from "../../../../packages/commute/src/sources/__fixtures__/regional/gbis-arrival-board.json";
 import gbisLocation from "../../../../packages/commute/src/sources/__fixtures__/regional/gbis-location.json";
 import tagoGateway04 from "../../../../packages/commute/src/sources/__fixtures__/regional/tago-gateway-04.json";
 import type { Upstream } from "../collector/ports";
+import { d1Over } from "../test-d1";
 import type { Env } from "../worker-env";
 import {
+	D1Timetable,
 	readBusSchedules,
 	readRegionalRouteCities,
 	regionalBoardSource,
@@ -311,5 +319,97 @@ describe("runnerConfig", () => {
 		expect(config.dailyBudgetGbisLocation).toBe(12);
 		expect(config.dailyBudgetTagoArrival).toBe(13);
 		expect(config.dailyBudgetTagoLocation).toBe(14);
+	});
+});
+
+describe("D1Timetable.firstLast", () => {
+	const SECOND_MS = 1000;
+	const NOON = kstToEpochMs("2026-11-24 12:00:00");
+	const DAY_START = kstToEpochMs("2026-11-24 00:00:00");
+	let timetable: D1Timetable;
+
+	beforeAll(async () => {
+		const tdb = await createTestDb();
+		const [old, current] = await tdb
+			.insert(referenceBatch)
+			.values([
+				{ isCurrent: false, kind: "timetable", sourceManifest: {} },
+				{ isCurrent: true, kind: "timetable", sourceManifest: {} },
+			])
+			.returning({ id: referenceBatch.id });
+		if (!(old && current)) {
+			throw new Error("seed batches missing");
+		}
+		const trip = (
+			batchId: number,
+			trainNo: string,
+			direction: "up" | "down",
+			serviceDay: "weekday" | "saturday"
+		) => ({
+			batchId,
+			direction,
+			express: "local" as const,
+			lineKey: "line2",
+			qualityFlags: [],
+			serviceDay,
+			serviceDaySource: "source" as const,
+			source: "seoul-metro-csv" as const,
+			sourceVersion: "test",
+			trainNo,
+		});
+		const trips = await tdb
+			.insert(timetableTrip)
+			.values([
+				trip(current.id, "first", "up", "weekday"),
+				trip(current.id, "last", "up", "weekday"),
+				trip(current.id, "down", "down", "weekday"),
+				trip(current.id, "sat", "up", "saturday"),
+				trip(old.id, "old", "up", "weekday"),
+			])
+			.returning({ id: timetableTrip.id });
+		const [first, last, down, sat, oldTrip] = trips.map((row) => row.id);
+		const stop = (
+			tripId: number | undefined,
+			arriveSec: number | null,
+			departSec: number | null
+		) => {
+			if (tripId === undefined) {
+				throw new Error("seed trip missing");
+			}
+			return {
+				arriveSec,
+				departSec,
+				qualityFlags: [],
+				seq: 1,
+				statnId: "1002000222",
+				tripId,
+			};
+		};
+		// 마지막 열차는 이 역이 종점이라 출발 시각이 없다(도착 25:00).
+		await tdb
+			.insert(timetableStopTime)
+			.values([
+				stop(first, 19_770, 19_800),
+				stop(last, 90_000, null),
+				stop(down, 18_000, 18_000),
+				stop(sat, 18_000, 18_000),
+				stop(oldTrip, 10_000, 10_000),
+			]);
+		timetable = new D1Timetable(d1Over(tdb));
+	});
+
+	it("D1Timetable.firstLast는 그 서비스일 그 방향의 첫·마지막 시각이고 depart가 null인 종점은 arrive를 쓴다", async () => {
+		expect(
+			await timetable.firstLast("line2", "up", "1002000222", NOON)
+		).toEqual({
+			firstAt: DAY_START + 19_800 * SECOND_MS,
+			lastAt: DAY_START + 90_000 * SECOND_MS,
+		});
+	});
+
+	it("시간표가 없는 역은 둘 다 null이다", async () => {
+		expect(
+			await timetable.firstLast("line2", "up", "1002000999", NOON)
+		).toEqual({ firstAt: null, lastAt: null });
 	});
 });

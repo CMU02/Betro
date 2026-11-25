@@ -17,7 +17,8 @@ export type BusSnapshotVehicle = BusObservation & { lastSeenAt: number };
  * ```jsonc
  * {
  *   "generatedAt": 1793678684100,   // 스냅샷을 만든 시각(UTC epoch ms)
- *   "staleSince": null,             // 소스가 비어 온 첫 시각. 정상이면 null
+ *   "staleSince": null,             // 소스가 비었거나 상류 장애로 끊긴 첫 시각. 정상이면 null
+ *   "stoppedToday": false,          // 그날(KST) 이 종류(지하철, 서울 버스)가 한도·인증 실패로 멈췄거나 예산을 다 썼다
  *   "vehicles": [                   // 키(`lineKey|rawTrainNo` 또는 `routeId|vehId`) 순
  *     {
  *       // SubwayObservation 또는 BusObservation 필드 전부(observation.ts, 수집 설계 8장)
@@ -27,7 +28,7 @@ export type BusSnapshotVehicle = BusObservation & { lastSeenAt: number };
  *   ],
  *   // 버스만: 비어 온 노선별 staleSince. staleSince는 그중 가장 이른 값
  *   "staleRoutes": { "100100029": 1793678714100 },
- *   // 버스만: 그날(KST) 한도 초과·인증 실패로 멈춘 지역 출처(5-B 설계 결정 10)
+ *   // 버스만: 그날(KST) 한도 초과·인증 실패로 멈췄거나 예산을 다 쓴 지역 출처(5-B 설계 결정 10)
  *   "stoppedSources": ["gbis"]
  * }
  * ```
@@ -41,6 +42,8 @@ export type BusSnapshotVehicle = BusObservation & { lastSeenAt: number };
 export interface Snapshot<V> {
 	generatedAt: number;
 	staleSince: number | null;
+	/** 그날(KST) 이 종류의 수집이 멈췄는가. 멈춤은 수집기가 안다(앱의 시간표 추정 모드, 14). */
+	stoppedToday: boolean;
 	vehicles: V[];
 }
 export type SubwaySnapshot = Snapshot<SubwaySnapshotVehicle>;
@@ -209,27 +212,39 @@ export class LatestState {
 		dropExpired(this.#buses, now, BUS_TTL_MS);
 	}
 
-	/** `stoppedSources`는 버스 스냅샷에만 싣는다(멈춤은 수집기가 안다). */
-	snapshot(kind: "subway", now: number): SubwaySnapshot;
+	/**
+	 * `stoppedSources`는 버스 스냅샷에만 싣고 지하철에서는 무시한다. `stoppedToday`는 둘 다 싣는다.
+	 * 멈춤은 수집기가 안다.
+	 */
+	snapshot(
+		kind: "subway",
+		now: number,
+		stoppedSources?: readonly ("gbis" | "tago")[],
+		stoppedToday?: boolean
+	): SubwaySnapshot;
 	snapshot(
 		kind: "bus",
 		now: number,
-		stoppedSources?: readonly ("gbis" | "tago")[]
+		stoppedSources?: readonly ("gbis" | "tago")[],
+		stoppedToday?: boolean
 	): BusSnapshot;
 	snapshot(
 		kind: "subway" | "bus",
 		now: number,
-		stoppedSources?: readonly ("gbis" | "tago")[]
+		stoppedSources?: readonly ("gbis" | "tago")[],
+		stoppedToday?: boolean
 	): SubwaySnapshot | BusSnapshot;
 	snapshot(
 		kind: "subway" | "bus",
 		now: number,
-		stoppedSources: readonly ("gbis" | "tago")[] = []
+		stoppedSources: readonly ("gbis" | "tago")[] = [],
+		stoppedToday = false
 	): SubwaySnapshot | BusSnapshot {
 		if (kind === "subway") {
 			return {
 				generatedAt: now,
 				staleSince: this.#subwayStaleSince,
+				stoppedToday,
 				vehicles: sortedVehicles(this.#trains, now, SUBWAY_TTL_MS),
 			};
 		}
@@ -244,6 +259,7 @@ export class LatestState {
 			staleRoutes,
 			staleSince: times.length > 0 ? Math.min(...times) : null,
 			stoppedSources: [...stoppedSources],
+			stoppedToday,
 			vehicles: sortedVehicles(this.#buses, now, BUS_TTL_MS),
 		};
 	}

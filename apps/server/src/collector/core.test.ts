@@ -11,6 +11,7 @@ import {
 	devConfig,
 	prodConfig,
 } from "@Betro/realtime/schedule";
+import { SUBWAY_TTL_MS } from "@Betro/realtime/state";
 import { describe, expect, it } from "bun:test";
 import { gunzipSync } from "node:zlib";
 import arrivalSample from "../../../../packages/realtime/src/__fixtures__/arrival-all-sample.json";
@@ -22,6 +23,7 @@ import tagoGateway04 from "../../../../packages/realtime/src/__fixtures__/region
 import tagoLocation from "../../../../packages/realtime/src/__fixtures__/regional/tago-location.json";
 import subwayReferenceFixture from "../../../../packages/realtime/src/__fixtures__/subway-reference-sample.json";
 import { SERVICE_ENDED_RECHECK_MS } from "./apply-call";
+import { MAX_WATCHED_STATION_TOTAL } from "./collector-state";
 import { BACKLOG_RETRY_MS, CollectorCore, DEFAULT_IDLE_FLUSH_MS } from "./core";
 import { STATE_KEYS } from "./core-state";
 import type {
@@ -706,6 +708,174 @@ describe("CollectorCore", () => {
 		expect(next.etag).toHaveLength(16);
 	});
 
+	// 상류 장애(5xx·네트워크)는 멈춤이 아니지만 실시간이 끊긴다. 앱이 3분 넘게 끊긴 것을 보고
+	// 시간표 추정 모드로 바꾸도록 staleSince를 남긴다(14).
+	it("서울 지하철이 4분 동안 500을 돌려주면 staleSince가 남고, 200을 받으면 지워진다", async () => {
+		const outage: { on: boolean } = { on: false };
+		const h = makeHarness({
+			respond: (url) =>
+				outage.on && ALL_URL.test(url)
+					? { body: "Internal Server Error", status: 500 }
+					: fixtureResponder(url),
+		});
+		await h.core.tick();
+		const subway = async () =>
+			JSON.parse((await h.core.snapshot("subway")).body) as {
+				staleSince: number | null;
+				stoppedToday: boolean;
+			};
+		expect((await subway()).staleSince).toBeNull();
+		outage.on = true;
+		h.clock.now += STEP;
+		const outageStart = h.clock.now;
+		await runTicks(h, 3);
+		const during = await subway();
+		expect(during.stoppedToday).toBe(false);
+		expect(during.staleSince).not.toBeNull();
+		expect(during.staleSince ?? 0).toBeGreaterThanOrEqual(outageStart);
+		expect(h.clock.now - (during.staleSince ?? 0)).toBeGreaterThan(3 * MINUTE);
+		outage.on = false;
+		const before = subwayCalls(h).length;
+		await h.core.tick();
+		expect(subwayCalls(h).length).toBeGreaterThan(before);
+		expect((await subway()).staleSince).toBeNull();
+	});
+
+	// `dev` 버스는 노선마다 160초 간격이라 첫 실패 호출이 장애 시작보다 늦다. 그 호출부터 3분을 넘긴다.
+	it("서울 버스 노선 하나가 6분 동안 500을 돌려주면 그 노선만 staleRoutes에 남고, 200을 받으면 지워진다", async () => {
+		const outage: { on: boolean } = { on: false };
+		const h = makeHarness({
+			respond: (url) =>
+				outage.on && routeOf(url) === ROUTE_6411
+					? { body: "Internal Server Error", status: 500 }
+					: fixtureResponder(url),
+		});
+		await h.core.tick();
+		const bus = async () =>
+			JSON.parse((await h.core.snapshot("bus")).body) as {
+				staleRoutes: Record<string, number | undefined>;
+				stoppedToday: boolean;
+			};
+		expect((await bus()).staleRoutes).toEqual({});
+		outage.on = true;
+		h.clock.now += STEP;
+		const before = busCalls(h, ROUTE_6411).length;
+		await runTicks(h, 5);
+		const firstFailedAt = busCalls(h, ROUTE_6411)[before]?.at ?? 0;
+		expect(firstFailedAt).toBeGreaterThan(0);
+		const during = await bus();
+		expect(during.stoppedToday).toBe(false);
+		expect(Object.keys(during.staleRoutes)).toEqual([ROUTE_6411]);
+		const staleAt = during.staleRoutes[ROUTE_6411] ?? 0;
+		expect(staleAt).toBeGreaterThanOrEqual(firstFailedAt);
+		expect(h.clock.now - staleAt).toBeGreaterThan(3 * MINUTE);
+		outage.on = false;
+		const failed = busCalls(h, ROUTE_6411).length;
+		h.clock.now += STEP;
+		await h.core.tick();
+		expect(busCalls(h, ROUTE_6411).length).toBeGreaterThan(failed);
+		expect((await bus()).staleRoutes).toEqual({});
+	});
+
+	// 서울 지하철 API에는 일일 한도 초과 코드가 없어(데이터 출처 조사) 상류가 멈추는 길은 인증 실패뿐이다.
+	// 한도는 우리 예산 소진으로 센다(아래 테스트).
+	it("서울 지하철이 인증 실패로 멈추면 지하철 스냅샷의 stoppedToday가 true이고 ETag가 바뀐다", async () => {
+		const h = makeHarness({
+			respond: (url) =>
+				ALL_URL.test(url)
+					? { body: "Unauthorized", status: 401 }
+					: fixtureResponder(url),
+		});
+		// 멈추기 전 스냅샷을 먼저 읽어 캐시가 무효화되는지 본다.
+		const before = await h.core.snapshot("subway");
+		expect(JSON.parse(before.body).stoppedToday).toBe(false);
+		await h.core.tick();
+		expect(subwayCalls(h)).toHaveLength(1);
+		const after = await h.core.snapshot("subway");
+		expect(JSON.parse(after.body).stoppedToday).toBe(true);
+		expect(after.etag).not.toBe(before.etag);
+		// 버스는 멈추지 않았다.
+		expect(JSON.parse((await h.core.snapshot("bus")).body).stoppedToday).toBe(
+			false
+		);
+	});
+
+	it("다음 날(KST)에는 stoppedToday가 false로 돌아온다", async () => {
+		const h = makeHarness({
+			respond: (url) =>
+				ALL_URL.test(url)
+					? { body: "Unauthorized", status: 401 }
+					: fixtureResponder(url),
+		});
+		await h.core.tick();
+		const stopped = await h.core.snapshot("subway");
+		expect(JSON.parse(stopped.body).stoppedToday).toBe(true);
+		h.clock.now = NEXT_KST_DAY;
+		const nextDay = await h.core.snapshot("subway");
+		expect(JSON.parse(nextDay.body).stoppedToday).toBe(false);
+		expect(nextDay.etag).not.toBe(stopped.etag);
+	});
+
+	it("지하철 하루 예산을 다 쓰면 상류 오류가 없어도 stoppedToday가 true다", async () => {
+		const h = makeHarness({ config: devConfig({ DAILY_BUDGET_SUBWAY: "1" }) });
+		expect(
+			JSON.parse((await h.core.snapshot("subway")).body).stoppedToday
+		).toBe(false);
+		await h.core.tick();
+		expect(subwayCalls(h)).toHaveLength(1);
+		expect(h.logs.some((line) => line.includes("stopped for the day"))).toBe(
+			false
+		);
+		const body = JSON.parse((await h.core.snapshot("subway")).body);
+		expect(body.stoppedToday).toBe(true);
+		expect(body.vehicles.length).toBeGreaterThan(0);
+	});
+
+	// 지하철·버스 예산이 모두 바닥나면 alarm이 다음 KST 날까지 잔다. 그동안 tick이 없어도 TTL이 지난
+	// 열차는 스냅샷에서 빠져야 앱이 시간표 열차를 그린다(스펙 5.8).
+	it("예산이 바닥나 tick이 없어도 TTL이 지난 열차는 지하철 스냅샷에서 빠진다", async () => {
+		const h = makeHarness({
+			config: devConfig({ DAILY_BUDGET_BUS: "2", DAILY_BUDGET_SUBWAY: "1" }),
+		});
+		const { nextAlarmAt } = await h.core.tick();
+		expect(nextAlarmAt).toBeGreaterThan(h.clock.now + SUBWAY_TTL_MS);
+		const stopped = JSON.parse((await h.core.snapshot("subway")).body);
+		expect(stopped.stoppedToday).toBe(true);
+		expect(stopped.vehicles.length).toBeGreaterThan(0);
+		h.clock.now += SUBWAY_TTL_MS + SECOND;
+		const later = JSON.parse((await h.core.snapshot("subway")).body);
+		expect(later.stoppedToday).toBe(true);
+		expect(later.vehicles).toEqual([]);
+		expect(later.generatedAt).toBe(h.clock.now);
+	});
+
+	it("TTL이 지난 뒤 DO가 다시 깨어나도(새 CollectorCore) 지하철 스냅샷에 옛 열차가 없다", async () => {
+		const config = devConfig({
+			DAILY_BUDGET_BUS: "2",
+			DAILY_BUDGET_SUBWAY: "1",
+		});
+		const h = makeHarness({ config });
+		await h.core.tick();
+		h.clock.now += SUBWAY_TTL_MS + SECOND;
+		const woken = makeHarness({
+			blobs: h.blobs,
+			clock: h.clock,
+			config,
+			state: h.state,
+		});
+		const body = JSON.parse((await woken.core.snapshot("subway")).body);
+		expect(body.stoppedToday).toBe(true);
+		expect(body.vehicles).toEqual([]);
+	});
+
+	it("버스가 계속 돌면 지하철 예산이 바닥나도 tick마다 TTL이 지난 열차를 뺀다", async () => {
+		const h = makeHarness({ config: devConfig({ DAILY_BUDGET_SUBWAY: "1" }) });
+		await runTicks(h, Math.ceil(SUBWAY_TTL_MS / STEP) + 1);
+		const body = JSON.parse((await h.core.snapshot("subway")).body);
+		expect(body.stoppedToday).toBe(true);
+		expect(body.vehicles).toEqual([]);
+	});
+
 	it("counts every call when concurrent prod calls straddle a 5-minute bucket", async () => {
 		const clock = { now: T0 + 4 * MINUTE + 58 * SECOND };
 		let release: () => void = () => undefined;
@@ -973,6 +1143,43 @@ describe("CollectorCore station boards", () => {
 		expect(Object.keys(await h.core.stationRows([GANGNAM]))).toEqual([GANGNAM]);
 	});
 
+	it("rejects station ids that are not 10 digits", async () => {
+		const h = makeHarness();
+		await expect(
+			h.core.watchStations(["9".repeat(200_000)], T0 + 10 * MINUTE)
+		).rejects.toThrow();
+		await expect(
+			h.core.watchStations(["abc"], T0 + 10 * MINUTE)
+		).rejects.toThrow();
+		expect(h.state.kv.get(STATE_KEYS.boards) ?? "").not.toContain(
+			"999999999999"
+		);
+	});
+
+	it("caps how many stations it watches at once and still extends watched ones", async () => {
+		const h = makeHarness();
+		const ids = Array.from({ length: MAX_WATCHED_STATION_TOTAL + 5 }, (_, i) =>
+			String(1_000_000_000 + i)
+		);
+		for (let start = 0; start < ids.length; start += 200) {
+			// biome-ignore lint/performance/noAwaitInLoops: 수집기 RPC처럼 차례로 등록한다
+			await h.core.watchStations(
+				ids.slice(start, start + 200),
+				T0 + 10 * MINUTE
+			);
+		}
+		const stored = JSON.parse(h.state.kv.get(STATE_KEYS.boards) ?? "{}") as {
+			watch: Record<string, number>;
+		};
+		expect(Object.keys(stored.watch)).toHaveLength(MAX_WATCHED_STATION_TOTAL);
+		expect(stored.watch[ids.at(-1) ?? ""]).toBeUndefined();
+		await h.core.watchStations([ids[0] ?? ""], T0 + 30 * MINUTE);
+		const extended = JSON.parse(h.state.kv.get(STATE_KEYS.boards) ?? "{}") as {
+			watch: Record<string, number>;
+		};
+		expect(extended.watch[ids[0] ?? ""]).toBe(T0 + 30 * MINUTE);
+	});
+
 	it("never stores key text with the station rows", async () => {
 		const keys: CollectorKeys = { bus: "q/r+s=", subway: "a/b+c=" };
 		const h = makeHarness({ keys });
@@ -1185,13 +1392,15 @@ describe("CollectorCore regional bus watches", () => {
 			respond?: Responder;
 			state?: MemoryState;
 			clock?: { now: number };
+			/** 기본은 `watchOnly`. */
+			config?: CollectorConfig;
 			/** 참조의 TAGO 도시 코드. 기본 "23"(인천), null이면 없다. */
 			tagoCity?: string | null;
 		} = {}
 	): Harness {
 		const h = makeHarness({
 			clock: options.clock,
-			config: watchOnly,
+			config: options.config ?? watchOnly,
 			respond: options.respond ?? regionalResponder(),
 			state: options.state,
 		});
@@ -1296,6 +1505,29 @@ describe("CollectorCore regional bus watches", () => {
 		expect(callsTo(h, GBIS_URL)).toHaveLength(1);
 	});
 
+	it("GBIS 위치 예산을 다 쓰면 버스 스냅샷 stoppedSources에 gbis가 있다", async () => {
+		const h = regionalHarness({
+			config: {
+				...prodConfig({ DAILY_BUDGET_GBIS_LOCATION_COLLECTOR: "1" }, []),
+				subwayLines: [],
+			},
+		});
+		await h.core.watchBusRoutes("install-1", [GBIS_6411], T0 + 30 * MINUTE);
+		// 예산을 쓰기 전 스냅샷을 먼저 읽어 캐시가 무효화되는지 본다.
+		expect((await busSnapshot(h)).stoppedSources).toEqual([]);
+		await h.core.tick();
+		expect(callsTo(h, GBIS_URL)).toHaveLength(1);
+		expect(h.logs.some((line) => line.includes("stopped for the day"))).toBe(
+			false
+		);
+		const body = (await busSnapshot(h)) as SnapshotBody & {
+			stoppedToday: boolean;
+		};
+		expect(body.stoppedSources).toEqual(["gbis"]);
+		// 서울 버스 예산은 남았다.
+		expect(body.stoppedToday).toBe(false);
+	});
+
 	it("GBIS XML 게이트웨이 한도 초과(22)도 그날 GBIS를 멈춘다", async () => {
 		const quota = {
 			body: "<OpenAPI_ServiceResponse><cmmMsgHeader><errMsg>SERVICE ERROR</errMsg><returnReasonCode>22</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>",
@@ -1362,6 +1594,106 @@ describe("CollectorCore regional bus watches", () => {
 			(vehicle) => vehicle.routeId === GBIS_6411
 		);
 		expect(after).toEqual([]);
+	});
+
+	for (const [label, leaving] of [
+		["빈 목록", [] as string[]],
+		["다른 노선", [ROUTE_6411]],
+	] as const) {
+		it(`지도를 잠깐 떠나며 ${label}을 보내고 원래 TTL 안에 돌아오면 멈춘 GBIS 차량이 다시 나오지 않는다`, async () => {
+			const first = regionalHarness();
+			const TTL = 90 * SECOND;
+			await first.core.watchBusRoutes("install-1", [GBIS_6411], T0 + TTL);
+			await first.core.tick();
+			// 하트비트로 감시를 늘리며 4분 동안 같은 순번을 본다.
+			first.clock.now = T0 + 4 * MINUTE;
+			await first.core.watchBusRoutes(
+				"install-1",
+				[GBIS_6411],
+				first.clock.now + TTL
+			);
+			await first.core.tick();
+			// 탭을 옮기거나 07을 열어 지도가 이 노선을 내려놓는다.
+			first.clock.now = T0 + 4 * MINUTE + 10 * SECOND;
+			await first.core.watchBusRoutes(
+				"install-1",
+				leaving,
+				first.clock.now + TTL
+			);
+			// DO가 잠들었다 깨어나고, 보지 않는 동안에도 tick은 돈다.
+			const second = regionalHarness({
+				clock: first.clock,
+				state: first.state,
+			});
+			second.clock.now = T0 + 4 * MINUTE + 30 * SECOND;
+			await second.core.tick();
+			// 원래 TTL(4분 + 90초) 안에 지도로 돌아오고, 다음 GBIS 호출 때까지 하트비트로 감시를 늘린다.
+			second.calls.splice(0);
+			for (const minute of [5, 6, 7]) {
+				second.clock.now = T0 + minute * MINUTE;
+				// biome-ignore lint/performance/noAwaitInLoops: 하트비트는 시각 순서대로 보낸다.
+				await second.core.watchBusRoutes(
+					"install-1",
+					[GBIS_6411],
+					second.clock.now + TTL
+				);
+			}
+			second.clock.now = T0 + 8 * MINUTE;
+			await second.core.tick();
+			expect(callsTo(second, GBIS_URL).length).toBeGreaterThan(0);
+			const after = (await busSnapshot(second)).vehicles.filter(
+				(vehicle) => vehicle.routeId === GBIS_6411
+			);
+			expect(after).toEqual([]);
+		});
+	}
+
+	it("하트비트 직전에 지도를 떠나도 떠난 때부터 TTL 동안은 멈춘 GBIS 차량이 다시 나오지 않는다", async () => {
+		const h = regionalHarness();
+		const TTL = 90 * SECOND;
+		await h.core.watchBusRoutes("install-1", [GBIS_6411], T0 + TTL);
+		await h.core.tick();
+		h.clock.now = T0 + 4 * MINUTE;
+		await h.core.watchBusRoutes("install-1", [GBIS_6411], h.clock.now + TTL);
+		await h.core.tick();
+		// 마지막 하트비트(4분)의 만료는 5분 30초다. 그 직전인 5분 20초에 떠난다.
+		h.clock.now = T0 + 5 * MINUTE + 20 * SECOND;
+		await h.core.watchBusRoutes("install-1", [], h.clock.now + TTL);
+		// 앞 요청의 만료(5분 30초)는 지났지만 떠난 지 90초는 안 됐다.
+		h.clock.now = T0 + 5 * MINUTE + 40 * SECOND;
+		await h.core.tick();
+		h.calls.splice(0);
+		for (const second of [6 * 60 + 20, 7 * 60 + 20]) {
+			h.clock.now = T0 + second * SECOND;
+			// biome-ignore lint/performance/noAwaitInLoops: 하트비트는 시각 순서대로 보낸다.
+			await h.core.watchBusRoutes("install-1", [GBIS_6411], h.clock.now + TTL);
+		}
+		h.clock.now = T0 + 8 * MINUTE;
+		await h.core.tick();
+		expect(callsTo(h, GBIS_URL).length).toBeGreaterThan(0);
+		const after = (await busSnapshot(h)).vehicles.filter(
+			(vehicle) => vehicle.routeId === GBIS_6411
+		);
+		expect(after).toEqual([]);
+	});
+
+	it("내려놓은 지역 노선의 멈춤 판단 기록은 원래 TTL이 지나면 지운다", async () => {
+		const h = regionalHarness();
+		await h.core.watchBusRoutes("install-1", [GBIS_6411], T0 + 90 * SECOND);
+		await h.core.tick();
+		await h.core.watchBusRoutes("install-1", [], T0 + 90 * SECOND);
+		const savedCore = () =>
+			JSON.parse(h.state.kv.get(STATE_KEYS.core) ?? "{}") as {
+				regionalPrev?: Record<string, unknown>;
+				regionalPrevKeepUntil?: Record<string, number>;
+			};
+		h.clock.now = T0 + 60 * SECOND;
+		await h.core.tick();
+		expect(Object.keys(savedCore().regionalPrev ?? {})).toEqual([GBIS_6411]);
+		h.clock.now = T0 + 91 * SECOND;
+		await h.core.tick();
+		expect(savedCore().regionalPrev ?? {}).toEqual({});
+		expect(savedCore().regionalPrevKeepUntil ?? {}).toEqual({});
 	});
 
 	it("숫자가 아닌 tago 키도 감시를 받는다", async () => {

@@ -30,6 +30,7 @@ import {
 	VehicleMarkers,
 } from "@/components/map/vehicle-markers";
 import { VehicleSheet } from "@/components/map/vehicle-sheet";
+import { SearchBarButton } from "@/components/ui/text-field";
 import { useAppTheme } from "@/contexts/app-theme-context";
 import type { ActiveSessionView } from "@/lib/commute/session-client";
 import { useActiveSession } from "@/lib/commute/use-active-session";
@@ -37,7 +38,9 @@ import { t } from "@/lib/i18n/t";
 import { nearestApproachingPoint } from "@/lib/map/camera-region";
 import { lineColor } from "@/lib/map/line-color";
 import { estimatedBoardNotice, routeOptionLabel } from "@/lib/map/map-labels";
+import { mapThemeProps } from "@/lib/map/map-theme";
 import { type MapRegion, regionOf, spanSegments } from "@/lib/map/route-shape";
+import { isScheduledVehicleId } from "@/lib/map/scheduled-trains";
 import {
 	getUserSelection,
 	initialSelection,
@@ -89,6 +92,10 @@ const FAINT_LINE_OPACITY = 0.35;
 const OVERLAY_GAP = 12;
 /** 칩과 그 아래 알약이 차지하는 높이. 경로를 맞출 때 이만큼 위를 비운다. */
 const TOP_OVERLAY_HEIGHT = 88;
+/** 맨 위 검색창(Figma SearchBar 52pt)과 그 아래 요소 사이 간격(`gap-2`). 경로를 맞출 때 늘 비운다. */
+const SEARCH_BAR_HEIGHT = 52;
+const SEARCH_BAR_GAP = 8;
+const SEARCH_OVERLAY_HEIGHT = SEARCH_BAR_HEIGHT + SEARCH_BAR_GAP;
 
 type Shape = readonly [number, number][];
 
@@ -181,6 +188,7 @@ function routeMarkers(
 		const color = legColor(mapLeg, busMeta, mode);
 		return mapLeg.vehicles.map((vehicle) => ({
 			color,
+			estimated: vehicle.estimated,
 			key: vehicleKey(vehicle),
 			kind: vehicle.kind,
 			motion: vehicle.motion,
@@ -399,15 +407,20 @@ function useCenterOnHere(
 	}, [here, mapRef, ready, userMoved]);
 }
 
-/** 칩 위·경로 목록 아래의 알약들. 지금 경로, 노선이 모두 꺼졌다는 안내, 실시간이 없는 구간 안내, 시간표 추정 도착 예상이다. */
+/**
+ * 칩 위·경로 목록 아래의 알약들. 지금 경로, 노선이 모두 꺼졌다는 안내, 실시간이 없는 구간 안내,
+ * 시간표 추정 모드(14), 시간표 추정 도착 예상이다.
+ */
 function RouteStatus({
 	allHidden,
 	estimated,
+	estimatedMode,
 	noRealtime,
 	routeLabel,
 }: {
 	allHidden: boolean;
 	estimated: string | null;
+	estimatedMode: boolean;
 	noRealtime: boolean;
 	routeLabel: string | null;
 }) {
@@ -416,9 +429,30 @@ function RouteStatus({
 			{routeLabel === null ? null : <MapPill label={routeLabel} />}
 			{allHidden ? <MapPill label={t("map.allHidden")} /> : null}
 			{noRealtime ? <MapPill label={t("map.noRealtime")} /> : null}
+			{estimatedMode ? (
+				<MapPill label={t("map.estimatedMode")} tone="estimated" />
+			) : null}
 			{estimated === null ? null : (
 				<MapPill label={estimated} tone="estimated" />
 			)}
+		</View>
+	);
+}
+
+/** 장소가 없을 때 검색창 아래. "근처 지하철"과, 그 옆에 시간표 추정 모드(14)다. */
+function NearbyStatus({
+	estimatedMode,
+	shown,
+}: {
+	estimatedMode: boolean;
+	shown: boolean;
+}) {
+	return (
+		<View className="flex-row gap-2 px-4" pointerEvents="box-none">
+			{shown ? <MapPill label={t("map.nearby")} tone="live" /> : null}
+			{shown && estimatedMode ? (
+				<MapPill label={t("map.estimatedMode")} tone="estimated" />
+			) : null}
 		</View>
 	);
 }
@@ -469,6 +503,7 @@ function PlacesOverlay({
 				<RouteStatus
 					allHidden={data.allHidden}
 					estimated={estimatedOf(data)}
+					estimatedMode={data.estimatedMode.bus || data.estimatedMode.subway}
 					noRealtime={data.legs.some((mapLeg) => !mapLeg.realtime)}
 					routeLabel={current === null ? null : routeOptionLabel(current)}
 				/>
@@ -488,6 +523,33 @@ function isRiding(
 		selection?.rank === 0 &&
 		session?.content.stage === "ride"
 	);
+}
+
+/** 07이 없는 경기·인천 면허 노선(서울 routeType 7·8). */
+const NO_DETAIL_ROUTE_TYPES: readonly string[] = ["7", "8"];
+
+/** 시트의 "자세히"가 여는 경로. 지하철은 06, 버스는 `seoul-bus:` 구간이고 경기·인천 면허 노선이 아닐 때만 07이다. */
+function busDetailHref(
+	leg: MapLeg["leg"],
+	busMeta: BusMetaMap,
+	vehicleId: string
+): string | null {
+	if (leg.mode === "subway") {
+		// 시간표 위치 열차는 실시간 열차 번호가 없어 06 열차 상세를 열 수 없다.
+		if (isScheduledVehicleId(vehicleId)) {
+			return null;
+		}
+		// 지하철 시트의 차량 ID는 열차 번호(`rawTrainNo`)다.
+		return `/train/${encodeURIComponent(vehicleId)}?line=${encodeURIComponent(leg.line)}`;
+	}
+	if (leg.mode !== "bus" || !leg.line.startsWith("seoul-bus:")) {
+		return null;
+	}
+	const meta = busMeta[leg.line];
+	if (meta !== undefined && NO_DETAIL_ROUTE_TYPES.includes(meta.routeType)) {
+		return null;
+	}
+	return `/bus/${encodeURIComponent(leg.line)}?veh=${encodeURIComponent(vehicleId)}`;
 }
 
 function SelectedSheet({
@@ -510,6 +572,13 @@ function SelectedSheet({
 	view: MapData["view"];
 }) {
 	const { mapLeg, vehicle } = selected;
+	const router = useRouter();
+	const detailHref = busDetailHref(mapLeg.leg, busMeta, vehicle.id);
+	const openDetail = useCallback(() => {
+		if (detailHref !== null) {
+			router.push(detailHref as never);
+		}
+	}, [detailHref, router]);
 	if (mapLeg.map === null || vehicle.positionSeq === null) {
 		return null;
 	}
@@ -522,6 +591,7 @@ function SelectedSheet({
 			map={mapLeg.map}
 			onClose={onClose}
 			onHeight={onHeight}
+			onOpenDetail={detailHref === null ? undefined : openDetail}
 			toAlight={toAlight}
 			vehicle={{
 				id: vehicle.id,
@@ -647,6 +717,7 @@ export default function MapTab() {
 	}, []);
 	const ready = useCallback(() => setMapReady(true), []);
 	const register = useCallback(() => router.navigate("/commute"), [router]);
+	const openSearch = useCallback(() => router.push("/search"), [router]);
 
 	const markers = hasPlaces
 		? routeMarkers(data.legs, busMeta, themeMode)
@@ -658,7 +729,10 @@ export default function MapTab() {
 	const mapPadding = useMemo(
 		() => ({
 			bottom: bottomOverlay + sheetInset,
-			top: insets.top + (hasPlaces ? TOP_OVERLAY_HEIGHT : 0),
+			top:
+				insets.top +
+				SEARCH_OVERLAY_HEIGHT +
+				(hasPlaces ? TOP_OVERLAY_HEIGHT : 0),
 		}),
 		[bottomOverlay, hasPlaces, insets.top, sheetInset]
 	);
@@ -673,12 +747,11 @@ export default function MapTab() {
 				buildingHeight={preferences.show3dBuildings ? 1 : 0}
 				initialCamera={INITIAL_CAMERA}
 				isExtentBoundedInKorea
-				isNightModeEnabled={isDark}
 				isShowLocationButton={false}
 				isShowZoomControls={false}
 				locale="ko"
 				mapPadding={mapPadding}
-				mapType={isDark ? "Navi" : "Basic"}
+				{...mapThemeProps(isDark)}
 				onCameraChanged={cameraChanged}
 				onInitialized={ready}
 				onTapMap={tapMap}
@@ -702,6 +775,13 @@ export default function MapTab() {
 				pointerEvents="box-none"
 				style={topStyle}
 			>
+				<View className="px-4" pointerEvents="box-none">
+					<SearchBarButton
+						accessibilityLabel={t("search.placeholder")}
+						onPress={openSearch}
+						placeholder={t("search.placeholder")}
+					/>
+				</View>
 				{hasPlaces ? (
 					<PlacesOverlay
 						data={data}
@@ -712,11 +792,10 @@ export default function MapTab() {
 						selection={selection}
 					/>
 				) : (
-					<View className="px-4" pointerEvents="box-none">
-						{nearby.paths.length > 0 ? (
-							<MapPill label={t("map.nearby")} tone="live" />
-						) : null}
-					</View>
+					<NearbyStatus
+						estimatedMode={nearby.estimatedMode}
+						shown={nearby.paths.length > 0}
+					/>
 				)}
 			</View>
 			{hasPlaces ? null : (

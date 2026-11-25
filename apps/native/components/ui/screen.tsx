@@ -11,6 +11,8 @@ export interface ScreenProps {
 	scroll?: boolean;
 	/** Figma `LargeTitle`(Title/1, 높이 52, 좌우 16). 없으면 제목 줄을 그리지 않는다. */
 	title?: string;
+	/** 제목 줄 오른쪽 끝에 놓는 동작(예: 09의 `IconButton` 추가). 제목이 있을 때만 보인다. */
+	titleAction?: ReactNode;
 }
 
 /**
@@ -27,7 +29,12 @@ function useBottomInset(): number {
 	return Platform.OS === "ios" ? tabBarHeight : 0;
 }
 
-export function Screen({ children, scroll = false, title }: ScreenProps) {
+export function Screen({
+	children,
+	scroll = false,
+	title,
+	titleAction,
+}: ScreenProps) {
 	const insets = useSafeAreaInsets();
 	const bottomInset = useBottomInset();
 
@@ -36,6 +43,7 @@ export function Screen({ children, scroll = false, title }: ScreenProps) {
 			<AppText accessibilityRole="header" variant="title1">
 				{title}
 			</AppText>
+			{titleAction}
 		</View>
 	) : null;
 

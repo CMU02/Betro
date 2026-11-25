@@ -248,6 +248,18 @@ describe("LatestState", () => {
 		expect(state.snapshot("bus", T, ["gbis"]).stoppedSources).toEqual(["gbis"]);
 	});
 
+	it("지하철·버스 스냅샷은 그날 멈췄는지(stoppedToday)를 싣는다", () => {
+		const state = new LatestState();
+		state.applySubway([subway()], T);
+		state.applyBus("100100290", [bus()], T);
+		expect(state.snapshot("subway", T).stoppedToday).toBe(false);
+		expect(state.snapshot("subway", T, [], true).stoppedToday).toBe(true);
+		expect(state.snapshot("bus", T).stoppedToday).toBe(false);
+		const stopped = state.snapshot("bus", T, ["gbis"], true);
+		expect(stopped.stoppedToday).toBe(true);
+		expect(stopped.stoppedSources).toEqual(["gbis"]);
+	});
+
 	it("멈춘 지역 차량은 TTL을 기다리지 않고 바로 뺀다", () => {
 		const state = new LatestState();
 		const routeId = "gbis:100100290";

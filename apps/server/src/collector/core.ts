@@ -70,6 +70,8 @@ const BUS_REFERENCE_KINDS: readonly ReferenceBatchKind[] = ["bus_route"];
  * `tago:<영문 3자><숫자>`). 상류 URL에 그대로 들어가므로 이 꼴만 받는다.
  */
 const BUS_ROUTE_ID = /^\d+$|^gbis:\d+$|^tago:[A-Z]{3}\d+$/;
+/** 서울 지하철 역 ID(statnId)는 10자리 숫자다. */
+const SUBWAY_STATION_ID = /^\d{10}$/;
 
 /** 버스 참조와 그 참조를 읽을 때 요청한 노선(D1에 없던 노선도 든다). */
 interface LoadedBus {
@@ -133,22 +135,29 @@ export class CollectorCore {
 	}
 
 	/**
-	 * `GET /v1/snapshot/:kind` 본문. 최신 상태와 그날 멈춘 지역 출처가 바뀌지 않았으면 같은
-	 * 본문·ETag. 멈춤은 다음 KST 날 저절로 풀리므로 캐시 키에 넣는다.
+	 * `GET /v1/snapshot/:kind` 본문. 최신 상태와 그날 멈춤(이 종류의 `stoppedToday`, 버스의 지역
+	 * 출처)이 바뀌지 않았으면 같은 본문·ETag. 멈춤은 예산 소진으로도 생기고 다음 KST 날 저절로
+	 * 풀리므로 상태 버전과 따로 캐시 키에 넣는다.
+	 * 예산이 바닥나면 alarm이 다음 날까지 자서 tick의 만료가 돌지 않는다. 그래서 읽을 때도 TTL이
+	 * 지난 차량을 빼고(빠지면 버전이 오른다) 나서 캐시 키를 본다.
 	 */
 	async snapshot(kind: SnapshotKind): Promise<SnapshotResponse> {
 		const state = await this.#state();
+		const { clock, config } = this.#ports;
+		const now = clock();
+		state.expire(now);
 		const version = state.versions[kind];
 		const stoppedSources =
-			kind === "bus" ? state.stoppedSources(this.#ports.clock()) : [];
-		const stopped = stoppedSources.join(",");
+			kind === "bus" ? state.stoppedSources(config, now) : [];
+		const stoppedToday = state.stoppedToday(kind, config, now);
+		const stopped = `${stoppedToday}|${stoppedSources.join(",")}`;
 		const cached = this.#snapshots.get(kind);
 		if (cached?.version === version && cached.stopped === stopped) {
 			return cached.response;
 		}
 		const generatedAt = state.core.changedAt[kind] ?? state.loadedAt;
 		const body = JSON.stringify(
-			state.latest.snapshot(kind, generatedAt, stoppedSources)
+			state.latest.snapshot(kind, generatedAt, stoppedSources, stoppedToday)
 		);
 		const etag = (await sha256Hex(body)).slice(0, ETAG_LENGTH);
 		const response = { body, etag };
@@ -161,9 +170,13 @@ export class CollectorCore {
 	 * 만료 시각이 지난 역은 지운다. 진행 중인 tick을 기다리지 않는다(메모리의 같은 값을 바꾸고 바로 저장).
 	 */
 	async watchStations(statnIds: string[], until: number): Promise<void> {
+		if (!statnIds.every((statnId) => SUBWAY_STATION_ID.test(statnId))) {
+			throw new Error("subway station ids must be 10 digits");
+		}
 		const state = await this.#state();
-		state.watchStations(statnIds, until);
+		// 만료된 역을 먼저 지워야 상한이 지난 요청 몫으로 차지 않는다.
 		state.expireWatches(this.#ports.clock());
+		state.watchStations(statnIds, until);
 		await state.saveBoards(this.#ports.state);
 	}
 
@@ -189,9 +202,13 @@ export class CollectorCore {
 			);
 		}
 		const state = await this.#state();
-		state.watchBusRoutes(installId, unique, until);
+		const kept = state.watchBusRoutes(installId, unique, until);
 		state.expireBusWatches(clock());
 		await state.saveBusWatch(this.#ports.state);
+		// 내려놓은 노선의 기록을 남기기로 했으면 다음 tick 전에 DO가 잠들어도 잃지 않게 바로 저장한다.
+		if (kept) {
+			await state.saveCore(this.#ports.state);
+		}
 	}
 
 	/** 등록한 역 중 행을 받은 역의 최근 행. 받지 못한 역은 키가 없다. */

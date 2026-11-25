@@ -1,7 +1,14 @@
 import { cn } from "heroui-native";
 import { SearchIcon, XIcon } from "lucide-react-native";
 import { useCallback } from "react";
-import { Pressable, TextInput, type TextInputProps, View } from "react-native";
+import {
+	Platform,
+	Pressable,
+	Text,
+	TextInput,
+	type TextInputProps,
+	View,
+} from "react-native";
 import { withUniwind } from "uniwind";
 
 import { MAX_FONT_SIZE_MULTIPLIER } from "@/components/ui/app-text";
@@ -13,6 +20,16 @@ const Clear = withUniwind(XIcon);
 /** Figma `SearchBar` 아이콘(Icon/search, Icon/x) 크기 */
 const SEARCH_ICON_SIZE = 20;
 const CLEAR_HIT_SLOP = 12;
+
+/**
+ * 한 줄 입력의 Android 세로 정렬. 글꼴 위아래 여백을 빼고 가운데에 맞춘다.
+ * 이게 없으면 자리표시자 글자가 알약 안에서 위로 치우친다(남은 일 #4).
+ */
+const ANDROID_INPUT_PROPS =
+	Platform.OS === "android"
+		? ({ includeFontPadding: false, textAlignVertical: "center" } as const)
+		: ({} as const);
+const ANDROID_INPUT_STYLE = { paddingVertical: 0 } as const;
 
 export interface TextFieldProps {
 	accessibilityLabel: string;
@@ -29,6 +46,41 @@ export interface TextFieldProps {
 	 */
 	search?: { clearLabel: string };
 	value: string;
+}
+
+const SEARCH_BAR_CLASS_NAME =
+	"h-[52px] flex-row items-center gap-3 rounded-full border bg-bg-control px-4";
+
+export interface SearchBarButtonProps {
+	accessibilityLabel: string;
+	onPress: () => void;
+	placeholder: string;
+}
+
+/** Figma `SearchBar` Idle. 입력은 못 하고 누르면 검색 화면으로 가는 52pt 알약. */
+export function SearchBarButton({
+	accessibilityLabel,
+	onPress,
+	placeholder,
+}: SearchBarButtonProps) {
+	return (
+		<Pressable
+			accessibilityLabel={accessibilityLabel}
+			accessibilityRole="search"
+			className={cn(SEARCH_BAR_CLASS_NAME, "border-border-subtle")}
+			onPress={onPress}
+		>
+			<Search colorClassName="accent-icon-secondary" size={SEARCH_ICON_SIZE} />
+			<Text
+				className="flex-1 text-text-tertiary"
+				maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}
+				numberOfLines={1}
+				style={[TEXT_STYLES.bodyM, ANDROID_INPUT_STYLE, ANDROID_INPUT_PROPS]}
+			>
+				{placeholder}
+			</Text>
+		</Pressable>
+	);
 }
 
 /** 한 줄 입력란. 글자는 `bodyM`, 배경은 `bg/control`. */
@@ -61,7 +113,7 @@ export function TextField({
 			placeholder={placeholder}
 			placeholderTextColorClassName="accent-text-tertiary"
 			returnKeyType={returnKeyType}
-			style={TEXT_STYLES.bodyM}
+			style={[TEXT_STYLES.bodyM, ANDROID_INPUT_STYLE, ANDROID_INPUT_PROPS]}
 			value={value}
 		/>
 	);
@@ -72,7 +124,7 @@ export function TextField({
 	return (
 		<View
 			className={cn(
-				"h-[52px] flex-row items-center gap-3 rounded-full border bg-bg-control px-4",
+				SEARCH_BAR_CLASS_NAME,
 				hasText ? "border-accent-primary" : "border-border-subtle"
 			)}
 		>

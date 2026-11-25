@@ -80,6 +80,12 @@ export interface CoreSaved {
 	 */
 	regionalPrev?: Record<string, Record<string, RegionalPrev>>;
 	/**
+	 * 설치가 명시적으로 내려놓은 지역 노선 키 → 내려놓은 요청의 원래 만료 시각. 아무도 보지 않아도
+	 * 이 시각까지는 `regionalPrev`를 남긴다. 탭을 잠깐 옮겼다 돌아와도 멈춘 차량이 새 차량처럼
+	 * 다시 나오지 않게 한다(TTL로 풀리던 때와 같다). 예전 저장값에는 없다.
+	 */
+	regionalPrevKeepUntil?: Record<string, number>;
+	/**
 	 * 운행 종료(headerCd 8)로 쉬는 버스 노선 → 마지막으로 운행 종료를 받은 시각.
 	 * 지금 운행 시간 안에 받은 것만 "쉬는 중"으로 본다.
 	 */

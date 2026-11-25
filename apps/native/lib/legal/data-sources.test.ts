@@ -1,10 +1,11 @@
+import { BUS_SOURCE_IDS, SUBWAY_SOURCE_IDS } from "@Betro/commute/refs";
 import { describe, expect, it } from "bun:test";
-
 import { t } from "@/lib/i18n/t";
 import {
 	DATA_PROVIDERS,
 	DATA_SOURCES_FOOTNOTE_KEY,
 	STATUS_LEGEND,
+	USED_SOURCES,
 } from "./data-sources";
 
 describe("data sources", () => {
@@ -30,7 +31,17 @@ describe("data sources", () => {
 			],
 			[
 				"공공데이터포털",
-				"버스 위치·노선·정류소, 서울교통공사 시간표",
+				"서울 버스 위치·노선·정류소, 서울교통공사 시간표",
+				"https://www.data.go.kr",
+			],
+			[
+				"경기도",
+				"경기도 버스정보 · 경기 버스 노선·정류소·도착·위치",
+				"https://www.data.go.kr",
+			],
+			[
+				"국토교통부",
+				"TAGO · 인천 버스 노선·정류소·도착·위치",
 				"https://www.data.go.kr",
 			],
 			[
@@ -43,7 +54,24 @@ describe("data sources", () => {
 				"선로·지도 형상 (ODbL)",
 				"https://www.openstreetmap.org/copyright",
 			],
+			[
+				"NAVER 지도",
+				"배경 지도",
+				"https://www.ncloud.com/product/applicationService/maps",
+			],
 		]);
+	});
+
+	it("앱이 쓰는 모든 출처가 제공 기관 하나 이상에 있다", () => {
+		const covered = new Set(DATA_PROVIDERS.flatMap((p) => p.sources));
+		expect(USED_SOURCES.filter((s) => !covered.has(s))).toEqual([]);
+	});
+
+	it("버스·지하철 출처 ID마다 USED_SOURCES에 대응이 있다", () => {
+		const ids: readonly string[] = [...BUS_SOURCE_IDS, ...SUBWAY_SOURCE_IDS];
+		expect(
+			ids.filter((id) => !(USED_SOURCES as readonly string[]).includes(id))
+		).toEqual([]);
 	});
 
 	it("keeps the KOGL footnote unchanged", () => {

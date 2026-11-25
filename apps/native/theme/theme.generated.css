@@ -11,6 +11,7 @@
 			--color-bg-hover: #ffffff14;
 			--color-bg-inverse: #f6f6f7;
 			--color-bg-scrim: #00000080;
+			--color-bg-segment-selected: #393b40;
 			--color-bg-surface: #161719;
 			--color-bg-surface-raised: #1e1f22;
 			--color-bg-surface-sunken: #070708;
@@ -76,6 +77,7 @@
 			--color-bg-hover: #0000000f;
 			--color-bg-inverse: #0e0f10;
 			--color-bg-scrim: #00000080;
+			--color-bg-segment-selected: #ffffff;
 			--color-bg-surface: #ffffff;
 			--color-bg-surface-raised: #ffffff;
 			--color-bg-surface-sunken: #eeeef0;

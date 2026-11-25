@@ -2,18 +2,15 @@ import type { Leg } from "@Betro/commute/plan";
 
 import { t } from "@/lib/i18n/t";
 import type { MessageKey, MessageParams } from "@/lib/i18n/translate";
+import { ESTIMATED_METHODS } from "@/lib/transit/eta-status";
 import { isLoopBranch, subwayBranchForLeg } from "./leg-vehicles";
 import type { BusMap, RouteViewLeg, SubwayMap } from "./map-client";
+import { timetableIdOf } from "./scheduled-trains";
 
 const MS_PER_SEC = 1000;
 const MS_PER_MIN = 60_000;
 /** 서울 버스 관측 간격(최대 약 160초)보다 길게 잡아, 정상 갱신 사이에는 "실시간"으로 둔다. */
-const LIVE_MAX_AGE_SEC = 180;
-const ESTIMATED_METHODS: readonly string[] = [
-	"timetable",
-	"headway",
-	"extrapolated",
-];
+export const LIVE_MAX_AGE_SEC = 180;
 
 export type SheetStopState = "past" | "now" | "next" | "mine";
 
@@ -21,7 +18,8 @@ export interface SheetModel {
 	directionKey: MessageKey;
 	directionParams: MessageParams;
 	estimated: boolean;
-	freshness: { live: boolean; secondsAgo: number };
+	/** 위치의 신선도. 시간표 위치 열차는 관측이 아니어서 `scheduled`가 붙는다. */
+	freshness: { live: boolean; scheduled?: true; secondsAgo: number };
 	lineLabel: string;
 	minutesToMine: number | null;
 	stops: { name: string; state: SheetStopState }[];
@@ -175,6 +173,7 @@ function directionOf(
  * 지도에서 차량을 눌렀을 때 시트에 그릴 값(지도 설계 2.4).
  * 남은 분은 승차 정류장 도착판에 이 차량이 있을 때만 낸다(지도 설계 2.8).
  * 도착 계산이 시각을 못 내는 차량은 정류장 줄만 보여 준다.
+ * 시간표 위치 열차(`scheduled:<tripId>`)는 열차 번호가 없고 추정이며, 도착판의 같은 trip(`timetable:<tripId>`) 시각을 쓴다.
  */
 export function sheetModel(input: {
 	/** 사용자가 이미 탄 차량이면 true. 줄이 하차 정류장에서 끝난다. */
@@ -192,7 +191,11 @@ export function sheetModel(input: {
 	const track = "stops" in map ? busTrack(leg, map) : subwayTrack(leg, map);
 	const direction = directionOf(leg, track, positionSeq);
 	const secondsAgo = Math.max(0, Math.floor((nowMs - observedAt) / MS_PER_SEC));
-	const entry = view?.approaching.find((item) => item.vehicleId === vehicleId);
+	const timetableId = timetableIdOf(vehicleId);
+	const scheduled = timetableId !== null;
+	const entry = view?.approaching.find(
+		(item) => item.vehicleId === (timetableId ?? vehicleId)
+	);
 	const minutesToMine =
 		entry?.etaAt === null || entry === undefined
 			? null
@@ -200,11 +203,13 @@ export function sheetModel(input: {
 	return {
 		directionKey: direction.key,
 		directionParams: direction.params,
-		estimated: ESTIMATED_METHODS.includes(entry?.method ?? ""),
-		freshness: { live: secondsAgo <= LIVE_MAX_AGE_SEC, secondsAgo },
+		estimated: scheduled || ESTIMATED_METHODS.includes(entry?.method ?? ""),
+		freshness: scheduled
+			? { live: false, scheduled: true, secondsAgo }
+			: { live: secondsAgo <= LIVE_MAX_AGE_SEC, secondsAgo },
 		lineLabel: leg.lineName,
 		minutesToMine,
 		stops: track === null ? [] : stopRows(track, positionSeq, boarded),
-		trainNo: leg.mode === "subway" ? vehicleId : null,
+		trainNo: leg.mode === "subway" && !scheduled ? vehicleId : null,
 	};
 }

@@ -562,7 +562,7 @@ it("stoppedSources가 없는 옛 스냅샷도 읽는다", () => {});
 
 ### Task 11: 전체 확인, 배포, 기기 확인
 
-- [ ] **Step 1: 전체 테스트와 린트를 돌립니다**
+- [x] **Step 1: 전체 테스트와 린트를 돌립니다**
 
 Run: 각 패키지에서 `bun test`(`packages/commute`, `packages/realtime`, `packages/transit-static`, `apps/server`(`src`), `apps/native`(`lib`)), 그리고 `bunx biome ci --changed --since=origin/develop --no-errors-on-unmatched`, `bun run check-types`.
 Expected: 실패 0, 린트 오류 0.
@@ -576,3 +576,23 @@ Expected: 실패 0, 린트 오류 0.
   - 지도에서 그 경로를 열면 차량이 그려지는지, "실시간 정보 없음"이 사라졌는지 봅니다. 인천 노선도 같은 방식으로 봅니다.
   - 확인이 끝나면 테스트 장소를 지웁니다.
 - [ ] **Step 4: 확인 결과를 이 계획 끝에 적고 커밋합니다.**
+
+---
+
+## 5-B 결과 (2026-11-25)
+
+Step 1은 출시 준비 계획 Task 12에서 했다. `feat/mvp-search-detail`에 `feat/mvp-release-fixes`(출시 준비 Task 6, 8~11)를 합친 뒤(merge `094dc55`) 돌렸다. 합칠 때 충돌은 없었다.
+
+| 검사 | 결과 |
+|---|---|
+| `packages/commute` `bun test` | 380 통과, 실패 0 |
+| `packages/realtime` `bun test` | 127 통과, 실패 0 |
+| `packages/transit-static` `bun test` | 458 통과, 7 건너뜀, 실패 0 |
+| `apps/server` `bun test src` | 351 통과, 실패 0 |
+| `apps/native` `bun test lib` | 716 통과, 실패 0 |
+| `apps/native` `bun test components scripts app-config.test.ts` | 21 통과, 실패 0 |
+| 루트 `bun test scripts` | 19 통과, 실패 0 |
+| `bun run check-types --force` | 10개 작업 모두 성공, 타입 오류 0 |
+| `bunx biome ci --changed --since=origin/develop --no-errors-on-unmatched` | 처음엔 오류 3건(`notification-content`의 서식 2건, `push-token-prune.test.ts`의 `noAwaitInLoops` 1건). 고친 뒤(`e0e0be3`) 오류 0 |
+
+Step 2(원격 배포)와 Step 3(기기 확인)은 출시 준비 계획 Task 13으로 옮겼다(Step 1의 6번, Step 2의 경기·인천 출퇴근 카드 항목). 사용자 확인 뒤에 한다.

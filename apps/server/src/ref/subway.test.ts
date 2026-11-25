@@ -3,14 +3,22 @@ import type { LibsqlDatabase } from "@Betro/db";
 import {
 	referenceBatch,
 	stationCrosswalk,
+	timetableStopTime,
+	timetableTrip,
 	trackShape,
 	trackStation,
 } from "@Betro/db/schema/transit";
 import { createTestDb } from "@Betro/db/test-db";
+import { kstToEpochMs } from "@Betro/realtime/time";
 import { LINES } from "@Betro/transit-static/lines";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { createApp } from "../app";
-import { directionBetween, expandLassoShapes, isLoopShape } from "./subway";
+import {
+	directionBetween,
+	expandLassoShapes,
+	findTripStops,
+	isLoopShape,
+} from "./subway";
 
 const API_HOST = "betro.cmu02-studio.com";
 const API = `https://${API_HOST}`;
@@ -484,5 +492,115 @@ describe("GET /v1/ref/subway/direction", () => {
 			"seoul-subway:7002"
 		);
 		expect(await res.json()).toEqual({ direction: "up", stops: 1 });
+	});
+});
+
+describe("findTripStops", () => {
+	let tripDb: LibsqlDatabase;
+	let tripId: number;
+	let oldTripId: number;
+	// 평일 새벽 3시 이후라 서비스일은 그날 0시부터다.
+	const NOW = kstToEpochMs("2026-11-24 09:00:00");
+	const DAY_START = kstToEpochMs("2026-11-24 00:00:00");
+
+	beforeAll(async () => {
+		tripDb = await createTestDb();
+		const [crosswalk, oldBatch, current] = await tripDb
+			.insert(referenceBatch)
+			.values([
+				{ isCurrent: true, kind: "station_crosswalk", sourceManifest: {} },
+				{ isCurrent: false, kind: "timetable", sourceManifest: {} },
+				{ isCurrent: true, kind: "timetable", sourceManifest: {} },
+			])
+			.returning({ id: referenceBatch.id });
+		if (!(crosswalk && oldBatch && current)) {
+			throw new Error("seed batches missing");
+		}
+		await tripDb.insert(stationCrosswalk).values(
+			[
+				["T1", "가역"],
+				["T2", "나역"],
+			].map(([statnId, name]) => ({
+				batchId: crosswalk.id,
+				coordSource: "test",
+				lat: 37.5,
+				lineKey: "line2",
+				lng: 127,
+				matchMethod: "auto-same-line" as const,
+				nameAliases: [],
+				nameCanonical: name as string,
+				qualityFlags: [],
+				statnId: statnId as string,
+				subwayId: "1002",
+			}))
+		);
+		const trip = (batchId: number, trainNo: string) => ({
+			batchId,
+			direction: "down" as const,
+			express: "local" as const,
+			lineKey: "line2",
+			qualityFlags: [],
+			serviceDay: "weekday" as const,
+			serviceDaySource: "source" as const,
+			source: "seoul-metro-csv" as const,
+			sourceVersion: "test",
+			trainNo,
+		});
+		const [t, o] = await tripDb
+			.insert(timetableTrip)
+			.values([trip(current.id, "2001"), trip(oldBatch.id, "9001")])
+			.returning({ id: timetableTrip.id });
+		if (!(t && o)) {
+			throw new Error("seed trip missing");
+		}
+		tripId = t.id;
+		oldTripId = o.id;
+		// 자정을 넘기는 정차(86_600초)와 도착 시각이 없는 출발역을 함께 둔다.
+		await tripDb.insert(timetableStopTime).values([
+			{
+				arriveSec: null,
+				departSec: 86_000,
+				qualityFlags: [],
+				seq: 1,
+				statnId: "T1",
+				tripId,
+			},
+			{
+				arriveSec: 86_600,
+				departSec: null,
+				qualityFlags: [],
+				seq: 2,
+				statnId: "T2",
+				tripId,
+			},
+		]);
+	});
+
+	test("trip 정차 시각은 서비스일 0시 + 초이고 자정을 넘는 정차도 이어진다", async () => {
+		const trip = await findTripStops(tripDb, tripId, NOW);
+		expect(trip?.line).toBe("seoul-subway:line2");
+		expect(trip?.express).toBe(false);
+		expect(trip?.stops.map((s) => [s.name, s.stop])).toEqual([
+			["가역", "seoul-subway:T1"],
+			["나역", "seoul-subway:T2"],
+		]);
+		const [first, second] = trip?.stops ?? [];
+		expect(first?.departAt).toBe(DAY_START + 86_000_000);
+		expect(first?.arriveAt).toBe(DAY_START + 86_000_000);
+		expect((second?.arriveAt ?? 0) - (first?.departAt ?? 0)).toBe(600_000);
+		expect(second?.departAt).toBe(second?.arriveAt ?? -1);
+	});
+
+	test("새벽 3시 전에는 전날이 서비스일이다", async () => {
+		const early = kstToEpochMs("2026-11-24 01:00:00");
+		const trip = await findTripStops(tripDb, tripId, early);
+		expect(trip?.stops[0]?.departAt).toBe(
+			kstToEpochMs("2026-11-23 00:00:00") + 86_000_000
+		);
+	});
+
+	test("다른 배치의 tripId와 없는 tripId는 null이다", async () => {
+		expect(await findTripStops(tripDb, oldTripId, NOW)).toBeNull();
+		expect(await findTripStops(tripDb, 999_999, NOW)).toBeNull();
 	});
 });

@@ -1,3 +1,4 @@
+import { DEFAULT_TIMEZONE } from "@Betro/commute/config";
 import type { Database } from "@Betro/db";
 import { and, asc, eq } from "@Betro/db/operators";
 import {
@@ -5,10 +6,13 @@ import {
 	referenceBatch,
 	stationCrosswalk,
 	type TrackDirection,
+	timetableStopTime,
+	timetableTrip,
 	trackShape,
 	trackStation,
 } from "@Betro/db/schema/transit";
 import { LINES, type LineKey } from "@Betro/transit-static/lines";
+import { serviceDayOf } from "../commute/cf-ports";
 import { subwayLine, subwayStation } from "./ids";
 
 export interface SubwayLineItem {
@@ -333,5 +337,97 @@ export async function findDirection(
 	return {
 		batchId: line.batchId,
 		result: directionBetween(expandLassoShapes(shapes), from, to),
+	};
+}
+
+export interface TripStop {
+	arriveAt: number | null;
+	departAt: number | null;
+	name: string;
+	stop: string;
+}
+
+export interface TripStops {
+	direction: TrackDirection;
+	express: boolean;
+	line: string;
+	stops: TripStop[];
+	timezone: string;
+	tripId: number;
+}
+
+const SECOND_MS = 1000;
+
+/**
+ * 현재 시간표 배치의 열차 하나의 정차 목록. 시각은 `now`가 속한 서비스일 0시에 초를 더한 epoch ms다.
+ * 현재 시간표 배치의 열차가 아니면 null.
+ */
+export async function findTripStops(
+	db: Database,
+	tripId: number,
+	now: number
+): Promise<TripStops | null> {
+	const batchId = await currentBatch(db, "timetable");
+	if (batchId === null) {
+		return null;
+	}
+	const [trip] = await db
+		.select({
+			direction: timetableTrip.direction,
+			express: timetableTrip.express,
+			lineKey: timetableTrip.lineKey,
+		})
+		.from(timetableTrip)
+		.where(
+			and(eq(timetableTrip.id, tripId), eq(timetableTrip.batchId, batchId))
+		)
+		.limit(1);
+	if (!trip) {
+		return null;
+	}
+	const times = await db
+		.select({
+			arriveSec: timetableStopTime.arriveSec,
+			departSec: timetableStopTime.departSec,
+			statnId: timetableStopTime.statnId,
+		})
+		.from(timetableStopTime)
+		.where(eq(timetableStopTime.tripId, tripId))
+		.orderBy(asc(timetableStopTime.seq));
+	const crosswalkBatchId = await currentBatch(db, "station_crosswalk");
+	const names = new Map<string, string>();
+	if (crosswalkBatchId !== null) {
+		const rows = await db
+			.select({
+				name: stationCrosswalk.nameCanonical,
+				statnId: stationCrosswalk.statnId,
+			})
+			.from(stationCrosswalk)
+			.where(
+				and(
+					eq(stationCrosswalk.batchId, crosswalkBatchId),
+					eq(stationCrosswalk.lineKey, trip.lineKey)
+				)
+			);
+		for (const row of rows) {
+			names.set(row.statnId, row.name);
+		}
+	}
+	const { dayStart } = serviceDayOf(now);
+	const at = (sec: number | null) =>
+		sec === null ? null : dayStart + sec * SECOND_MS;
+	return {
+		direction: trip.direction,
+		express: trip.express !== "local",
+		line: subwayLine(trip.lineKey),
+		stops: times.map((time) => ({
+			// 두 열 모두 null일 수 있어 한쪽으로 메운다.
+			arriveAt: at(time.arriveSec ?? time.departSec),
+			departAt: at(time.departSec ?? time.arriveSec),
+			name: names.get(time.statnId) ?? time.statnId,
+			stop: subwayStation(time.statnId),
+		})),
+		timezone: DEFAULT_TIMEZONE,
+		tripId,
 	};
 }

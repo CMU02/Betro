@@ -21,11 +21,15 @@ const SELECTED_MARKER_SIZE = 36;
 const ICON_SIZE = 16;
 const MARKER_ANCHOR = { x: 0.5, y: 0.5 } as const;
 const SELECTED_Z_INDEX = 1;
+/** 시간표 위치 열차(14)의 불투명도(Motion Spec). 실시간 열차는 1이다. */
+const ESTIMATED_ALPHA = 0.7;
 
 type Shape = readonly [number, number][];
 
 export interface MarkerVehicle {
 	color: string;
+	/** 시간표 위치 열차(14). 흐리게 그린다. */
+	estimated?: true;
 	key: string;
 	kind: "bus" | "subway";
 	motion: MotionState;
@@ -69,12 +73,13 @@ const VehicleMarker = memo(function VehicleMarkerView({
 	selected: boolean;
 	vehicle: MarkerVehicle;
 }) {
-	const { color, key, kind } = vehicle;
+	const { color, estimated, key, kind } = vehicle;
 	const handleTap = useCallback(() => onPress?.(key), [onPress, key]);
 	const size = selected ? SELECTED_MARKER_SIZE : MARKER_SIZE;
 	const Icon = kind === "bus" ? BusFront : TrainFront;
 	return (
 		<NaverMapMarkerOverlay
+			alpha={estimated ? ESTIMATED_ALPHA : 1}
 			anchor={MARKER_ANCHOR}
 			height={size}
 			latitude={latitude}
@@ -90,7 +95,7 @@ const VehicleMarker = memo(function VehicleMarkerView({
 					selected ? "size-9 border-2 border-accent-primary" : "size-7"
 				)}
 				collapsable={false}
-				key={`${kind}/${color}/${selected}`}
+				key={`${kind}/${color}/${selected}/${estimated === true}`}
 				style={{ backgroundColor: color }}
 			>
 				{/* 노선색 위 흰 아이콘. 노선 배지 글자와 같은 원시 흰색이다(line-badge.tsx). */}
@@ -128,7 +133,8 @@ export function VehicleMarkers({
 				}
 				return (
 					<VehicleMarker
-						key={vehicle.key}
+						// 시간표 열차와 실시간 열차가 같은 마커를 이어 쓰지 않게 한다.
+						key={`${vehicle.key}/${vehicle.estimated === true}`}
 						latitude={at.latitude}
 						longitude={at.longitude}
 						onPress={onPress}

@@ -37,6 +37,7 @@ import {
 import { startMinuteOf } from "./routes";
 import {
 	commuteReportDate,
+	REGIONAL_CONCURRENCY,
 	RunnerCore,
 	type SessionEntry,
 } from "./runner-core";
@@ -574,8 +575,13 @@ class FakeBoards implements BoardSource {
 	regionalLocationsHandler:
 		| ((route: RegionalRouteRef) => RegionalPosition[] | null | Error)
 		| null = null;
+	/** 정하면 지역 도착 호출은 이 약속이 끝난 뒤에 응답한다(동시성 확인). 기본은 바로 응답한다. */
+	regionalArrivalGate: (() => Promise<void>) | null = null;
+	/** 지금 나가 있는 지역 호출(도착과 위치 목록) 수와 그 최댓값. */
+	regionalInFlight = 0;
+	regionalMaxInFlight = 0;
 
-	regionalArrival(
+	async regionalArrival(
 		route: RegionalRouteRef,
 		stop: RegionalStop
 	): Promise<RouteStopArrival | null> {
@@ -584,20 +590,40 @@ class FakeBoards implements BoardSource {
 			seq: stop.seq,
 			source: route.source,
 		});
-		const handled = this.regionalArrivalHandler?.(route, stop) ?? null;
-		return handled instanceof Error
-			? Promise.reject(handled)
-			: Promise.resolve(handled);
+		this.#enterRegional();
+		try {
+			await this.regionalArrivalGate?.();
+			const handled = this.regionalArrivalHandler?.(route, stop) ?? null;
+			if (handled instanceof Error) {
+				throw handled;
+			}
+			return handled;
+		} finally {
+			this.regionalInFlight -= 1;
+		}
 	}
 
 	regionalLocations(
 		route: RegionalRouteRef
 	): Promise<RegionalPosition[] | null> {
 		this.locationCalls.push({ routeId: route.routeId, source: route.source });
+		this.#enterRegional();
 		const handled = this.regionalLocationsHandler?.(route) ?? null;
-		return handled instanceof Error
-			? Promise.reject(handled)
-			: Promise.resolve(handled);
+		const settled =
+			handled instanceof Error
+				? Promise.reject(handled)
+				: Promise.resolve(handled);
+		return settled.finally(() => {
+			this.regionalInFlight -= 1;
+		});
+	}
+
+	#enterRegional(): void {
+		this.regionalInFlight += 1;
+		this.regionalMaxInFlight = Math.max(
+			this.regionalMaxInFlight,
+			this.regionalInFlight
+		);
 	}
 }
 
@@ -2199,6 +2225,130 @@ describe("RunnerCore 지역 버스", () => {
 		await tickAt(h, core, h.clock.now);
 		expect(h.boards.regionalCalls).toHaveLength(3);
 	});
+
+	/** 승차 정류장 순번만 바꾼 구간(정류장 ID도 순번으로 바꾼다). */
+	function boardingAt(leg: BusLeg, seq: number): BusLeg {
+		const source: RegionalSource = leg.line.startsWith("gbis:")
+			? "gbis"
+			: "tago";
+		return { ...leg, board: { ...leg.board, seq, stop: `${source}:S${seq}` } };
+	}
+
+	/** 승차 전 세션 하나가 `legs`의 승차 정류장을 모두 보게 한다(구간마다 대안 경로 하나). */
+	function stopsPlan(legs: BusLeg[]): CommutePlan {
+		const plan = makePlan(PLAN_ANDROID);
+		plan.routes = legs.map((leg, rank) => ({
+			legs: [leg],
+			rank,
+			walkMinutes: [5, 3],
+		}));
+		return plan;
+	}
+
+	const STOP_SEQS = [20, 25, BOARD_SEQ];
+	const CALL_MS = 8 * SECOND;
+
+	/**
+	 * 지역 도착 호출마다 `CALL_MS`가 걸리는 가상 시계로 tick 한 번. 나갈 수 있는 호출이 다 나가도록
+	 * 매크로태스크 한 번을 기다린 뒤, 기다리는 호출이 있으면 시계를 `CALL_MS` 당기고 한꺼번에 응답한다.
+	 * 걸린 가상 시간을 돌려준다.
+	 */
+	async function tickWithSlowArrivals(
+		h: Harness,
+		core: RunnerCore,
+		at: number
+	): Promise<number> {
+		h.clock.now = at;
+		const waiting: (() => void)[] = [];
+		h.boards.regionalArrivalGate = () =>
+			new Promise<void>((resolve) => {
+				waiting.push(resolve);
+			});
+		let isDone = false;
+		const ticking = core.tick().finally(() => {
+			isDone = true;
+		});
+		const pump = async (): Promise<void> => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			if (isDone) {
+				return;
+			}
+			if (waiting.length > 0) {
+				h.clock.now += CALL_MS;
+				for (const resolve of waiting.splice(0)) {
+					resolve();
+				}
+			}
+			await pump();
+		};
+		await pump();
+		await ticking;
+		h.boards.regionalArrivalGate = null;
+		return h.clock.now - at;
+	}
+
+	test("TAGO 정류장 세 곳이 각 8초 걸려도 tick은 약 8초다", async () => {
+		const h = harness();
+		addRegional(
+			h,
+			stopsPlan(STOP_SEQS.map((seq) => boardingAt(tagoLeg(), seq)))
+		);
+		h.regionalCities[TAGO_LINE] = TAGO_CITY;
+		simulateRegional(h);
+		const elapsed = await tickWithSlowArrivals(h, h.core(), T0);
+		expect(h.boards.regionalCalls.map((call) => call.seq).sort()).toEqual(
+			STOP_SEQS
+		);
+		expect(h.boards.regionalMaxInFlight).toBe(REGIONAL_CONCURRENCY);
+		expect(elapsed).toBe(CALL_MS);
+	});
+
+	test("예산이 2건 남았을 때 동시에 세 곳을 불러도 2건만 부르고 저장된 used는 한도와 같다", async () => {
+		const h = harness({ dailyBudgetTagoArrival: 5 });
+		const budgetKey = `budget:tago-arrival:${SERVICE_DATE}`;
+		await h.store.put(budgetKey, 3);
+		addRegional(
+			h,
+			stopsPlan(STOP_SEQS.map((seq) => boardingAt(tagoLeg(), seq)))
+		);
+		h.regionalCities[TAGO_LINE] = TAGO_CITY;
+		simulateRegional(h);
+		// 가짜 store의 get/put은 각각 한 틱씩 늦게 끝난다(await 사이 경쟁을 드러내려는 것). get은 읽은
+		// 뒤에 늦으므로 그 사이의 put을 보지 못한다.
+		const get = h.store.get.bind(h.store);
+		const put = h.store.put.bind(h.store);
+		h.store.get = async <T>(key: string): Promise<T | undefined> => {
+			const value = await get<T>(key);
+			await Promise.resolve();
+			return value;
+		};
+		h.store.put = async (key: string, value: unknown): Promise<void> => {
+			await Promise.resolve();
+			await put(key, value);
+		};
+		await tickAt(h, h.core(), T0);
+		expect(h.boards.regionalCalls).toHaveLength(2);
+		expect(await h.store.get<number>(budgetKey)).toBe(5);
+	});
+
+	test("노선 두 개의 정류장을 불러도 동시에 나가는 호출은 3건을 넘지 않는다", async () => {
+		const h = harness();
+		addRegional(
+			h,
+			stopsPlan([
+				...STOP_SEQS.map((seq) => boardingAt(regionalLeg(), seq)),
+				...STOP_SEQS.map((seq) => boardingAt(tagoLeg(), seq)),
+			])
+		);
+		h.regionalCities[TAGO_LINE] = TAGO_CITY;
+		simulateRegional(h);
+		const elapsed = await tickWithSlowArrivals(h, h.core(), T0);
+		expect(callsOf(h, "gbis")).toHaveLength(STOP_SEQS.length);
+		expect(callsOf(h, "tago")).toHaveLength(STOP_SEQS.length);
+		// 노선은 차례로, 한 노선의 정류장은 세 곳씩 동시에 부른다.
+		expect(h.boards.regionalMaxInFlight).toBe(REGIONAL_CONCURRENCY);
+		expect(elapsed).toBe(2 * CALL_MS);
+	});
 });
 
 describe("RunnerCore 입력과 종료", () => {
@@ -2688,6 +2838,123 @@ describe("RunnerCore 경로 보기", () => {
 				}),
 			],
 		});
+	});
+});
+
+describe("RunnerCore 버스 노선 보기", () => {
+	const LINE = `seoul-bus:${ROUTE_ID}`;
+	const EIGHT_MINUTES = 8;
+
+	function eightMinuteHeadway(h: Harness): void {
+		h.busSchedules.handler = (ids) =>
+			Object.fromEntries(
+				ids.map((id) => [
+					id,
+					{
+						firstBusMinute: null,
+						headwayMin: EIGHT_MINUTES,
+						lastBusMinute: null,
+					},
+				])
+			);
+	}
+
+	test("버스 노선 보기는 세션과 같은 캐시를 쓰고 60초 안에 다시 부르지 않는다", async () => {
+		const h = harness();
+		eightMinuteHeadway(h);
+		const core = h.core();
+		const view = await core.busRouteView(LINE, T0);
+		h.clock.now = T0 + 30 * SECOND;
+		await core.busRouteView(LINE, h.clock.now);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID]);
+		expect(h.busSchedules.calls.at(-1)).toEqual([LINE]);
+		expect(view).toMatchObject({
+			etaState: "live",
+			fetchedAt: T0,
+			headwayMs: EIGHT_MINUTES * MINUTE,
+		});
+		expect(view.stops).toHaveLength(LAST_SEQ);
+		const board = view.stops.find((stop) => stop.seq === BOARD_SEQ);
+		expect(board?.vehicles).toEqual([
+			{
+				etaAt: V1_AT_BOARD,
+				plate: "서울74사V1",
+				stopsAway: 17,
+				vehicleId: "V1",
+			},
+			{
+				etaAt: V2_AT_BOARD,
+				plate: "서울74사V2",
+				stopsAway: 29,
+				vehicleId: "V2",
+			},
+		]);
+
+		// 같은 노선의 출퇴근 세션도 그 캐시를 쓴다.
+		addAndroid(h);
+		await tickAt(h, core, T0 + TICK_STEP);
+		expect(await sessions(h)).toHaveLength(1);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID]);
+	});
+
+	test("지도 몫에 닿으면 부르지 않고 배차간격 추정이다", async () => {
+		const h = harness();
+		eightMinuteHeadway(h);
+		await h.store.put(
+			`budget:${SERVICE_DATE}`,
+			h.config.dailyBudgetBusArrival - h.config.busArrivalSessionReserve
+		);
+		const view = await h.core().busRouteView(LINE, T0);
+		expect(h.boards.busCalls).toEqual([]);
+		expect(view).toEqual({
+			etaState: "estimated",
+			fetchedAt: null,
+			headwayMs: EIGHT_MINUTES * MINUTE,
+			stops: [],
+		});
+		expect(h.logs.some((line) => line.includes("map share"))).toBe(true);
+	});
+
+	test("운행 종료로 차량이 없으면 estimated이고 stops가 비어 있다", async () => {
+		const h = harness();
+		h.boards.handler = () => [];
+		const view = await h.core().busRouteView(LINE, T0);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID]);
+		expect(view).toEqual({
+			etaState: "estimated",
+			fetchedAt: T0,
+			headwayMs: null,
+			stops: [],
+		});
+	});
+
+	test("묵은 원자료(staleAfterMs 초과)는 정류장을 보이되 estimated다", async () => {
+		const h = harness();
+		const core = h.core();
+		await core.busRouteView(LINE, T0);
+		h.boards.handler = () => new Error("upstream down");
+		h.clock.now = T0 + h.config.staleAfterMs + SECOND;
+		const view = await core.busRouteView(LINE, h.clock.now);
+		expect(h.boards.busCalls).toEqual([ROUTE_ID, ROUTE_ID]);
+		expect(view.etaState).toBe("estimated");
+		expect(view.fetchedAt).toBe(T0);
+		expect(view.stops).toHaveLength(LAST_SEQ);
+	});
+
+	test("배차간격을 읽지 못해도 던지지 않고 headwayMs가 null이다", async () => {
+		const h = harness();
+		h.busSchedules.handler = () => new Error("D1 down");
+		const view = await h.core().busRouteView(LINE, T0);
+		expect(view.headwayMs).toBeNull();
+		expect(view.etaState).toBe("live");
+	});
+
+	test("서울 버스가 아닌 노선은 던지고 상류를 부르지 않는다", async () => {
+		const h = harness();
+		await expect(
+			h.core().busRouteView(`gbis:${ROUTE_ID}`, T0)
+		).rejects.toThrow();
+		expect(h.boards.busCalls).toEqual([]);
 	});
 });
 

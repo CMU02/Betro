@@ -17,6 +17,8 @@ const DEFAULT_DAILY_BUDGET_GBIS_POSITION = 300;
 const DEFAULT_DAILY_BUDGET_TAGO_POSITION = 3000;
 /** 출처를 붙인 지역 노선 키(`gbis:<routeId>`, `tago:<routeId>`). */
 const REGIONAL_ROUTE_KEY = /^(gbis|tago):(.+)$/;
+/** 지역 위치 목록 간격 상한. 하한(dev 160초)보다 크고 차량 TTL(300초)보다 작다. */
+const DEFAULT_REGIONAL_MAX_INTERVAL_MS = 240_000;
 const DEFAULT_MAP_WATCH_MAX_PER_INSTALL = 6;
 const DEFAULT_MAP_WATCH_MAX_TOTAL = 40;
 const DEV_SUBWAY_MIN_INTERVAL_MS = 80_000;
@@ -49,6 +51,11 @@ export interface CollectorConfig {
 	mode: "dev" | "prod";
 	operatingEnd: string;
 	operatingStart: string;
+	/**
+	 * 지역 위치 목록(GBIS·TAGO) 호출 간격 상한. 예산을 운행 시간 전체에 펴면 간격이 차량 TTL을
+	 * 넘으므로 여기서 자른다. 하한(`busMinIntervalMs`)이 더 크면 하한이 이긴다.
+	 */
+	regionalMaxIntervalMs: number;
 	/** `prod` 위치 API 노선(`nameKo`). `dev`는 ALL 한 번이라 비어 있다. */
 	subwayLines: string[];
 	/** 지하철 소스 하나(dev: ALL, prod: 노선 하나)의 최소 호출 간격. */
@@ -87,6 +94,7 @@ function baseConfig(
 	| "dailyBudget"
 	| "mapWatchMaxPerInstall"
 	| "mapWatchMaxTotal"
+	| "regionalMaxIntervalMs"
 > {
 	return {
 		dailyBudget: {
@@ -118,6 +126,11 @@ function baseConfig(
 			env,
 			"OPERATING_START_KST",
 			DEFAULT_OPERATING_START
+		),
+		regionalMaxIntervalMs: readCount(
+			env,
+			"REGIONAL_MAX_INTERVAL_MS",
+			DEFAULT_REGIONAL_MAX_INTERVAL_MS
 		),
 	};
 }
@@ -323,7 +336,15 @@ export function interval(
 		sourcesFor(kind, config, extraBusRouteIds).length
 	);
 	const left = Math.max(1, remaining(budget, kind, config, now));
-	return Math.max(minMs, (remainingOperatingMs(now, config) * sources) / left);
+	const spread = Math.max(
+		minMs,
+		(remainingOperatingMs(now, config) * sources) / left
+	);
+	if (kind === "gbis-position" || kind === "tago-position") {
+		// 지역 노선은 간격이 차량 TTL을 넘지 않게 자른다. 하한이 더 크면 하한이 이긴다.
+		return Math.min(spread, Math.max(minMs, config.regionalMaxIntervalMs));
+	}
+	return spread;
 }
 
 /** 버스 소스 종류. 서울 버스와 지역 출처마다 예산·간격을 따로 편다(5-B 설계 결정 3). */

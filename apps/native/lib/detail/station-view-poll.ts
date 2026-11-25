@@ -1,0 +1,89 @@
+import type { RefResult } from "@/lib/ref/ref-client";
+
+import type { StationView } from "./detail-client";
+import { isLiveStale } from "./live-stale";
+
+/** 받은 도착판과 받은 시각. 시각은 도착 추정의 기준이라 실패한 폴링이 덮어쓰지 않는다. */
+export interface StationViewSnapshot {
+	receivedAt: number;
+	result: RefResult<StationView>;
+}
+
+/**
+ * 새 응답을 반영한다. 폴링이 실패해도 마지막으로 받은 도착판은 그 시각 그대로 둔다.
+ * 받은 적이 없으면 실패를 그대로 낸다.
+ */
+export function settleStationView(
+	previous: StationViewSnapshot | undefined,
+	next: RefResult<StationView>,
+	now: number
+): StationViewSnapshot {
+	if (!next.ok && previous?.result.ok) {
+		return previous;
+	}
+	return { receivedAt: now, result: next };
+}
+
+/**
+ * 지금 그릴 도착판. 받은 적이 없으면 null이다. 폴링이 실패해 마지막 응답이 묵음 기준보다 오래됐으면
+ * 모든 방향을 추정으로 내리고, 도착 시각이 이미 지난 열차는 뺀다(떠난 열차를 '약 1분'으로 두지 않는다).
+ */
+export function stationViewAt(
+	snapshot: StationViewSnapshot | undefined,
+	now: number
+): StationView | null {
+	if (!snapshot?.result.ok) {
+		return null;
+	}
+	const view = snapshot.result.value;
+	if (!isLiveStale(snapshot.receivedAt, now)) {
+		return view;
+	}
+	return {
+		...view,
+		stations: view.stations.map((entry) => ({
+			...entry,
+			directions: entry.directions.map((direction) => ({
+				...direction,
+				approaching: direction.approaching.filter(
+					(arrival) => arrival.etaAt === null || arrival.etaAt > now
+				),
+				etaState: "estimated",
+			})),
+		})),
+	};
+}
+
+/** 화면이 보이는 동안만 다시 받는다. 가려지면 폴링을 멈춘다. */
+export function stationPollInterval(
+	visible: boolean,
+	intervalMs: number
+): number | false {
+	return visible ? intervalMs : false;
+}
+
+/**
+ * 쿼리 옵션. 가려지면 쿼리를 끄고(enabled), 다시 보이면 켜서 오래된 도착판을 바로 새로 받는다.
+ * 간격만 바꾸면 다시 보여도 다음 틱까지 옛 응답이 남는다.
+ */
+export function stationPollOptions(
+	visible: boolean,
+	intervalMs: number
+): { enabled: boolean; refetchInterval: number | false } {
+	return {
+		enabled: visible,
+		refetchInterval: stationPollInterval(visible, intervalMs),
+	};
+}
+
+export type StationViewPhase = "failed" | "loading" | "ready";
+
+/** 도착판·첫차 막차 카드가 함께 따르는 상태. 받은 적이 없을 때만 loading/failed다. */
+export function stationViewPhase(
+	snapshot: StationViewSnapshot | undefined
+): StationViewPhase {
+	if (snapshot === undefined) {
+		return "loading";
+	}
+	return snapshot.result.ok ? "ready" : "failed";
+}

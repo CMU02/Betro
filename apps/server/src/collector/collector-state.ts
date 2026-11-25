@@ -4,6 +4,7 @@ import {
 	type BudgetKind,
 	type BudgetState,
 	emptyBudget,
+	remaining,
 } from "@Betro/realtime/budget";
 import type { RegionalPrev } from "@Betro/realtime/bus/regional-normalize";
 import { dedupeRaw, sha256Hex } from "@Betro/realtime/history";
@@ -31,6 +32,7 @@ import type { ArrivalRow } from "@Betro/realtime/upstream/subway-arrival";
 import { redactKeys } from "@Betro/realtime/upstream/urls";
 import { SERVICE_ENDED_RECHECK_MS } from "./apply-call";
 import {
+	type BusWatchEntry,
 	type BusWatchSaved,
 	type CoreSaved,
 	currentOperatingWindow,
@@ -93,6 +95,12 @@ export interface RawAttempt {
  * 수집기의 기억: 예산, 스케줄, 최신 상태, 소스 진행, 알림 상태, 이력 버퍼, 5분 지표.
  * `load`로 저장소에서 되살리고 `save`로 돌려 쓴다. 이력 버퍼(메모리)만 재시작 때 잃는다.
  */
+/**
+ * 한꺼번에 관측하는 역 수의 상한. 서울 지하철 역은 약 700개라 실제 요청은 닿지 않는다.
+ * 모든 관측 역과 그 행이 `boards` 값 하나에 저장되므로, 임의 ID로 값이 커지지 않게 막는다.
+ */
+export const MAX_WATCHED_STATION_TOTAL = 1000;
+
 export class CollectorState {
 	budget: BudgetState;
 	schedule: ScheduleState;
@@ -184,11 +192,17 @@ export class CollectorState {
 
 	/** 역을 `until`까지 본다. 이미 더 늦게까지 보고 있으면 그대로 둔다. */
 	watchStations(statnIds: readonly string[], until: number): void {
+		let count = Object.keys(this.boards.watch).length;
 		for (const statnId of statnIds) {
-			this.boards.watch[statnId] = Math.max(
-				this.boards.watch[statnId] ?? 0,
-				until
-			);
+			const current = this.boards.watch[statnId];
+			if (current === undefined) {
+				// 상한이 차면 새 역은 받지 않는다. 그 역은 시간표 도착판으로 대신한다.
+				if (count >= MAX_WATCHED_STATION_TOTAL) {
+					continue;
+				}
+				count += 1;
+			}
+			this.boards.watch[statnId] = Math.max(current ?? 0, until);
 		}
 	}
 
@@ -202,37 +216,76 @@ export class CollectorState {
 		}
 	}
 
-	/** 설치 하나의 관측 요청을 통째로 바꾼다. 빈 배열이면 그 설치의 요청을 지운다. */
+	/**
+	 * 설치 하나의 관측 요청을 통째로 바꾼다. 빈 배열이면 그 설치의 요청을 지운다.
+	 * 이번에 빠진 지역 노선의 멈춤 판단 기록은 앞 요청의 만료와 이번 요청의 만료 중 늦은 때까지 남긴다
+	 * (떠난 때부터 TTL 하나). 남길 노선이 새로 생겼으면 true다(호출한 쪽이 core를 저장한다).
+	 */
 	watchBusRoutes(
 		installId: string,
 		routeIds: readonly string[],
 		until: number
-	): void {
+	): boolean {
 		const unique = [...new Set(routeIds)];
+		const kept = this.#keepDroppedPrev(this.busWatch[installId], unique, until);
 		if (unique.length === 0) {
 			delete this.busWatch[installId];
-			return;
+			return kept;
 		}
 		this.busWatch[installId] = { routeIds: unique, until };
+		return kept;
 	}
 
-	/** 만료 시각이 지난 설치의 관측 요청과, 아무도 보지 않는 지역 노선의 멈춤 판단 기록을 지운다. */
+	/** 앞 요청에서 빠진 노선 중 멈춤 판단 기록이 있는 노선을 앞·이번 요청의 만료 중 늦은 때까지 남긴다. */
+	#keepDroppedPrev(
+		previous: BusWatchEntry | undefined,
+		next: readonly string[],
+		until: number
+	): boolean {
+		const prev = this.core.regionalPrev;
+		if (!(previous && prev)) {
+			return false;
+		}
+		const keepTo = Math.max(previous.until, until);
+		let kept = false;
+		for (const routeKey of previous.routeIds) {
+			if (next.includes(routeKey) || !prev[routeKey]) {
+				continue;
+			}
+			this.core.regionalPrevKeepUntil ??= {};
+			const keepUntil = this.core.regionalPrevKeepUntil;
+			if ((keepUntil[routeKey] ?? Number.NEGATIVE_INFINITY) < keepTo) {
+				keepUntil[routeKey] = keepTo;
+				kept = true;
+			}
+		}
+		return kept;
+	}
+
+	/**
+	 * 만료 시각이 지난 설치의 관측 요청과, 아무도 보지 않는 지역 노선의 멈춤 판단 기록을 지운다.
+	 * 명시적으로 내려놓은 노선의 기록은 원래 만료 시각까지 남긴다(`regionalPrevKeepUntil`).
+	 */
 	expireBusWatches(now: number): void {
 		for (const [installId, entry] of Object.entries(this.busWatch)) {
 			if (entry.until < now) {
 				delete this.busWatch[installId];
 			}
 		}
-		const prev = this.core.regionalPrev;
-		if (!prev) {
-			return;
-		}
+		const prev = this.core.regionalPrev ?? {};
+		const keepUntil = this.core.regionalPrevKeepUntil ?? {};
 		const watched = new Set(
 			Object.values(this.busWatch).flatMap((entry) => entry.routeIds)
 		);
 		for (const routeKey of Object.keys(prev)) {
-			if (!watched.has(routeKey)) {
+			if (!watched.has(routeKey) && (keepUntil[routeKey] ?? 0) < now) {
 				delete prev[routeKey];
+			}
+		}
+		// 다시 보거나, 기한이 지났거나, 기록이 없어진 노선의 표시는 지운다.
+		for (const [routeKey, at] of Object.entries(keepUntil)) {
+			if (watched.has(routeKey) || at < now || !prev[routeKey]) {
+				delete keepUntil[routeKey];
 			}
 		}
 	}
@@ -325,11 +378,27 @@ export class CollectorState {
 		);
 	}
 
-	/** 그날(KST) 멈춘 지역 출처(버스 스냅샷 `stoppedSources`). */
-	stoppedSources(now: number): RegionalSource[] {
+	/**
+	 * 그날(KST) 이 소스에서 실시간을 더 받지 못하는가(스냅샷 `stoppedToday`·`stoppedSources`).
+	 * 한도 초과·인증 실패로 멈췄거나(`isStopped`) 그날 예산을 다 썼으면 true다. 예산 소진은
+	 * `stop`으로 남지 않으므로 여기서 함께 센다. `#poll`과 알림은 `isStopped`만 본다.
+	 */
+	stoppedToday(
+		kind: BudgetKind,
+		config: CollectorConfig,
+		now: number
+	): boolean {
+		return (
+			this.isStopped(kind, now) ||
+			remaining(this.budget, kind, config, now) <= 0
+		);
+	}
+
+	/** 그날(KST) 멈췄거나 예산을 다 쓴 지역 출처(버스 스냅샷 `stoppedSources`). */
+	stoppedSources(config: CollectorConfig, now: number): RegionalSource[] {
 		const sources: RegionalSource[] = ["gbis", "tago"];
 		return sources.filter((source) =>
-			this.isStopped(regionalBudgetKind(source), now)
+			this.stoppedToday(regionalBudgetKind(source), config, now)
 		);
 	}
 

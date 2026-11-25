@@ -51,6 +51,13 @@ const fakeRunner: CommuteRunnerClient = {
 			sessionId: SESSION_ID,
 		});
 	},
+	busRouteView: () =>
+		Promise.resolve({
+			etaState: "estimated",
+			fetchedAt: null,
+			headwayMs: null,
+			stops: [],
+		}),
 	healthCheck: () => Promise.resolve(),
 	input: (installId, sessionId, input) => {
 		runnerCalls.push(["input", installId, sessionId, input.kind]);

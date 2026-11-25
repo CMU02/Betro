@@ -1,7 +1,21 @@
 import type { LockScreenModel } from "./lock-screen-model";
 
+/**
+ * 타이머를 걸 만큼 남은 최소 시간(밀리초). 이보다 짧으면 타이머 대신 "곧"을 둔다.
+ * 모델을 만든 뒤 시간이 흘러 끝 시각이 코앞이거나 지났으면 타이머가 0 아래로 세기 때문이다.
+ */
+export const MIN_COUNTDOWN_MS = 60_000;
+
+/** 타이머가 끝난 뒤 네이티브가 다시 그릴 글자. */
+export interface AfterCountdownContent {
+	body: string;
+	chipText: string;
+}
+
 /** Android 진행 중 알림에 그대로 넣는 글자들. 문구는 모두 `LockScreenModel`에서 온다. */
 export interface NotificationContent {
+	/** 타이머가 끝난 뒤 네이티브가 다시 그릴 본문과 칩. 타이머가 없으면 null. */
+	afterCountdown: AfterCountdownContent | null;
 	/** 본문: 상세. 타이머가 없을 때만 남은 분("곧")을 그 뒤에 붙인다. */
 	body: string;
 	/**
@@ -32,18 +46,34 @@ function nextLegLines(model: LockScreenModel): string[] {
 	return lines;
 }
 
+function withMinutes(detail: string, minutes: string): string {
+	return `${detail}${SEPARATOR}${minutes}`;
+}
+
+/**
+ * `nowMs`는 이 내용을 그리는 시각(epoch 밀리초)이다.
+ * `soonText`는 `commute.lock.minutes.soon`("곧")이다. 이 모듈은 `t`를 모르므로 부르는 쪽이 넘긴다.
+ */
 export function notificationContent(
-	model: LockScreenModel
+	model: LockScreenModel,
+	nowMs: number,
+	soonText: string
 ): NotificationContent {
-	const { countdownEpoch } = model;
-	const counting = countdownEpoch !== null;
+	const endAtMs =
+		model.countdownEpoch === null ? null : model.countdownEpoch * MS_PER_SECOND;
+	const counting = endAtMs !== null && endAtMs - nowMs >= MIN_COUNTDOWN_MS;
+	// 끝 시각이 1분 안이면 모델의 "N분"이 이미 낡았다. 남은 분 자리에 "곧"을 둔다.
+	const minutes = endAtMs !== null && !counting ? soonText : model.minutes;
 	return {
+		afterCountdown: counting
+			? { body: withMinutes(model.detail, soonText), chipText: soonText }
+			: null,
 		body:
-			model.minutes === null || counting
+			minutes === null || counting
 				? model.detail
-				: `${model.detail}${SEPARATOR}${model.minutes}`,
-		chipText: model.minutes ?? model.lineName,
-		countdownAtMs: counting ? countdownEpoch * MS_PER_SECOND : null,
+				: withMinutes(model.detail, minutes),
+		chipText: minutes ?? model.lineName,
+		countdownAtMs: counting ? endAtMs : null,
 		header: model.header,
 		lines: model.suggestion === null ? nextLegLines(model) : [model.suggestion],
 		mode: model.mode,

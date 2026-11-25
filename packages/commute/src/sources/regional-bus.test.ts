@@ -104,6 +104,44 @@ describe("지역 버스 파서", () => {
 		});
 	});
 
+	it("GBIS resultCode 1은 temporary다", () => {
+		const env = (resultCode: unknown) => ({
+			response: { msgHeader: { resultCode } },
+		});
+		expect(parseGbisLocations(env(1))).toEqual({
+			ok: false,
+			reason: "temporary",
+		});
+		expect(parseGbisLocations(env("1"))).toEqual({
+			ok: false,
+			reason: "temporary",
+		});
+	});
+
+	it("GBIS resultCode가 빈 문자열이나 null이나 숫자가 아니면 정상이 아니라 malformed다", () => {
+		const env = (resultCode: unknown) => ({
+			response: { msgHeader: { resultCode } },
+		});
+		for (const code of ["", null, "abc"]) {
+			expect(parseGbisLocations(env(code))).toEqual({
+				ok: false,
+				reason: "malformed",
+			});
+		}
+	});
+
+	it("TAGO resultCode 99는 temporary이고 코드가 없으면 malformed다", () => {
+		const env = (header: unknown) => ({ response: { header } });
+		expect(parseTagoLocations(env({ resultCode: "99" }))).toEqual({
+			ok: false,
+			reason: "temporary",
+		});
+		expect(parseTagoLocations(env({}))).toEqual({
+			ok: false,
+			reason: "malformed",
+		});
+	});
+
 	it("주소는 https이고 키는 serviceKey로만 들어간다", () => {
 		const stop = { seq: 15, stopId: "S1" };
 		const urls = [

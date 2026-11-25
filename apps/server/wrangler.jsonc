@@ -35,6 +35,8 @@
     "API_HOST": "betro.cmu02-studio.com",
     "STATUS_HOST": "betro-status.cmu02-studio.com",
     "COLLECTOR_MODE": "dev",
+    // 개인정보 처리방침의 문의 연락처. 출시 전에 채운다(Part C).
+    "PRIVACY_CONTACT": "support@cmu02-studio.com",
     // 로컬 .dev.vars는 UPSTREAM_MODE=fixture로 덮어써서 상류를 부르지 않는다.
     "UPSTREAM_MODE": "live",
     // 출퇴근 푸시. "send"일 때만 APNs·FCM에 보낸다. 로컬 .dev.vars는 "log"로 둔다.

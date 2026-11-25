@@ -345,3 +345,33 @@ it("a split line uses the branch that holds the alight station, like the map", (
 	]);
 	expect(model.directionParams).toEqual({ name: "마3" });
 });
+
+it("시간표 열차 시트는 열차 번호 없이 '시간표 추정'이다", () => {
+	const model = sheetModel({
+		boarded: false,
+		leg: loopLeg,
+		map: loopMap,
+		nowMs: NOW,
+		observedAt: NOW - 400_000,
+		positionSeq: 4,
+		vehicleId: "scheduled:77",
+		view: emptyView([
+			{
+				etaAt: NOW + 185_000,
+				method: "timetable",
+				stopsAway: 3,
+				vehicleId: "timetable:77",
+			},
+		]),
+	});
+	expect(model.trainNo).toBeNull();
+	expect(model.estimated).toBe(true);
+	// 시간표 위치는 관측이 아니어서 "N분 전 위치"로 쓰지 않는다.
+	expect(model.freshness).toEqual({
+		live: false,
+		scheduled: true,
+		secondsAgo: 400,
+	});
+	// 도착판의 같은 trip(`timetable:77`) 행의 시각을 쓴다.
+	expect(model.minutesToMine).toBe(3);
+});
