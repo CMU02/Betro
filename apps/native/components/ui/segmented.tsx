@@ -7,11 +7,10 @@ import {
 	SEGMENT_BASE_CLASS,
 	SEGMENT_IDLE_LABEL_CLASS,
 	SEGMENT_LABEL_VARIANT,
+	SEGMENT_SELECTED_CLASS,
 	SEGMENT_SELECTED_LABEL_CLASS,
 	SEGMENTED_CLASS,
-	segmentSelectedClass,
 } from "@/components/ui/segmented-style";
-import { useAppTheme } from "@/contexts/app-theme-context";
 import { ELEVATION } from "@/theme/tokens";
 
 export interface SegmentedOption {
@@ -40,17 +39,13 @@ const SELECTED_SEGMENT_STYLE = { boxShadow: ELEVATION.floating } as const;
 
 function Segment({ onChange, option, role, selected }: SegmentProps) {
 	const press = useCallback(() => onChange(option.key), [onChange, option.key]);
-	const { isDark } = useAppTheme();
 	return (
 		<Pressable
 			accessibilityRole={role}
 			accessibilityState={
 				role === "radio" ? { checked: selected } : { selected }
 			}
-			className={cn(
-				SEGMENT_BASE_CLASS,
-				selected && segmentSelectedClass(isDark)
-			)}
+			className={cn(SEGMENT_BASE_CLASS, selected && SEGMENT_SELECTED_CLASS)}
 			onPress={press}
 			style={selected ? SELECTED_SEGMENT_STYLE : undefined}
 		>
