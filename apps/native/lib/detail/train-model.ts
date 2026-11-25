@@ -138,10 +138,17 @@ export function trainModel(input: {
 		vehicle === null || vehicle.statnId === null
 			? null
 			: `${SUBWAY_PREFIX}${vehicle.statnId}`;
-	const hereIndex =
+	let hereIndex =
 		hereStop === null
 			? -1
 			: entries.findIndex((entry) => entry.stop === hereStop);
+	// 시간표가 없는 순환선은 가지 순번(1번 역부터)대로면 현재 역이 목록 끝에 묻힌다. 현재 역부터 한 바퀴로 돌린다.
+	const isLoop =
+		branch !== null && isLoopBranch(bareId(map.line), branch.branchKey);
+	if (trip === null && isLoop && hereIndex > 0) {
+		entries = [...entries.slice(hereIndex), ...entries.slice(0, hereIndex)];
+		hereIndex = 0;
+	}
 	const stops = entries.map<TrainModel["stops"][number]>((entry, index) => {
 		let state: TrainModel["stops"][number]["state"] = "upcoming";
 		if (hereIndex >= 0 && index === hereIndex) {

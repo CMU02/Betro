@@ -114,6 +114,28 @@ describe("trainModel", () => {
 		expect(model.stops.every((stop) => stop.time === null)).toBe(true);
 	});
 
+	it("시간표 없는 순환선 열차는 현재 역부터 한 바퀴를 보인다", () => {
+		const ring = lineMap("seoul-subway:line2", [
+			branch("main", "up", ["A", "B", "C", "D", "E"]),
+		]);
+		const model = trainModel({
+			map: ring,
+			now: NOW,
+			stationsById: names,
+			trip: null,
+			vehicle: train({ lineKey: "line2", statnId: "D" }),
+		});
+		expect(model.stops.map((stop) => stop.name)).toEqual([
+			"역D",
+			"역E",
+			"역A",
+			"역B",
+			"역C",
+		]);
+		expect(model.stops[0]?.state).toBe("current");
+		expect(model.nextStopName).toBe("역E");
+	});
+
 	it("현재 역 앞은 passed, 뒤는 upcoming이다", () => {
 		const model = trainModel({
 			map: plain,
