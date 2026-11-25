@@ -8,6 +8,7 @@ describe("busFreshnessOf", () => {
 			live: true,
 			showNotice: true,
 			showRunning: true,
+			showTag: true,
 		});
 	});
 
@@ -16,6 +17,7 @@ describe("busFreshnessOf", () => {
 			live: true,
 			showNotice: true,
 			showRunning: true,
+			showTag: true,
 		});
 	});
 
@@ -24,6 +26,7 @@ describe("busFreshnessOf", () => {
 			live: true,
 			showNotice: true,
 			showRunning: false,
+			showTag: true,
 		});
 	});
 
@@ -32,11 +35,13 @@ describe("busFreshnessOf", () => {
 			live: false,
 			showNotice: false,
 			showRunning: false,
+			showTag: true,
 		});
 		expect(busFreshnessOf({ etaState: "estimated", running: 0 })).toEqual({
 			live: false,
 			showNotice: false,
 			showRunning: false,
+			showTag: true,
 		});
 	});
 
@@ -45,6 +50,18 @@ describe("busFreshnessOf", () => {
 			live: false,
 			showNotice: false,
 			showRunning: true,
+			showTag: true,
+		});
+	});
+
+	test("첫 응답을 기다리는 동안에는 상태 표시와 대수, 안내를 모두 숨긴다", () => {
+		expect(
+			busFreshnessOf({ etaState: null, loading: true, running: 0 })
+		).toEqual({
+			live: false,
+			showNotice: false,
+			showRunning: false,
+			showTag: false,
 		});
 	});
 });

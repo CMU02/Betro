@@ -328,24 +328,29 @@ function VehicleSummary({
 
 function Freshness({
 	headway,
+	loading,
 	running,
 	view,
 }: {
 	headway: EtaStatus | null;
+	loading: boolean;
 	running: number;
 	view: BusRouteViewResponse | null;
 }) {
-	const { live, showNotice, showRunning } = busFreshnessOf({
+	const { live, showNotice, showRunning, showTag } = busFreshnessOf({
 		etaState: view?.etaState ?? null,
+		loading,
 		running,
 	});
 	return (
 		<>
 			<View className="flex-row items-center gap-3">
-				<StatusTag
-					kind={live ? "live" : "estimated"}
-					label={t(TAG_KEY[live ? "live" : "estimated"])}
-				/>
+				{showTag ? (
+					<StatusTag
+						kind={live ? "live" : "estimated"}
+						label={t(TAG_KEY[live ? "live" : "estimated"])}
+					/>
+				) : null}
 				{showRunning ? (
 					<AppText className="text-text-secondary" variant="caption">
 						{t("busDetail.running", { n: running })}
@@ -609,6 +614,7 @@ export default function BusRouteDetailScreen() {
 						) : (
 							<Freshness
 								headway={model?.headway ?? null}
+								loading={viewQuery.isPending}
 								running={running}
 								view={view}
 							/>
