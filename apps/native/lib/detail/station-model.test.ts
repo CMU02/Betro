@@ -199,9 +199,12 @@ describe("stationModel", () => {
 		expect(rows?.map((r) => r.status.kind)).toEqual(["live", "estimated"]);
 	});
 
-	it("지도를 아직 못 받았으면 방면 이름이 비어도 행은 낸다", () => {
+	it("지도를 아직 못 받았으면 방면 대신 상행·하행으로 보이고 행은 낸다", () => {
 		const [line] = stationModel(estimatedOnlyView, {}, NOW);
 		expect(line?.directions).toHaveLength(2);
+		expect(line?.directions.map((d) => [d.key, d.directionLabel])).toEqual(
+			line?.directions.map((d) => [d.key, d.key === "up" ? "상행" : "하행"])
+		);
 	});
 
 	it("방면 이름이 비어도 방향 key가 겹치지 않고, 같은 분의 시간표 행도 key가 겹치지 않는다", () => {

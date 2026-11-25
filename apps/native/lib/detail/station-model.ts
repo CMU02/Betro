@@ -16,7 +16,7 @@ const TIMETABLE_PREFIX = "timetable:";
 export interface StationDirectionRow {
 	directionLabel: string;
 	firstLabel: string | null;
-	/** React key. 방면 이름은 지도를 받기 전 비어 있어 겹치므로 방향으로 만든다. */
+	/** React key. 방면 이름은 지도를 받기 전과 뒤가 달라 key로 쓰지 않고 방향으로 만든다. */
 	key: "up" | "down";
 	lastLabel: string | null;
 	/** `key`는 응답의 차량 ID다. 같은 분에 오는 시간표 열차도 겹치지 않는다. */
@@ -55,7 +55,8 @@ function directionLabelOf(
 	stop: string
 ): string {
 	if (branch === null) {
-		return "";
+		// 노선 지도를 아직 못 받았으면 끝 역을 모르니 상행·하행으로 보인다.
+		return t(`trainDetail.direction.${direction}`);
 	}
 	const stations = branch.stations.slice().sort(bySeq);
 	const lineKey = line.slice(line.indexOf(":") + 1);
