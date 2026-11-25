@@ -72,11 +72,13 @@ describe("app.config.ts 릴리스 설정", () => {
 		expect(config.name).toBe("Betro");
 	});
 
-	it("EAS 프로젝트 ID를 담는다", async () => {
+	it("EAS 프로젝트 ID와 그 프로젝트의 slug를 담는다", async () => {
 		const config = await load({});
 		expect(config.extra?.eas?.projectId).toBe(
 			"4119b4df-f46d-4e97-9251-b19bf38a9b9c"
 		);
+		// EAS 프로젝트 slug가 소문자 betro라 다르면 eas 명령이 멈춘다.
+		expect(config.slug).toBe("betro");
 	});
 
 	it("프로필이 없으면 DSN 없이도 읽힌다", async () => {

@@ -162,7 +162,7 @@ const config: ExpoConfig = {
 		["@mj-studio/react-native-naver-map", { client_id: naverMapClientId }],
 	],
 	scheme: "Betro",
-	slug: "Betro",
+	slug: "betro",
 	userInterfaceStyle: "automatic",
 	version: "1.0.0",
 	web: {
