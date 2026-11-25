@@ -61,6 +61,7 @@ import {
 	type BusSnapshotVehicle,
 	fetchSnapshot,
 } from "@/lib/map/map-client";
+import { mapThemeProps } from "@/lib/map/map-theme";
 import {
 	busTrackPoint,
 	createBusTrack,
@@ -209,6 +210,7 @@ function RouteMap({
 	onPressVehicle: (key: string) => void;
 	selectedVehicleId: string | null;
 }) {
+	const { isDark } = useAppTheme();
 	const [first] = map.shape;
 	const lines = useMemo(() => {
 		const total = cumulativeM(map.shape).at(-1) ?? 0;
@@ -231,6 +233,7 @@ function RouteMap({
 		<View className="overflow-hidden rounded-lg">
 			<NaverMapView
 				initialCamera={{ latitude: first[1], longitude: first[0], zoom: 13 }}
+				{...mapThemeProps(isDark)}
 				isExtentBoundedInKorea
 				isShowCompass={false}
 				isShowLocationButton={false}

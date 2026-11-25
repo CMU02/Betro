@@ -21,6 +21,7 @@ import { InlineNotice } from "@/components/ui/inline-notice";
 import { OfflineNotice } from "@/components/ui/offline-notice";
 import { Section } from "@/components/ui/section";
 import { TopBar } from "@/components/ui/top-bar";
+import { useAppTheme } from "@/contexts/app-theme-context";
 import { fetchStopRoutes, type StopRoutes } from "@/lib/detail/detail-client";
 import { type StopRouteRow, stopModel } from "@/lib/detail/stop-model";
 import { appFavorites } from "@/lib/favorites/app-favorites";
@@ -28,6 +29,7 @@ import { favoriteId } from "@/lib/favorites/favorites";
 import { t } from "@/lib/i18n/t";
 import type { MessageKey } from "@/lib/i18n/translate";
 import { createMapRefCache } from "@/lib/map/map-client";
+import { mapThemeProps } from "@/lib/map/map-theme";
 import { MAP_REF_STALE_MS } from "@/lib/map/use-map-data";
 import { refStaleTime } from "@/lib/ref/ref-client";
 import { loadSearchIndex } from "@/lib/search/search-client";
@@ -53,10 +55,12 @@ const TAG_KEY: Record<EtaStatus["kind"], MessageKey> = {
 };
 
 function StopMap({ lat, lng }: { lat: number; lng: number }) {
+	const { isDark } = useAppTheme();
 	return (
 		<View className="overflow-hidden rounded-lg">
 			<NaverMapView
 				initialCamera={{ latitude: lat, longitude: lng, zoom: MAP_ZOOM }}
+				{...mapThemeProps(isDark)}
 				isExtentBoundedInKorea
 				isRotateGesturesEnabled={false}
 				isScrollGesturesEnabled={false}

@@ -38,6 +38,7 @@ import { t } from "@/lib/i18n/t";
 import { nearestApproachingPoint } from "@/lib/map/camera-region";
 import { lineColor } from "@/lib/map/line-color";
 import { estimatedBoardNotice, routeOptionLabel } from "@/lib/map/map-labels";
+import { mapThemeProps } from "@/lib/map/map-theme";
 import { type MapRegion, regionOf, spanSegments } from "@/lib/map/route-shape";
 import { isScheduledVehicleId } from "@/lib/map/scheduled-trains";
 import {
@@ -746,12 +747,11 @@ export default function MapTab() {
 				buildingHeight={preferences.show3dBuildings ? 1 : 0}
 				initialCamera={INITIAL_CAMERA}
 				isExtentBoundedInKorea
-				isNightModeEnabled={isDark}
 				isShowLocationButton={false}
 				isShowZoomControls={false}
 				locale="ko"
 				mapPadding={mapPadding}
-				mapType={isDark ? "Navi" : "Basic"}
+				{...mapThemeProps(isDark)}
 				onCameraChanged={cameraChanged}
 				onInitialized={ready}
 				onTapMap={tapMap}

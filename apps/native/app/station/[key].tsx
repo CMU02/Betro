@@ -21,6 +21,7 @@ import { OfflineNotice } from "@/components/ui/offline-notice";
 import { Section } from "@/components/ui/section";
 import { Segmented } from "@/components/ui/segmented";
 import { TopBar } from "@/components/ui/top-bar";
+import { useAppTheme } from "@/contexts/app-theme-context";
 import { fetchStationView, STATION_VIEW_MAX } from "@/lib/detail/detail-client";
 import {
 	type StationDirectionRow,
@@ -42,6 +43,7 @@ import { t } from "@/lib/i18n/t";
 import type { MessageKey } from "@/lib/i18n/translate";
 import type { SubwayMap } from "@/lib/map/map-client";
 import { createMapRefCache } from "@/lib/map/map-client";
+import { mapThemeProps } from "@/lib/map/map-theme";
 import { loadRefMap, MAP_REF_STALE_MS } from "@/lib/map/use-map-data";
 import {
 	loadSearchIndex,
@@ -76,10 +78,12 @@ function lineLabel(line: string): string {
 }
 
 function StationMap({ lat, lng }: { lat: number; lng: number }) {
+	const { isDark } = useAppTheme();
 	return (
 		<View className="overflow-hidden rounded-lg">
 			<NaverMapView
 				initialCamera={{ latitude: lat, longitude: lng, zoom: MAP_ZOOM }}
+				{...mapThemeProps(isDark)}
 				isExtentBoundedInKorea
 				isRotateGesturesEnabled={false}
 				isScrollGesturesEnabled={false}
