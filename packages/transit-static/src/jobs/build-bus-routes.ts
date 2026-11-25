@@ -21,6 +21,7 @@ import {
 	type RegionalBusSource,
 	withRegionalRoutes,
 } from "../bus/scope";
+import { compareCodeUnits } from "../compare";
 import { isCurrentManifest, loadBusRoutes, withLogicVersion } from "../db/load";
 import { rawPath, resolveDatabaseUrl } from "../paths";
 import { readRaw, sha256Hex } from "../raw-store";
@@ -164,7 +165,8 @@ async function latestRegionalList(
 	}
 	const newestFirst = dirs
 		.filter((dir) => DATE_DIR_RE.test(dir))
-		.sort()
+		// 날짜 폴더 이름(ASCII)을 코드 단위 순서로 정렬한다. 로캘에 따라 달라지지 않게 한다.
+		.sort(compareCodeUnits)
 		.reverse();
 	for (const dir of newestFirst) {
 		const fileName = `${dir}/${REGIONAL_ROUTES_FILE}`;
@@ -241,7 +243,10 @@ function regionalManifest(reads: readonly RegionalRead[]): SourceManifest {
 		if (!list) {
 			continue;
 		}
-		const joined = [list.text, ...[...rawHashes].sort()].join("\n");
+		// 해시(16진수)를 코드 단위 순서로 이어 붙여 배치 manifest가 늘 같게 한다.
+		const joined = [list.text, ...[...rawHashes].sort(compareCodeUnits)].join(
+			"\n"
+		);
 		manifest[`${source}RouteList`] = {
 			fileName: `${list.fileName} (${list.rows.length} routes, ${rawHashes.length} raws)`,
 			sha256: textHash(joined),
