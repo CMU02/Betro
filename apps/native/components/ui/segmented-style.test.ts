@@ -7,6 +7,7 @@ import {
 	SEGMENT_SELECTED_CLASS,
 	SEGMENT_SELECTED_LABEL_CLASS,
 	SEGMENTED_CLASS,
+	segmentSelectedClass,
 } from "./segmented-style";
 
 test("Segmented는 설정 화면의 Figma Segmented와 같은 모양이다", () => {
@@ -26,4 +27,9 @@ test("설정 화면은 자체 복사본 대신 공용 Segmented를 쓴다", () =
 	);
 	expect(src).toContain('from "@/components/ui/segmented"');
 	expect(src).not.toContain("function ThemeOption");
+});
+
+test("다크 모드에서는 고른 칸이 바탕(bg/control)보다 밝은 색이라 구분된다", () => {
+	expect(segmentSelectedClass(false)).toBe("bg-bg-surface-raised");
+	expect(segmentSelectedClass(true)).toBe("bg-border-strong");
 });
