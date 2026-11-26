@@ -147,8 +147,24 @@ it("tells apart two stops with the same name on one route", () => {
 	expect(first).toBe("교대역 방면");
 	expect(second).toBe("양재역 방면");
 	expect(first).not.toBe(second);
-	// 이름이 한 번만 나오는 정류장에는 구분 글자가 없다.
-	expect(choices[1]?.sub).toBeNull();
+	// 이름이 한 번만 나와도 방면이 없으면 정류장 번호를 보여 준다.
+	expect(choices[1]?.sub).toBe("20002");
+});
+
+it("shows direction and stop number on stops whose name is unique", () => {
+	const choices = boardChoices(STOPS, t);
+	expect(choices[2]?.sub).toBe("강남역 방면 · 20003");
+	expect(choices[0]?.sub).toBe("20001");
+	const noIds = boardChoices(
+		[
+			stop(1, "가", { arsId: null, directionName: "나" }),
+			stop(2, "다", { arsId: null }),
+		],
+		t
+	);
+	expect(noIds.map((choice) => choice.sub)).toEqual(["나 방면", null]);
+	const alight = alightChoices(STOPS, STOPS[0] as BusStop, t);
+	expect(alight[2]?.sub).toBe("강남역 방면 · 20003");
 });
 
 it("falls back to the stop number when the direction does not tell them apart", () => {
