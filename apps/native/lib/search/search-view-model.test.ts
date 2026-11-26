@@ -35,11 +35,32 @@ const INDEX: SearchIndex = {
 			name: "강남",
 		},
 	],
-	stops: [],
+	stops: [
+		{
+			arsId: "22009",
+			lat: 37.49,
+			lng: 127.02,
+			name: "강남역5번출구",
+			stop: "seoul-bus:121000009",
+			towards: "역삼역",
+		},
+	],
 };
 
 const RECENTS: SearchTarget[] = [
 	{ key: "seoul-subway:gangnam", kind: "station", name: "강남" },
+];
+
+const MIXED_RECENTS: SearchTarget[] = [
+	{ kind: "stop", name: "강남역5번출구", stop: "seoul-bus:121000009" },
+	{
+		kind: "route",
+		line: "seoul-bus:100100118",
+		name: "146",
+		shortName: "146",
+	},
+	{ key: "seoul-subway:gangnam", kind: "station", name: "강남" },
+	{ kind: "stop", name: "없어진정류장", stop: "seoul-bus:gone" },
 ];
 
 const BASE = {
@@ -68,12 +89,56 @@ describe("searchViewState", () => {
 	it("질의가 비면 최근 검색, 결과가 없으면 empty다", () => {
 		expect(searchViewState(BASE)).toEqual({
 			kind: "recents",
-			recents: RECENTS,
+			recents: [
+				{
+					kind: "station",
+					station: INDEX.stations[0] ?? null,
+					target: RECENTS[0] as Extract<SearchTarget, { kind: "station" }>,
+				},
+			],
 		});
 		expect(searchViewState({ ...BASE, query: "   " }).kind).toBe("recents");
 		expect(searchViewState({ ...BASE, query: "없는곳" })).toEqual({
 			kind: "empty",
 		});
+	});
+
+	it("최근 검색은 색인 항목을 붙여 유형대로 그릴 수 있게 하고, 색인에 없으면 null이다", () => {
+		const state = searchViewState({ ...BASE, recents: MIXED_RECENTS });
+		if (state.kind !== "recents") {
+			throw new Error(`expected recents, got ${state.kind}`);
+		}
+		expect(state.recents.map((recent) => recent.kind)).toEqual([
+			"stop",
+			"route",
+			"station",
+			"stop",
+		]);
+		const [stop, route, station, gone] = state.recents;
+		expect(stop?.kind === "stop" && stop.stop?.arsId).toBe("22009");
+		expect(route?.kind === "route" && route.route?.routeType).toBe("3");
+		expect(station?.kind === "station" && station.station?.key).toBe(
+			"seoul-subway:gangnam"
+		);
+		expect(gone?.kind === "stop" && gone.stop).toBeNull();
+		expect(gone?.target.name).toBe("없어진정류장");
+	});
+
+	it("질의가 비어도 고른 범위 칩으로 최근 검색을 거른다", () => {
+		const kinds = (scope: "all" | "station" | "stop" | "route") => {
+			const state = searchViewState({
+				...BASE,
+				recents: MIXED_RECENTS,
+				scope,
+			});
+			return state.kind === "recents"
+				? state.recents.map((recent) => recent.target.name)
+				: [];
+		};
+		expect(kinds("stop")).toEqual(["강남역5번출구", "없어진정류장"]);
+		expect(kinds("station")).toEqual(["강남"]);
+		expect(kinds("route")).toEqual(["146"]);
+		expect(kinds("all")).toHaveLength(MIXED_RECENTS.length);
 	});
 
 	it("결과가 있으면 구역을 담아 돌려준다", () => {

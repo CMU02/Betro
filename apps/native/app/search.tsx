@@ -38,6 +38,7 @@ import type { SearchScope, SearchTarget } from "@/lib/search/search-model";
 import {
 	lineNameKey,
 	routeTarget,
+	type SearchRecent,
 	searchViewState,
 	stationLineKeys,
 	stationTarget,
@@ -68,7 +69,14 @@ type Item =
 	| { id: string; kind: "station"; station: SearchStation }
 	| { id: string; kind: "stop"; stop: SearchStop }
 	| { id: string; kind: "route"; route: SearchRoute }
-	| { id: string; kind: "recent"; target: SearchTarget };
+	| { id: string; kind: "recent"; recent: SearchRecent };
+
+/** 색인에서 사라진 최근 검색 항목에 붙이는 유형 이름. */
+const RECENT_KIND_LABEL: Readonly<Record<SearchTarget["kind"], MessageKey>> = {
+	route: "search.section.routes",
+	station: "search.section.stations",
+	stop: "search.section.stops",
+};
 
 function StationRow({
 	onOpen,
@@ -157,19 +165,30 @@ function RouteRow({
 	);
 }
 
+/** 최근 검색은 결과 행과 같은 모양으로 유형을 보인다. 색인에 없으면 이름과 유형 이름만 보인다. */
 function RecentRow({
 	onOpen,
-	target,
+	recent,
 }: {
 	onOpen: (target: SearchTarget) => void;
-	target: SearchTarget;
+	recent: SearchRecent;
 }) {
-	const press = useCallback(() => onOpen(target), [onOpen, target]);
+	const press = useCallback(() => onOpen(recent.target), [onOpen, recent]);
+	if (recent.kind === "station" && recent.station !== null) {
+		return <StationRow onOpen={onOpen} station={recent.station} />;
+	}
+	if (recent.kind === "stop" && recent.stop !== null) {
+		return <StopRow onOpen={onOpen} stop={recent.stop} />;
+	}
+	if (recent.kind === "route" && recent.route !== null) {
+		return <RouteRow onOpen={onOpen} route={recent.route} />;
+	}
 	return (
 		<ListRow
 			icon={Clock}
 			onPress={press}
-			title={target.name}
+			subtitle={t(RECENT_KIND_LABEL[recent.kind])}
+			title={recent.target.name}
 			trailing={{ type: "none" }}
 		/>
 	);
@@ -206,10 +225,10 @@ function itemsOf(state: ReturnType<typeof searchViewState>): Item[] {
 				title: t("search.section.recents"),
 				withClear: true,
 			},
-			...state.recents.map((target) => ({
-				id: `r-${targetHref(target)}`,
+			...state.recents.map((recent) => ({
+				id: `r-${targetHref(recent.target)}`,
 				kind: "recent" as const,
-				target,
+				recent,
 			})),
 		];
 	}
@@ -263,13 +282,12 @@ export default function SearchScreen() {
 		queryKey: ["search-index"],
 		staleTime: MAP_REF_STALE_MS,
 	});
-	const state = searchViewState({
-		failed: indexQuery.isError,
-		index: indexQuery.data ?? null,
-		query,
-		recents,
-		scope,
-	});
+	const failed = indexQuery.isError;
+	const index = indexQuery.data ?? null;
+	const state = useMemo(
+		() => searchViewState({ failed, index, query, recents, scope }),
+		[failed, index, query, recents, scope]
+	);
 	const items = useMemo(() => itemsOf(state), [state]);
 
 	const goBack = useCallback(() => router.back(), [router]);
@@ -311,7 +329,7 @@ export default function SearchScreen() {
 				case "route":
 					return <RouteRow onOpen={open} route={item.route} />;
 				default:
-					return <RecentRow onOpen={open} target={item.target} />;
+					return <RecentRow onOpen={open} recent={item.recent} />;
 			}
 		},
 		[clearRecents, open]
