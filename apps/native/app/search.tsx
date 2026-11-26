@@ -390,6 +390,7 @@ export default function SearchScreen() {
 					paddingBottom: insets.bottom + BOTTOM_PADDING,
 				}}
 				data={items}
+				keyboardDismissMode="on-drag"
 				keyboardShouldPersistTaps="handled"
 				keyExtractor={itemKey}
 				renderItem={renderItem}
