@@ -8,8 +8,12 @@ import { appPlacesSync } from "@/lib/places/app-places";
 import { appPreferences } from "@/lib/preferences/app-preferences";
 import { getPushPermissionStatus } from "@/lib/push/push-messaging";
 import { CommuteActivity } from "@/modules/commute-activity";
+import { CommuteNotification } from "@/modules/commute-notification";
 
-import { setLockScreenGuidance } from "./lock-screen-guidance";
+import {
+	endLocalGuidance,
+	setLockScreenGuidance,
+} from "./lock-screen-guidance";
 import type { LockScreenPlatform } from "./lock-screen-readiness";
 import { createLockScreenStatusStore } from "./lock-screen-status";
 
@@ -31,7 +35,11 @@ AppState.addEventListener("change", (state) => {
 /** 설정의 "출퇴근 잠금화면 안내"를 바꾼다. 던지지 않는다. */
 export function setAppLockScreenGuidance(enabled: boolean): Promise<void> {
 	return setLockScreenGuidance(enabled, {
-		endLocal: () => CommuteActivity.endAll(),
+		endLocal: () =>
+			endLocalGuidance(lockScreenPlatform, {
+				endActivities: () => CommuteActivity.endAll(),
+				notifier: CommuteNotification,
+			}),
 		sync: () => appPlacesSync.run(),
 		update: (value) =>
 			appPreferences.update({ commuteLiveActivityEnabled: value }),
