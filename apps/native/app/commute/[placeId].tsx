@@ -5,7 +5,7 @@ import { Fragment, useCallback } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { withUniwind } from "uniwind";
-
+import { LockScreenWarning } from "@/components/commute/lock-screen-warning";
 import {
 	RouteCompareRow,
 	RouteSummaryRow,
@@ -25,11 +25,16 @@ import {
 	guideTitle,
 	type IdleGuide,
 } from "@/lib/commute/guide-model";
+import type {
+	LockScreenReadiness,
+	LockScreenSystemState,
+} from "@/lib/commute/lock-screen-readiness";
 import {
 	useActiveSession,
 	useEndSession,
 	useEpochSeconds,
 } from "@/lib/commute/use-active-session";
+import { useLockScreenReadiness } from "@/lib/commute/use-lock-screen";
 import { appCrashSink } from "@/lib/crash/app-crash-reporting";
 import { reportError } from "@/lib/crash/crash-reporting";
 import { t } from "@/lib/i18n/t";
@@ -91,8 +96,17 @@ function ActiveContent({ ending, guide, notice, onEnd }: ActiveContentProps) {
 	);
 }
 
-/** 세션 없음: 다음 안내 시각 → 등록한 경로 목록(Figma 100:20395). */
-function IdleContent({ guide }: { guide: IdleGuide }) {
+interface IdleContentProps {
+	guide: IdleGuide;
+	readiness: LockScreenReadiness | null;
+	system: LockScreenSystemState | null;
+}
+
+/**
+ * 세션 없음: 다음 안내 시각 → 등록한 경로 목록(Figma 100:20395). 이 기기에서 잠금화면에 뜨지 않으면
+ * 다음 안내 아래에 까닭과 고치는 버튼을 둔다(`guide.next`도 "…부터 잠금화면에 떠요"를 말하지 않는다).
+ */
+function IdleContent({ guide, readiness, system }: IdleContentProps) {
 	return (
 		<>
 			<View className="gap-1 rounded-lg bg-bg-surface-raised p-4">
@@ -107,6 +121,7 @@ function IdleContent({ guide }: { guide: IdleGuide }) {
 				</View>
 				<AppText variant="bodyMStrong">{guide.next}</AppText>
 			</View>
+			<LockScreenWarning readiness={readiness} system={system} />
 			<View className="gap-2">
 				<Section title={t("commuteGuide.routes.title")}>
 					{guide.routes.map((row, index) => (
@@ -138,6 +153,7 @@ export default function CommuteGuideScreen() {
 	const offline = useOffline();
 	const { end, ending, notice } = useEndSession();
 	const now = useEpochSeconds();
+	const { readiness, system } = useLockScreenReadiness();
 	const goBack = useCallback(() => router.back(), [router]);
 
 	if (place === undefined) {
@@ -150,6 +166,7 @@ export default function CommuteGuideScreen() {
 	}
 
 	const guide = guideModel({
+		lockScreen: readiness,
 		now,
 		place,
 		session: state?.session ?? null,
@@ -184,7 +201,7 @@ export default function CommuteGuideScreen() {
 						onEnd={handleEnd}
 					/>
 				) : (
-					<IdleContent guide={guide} />
+					<IdleContent guide={guide} readiness={readiness} system={system} />
 				)}
 			</ScrollView>
 		</View>

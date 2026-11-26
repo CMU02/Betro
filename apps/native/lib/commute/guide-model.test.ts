@@ -237,6 +237,54 @@ describe("guideModel idle", () => {
 		);
 	});
 
+	it("does not promise the lock screen when guidance will not appear on this device", () => {
+		for (const lockScreen of [
+			"notificationsOff",
+			"activitiesOff",
+			"disabledInApp",
+		] as const) {
+			const model = guideModel({
+				lockScreen,
+				now: NOW,
+				place: placeOf(),
+				session: null,
+				t,
+				timezone: TIMEZONE,
+			});
+			expect(model.kind === "idle" && model.next).toBe("오늘 08:10에 나가요");
+		}
+	});
+
+	it("keeps the promise while the device state is unknown or ready", () => {
+		for (const lockScreen of [null, "ready"] as const) {
+			const model = guideModel({
+				lockScreen,
+				now: NOW,
+				place: placeOf(),
+				session: null,
+				t,
+				timezone: TIMEZONE,
+			});
+			expect(model.kind === "idle" && model.next).toBe(
+				"오늘 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
+			);
+		}
+	});
+
+	it("still says a pending place is not on the server when guidance is also blocked", () => {
+		const model = guideModel({
+			lockScreen: "notificationsOff",
+			now: NOW,
+			place: { ...placeOf(), sync: "pending" },
+			session: null,
+			t,
+			timezone: TIMEZONE,
+		});
+		expect(model.kind === "idle" && model.next).toBe(
+			"평일 08:10에 나가요 · 아직 서버에 저장되지 않았어요"
+		);
+	});
+
 	it("names the day the next start falls on: today, tomorrow or a weekday", () => {
 		const nextAt = (now: number, overrides = {}) => {
 			const model = guideModel({

@@ -21,6 +21,10 @@ import {
 	type LockScreenModel,
 	lockScreenModel,
 } from "./lock-screen-model";
+import {
+	isLockScreenBlocked,
+	type LockScreenReadiness,
+} from "./lock-screen-readiness";
 import type { ActiveSessionView, SessionRouteView } from "./session-client";
 
 type Translate = (key: MessageKey, params?: MessageParams) => string;
@@ -78,6 +82,11 @@ export interface IdleGuide {
 export type GuideModel = ActiveGuide | IdleGuide;
 
 export interface GuideInput {
+	/**
+	 * 잠금화면 안내가 이 기기에 뜰 수 있는지. 뜨지 않으면(알림·실시간 현황·앱 설정이 꺼짐) "…부터 잠금화면에
+	 * 떠요"라고 말하지 않는다. 모르면 null(또는 없음)이고 그때는 말한다.
+	 */
+	lockScreen?: LockScreenReadiness | null;
 	/** epoch 초(푸시 값과 같은 단위) */
 	now: number;
 	place: Place;
@@ -198,12 +207,8 @@ function leaveDayLabel(
 	return t(DAY_KEYS[next.weekday] ?? "places.day.mon");
 }
 
-function nextLine(
-	place: Place,
-	now: number,
-	timezone: string,
-	t: Translate
-): string {
+function nextLine(input: GuideInput): string {
+	const { now, place, t, timezone } = input;
 	const { schedule } = place.plan;
 	const { days, leadMinutes, leaveMinute } = schedule;
 	const show = leaveMinute - leadMinutes;
@@ -216,6 +221,10 @@ function nextLine(
 		});
 	}
 	const params = { day: leaveDayLabel(schedule, now, timezone, t), leave };
+	// 알림·실시간 현황·앱 설정이 막으면 뜨지 않으니 나가는 시각만 말한다. 화면이 따로 까닭을 보인다.
+	if (isLockScreenBlocked(input.lockScreen ?? null)) {
+		return t("commuteGuide.next.leaveOnly", params);
+	}
 	if (show < 0) {
 		return t("commuteGuide.next.previousDay", {
 			...params,
@@ -226,10 +235,10 @@ function nextLine(
 }
 
 function idleGuide(input: GuideInput): IdleGuide {
-	const { now, place, t, timezone } = input;
+	const { place, t } = input;
 	return {
 		kind: "idle",
-		next: nextLine(place, now, timezone, t),
+		next: nextLine(input),
 		routes: byRank(place.plan.routes).map((route) => ({
 			badge: route.legs.map((leg) => badgeOf(leg, place.busMeta)),
 			label: t(
