@@ -6,6 +6,7 @@ import {
 	type ReactNode,
 	useCallback,
 	useMemo,
+	useRef,
 	useState,
 	useSyncExternalStore,
 } from "react";
@@ -22,7 +23,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { IconButton } from "@/components/ui/icon-button";
 import { ListRow } from "@/components/ui/list-row";
 import { OfflineNotice } from "@/components/ui/offline-notice";
-import { TextField } from "@/components/ui/text-field";
+import { TextField, type TextFieldHandle } from "@/components/ui/text-field";
 import { t } from "@/lib/i18n/t";
 import type { MessageKey } from "@/lib/i18n/translate";
 import { createMapRefCache } from "@/lib/map/map-client";
@@ -276,6 +277,7 @@ export default function SearchScreen() {
 	const insets = useSafeAreaInsets();
 	const [query, setQuery] = useState("");
 	const [scope, setScope] = useState<SearchScope>("all");
+	const fieldRef = useRef<TextFieldHandle | null>(null);
 	const recents = useSyncExternalStore(appRecents.subscribe, appRecents.get);
 	const indexQuery = useQuery({
 		queryFn: () => loadSearchIndex(serverClient, searchRefCache),
@@ -302,6 +304,11 @@ export default function SearchScreen() {
 		[router]
 	);
 	const clearRecents = useCallback(() => appRecents.clear(), []);
+	/** 범위를 바꿔도 키보드가 떠 있으면 바로 이어 쓰게 입력란에 커서를 남긴다(E2E P2-7). */
+	const selectScope = useCallback((next: SearchScope) => {
+		setScope(next);
+		fieldRef.current?.keepTyping();
+	}, []);
 
 	const renderItem = useCallback(
 		({ item }: { item: Item }) => {
@@ -378,6 +385,7 @@ export default function SearchScreen() {
 						autoFocus
 						onChangeText={setQuery}
 						placeholder={t("search.placeholder")}
+						ref={fieldRef}
 						returnKeyType="search"
 						search={{ clearLabel: t("search.clearText") }}
 						value={query}
@@ -397,7 +405,7 @@ export default function SearchScreen() {
 					<ScopeChip
 						key={entry.key}
 						label={t(entry.label)}
-						onSelect={setScope}
+						onSelect={selectScope}
 						scope={entry.key}
 						selected={scope === entry.key}
 					/>
