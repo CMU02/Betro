@@ -25,13 +25,20 @@ const CONTAINER_BY_VARIANT: Record<AppButtonVariant, string> = {
 	secondary: "bg-bg-control active:bg-bg-hover",
 };
 
+/** 비활성: 배경도 함께 죽여서(채움색 없음) 켜진 버튼과 한눈에 구분되게 하고, 눌림색은 쓰지 않는다. */
+const CONTAINER_WHEN_DISABLED: Record<AppButtonVariant, string> = {
+	ghost: "bg-transparent",
+	primary: "bg-bg-control",
+	secondary: "bg-bg-control",
+};
+
 const LABEL_BY_VARIANT: Record<AppButtonVariant, string> = {
 	ghost: "text-text-primary",
 	primary: "text-text-on-accent",
 	secondary: "text-text-primary",
 };
 
-/** Figma `Button`(4:109). 비활성일 때는 글자를 흐리게 하고 누를 수 없다. */
+/** Figma `Button`(4:109). 비활성일 때는 배경·글자를 모두 죽이고 누를 수 없다. */
 export function AppButton({
 	accessibilityState,
 	className,
@@ -51,7 +58,9 @@ export function AppButton({
 			className={cn(
 				"flex-row items-center justify-center",
 				CONTAINER_BY_SIZE[size],
-				CONTAINER_BY_VARIANT[variant],
+				disabled
+					? CONTAINER_WHEN_DISABLED[variant]
+					: CONTAINER_BY_VARIANT[variant],
 				className
 			)}
 			disabled={disabled}

@@ -107,6 +107,19 @@ function countBy<T>(items: readonly T[], keyOf: (item: T) => string | null) {
 	return counts;
 }
 
+/** 이름이 한 번만 나오는 정류장의 보조 글자: 방면과 정류장 번호 중 있는 것. */
+function soleSubOf(stop: BusStop, t?: Translate): string | null {
+	const { arsId, directionName } = stop;
+	const direction =
+		directionName !== null && t
+			? t("legPicker.towards", { name: directionName })
+			: directionName;
+	const parts = [direction, arsId].filter(
+		(part): part is string => part !== null && part !== ""
+	);
+	return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 /**
  * 같은 이름 정류장(순환, 왕복)을 구분하는 글자. 그 무리 안에서 방면이 하나뿐이면 방면을 쓰고,
  * 방면이 같거나 없으면 정류장 번호를 쓴다. `t`가 있으면 방면에 "방면"을 붙인다.
@@ -115,7 +128,7 @@ function subsOf(stops: BusStop[], t?: Translate): (string | null)[] {
 	const nameCounts = countBy(stops, (stop) => stop.name);
 	return stops.map((stop) => {
 		if ((nameCounts.get(stop.name) ?? 0) < 2) {
-			return null;
+			return soleSubOf(stop, t);
 		}
 		const sameName = stops.filter((other) => other.name === stop.name);
 		const directionCounts = countBy(sameName, (other) => other.directionName);

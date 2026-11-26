@@ -186,11 +186,19 @@ function DeletePlaceButton({ onDelete }: { onDelete: () => void }) {
 	}, [armed, onDelete]);
 	const cancel = useCallback(() => setArmed(false), []);
 	return (
-		<View className="gap-2">
+		<View className="flex-row gap-2">
+			{armed ? (
+				<AppButton
+					className="flex-1"
+					label={t("placeSetup.delete.cancel")}
+					onPress={cancel}
+					variant="secondary"
+				/>
+			) : null}
 			<Pressable
 				accessibilityLiveRegion="polite"
 				accessibilityRole="button"
-				className="h-[52px] flex-row items-center justify-center gap-2 rounded-lg bg-status-delayed-soft px-5"
+				className="h-[52px] flex-1 flex-row items-center justify-center gap-2 rounded-lg bg-status-delayed-soft px-5"
 				onPress={handlePress}
 			>
 				<Trash colorClassName="accent-status-delayed" size={DELETE_ICON_SIZE} />
@@ -200,13 +208,6 @@ function DeletePlaceButton({ onDelete }: { onDelete: () => void }) {
 						: t("placeSetup.delete.label")}
 				</AppText>
 			</Pressable>
-			{armed ? (
-				<AppButton
-					label={t("placeSetup.delete.cancel")}
-					onPress={cancel}
-					variant="ghost"
-				/>
-			) : null}
 		</View>
 	);
 }
