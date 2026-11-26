@@ -6,6 +6,7 @@ import { isLoopBranch, subwayBranchForLeg } from "@/lib/map/leg-vehicles";
 import type { SubwayMap } from "@/lib/map/map-client";
 import { arrivalStatus, type EtaStatus } from "@/lib/transit/eta-status";
 import type { StationView, StationViewDirection } from "./detail-client";
+import type { StationViewPhase } from "./station-view-poll";
 
 const MS_PER_SEC = 1000;
 /** 방향마다 보이는 도착 줄 수(Figma `16:9607`). */
@@ -132,4 +133,22 @@ export function stationModel(
 		),
 		line: entry.line,
 	}));
+}
+
+/** 노선 지도 상태. 받는 중(`loading`), 받음(`ready`), 끝내 못 받음(`failed`). */
+export type LineMapState = "failed" | "loading" | "ready";
+
+/**
+ * 도착·첫차 막차 카드가 따르는 상태. 도착판을 받았어도 고른 노선의 지도를 받는 중이면 loading으로 둔다.
+ * 지도 없이 그리면 상행·하행을 먼저 보였다가 '내선순환 · 교대 방면'으로 바뀐다(E2E P2-8).
+ * 지도를 못 받았거나 받은 지도에 이 역을 지나는 가지가 없으면 기다리지 않고 상행·하행으로 그린다.
+ */
+export function stationSectionPhase(
+	viewPhase: StationViewPhase,
+	mapState: LineMapState
+): StationViewPhase {
+	if (viewPhase !== "ready") {
+		return viewPhase;
+	}
+	return mapState === "loading" ? "loading" : "ready";
 }
