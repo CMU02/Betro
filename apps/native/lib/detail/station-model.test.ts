@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import type { SubwayMap } from "@/lib/map/map-client";
 import type { StationView, StationViewDirection } from "./detail-client";
-import { stationModel } from "./station-model";
+import { stationModel, stationSectionPhase } from "./station-model";
 
 const NOW = Date.UTC(2026, 10, 24, 0, 0);
 const MIN = 60_000;
@@ -199,12 +199,24 @@ describe("stationModel", () => {
 		expect(rows?.map((r) => r.status.kind)).toEqual(["live", "estimated"]);
 	});
 
-	it("지도를 아직 못 받았으면 방면 대신 상행·하행으로 보이고 행은 낸다", () => {
+	it("지도를 끝내 못 받았으면(maps에 노선이 없으면) 방면 대신 상행·하행으로 보이고 행은 낸다", () => {
 		const [line] = stationModel(estimatedOnlyView, {}, NOW);
 		expect(line?.directions).toHaveLength(2);
 		expect(line?.directions.map((d) => [d.key, d.directionLabel])).toEqual(
 			line?.directions.map((d) => [d.key, d.key === "up" ? "상행" : "하행"])
 		);
+	});
+
+	it("지도는 받았지만 이 역을 지나는 가지가 없으면 상행·하행으로 보인다", () => {
+		const unknownStop = view("seoul-subway:line2", "seoul-subway:zz", [
+			direction("up"),
+			direction("down"),
+		]);
+		const [line] = stationModel(unknownStop, MAPS, NOW);
+		expect(line?.directions.map((d) => d.directionLabel)).toEqual([
+			"상행",
+			"하행",
+		]);
 	});
 
 	it("방면 이름이 비어도 방향 key가 겹치지 않고, 같은 분의 시간표 행도 key가 겹치지 않는다", () => {
@@ -235,5 +247,29 @@ describe("stationModel", () => {
 				(r) => r.key
 			) ?? [];
 		expect(new Set(rowKeys).size).toBe(2);
+	});
+});
+
+describe("stationSectionPhase", () => {
+	it("도착판을 받았어도 그 노선 지도를 받는 중이면 loading이다(상행·하행을 먼저 보이지 않는다)", () => {
+		expect(stationSectionPhase("ready", "loading")).toBe("loading");
+	});
+
+	it("도착판과 노선 지도를 모두 받았으면 ready다", () => {
+		expect(stationSectionPhase("ready", "ready")).toBe("ready");
+	});
+
+	it("노선 지도를 못 받았으면 기다리지 않고 ready로 상행·하행을 보인다", () => {
+		expect(stationSectionPhase("ready", "failed")).toBe("ready");
+	});
+
+	it("도착판이 실패면 지도 상태와 관계없이 failed다", () => {
+		expect(stationSectionPhase("failed", "loading")).toBe("failed");
+		expect(stationSectionPhase("failed", "ready")).toBe("failed");
+	});
+
+	it("도착판을 받는 중이면 지도 상태와 관계없이 loading이다", () => {
+		expect(stationSectionPhase("loading", "ready")).toBe("loading");
+		expect(stationSectionPhase("loading", "failed")).toBe("loading");
 	});
 });
