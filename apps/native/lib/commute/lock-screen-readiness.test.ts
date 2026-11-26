@@ -3,10 +3,13 @@ import { describe, expect, it } from "bun:test";
 import { t } from "../i18n/t";
 import type { Place } from "../places/places";
 import {
+	fixLabelKey,
+	isLockScreenBlocked,
 	type LockScreenSystemState,
 	lockScreenFixAction,
 	lockScreenPromptModel,
 	lockScreenReadiness,
+	lockScreenSettingsRow,
 	shouldOfferLockScreenPrompt,
 	systemBlock,
 } from "./lock-screen-readiness";
@@ -108,7 +111,7 @@ describe("lockScreenFixAction", () => {
 		).toBe("none");
 	});
 
-	it("sends the in-app off state to the setting", () => {
+	it("turns the in-app setting back on in place", () => {
 		expect(
 			lockScreenFixAction({
 				platform: "ios",
@@ -116,7 +119,7 @@ describe("lockScreenFixAction", () => {
 				readiness: "disabledInApp",
 				requestedThisSession: false,
 			})
-		).toBe("openInAppSetting");
+		).toBe("enableInApp");
 	});
 
 	it("opens the system settings for Live Activities (nothing to request)", () => {
@@ -219,5 +222,44 @@ describe("lockScreenPromptModel", () => {
 		expect(model.title).toBe(
 			"평일 08:10 헬스장 가는 길, 잠금화면에 도착 정보를 띄워드릴게요"
 		);
+	});
+});
+
+describe("isLockScreenBlocked", () => {
+	it("is blocked for every reason guidance will not appear, and not while unknown", () => {
+		expect(isLockScreenBlocked("notificationsOff")).toBe(true);
+		expect(isLockScreenBlocked("activitiesOff")).toBe(true);
+		expect(isLockScreenBlocked("disabledInApp")).toBe(true);
+		expect(isLockScreenBlocked("ready")).toBe(false);
+		expect(isLockScreenBlocked(null)).toBe(false);
+	});
+});
+
+describe("fixLabelKey", () => {
+	it("names each fix and has no button when there is nothing to do", () => {
+		expect(fixLabelKey("requestPermission")).toBe(
+			"lockScreen.fix.requestPermission"
+		);
+		expect(fixLabelKey("openSettings")).toBe("lockScreen.fix.openSettings");
+		expect(fixLabelKey("enableInApp")).toBe("lockScreen.fix.enableInApp");
+		expect(fixLabelKey("none")).toBeNull();
+	});
+});
+
+describe("lockScreenSettingsRow", () => {
+	it("explains the system block under the toggle and offers a fix row while the toggle is on", () => {
+		expect(lockScreenSettingsRow(true, "notificationsOff")).toEqual({
+			fixKey: "lockScreen.settings.fixNotifications",
+			subtitleKey: "lockScreen.settings.notificationsOff",
+		});
+		expect(lockScreenSettingsRow(true, "activitiesOff")).toEqual({
+			fixKey: "lockScreen.settings.fixActivities",
+			subtitleKey: "lockScreen.settings.activitiesOff",
+		});
+	});
+
+	it("says nothing when the system allows it or the user turned it off", () => {
+		expect(lockScreenSettingsRow(true, null)).toBeNull();
+		expect(lockScreenSettingsRow(false, "notificationsOff")).toBeNull();
 	});
 });

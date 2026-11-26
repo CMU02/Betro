@@ -336,7 +336,7 @@ export const ko = {
 	/** 잠금화면 안내가 실제로 뜰 수 있는지(알림 권한, 실시간 현황, 설정의 안내 켜기)와 고치는 버튼 */
 	lockScreen: {
 		fix: {
-			inAppSetting: "안내 켜기",
+			enableInApp: "안내 켜기",
 			openSettings: "설정 열기",
 			requestPermission: "알림 켜기",
 		},

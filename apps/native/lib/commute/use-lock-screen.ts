@@ -1,4 +1,3 @@
-import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 import { usePreferences } from "@/lib/preferences/use-preferences";
@@ -8,6 +7,7 @@ import {
 	lockScreenPlatform,
 	openLockScreenSystemSettings,
 	requestLockScreenNotifications,
+	setAppLockScreenGuidance,
 } from "./app-lock-screen";
 import {
 	type LockScreenFix,
@@ -57,13 +57,12 @@ export interface LockScreenFixControl {
 
 /**
  * 잠금화면 안내를 막는 것을 고치는 버튼. 알림은 묻고(이번에 거부되면 다음엔 설정 앱), 실시간 현황은
- * 설정 앱을, 앱에서 끈 경우는 설정 탭을 연다.
+ * 설정 앱을 연다. 앱에서 끈 경우는 그 자리에서 다시 켠다(장소 설정 화면에서 설정 탭으로 가면 고치던 값을 잃는다).
  */
 export function useLockScreenFix(
 	readiness: LockScreenReadiness | null,
 	system: LockScreenSystemState | null
 ): LockScreenFixControl {
-	const router = useRouter();
 	const [requested, setRequested] = useState(false);
 	const [pending, setPending] = useState(false);
 	const action = lockScreenFixAction({
@@ -77,8 +76,8 @@ export function useLockScreenFix(
 			openLockScreenSystemSettings();
 			return false;
 		}
-		if (action === "openInAppSetting") {
-			router.navigate("/settings");
+		if (action === "enableInApp") {
+			await setAppLockScreenGuidance(true);
 			return false;
 		}
 		if (action !== "requestPermission") {
@@ -92,6 +91,6 @@ export function useLockScreenFix(
 		} finally {
 			setPending(false);
 		}
-	}, [action, router]);
+	}, [action]);
 	return { action, pending, run };
 }

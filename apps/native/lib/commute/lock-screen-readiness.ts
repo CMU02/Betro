@@ -76,7 +76,7 @@ export function lockScreenReadiness(
 export type LockScreenFix =
 	| "requestPermission"
 	| "openSettings"
-	| "openInAppSetting"
+	| "enableInApp"
 	| "none";
 
 export interface FixInput {
@@ -94,7 +94,7 @@ export interface FixInput {
 export function lockScreenFixAction(input: FixInput): LockScreenFix {
 	switch (input.readiness) {
 		case "disabledInApp":
-			return "openInAppSetting";
+			return "enableInApp";
 		case "activitiesOff":
 			return "openSettings";
 		case "notificationsOff": {
@@ -152,4 +152,54 @@ export function lockScreenPromptModel(
 			name: placeNameOf(place, t),
 		}),
 	};
+}
+
+/** 잠금화면 안내가 뜨지 않는 경우. 아직 모르면 false(경고가 잠깐 깜빡이지 않게). */
+export function isLockScreenBlocked(
+	readiness: LockScreenReadiness | null
+): readiness is Exclude<LockScreenReadiness, "ready"> {
+	return readiness !== null && readiness !== "ready";
+}
+
+/** 고치는 버튼 글자. 할 일이 없으면 버튼이 없다. */
+export function fixLabelKey(action: LockScreenFix): MessageKey | null {
+	switch (action) {
+		case "requestPermission":
+			return "lockScreen.fix.requestPermission";
+		case "openSettings":
+			return "lockScreen.fix.openSettings";
+		case "enableInApp":
+			return "lockScreen.fix.enableInApp";
+		default:
+			return null;
+	}
+}
+
+export interface LockScreenSettingsRow {
+	/** 토글 아래 고치는 행 제목 */
+	fixKey: MessageKey;
+	/** 토글 행 부제 */
+	subtitleKey: MessageKey;
+}
+
+/**
+ * 설정의 "출퇴근 잠금화면 안내" 행. 토글은 켜져 있는데 시스템이 막으면 부제로 알리고, 누르면 고치는 행을
+ * 하나 더 둔다(토글 행은 누르면 토글되므로). 꺼 두었거나 시스템이 허용하면 null.
+ */
+export function lockScreenSettingsRow(
+	inAppEnabled: boolean,
+	block: LockScreenSystemBlock | null
+): LockScreenSettingsRow | null {
+	if (!inAppEnabled || block === null) {
+		return null;
+	}
+	return block === "notificationsOff"
+		? {
+				fixKey: "lockScreen.settings.fixNotifications",
+				subtitleKey: "lockScreen.settings.notificationsOff",
+			}
+		: {
+				fixKey: "lockScreen.settings.fixActivities",
+				subtitleKey: "lockScreen.settings.activitiesOff",
+			};
 }

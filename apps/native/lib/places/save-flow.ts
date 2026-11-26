@@ -4,6 +4,11 @@ import type { SaveResult } from "./plan-sync";
 import { saveOutcome } from "./setup-form-model";
 
 export interface SaveFlowDeps {
+	/**
+	 * 저장이 끝나고 닫기 전에 한 번 기다린다(잠금화면 안내가 뜨지 않으면 알림을 켜자고 묻는 시트).
+	 * 기다리는 동안 잠금을 쥐고 있어 다시 저장하거나 뒤로 가지 못한다. 던져도 닫는다.
+	 */
+	afterSaved?: () => Promise<void>;
 	/** 장소 설정 화면을 닫는다(`router.back()`). */
 	close: () => void;
 	/** 저장을 시작한 화면이 아직 떠 있고 맨 위에 있으면 true. */
@@ -17,11 +22,24 @@ export interface SaveFlowDeps {
 }
 
 const SAVE_CONTEXT = "place-save";
+const PROMPT_CONTEXT = "place-save-prompt";
+
+async function runAfterSaved(deps: SaveFlowDeps): Promise<void> {
+	if (deps.afterSaved === undefined) {
+		return;
+	}
+	try {
+		await deps.afterSaved();
+	} catch (error) {
+		reportError(deps.sink, error, PROMPT_CONTEXT);
+	}
+}
 
 /**
  * 장소 하나를 저장한다. 저장은 서버 응답을 최대 10초 기다리므로, 끝났을 때 화면이 이미 떠났거나
  * 다른 화면이 위에 올라와 있으면 닫지도 문구를 보이지도 않는다(그 화면을 대신 닫게 된다).
  * 닫을 때는 잠금을 풀지 않는다. 닫히는 동안 다시 고치거나 저장하지 못하게 한다.
+ * 닫기 전에 `afterSaved`(있으면)를 기다린다.
  */
 export async function runSave(deps: SaveFlowDeps): Promise<void> {
 	if (deps.lock.current) {
@@ -34,6 +52,9 @@ export async function runSave(deps: SaveFlowDeps): Promise<void> {
 	try {
 		const outcome = saveOutcome(await deps.save());
 		if (outcome.kind === "close") {
+			if (deps.isOpen()) {
+				await runAfterSaved(deps);
+			}
 			if (deps.isOpen()) {
 				deps.close();
 				return;

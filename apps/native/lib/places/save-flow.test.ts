@@ -145,3 +145,92 @@ it("reports a thrown save as rejected and unlocks", async () => {
 	expect(lock.current).toBe(false);
 	expect(state.saving).toEqual([true, false]);
 });
+
+// 저장 뒤 잠금화면 안내 시트
+
+it("waits for the after-save step before closing and keeps the form locked meanwhile", async () => {
+	const { control, deps, lock, state } = harness();
+	let answer: (() => void) | null = null;
+	let asked = 0;
+	const running = runSave({
+		...deps,
+		afterSaved: () => {
+			asked += 1;
+			return new Promise<void>((resolve) => {
+				answer = resolve;
+			});
+		},
+	});
+	control.finish("saved");
+	await Promise.resolve();
+	await Promise.resolve();
+	expect(asked).toBe(1);
+	expect(state.closes).toBe(0);
+	expect(lock.current).toBe(true);
+	(answer as (() => void) | null)?.();
+	await running;
+	expect(state.closes).toBe(1);
+	expect(lock.current).toBe(true);
+});
+
+it("does not run the after-save step when the save failed", async () => {
+	const { control, deps, state } = harness();
+	let asked = 0;
+	const running = runSave({
+		...deps,
+		afterSaved: () => {
+			asked += 1;
+			return Promise.resolve();
+		},
+	});
+	control.finish("limit");
+	await running;
+	expect(asked).toBe(0);
+	expect(state.closes).toBe(0);
+});
+
+it("does not run the after-save step on a form that already left", async () => {
+	const { control, deps, state } = harness();
+	let asked = 0;
+	const running = runSave({
+		...deps,
+		afterSaved: () => {
+			asked += 1;
+			return Promise.resolve();
+		},
+	});
+	state.open = false;
+	control.finish("saved");
+	await running;
+	expect(asked).toBe(0);
+	expect(state.closes).toBe(0);
+});
+
+it("still closes when the after-save step throws, and reports it", async () => {
+	const { control, deps, errors, state } = harness();
+	const running = runSave({
+		...deps,
+		afterSaved: () => Promise.reject(new Error("no status")),
+	});
+	control.finish("saved");
+	await running;
+	expect(state.closes).toBe(1);
+	expect(errors).toEqual([
+		{ context: "place-save-prompt", message: "no status" },
+	]);
+});
+
+it("unlocks instead of closing when the form left while the after-save step ran", async () => {
+	const { control, deps, lock, state } = harness();
+	const running = runSave({
+		...deps,
+		afterSaved: () => {
+			state.open = false;
+			return Promise.resolve();
+		},
+	});
+	control.finish("saved");
+	await running;
+	expect(state.closes).toBe(0);
+	expect(lock.current).toBe(false);
+});
