@@ -185,7 +185,7 @@ function AndroidTabBar(props: BottomTabBarProps) {
 						<View
 							className={cn(
 								"h-8 w-16 items-center justify-center rounded-full",
-								item.selected && "bg-accent-soft"
+								item.selected ? "bg-accent-soft" : "bg-transparent"
 							)}
 						>
 							<Icon
