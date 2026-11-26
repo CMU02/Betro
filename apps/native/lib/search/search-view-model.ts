@@ -14,16 +14,72 @@ import {
 	searchIndex,
 } from "./search-model";
 
+type TargetOf<K extends SearchTarget["kind"]> = Extract<
+	SearchTarget,
+	{ kind: K }
+>;
+
+/**
+ * 최근 검색 한 줄. 지금 색인에서 같은 항목을 찾아 붙여 결과 행과 같은 모양(역 노선 배지, 정류장 번호·방면,
+ * 버스 노선 배지)으로 그린다. 색인에서 사라진 항목은 null이고 이름과 유형만 보인다.
+ */
+export type SearchRecent =
+	| {
+			kind: "station";
+			station: SearchStation | null;
+			target: TargetOf<"station">;
+	  }
+	| { kind: "stop"; stop: SearchStop | null; target: TargetOf<"stop"> }
+	| { kind: "route"; route: SearchRoute | null; target: TargetOf<"route"> };
+
 export type SearchViewState =
 	| { kind: "loading" }
 	| { kind: "failed" }
-	| { kind: "recents"; recents: SearchTarget[] }
+	| { kind: "recents"; recents: SearchRecent[] }
 	| { kind: "empty" }
 	| { kind: "results"; sections: SearchSections };
 
+function recentOf(index: SearchIndex, target: SearchTarget): SearchRecent {
+	switch (target.kind) {
+		case "station":
+			return {
+				kind: "station",
+				station: index.stations.find((s) => s.key === target.key) ?? null,
+				target,
+			};
+		case "stop":
+			return {
+				kind: "stop",
+				stop: index.stops.find((s) => s.stop === target.stop) ?? null,
+				target,
+			};
+		default:
+			return {
+				kind: "route",
+				route: index.routes.find((r) => r.line === target.line) ?? null,
+				target,
+			};
+	}
+}
+
+/** 고른 범위 칩에 맞는 최근 검색만 남기고 색인 항목을 붙인다. */
+function recentsOf(
+	index: SearchIndex,
+	recents: readonly SearchTarget[],
+	scope: SearchScope
+): SearchRecent[] {
+	const found: SearchRecent[] = [];
+	for (const target of recents) {
+		if (scope === "all" || target.kind === scope) {
+			found.push(recentOf(index, target));
+		}
+	}
+	return found;
+}
+
 /**
  * 검색 화면이 보일 상태 하나를 고른다. 색인이 있으면(받아 둔 저장본 포함) 실패 표시와 상관없이 찾는다.
- * 색인이 없을 때만 불러오는 중과 실패를 가른다.
+ * 색인이 없을 때만 불러오는 중과 실패를 가른다. 질의가 비면 고른 범위 칩에 맞는 최근 검색을 보인다.
  */
 export function searchViewState(input: {
 	index: SearchIndex | null;
@@ -36,7 +92,10 @@ export function searchViewState(input: {
 		return input.failed ? { kind: "failed" } : { kind: "loading" };
 	}
 	if (normalizeQuery(input.query) === "") {
-		return { kind: "recents", recents: input.recents };
+		return {
+			kind: "recents",
+			recents: recentsOf(input.index, input.recents, input.scope),
+		};
 	}
 	const sections = searchIndex(input.index, input.query, input.scope);
 	if (
