@@ -123,17 +123,30 @@ function rankItems<T>(
 	return scored.slice(0, limit).map((entry) => entry.item);
 }
 
+/** 색인마다 한 번만 만든다. 글자를 칠 때마다 역 이름 전체를 다시 정규화하지 않게 한다. */
+const stationNameCache = new WeakMap<SearchIndex, Set<string>>();
+
+function stationNamesOf(index: SearchIndex): Set<string> {
+	const cached = stationNameCache.get(index);
+	if (cached !== undefined) {
+		return cached;
+	}
+	const names = new Set(
+		index.stations.map((station) =>
+			stripStationSuffix(normalizeQuery(station.name))
+		)
+	);
+	stationNameCache.set(index, names);
+	return names;
+}
+
 function rankStops(
 	index: SearchIndex,
 	normalized: string,
 	stationQuery: string,
 	limit: number
 ): SearchStop[] {
-	const stationNames = new Set(
-		index.stations.map((station) =>
-			stripStationSuffix(normalizeQuery(station.name))
-		)
-	);
+	const stationNames = stationNamesOf(index);
 	return rankItems(index.stops, limit, (stop) => {
 		const name = normalizeQuery(stop.name);
 		const arsId = stop.arsId === null ? null : normalizeQuery(stop.arsId);

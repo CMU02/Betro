@@ -123,9 +123,11 @@ function useLineMaps(lines: string[]): {
 			staleTime: MAP_REF_STALE_MS,
 		})),
 	});
-	// 실패는 dataUpdatedAt을 바꾸지 않으므로 status도 함께 본다(안 그러면 loading에 머문다).
+	// 실패는 dataUpdatedAt을 바꾸지 않으므로 status와 실패 횟수도 함께 본다(안 그러면 loading에 머문다).
 	const signature = queries
-		.map((query) => `${query.dataUpdatedAt}:${query.status}`)
+		.map(
+			(query) => `${query.dataUpdatedAt}:${query.status}:${query.failureCount}`
+		)
 		.join(",");
 	// biome-ignore lint/correctness/useExhaustiveDependencies: 지도 응답이나 상태가 바뀔 때만(signature) 다시 만든다.
 	return useMemo(() => {
@@ -134,7 +136,11 @@ function useLineMaps(lines: string[]): {
 		lines.forEach((line, index) => {
 			const query = queries[index];
 			if (query?.data === undefined) {
-				states[line] = query?.status === "error" ? "failed" : "loading";
+				// 첫 실패에서 바로 failed로 본다. 재시도(기본 3회)를 다 기다리면 도착 정보가 수십 초 가려진다.
+				states[line] =
+					query?.status === "error" || (query?.failureCount ?? 0) > 0
+						? "failed"
+						: "loading";
 			} else {
 				maps[line] = query.data as SubwayMap;
 				states[line] = "ready";

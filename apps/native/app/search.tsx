@@ -214,7 +214,10 @@ function itemKey(item: Item): string {
 	return item.id;
 }
 
-function itemsOf(state: ReturnType<typeof searchViewState>): Item[] {
+function itemsOf(
+	state: ReturnType<typeof searchViewState>,
+	scope: SearchScope
+): Item[] {
 	if (state.kind === "recents") {
 		if (state.recents.length === 0) {
 			return [];
@@ -224,7 +227,8 @@ function itemsOf(state: ReturnType<typeof searchViewState>): Item[] {
 				id: "h-recents",
 				kind: "header",
 				title: t("search.section.recents"),
-				withClear: true,
+				// "모두 지우기"는 범위와 관계없이 다 지우므로, 전부 보일 때(전체)만 둔다.
+				withClear: scope === "all",
 			},
 			...state.recents.map((recent) => ({
 				id: `r-${targetHref(recent.target)}`,
@@ -290,7 +294,7 @@ export default function SearchScreen() {
 		() => searchViewState({ failed, index, query, recents, scope }),
 		[failed, index, query, recents, scope]
 	);
-	const items = useMemo(() => itemsOf(state), [state]);
+	const items = useMemo(() => itemsOf(state, scope), [state, scope]);
 
 	const goBack = useCallback(() => router.back(), [router]);
 	const retry = useCallback(() => {
