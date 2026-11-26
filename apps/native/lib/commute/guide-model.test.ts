@@ -158,6 +158,7 @@ describe("guideModel idle", () => {
 			kind: "idle",
 			// NOW는 화요일 08:00, 오늘 안내가 막 시작하는 시각이다. 서버가 3분 안에 세션을 열므로 아직 오늘이다.
 			next: "오늘 08:10에 나가요 · 08:00부터 잠금화면에 떠요",
+			nextLabel: "다음 안내",
 			routes: [
 				{
 					badge: [
@@ -252,6 +253,36 @@ describe("guideModel idle", () => {
 				timezone: TIMEZONE,
 			});
 			expect(model.kind === "idle" && model.next).toBe("오늘 08:10에 나가요");
+		}
+	});
+
+	it("does not call it the next guidance when the app setting stops it from starting", () => {
+		const off = guideModel({
+			lockScreen: "disabledInApp",
+			now: NOW,
+			place: placeOf(),
+			session: null,
+			t,
+			timezone: TIMEZONE,
+		});
+		expect(off.kind === "idle" && off.nextLabel).toBe("다음 출발");
+
+		// 시스템이 잠금화면만 막으면 세션은 열리고 앱 안 안내는 온다.
+		for (const lockScreen of [
+			null,
+			"ready",
+			"notificationsOff",
+			"activitiesOff",
+		] as const) {
+			const model = guideModel({
+				lockScreen,
+				now: NOW,
+				place: placeOf(),
+				session: null,
+				t,
+				timezone: TIMEZONE,
+			});
+			expect(model.kind === "idle" && model.nextLabel).toBe("다음 안내");
 		}
 	});
 

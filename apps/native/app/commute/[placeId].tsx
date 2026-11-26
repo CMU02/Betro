@@ -116,7 +116,7 @@ function IdleContent({ guide, readiness, system }: IdleContentProps) {
 						size={CLOCK_ICON_SIZE}
 					/>
 					<AppText className="text-text-secondary" variant="caption">
-						{t("commuteGuide.next.label")}
+						{guide.nextLabel}
 					</AppText>
 				</View>
 				<AppText variant="bodyMStrong">{guide.next}</AppText>

@@ -16,7 +16,8 @@ export type LockScreenPlatform = "ios" | "android";
  * - `notificationsOff`: Android 알림 권한이 없다(FCM 데이터 메시지로 그리는 진행 중 알림이 안 보이고,
  *   권한이 없으면 FCM 토큰도 서버에 올리지 않는다).
  * - `activitiesOff`: iOS 설정에서 이 앱의 실시간 현황(Live Activities)이 꺼져 있다.
- * - `disabledInApp`: 앱 설정의 "출퇴근 잠금화면 안내"를 껐다.
+ * - `disabledInApp`: 앱 설정의 "출퇴근 잠금화면 안내"를 껐다. 올리는 예약이 `enabled: false`라 서버가 세션을
+ *   열지 않으므로 잠금화면뿐 아니라 앱 안 실시간 안내도 시작되지 않는다(서버 변경 없이 끄려고 고른 방식).
  */
 export type LockScreenReadiness =
 	| "ready"
@@ -177,21 +178,25 @@ export function fixLabelKey(action: LockScreenFix): MessageKey | null {
 }
 
 export interface LockScreenSettingsRow {
-	/** 토글 아래 고치는 행 제목 */
-	fixKey: MessageKey;
+	/** 토글 아래 고치는 행 제목. 고칠 것이 없으면(토글을 꺼 둠) null */
+	fixKey: MessageKey | null;
 	/** 토글 행 부제 */
 	subtitleKey: MessageKey;
 }
 
 /**
  * 설정의 "출퇴근 잠금화면 안내" 행. 토글은 켜져 있는데 시스템이 막으면 부제로 알리고, 누르면 고치는 행을
- * 하나 더 둔다(토글 행은 누르면 토글되므로). 꺼 두었거나 시스템이 허용하면 null.
+ * 하나 더 둔다(토글 행은 누르면 토글되므로). 꺼 두면 앱 안 안내도 시작되지 않는다고 부제로만 알린다.
+ * 켜져 있고 시스템이 허용하면 null.
  */
 export function lockScreenSettingsRow(
 	inAppEnabled: boolean,
 	block: LockScreenSystemBlock | null
 ): LockScreenSettingsRow | null {
-	if (!inAppEnabled || block === null) {
+	if (!inAppEnabled) {
+		return { fixKey: null, subtitleKey: "lockScreen.settings.disabled" };
+	}
+	if (block === null) {
 		return null;
 	}
 	return block === "notificationsOff"

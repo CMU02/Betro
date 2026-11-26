@@ -11,6 +11,8 @@ export interface SyncDeps {
 	/**
 	 * 설정의 "출퇴근 잠금화면 안내". 올리는 예약의 `enabled`를 이 값으로 바꾼다(서버는 꺼진 예약의
 	 * 세션을 열지 않고, 돌던 세션은 닫는다). 기기에 둔 예약은 그대로 둔다. 없으면 예약 값 그대로 올린다.
+	 * 서버 변경 없이 끄려고 고른 방식이라 세션 자체가 없어 앱 안 실시간 안내도 함께 꺼진다. 화면 문구
+	 * (`lockScreen.settings.disabled`, `lockScreen.warning.disabledInApp`)가 그렇게 말한다.
 	 */
 	guidanceEnabled?: () => boolean;
 	now: () => number;

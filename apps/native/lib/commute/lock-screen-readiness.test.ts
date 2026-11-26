@@ -258,8 +258,16 @@ describe("lockScreenSettingsRow", () => {
 		});
 	});
 
-	it("says nothing when the system allows it or the user turned it off", () => {
+	it("says nothing when the toggle is on and the system allows it", () => {
 		expect(lockScreenSettingsRow(true, null)).toBeNull();
-		expect(lockScreenSettingsRow(false, "notificationsOff")).toBeNull();
+	});
+
+	it("says guidance will not start at all while the toggle is off, with no fix row", () => {
+		for (const block of [null, "notificationsOff", "activitiesOff"] as const) {
+			expect(lockScreenSettingsRow(false, block)).toEqual({
+				fixKey: null,
+				subtitleKey: "lockScreen.settings.disabled",
+			});
+		}
 	});
 });

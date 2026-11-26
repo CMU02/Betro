@@ -197,7 +197,8 @@ function openCrashTest(): void {
 
 /**
  * "출퇴근 잠금화면 안내" 토글. 토글은 앱 설정만 바꾼다. 켜 두었는데 시스템이 막으면(Android 알림 꺼짐,
- * iOS 실시간 현황 꺼짐) 부제로 알리고 그 아래 고치는 행을 둔다. 앱이 앞으로 올 때 상태를 다시 읽는다.
+ * iOS 실시간 현황 꺼짐) 부제로 알리고 그 아래 고치는 행을 둔다. 꺼 두면 앱 안 안내도 시작되지 않는다고
+ * 부제로 알린다. 앱이 앞으로 올 때 상태를 다시 읽는다.
  */
 function LockScreenGuidanceRows({ enabled }: { enabled: boolean }) {
 	const { readiness, system } = useLockScreenReadiness();
@@ -212,6 +213,7 @@ function LockScreenGuidanceRows({ enabled }: { enabled: boolean }) {
 	const fix = useCallback(() => {
 		run().catch(() => undefined);
 	}, [run]);
+	const fixKey = row?.fixKey ?? null;
 	return (
 		<>
 			<ListRow
@@ -220,14 +222,14 @@ function LockScreenGuidanceRows({ enabled }: { enabled: boolean }) {
 				title={t("settings.commuteLockScreen.title")}
 				trailing={{ onChange: toggle, type: "toggle", value: enabled }}
 			/>
-			{row ? (
+			{fixKey ? (
 				<>
 					<ListDivider />
 					<ListRow
 						// 제목을 위 행 제목 시작선(아이콘 24 뒤)에 맞춘다.
 						leading={<View className="size-6" />}
 						onPress={fix}
-						title={t(row.fixKey)}
+						title={t(fixKey)}
 						trailing={{ type: "chevron" }}
 					/>
 				</>

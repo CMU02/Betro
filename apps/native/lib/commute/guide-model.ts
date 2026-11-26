@@ -76,6 +76,8 @@ export interface IdleGuide {
 	 * 서버에 올라가기 전이면 등록한 요일로 "평일 08:10에 나가요 · 아직 서버에 저장되지 않았어요"
 	 */
 	next: string;
+	/** `next` 위 작은 제목. 설정에서 안내를 꺼 둬 세션이 열리지 않으면 "다음 출발", 아니면 "다음 안내" */
+	nextLabel: string;
 	routes: GuideRouteRow[];
 }
 
@@ -239,6 +241,11 @@ function idleGuide(input: GuideInput): IdleGuide {
 	return {
 		kind: "idle",
 		next: nextLine(input),
+		nextLabel: t(
+			input.lockScreen === "disabledInApp"
+				? "commuteGuide.next.labelDisabled"
+				: "commuteGuide.next.label"
+		),
 		routes: byRank(place.plan.routes).map((route) => ({
 			badge: route.legs.map((leg) => badgeOf(leg, place.busMeta)),
 			label: t(
