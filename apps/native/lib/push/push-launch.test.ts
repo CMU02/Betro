@@ -20,10 +20,10 @@ it("sets push up again once permission is granted after a refusal", () => {
 	expect(shouldRetryPushSetup("denied", "granted")).toBe(true);
 });
 
-it("does not set push up again while it is checking, already running or still refused", () => {
+it("does not set push up again while it is checking, running, failed or still refused", () => {
 	expect(shouldRetryPushSetup("checking", "granted")).toBe(false);
 	expect(shouldRetryPushSetup("granted", "granted")).toBe(false);
 	expect(shouldRetryPushSetup("denied", "denied")).toBe(false);
 	expect(shouldRetryPushSetup("denied", null)).toBe(false);
-	expect(shouldRetryPushSetup("error", "granted")).toBe(true);
+	expect(shouldRetryPushSetup("error", "granted")).toBe(false);
 });

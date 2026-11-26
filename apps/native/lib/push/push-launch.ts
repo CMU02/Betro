@@ -25,15 +25,12 @@ export function subscribeOptionsForLaunch(): { requestPermission: false } {
 }
 
 /**
- * 푸시 구독을 다시 시작할지. 마운트 때 권한이 없어(또는 실패해) 멈췄는데 그 뒤 허용됐으면(저장 뒤 시트에서
+ * 푸시 구독을 다시 시작할지. 마운트 때 권한이 없어 멈췄는데 그 뒤 허용됐으면(저장 뒤 시트에서
  * 허용, 설정 앱에서 켜고 돌아옴) 다시 시작해 FCM 토큰을 서버에 올린다. 이미 돌고 있거나 확인 중이면 두지 않는다.
  */
 export function shouldRetryPushSetup(
 	permission: PushPermissionState,
 	systemStatus: PermissionStatus | null
 ): boolean {
-	return (
-		systemStatus === "granted" &&
-		(permission === "denied" || permission === "error")
-	);
+	return systemStatus === "granted" && permission === "denied";
 }

@@ -43,8 +43,9 @@ export interface ReadinessInput {
 
 /**
  * 시스템이 잠금화면 안내를 막는지. 앱 설정은 보지 않는다(설정 행이 시스템 상태를 따로 보인다).
- * iOS는 실시간 현황만 본다. ActivityKit 시작 푸시(push-to-start)와 갱신 푸시는 알림 권한이 아니라
- * 실시간 현황 허용(`areActivitiesEnabled`)을 따르므로, 알림을 꺼도 잠금화면 안내는 뜬다.
+ * iOS는 실시간 현황만 본다. Apple 문서(Displaying live data with Live Activities)는 Live Activity를
+ * 막는 것으로 설정의 실시간 현황(`areActivitiesEnabled`)만 들고 알림 권한은 말하지 않는다. 기기에서
+ * 알림을 끈 채 시작 푸시가 뜨는지는 아직 확인하지 않았다.
  */
 export function systemBlock(
 	platform: LockScreenPlatform,
