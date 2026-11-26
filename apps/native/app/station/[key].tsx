@@ -422,7 +422,9 @@ export default function StationDetailScreen() {
 			<TopBar onBack={goBack} title={station?.name ?? ""} trailing={star} />
 			<OfflineNotice className="px-4 pb-2" />
 			<ScrollView
-				contentContainerStyle={{ paddingBottom: BOTTOM_PADDING }}
+				contentContainerStyle={{
+					paddingBottom: insets.bottom + BOTTOM_PADDING,
+				}}
 				showsVerticalScrollIndicator={false}
 			>
 				{notFound ? (
@@ -442,16 +444,6 @@ export default function StationDetailScreen() {
 					/>
 				)}
 			</ScrollView>
-			<View
-				className="px-4 pt-2"
-				style={{ paddingBottom: insets.bottom + BOTTOM_PADDING }}
-			>
-				<AppButton
-					label={t("stationDetail.favorite")}
-					onPress={toggleFavorite}
-					variant={isFavorite ? "secondary" : "primary"}
-				/>
-			</View>
 		</View>
 	);
 }
