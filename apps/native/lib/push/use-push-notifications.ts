@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 
-import { type PushSubscribeOptions, permissionStepFor } from "./push-launch";
+import type { PermissionStatus } from "../onboarding/onboarding";
+import {
+	type PushSubscribeOptions,
+	permissionStepFor,
+	shouldRetryPushSetup,
+} from "./push-launch";
 import type { PushMessage } from "./push-message";
 import {
 	getPushPermissionStatus,
@@ -34,16 +39,29 @@ const INITIAL_STATE: PushNotificationsState = {
  * Checks notification permission on mount (asking only when `options.requestPermission`
  * is true), fetches the FCM token once granted and keeps the foreground, tap and
  * token-refresh listeners alive while the component is mounted.
+ * `systemStatus` is the latest permission read elsewhere (app foreground, an in-app request).
+ * When it turns "granted" after this hook stopped at "denied", setup runs again.
  */
 export function usePushNotifications(
 	handlers: PushSubscriptionHandlers,
-	options: PushSubscribeOptions
+	options: PushSubscribeOptions,
+	systemStatus: PermissionStatus | null = null
 ): PushNotificationsState {
 	const [state, setState] = useState<PushNotificationsState>(INITIAL_STATE);
+	const [attempt, setAttempt] = useState(0);
+	const retry = shouldRetryPushSetup(state.permission, systemStatus);
+
+	useEffect(() => {
+		if (retry) {
+			setState((previous) => ({ ...previous, permission: "checking" }));
+			setAttempt((previous) => previous + 1);
+		}
+	}, [retry]);
 	const { onForegroundMessage, onNotificationOpened, onTokenRefresh } =
 		handlers;
 	const permissionStep = permissionStepFor(options);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` restarts setup after a later grant
 	useEffect(() => {
 		let cancelled = false;
 		let unsubscribe: (() => void) | null = null;
@@ -95,6 +113,7 @@ export function usePushNotifications(
 			unsubscribe?.();
 		};
 	}, [
+		attempt,
 		onForegroundMessage,
 		onNotificationOpened,
 		onTokenRefresh,

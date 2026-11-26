@@ -1,0 +1,155 @@
+import type { MessageKey, MessageParams } from "../i18n/translate";
+import {
+	type PermissionStatus,
+	permissionButtonAction,
+} from "../onboarding/onboarding";
+import { daysLabel, timeLabel } from "../places/place-card-model";
+import type { Place } from "../places/places";
+import { placeNameOf } from "../places/plan-headers";
+
+type Translate = (key: MessageKey, params?: MessageParams) => string;
+
+export type LockScreenPlatform = "ios" | "android";
+
+/**
+ * 잠금화면 출퇴근 안내가 이 기기에 뜰 수 있는지.
+ * - `notificationsOff`: Android 알림 권한이 없다(FCM 데이터 메시지로 그리는 진행 중 알림이 안 보이고,
+ *   권한이 없으면 FCM 토큰도 서버에 올리지 않는다).
+ * - `activitiesOff`: iOS 설정에서 이 앱의 실시간 현황(Live Activities)이 꺼져 있다.
+ * - `disabledInApp`: 앱 설정의 "출퇴근 잠금화면 안내"를 껐다.
+ */
+export type LockScreenReadiness =
+	| "ready"
+	| "notificationsOff"
+	| "activitiesOff"
+	| "disabledInApp";
+
+/** 시스템이 막는 경우만. */
+export type LockScreenSystemBlock = "notificationsOff" | "activitiesOff";
+
+/** 창 없이 읽은 시스템 상태. */
+export interface LockScreenSystemState {
+	/** iOS `ActivityAuthorizationInfo().areActivitiesEnabled`. Android에서는 쓰지 않는다. */
+	activitiesEnabled: boolean;
+	pushStatus: PermissionStatus;
+}
+
+export interface ReadinessInput {
+	inAppEnabled: boolean;
+	platform: LockScreenPlatform;
+	/** 아직 읽지 못했으면 null. */
+	system: LockScreenSystemState | null;
+}
+
+/**
+ * 시스템이 잠금화면 안내를 막는지. 앱 설정은 보지 않는다(설정 행이 시스템 상태를 따로 보인다).
+ * iOS는 실시간 현황만 본다. ActivityKit 시작 푸시(push-to-start)와 갱신 푸시는 알림 권한이 아니라
+ * 실시간 현황 허용(`areActivitiesEnabled`)을 따르므로, 알림을 꺼도 잠금화면 안내는 뜬다.
+ */
+export function systemBlock(
+	platform: LockScreenPlatform,
+	system: LockScreenSystemState | null
+): LockScreenSystemBlock | null {
+	if (system === null) {
+		return null;
+	}
+	if (platform === "ios") {
+		return system.activitiesEnabled ? null : "activitiesOff";
+	}
+	return system.pushStatus === "granted" ? null : "notificationsOff";
+}
+
+/** 앱 설정을 먼저 본다(끈 사람에게 시스템 권한을 켜라고 하지 않는다). 시스템 상태를 모르면 null. */
+export function lockScreenReadiness(
+	input: ReadinessInput
+): LockScreenReadiness | null {
+	if (!input.inAppEnabled) {
+		return "disabledInApp";
+	}
+	if (input.system === null) {
+		return null;
+	}
+	return systemBlock(input.platform, input.system) ?? "ready";
+}
+
+/** 고치는 버튼이 할 일. */
+export type LockScreenFix =
+	| "requestPermission"
+	| "openSettings"
+	| "openInAppSetting"
+	| "none";
+
+export interface FixInput {
+	platform: LockScreenPlatform;
+	pushStatus: PermissionStatus;
+	readiness: LockScreenReadiness | null;
+	/** 이번에 화면에서 시스템 창으로 요청했는지. */
+	requestedThisSession: boolean;
+}
+
+/**
+ * 실시간 현황은 앱이 요청할 수 없어 설정 앱을 연다. 알림은 iOS 거부가 늘 영구라 바로 설정 앱으로 보내고,
+ * Android는 온보딩과 같이 먼저 요청하고 이번에 거부되면 설정 앱으로 보낸다(묻기 전에도 "denied"라서).
+ */
+export function lockScreenFixAction(input: FixInput): LockScreenFix {
+	switch (input.readiness) {
+		case "disabledInApp":
+			return "openInAppSetting";
+		case "activitiesOff":
+			return "openSettings";
+		case "notificationsOff": {
+			if (input.platform === "ios") {
+				return input.pushStatus === "undetermined"
+					? "requestPermission"
+					: "openSettings";
+			}
+			const action = permissionButtonAction(
+				input.pushStatus,
+				input.requestedThisSession
+			);
+			if (action === "none") {
+				return "none";
+			}
+			return action === "openSettings" ? "openSettings" : "requestPermission";
+		}
+		default:
+			return "none";
+	}
+}
+
+/** 장소를 저장한 뒤 시트를 띄울지. 사용자가 앱에서 끈 경우와 이미 되는 경우에는 띄우지 않는다. */
+export function shouldOfferLockScreenPrompt(
+	readiness: LockScreenReadiness | null
+): readiness is LockScreenSystemBlock {
+	return readiness === "notificationsOff" || readiness === "activitiesOff";
+}
+
+export interface LockScreenPromptModel {
+	body: string;
+	/** 주 버튼 글자. 알림은 "알림 받기", 실시간 현황은 "설정 열기". */
+	primary: string;
+	/** "평일 08:10 회사 가는 길, 잠금화면에 도착 정보를 띄워드릴게요" */
+	title: string;
+}
+
+/** 저장한 장소 이름과 나가는 시각으로 잠금화면 안내의 쓸모를 말한다. */
+export function lockScreenPromptModel(
+	place: Place,
+	block: LockScreenSystemBlock,
+	t: Translate
+): LockScreenPromptModel {
+	const { days, leadMinutes, leaveMinute } = place.plan.schedule;
+	return {
+		body: t(`lockScreen.prompt.body.${block}`, { m: leadMinutes }),
+		primary: t(
+			block === "notificationsOff"
+				? "lockScreen.prompt.allow"
+				: "lockScreen.prompt.openSettings"
+		),
+		title: t("lockScreen.prompt.title", {
+			days: daysLabel(days, t),
+			leave: timeLabel(leaveMinute),
+			name: placeNameOf(place, t),
+		}),
+	};
+}

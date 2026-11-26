@@ -103,6 +103,8 @@ export const ko = {
 		/** 다음 안내. `{day}`는 다음에 나가는 날("오늘", "내일", 요일 한 글자)이다. */
 		next: {
 			label: "다음 안내",
+			/** 잠금화면 안내가 뜨지 않을 때(알림·실시간 현황·설정이 꺼짐). 뜬다고 말하지 않는다. */
+			leaveOnly: "{day} {leave}에 나가요",
 			/** 서버에 올라가기 전에는 예약이 동작한다고 말하지 않는다. `{days}`는 등록한 요일이다. */
 			notSynced: "{days} {leave}에 나가요 · 아직 서버에 저장되지 않았어요",
 			previousDay: "{day} {leave}에 나가요 · 전날 {show}부터 잠금화면에 떠요",
@@ -330,6 +332,40 @@ export const ko = {
 	licenses: {
 		intro: "Betro는 아래 오픈소스를 쓰고 있어요.",
 		title: "오픈소스 라이선스",
+	},
+	/** 잠금화면 안내가 실제로 뜰 수 있는지(알림 권한, 실시간 현황, 설정의 안내 켜기)와 고치는 버튼 */
+	lockScreen: {
+		fix: {
+			inAppSetting: "안내 켜기",
+			openSettings: "설정 열기",
+			requestPermission: "알림 켜기",
+		},
+		/** 장소를 저장한 뒤 잠금화면 안내가 뜨지 않을 때 한 번 묻는 시트 */
+		prompt: {
+			allow: "알림 받기",
+			body: {
+				activitiesOff:
+					"설정에서 실시간 현황을 켜면 나가는 시각 {m}분 전부터 잠금화면에 떠요",
+				notificationsOff:
+					"알림을 켜면 나가는 시각 {m}분 전부터 잠금화면에 떠요",
+			},
+			later: "나중에",
+			openSettings: "설정 열기",
+			title:
+				"{days} {leave} {name} 가는 길, 잠금화면에 도착 정보를 띄워드릴게요",
+		},
+		/** 설정의 "출퇴근 잠금화면 안내" 행 부제와 고치는 행 */
+		settings: {
+			activitiesOff: "실시간 현황이 꺼져 있어요",
+			fixActivities: "실시간 현황 켜기",
+			fixNotifications: "알림 켜기",
+			notificationsOff: "알림이 꺼져 있어요",
+		},
+		warning: {
+			activitiesOff: "실시간 현황이 꺼져 있어 잠금화면에 뜨지 않아요",
+			disabledInApp: "설정에서 잠금화면 안내를 꺼 둬서 뜨지 않아요",
+			notificationsOff: "알림이 꺼져 있어 잠금화면에 뜨지 않아요",
+		},
 	},
 	map: {
 		allHidden: "이 경로의 노선이 모두 꺼져 있어요",
