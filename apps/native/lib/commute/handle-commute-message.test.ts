@@ -200,3 +200,32 @@ it("still reports shown when the acknowledgement fails", async () => {
 
 	expect(await handleCommuteMessage(data("start"), deps)).toBe("shown");
 });
+
+it("clears instead of drawing when lock-screen guidance is turned off on the device", async () => {
+	const { calls, deps, ended, shown } = setup();
+	const disabled = { ...deps, enabled: () => false };
+
+	expect(await handleCommuteMessage(data("start"), disabled)).toBe("ignored");
+	expect(await handleCommuteMessage(data("update"), disabled)).toBe("ignored");
+	expect(shown).toEqual([]);
+	expect(ended).toEqual(["session-1", "session-1"]);
+	expect(calls).toEqual([]);
+});
+
+it("still ends a session while lock-screen guidance is turned off", async () => {
+	const { deps, ended } = setup();
+
+	expect(
+		await handleCommuteMessage(data("end"), { ...deps, enabled: () => false })
+	).toBe("ended");
+	expect(ended).toEqual(["session-1"]);
+});
+
+it("draws as before when lock-screen guidance is on", async () => {
+	const { deps, shown } = setup();
+
+	expect(
+		await handleCommuteMessage(data("update"), { ...deps, enabled: () => true })
+	).toBe("shown");
+	expect(shown).toHaveLength(1);
+});

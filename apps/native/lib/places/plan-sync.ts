@@ -8,6 +8,11 @@ import { headersOf } from "./plan-headers";
 
 export interface SyncDeps {
 	client: ServerClient;
+	/**
+	 * 설정의 "출퇴근 잠금화면 안내". 올리는 예약의 `enabled`를 이 값으로 바꾼다(서버는 꺼진 예약의
+	 * 세션을 열지 않고, 돌던 세션은 닫는다). 기기에 둔 예약은 그대로 둔다. 없으면 예약 값 그대로 올린다.
+	 */
+	guidanceEnabled?: () => boolean;
 	now: () => number;
 	/** planId → 머리줄 전체를 잠금화면에 넘긴다. */
 	setHeaders: (headers: Record<string, string>) => Promise<void>;
@@ -33,6 +38,14 @@ const NOT_FOUND = 404;
 const CONFLICT = 409;
 const SERVER_ERROR = 500;
 const IMPORTED_ID_PREFIX = "imported-";
+
+/** 서버에 올릴 값. 잠금화면 안내 설정이 있으면 `enabled`만 그 값으로 바꾼다. */
+function uploadOf(deps: SyncDeps, plan: CommutePlan): CommutePlan {
+	const enabled = deps.guidanceEnabled?.();
+	return enabled === undefined || enabled === plan.enabled
+		? plan
+		: { ...plan, enabled };
+}
 
 function planPath(planId: string): string {
 	return `${PLANS_PATH}/${encodeURIComponent(planId)}`;
@@ -97,7 +110,11 @@ async function putPlan(
 	const { planId } = plan;
 	uploads.set(planId, (uploads.get(planId) ?? 0) + 1);
 	try {
-		const response = await deps.client.request("PUT", planPath(planId), plan);
+		const response = await deps.client.request(
+			"PUT",
+			planPath(planId),
+			uploadOf(deps, plan)
+		);
 		if (mayHaveStored(response.status)) {
 			deps.store.queueDelete(planId);
 		}
@@ -393,6 +410,32 @@ function markMissingPending(deps: SyncDeps, plans: CommutePlan[]): Place[] {
 	return missing;
 }
 
+/**
+ * ⑤ 기기에 `synced`로 있는데 서버 값의 `enabled`가 잠금화면 안내 설정과 다른 장소를 `pending`으로 바꾼다.
+ * 설정을 바꾼 뒤(끄면 서버가 세션을 열지 않게) 또는 바꿀 때 서버에 닿지 못했을 때 여기서 다시 올린다.
+ */
+function markGuidanceMismatchPending(
+	deps: SyncDeps,
+	plans: CommutePlan[]
+): Place[] {
+	const enabled = deps.guidanceEnabled?.();
+	if (enabled === undefined) {
+		return [];
+	}
+	const mismatched = new Set(
+		plans.filter((plan) => plan.enabled !== enabled).map((plan) => plan.planId)
+	);
+	const stale = deps.store
+		.get()
+		.places.filter(
+			(place) => place.sync === "synced" && mismatched.has(place.plan.planId)
+		);
+	for (const place of stale) {
+		deps.store.upsert({ ...place, sync: "pending" });
+	}
+	return stale;
+}
+
 async function syncWithServer(
 	deps: SyncDeps
 ): Promise<ReconcileSummary | "offline"> {
@@ -415,7 +458,10 @@ async function syncWithServer(
 		return "offline";
 	}
 	const imported = importServerOnly(deps, plans, knownBefore);
-	const pushedMissing = await pushPlaces(deps, markMissingPending(deps, plans));
+	const pushedMissing = await pushPlaces(deps, [
+		...markMissingPending(deps, plans),
+		...markGuidanceMismatchPending(deps, plans),
+	]);
 	return {
 		imported,
 		pushed: pushedPending + (pushedMissing ?? 0),
@@ -425,7 +471,7 @@ async function syncWithServer(
 
 /**
  * 기기와 서버의 예약을 맞춘다. ① 밀린 삭제 ② 밀린 저장 ③ 서버 목록 ④ 서버에만 있는 예약 가져오기
- * ⑤ 서버가 잃은 예약 다시 올리기 ⑥ 머리줄. ③을 읽지 못하면(또는 그 전에 서버에 닿지 않으면) `"offline"`이고
+ * ⑤ 서버가 잃은 예약과 잠금화면 안내 설정이 다른 예약 다시 올리기 ⑥ 머리줄. ③을 읽지 못하면(또는 그 전에 서버에 닿지 않으면) `"offline"`이고
  * ④⑤를 하지 않는다. 머리줄은 어느 경우에도 끝에 한 번 넘긴다.
  */
 export async function reconcile(

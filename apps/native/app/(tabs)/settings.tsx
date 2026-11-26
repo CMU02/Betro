@@ -25,6 +25,7 @@ import { Screen } from "@/components/ui/screen";
 import { Section } from "@/components/ui/section";
 import { Segmented } from "@/components/ui/segmented";
 import { useAppTheme } from "@/contexts/app-theme-context";
+import { setAppLockScreenGuidance } from "@/lib/commute/app-lock-screen";
 import { showLockSamples } from "@/lib/commute/lock-sample-presenter";
 import {
 	isCrashReportingActive,
@@ -204,10 +205,9 @@ export default function SettingsTab() {
 		(value: boolean) => update({ dataSaver: value }),
 		[update]
 	);
-	const toggleLiveActivity = useCallback(
-		(value: boolean) => update({ commuteLiveActivityEnabled: value }),
-		[update]
-	);
+	const toggleLiveActivity = useCallback((value: boolean) => {
+		setAppLockScreenGuidance(value).catch(() => undefined);
+	}, []);
 	const openDataSources = useCallback(() => {
 		router.push("/settings/data-sources");
 	}, [router]);

@@ -25,6 +25,11 @@ export interface CommuteNotifierPort {
 
 export interface CommuteMessageDeps {
 	client: ServerClient;
+	/**
+	 * 설정의 "출퇴근 잠금화면 안내"가 켜져 있는지. false면 그리지 않고 떠 있는 알림을 지운다.
+	 * 없으면 켜진 것으로 본다.
+	 */
+	enabled?: () => boolean;
 	/** 기기가 저장한 planId별 머리줄. 모르면 null. */
 	header: (planId: string) => Promise<string | null>;
 	notifier: CommuteNotifierPort;
@@ -83,6 +88,11 @@ export async function handleCommuteMessage(
 	if (event === "end") {
 		deps.notifier.end(sessionId);
 		return "ended";
+	}
+	// 꺼 둔 뒤 서버가 아직 모르고 보낸 값이면(꺼짐이 서버에 닿기 전) 그리지 않고 남은 알림도 치운다.
+	if (deps.enabled?.() === false) {
+		deps.notifier.end(sessionId);
+		return "ignored";
 	}
 	const state = parseContentState(parseJson(data.state));
 	if (state === null) {
