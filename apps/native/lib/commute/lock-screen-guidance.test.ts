@@ -64,8 +64,8 @@ describe("endLocalGuidance", () => {
 					options.notifier === null
 						? null
 						: {
-								endAll: () => {
-									events.push("notifier.endAll");
+								hideAll: () => {
+									events.push("notifier.hideAll");
 									if (options.notifier === "throws") {
 										throw new Error("missing in this build");
 									}
@@ -89,7 +89,7 @@ describe("endLocalGuidance", () => {
 
 		await endLocalGuidance("android", deps);
 
-		expect(events).toEqual(["notifier.endAll"]);
+		expect(events).toEqual(["notifier.hideAll"]);
 	});
 
 	it("does nothing on Android without the notification module", async () => {

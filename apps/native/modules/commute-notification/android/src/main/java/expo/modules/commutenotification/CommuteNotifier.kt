@@ -137,16 +137,12 @@ object CommuteNotifier {
   }
 
   /**
-   * 지금 그린 세션을 `end`한다(설정에서 잠금화면 안내를 끌 때). 서버를 기다리지 않아 연결이 없어도 지워진다.
-   * 저장된 세션이 없어도 알림과 타이머 알람은 지운다.
+   * 떠 있는 알림과 타이머 알람만 지운다(설정에서 잠금화면 안내를 끌 때). 서버를 기다리지 않아 연결이 없어도 지워진다.
+   * `end`와 달리 세션을 끝난 것으로 적지 않고, 그린 `seq`도 잊는다. 다시 켜면 같은 세션의 다음 메시지를 그린다.
    */
   @Synchronized
-  fun endAll(context: Context) {
-    val sessionId = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_SESSION, null)
-    if (sessionId != null) {
-      end(context, sessionId)
-      return
-    }
+  fun hideAll(context: Context) {
+    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY_SEQ).remove(KEY_LAST).apply()
     context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
     cancelCountdownEnd(context)
   }

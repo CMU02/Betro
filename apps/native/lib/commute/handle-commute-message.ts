@@ -20,6 +20,8 @@ export interface ShowRequest {
 
 export interface CommuteNotifierPort {
 	end: (sessionId: string) => void;
+	/** 떠 있는 알림만 지운다. 세션을 끝난 것으로 적지 않아 다시 켜면 같은 세션을 그릴 수 있다. */
+	hideAll: () => void;
 	show: (input: ShowRequest) => boolean;
 }
 
@@ -92,7 +94,7 @@ export async function handleCommuteMessage(
 	}
 	// 꺼 두면 서버는 세션을 계속 보낸다(앱 안 안내용). 그리지 않고 남은 알림도 치운다.
 	if (deps.enabled?.() === false) {
-		deps.notifier.end(sessionId);
+		deps.notifier.hideAll();
 		return "ignored";
 	}
 	const state = parseContentState(parseJson(data.state));

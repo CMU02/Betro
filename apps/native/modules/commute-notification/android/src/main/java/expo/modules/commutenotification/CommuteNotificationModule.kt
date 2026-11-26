@@ -66,8 +66,8 @@ class CommuteNotificationModule : Module() {
       CommuteNotifier.end(context, sessionId)
     }
 
-    Function("endAll") {
-      CommuteNotifier.endAll(context)
+    Function("hideAll") {
+      CommuteNotifier.hideAll(context)
     }
   }
 }

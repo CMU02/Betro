@@ -30,7 +30,7 @@ export interface LocalGuidanceEnders {
 	/** iOS: 이 앱의 Live Activity를 모두 끝낸다. */
 	endActivities: () => Promise<void>;
 	/** Android 진행 중 알림 모듈. 없으면(iOS, 모듈이 없는 빌드) null. */
-	notifier: { endAll: () => void } | null;
+	notifier: { hideAll: () => void } | null;
 }
 
 /**
@@ -45,5 +45,5 @@ export async function endLocalGuidance(
 		await enders.endActivities();
 		return;
 	}
-	enders.notifier?.endAll();
+	enders.notifier?.hideAll();
 }

@@ -62,6 +62,7 @@ function setup(options: { ackStatus?: number; shows?: boolean } = {}) {
 	const calls: Call[] = [];
 	const shown: ShowRequest[] = [];
 	const ended: string[] = [];
+	let hidden = 0;
 	const client: ServerClient = {
 		request: (method, path, body) => {
 			calls.push({ body, method, path });
@@ -76,6 +77,9 @@ function setup(options: { ackStatus?: number; shows?: boolean } = {}) {
 			end: (sessionId) => {
 				ended.push(sessionId);
 			},
+			hideAll: () => {
+				hidden += 1;
+			},
 			show: (input) => {
 				shown.push(input);
 				return options.shows ?? true;
@@ -85,7 +89,7 @@ function setup(options: { ackStatus?: number; shows?: boolean } = {}) {
 		t,
 		timezone: "Asia/Seoul",
 	};
-	return { calls, deps, ended, shown };
+	return { calls, deps, ended, hidden: () => hidden, shown };
 }
 
 it("shows a start message and acknowledges it once with a ms timestamp", async () => {
@@ -201,15 +205,28 @@ it("still reports shown when the acknowledgement fails", async () => {
 	expect(await handleCommuteMessage(data("start"), deps)).toBe("shown");
 });
 
-it("clears instead of drawing when lock-screen guidance is turned off on the device", async () => {
-	const { calls, deps, ended, shown } = setup();
+it("hides instead of drawing when lock-screen guidance is turned off, without ending the session", async () => {
+	const { calls, deps, ended, hidden, shown } = setup();
 	const disabled = { ...deps, enabled: () => false };
 
 	expect(await handleCommuteMessage(data("start"), disabled)).toBe("ignored");
 	expect(await handleCommuteMessage(data("update"), disabled)).toBe("ignored");
 	expect(shown).toEqual([]);
-	expect(ended).toEqual(["session-1", "session-1"]);
+	// 끝난 것으로 적으면 다시 켰을 때 같은 세션을 그릴 수 없다.
+	expect(ended).toEqual([]);
+	expect(hidden()).toBe(2);
 	expect(calls).toEqual([]);
+});
+
+it("draws the same session again after guidance is turned back on", async () => {
+	const { deps, shown } = setup();
+	let enabled = false;
+	const toggled = { ...deps, enabled: () => enabled };
+
+	expect(await handleCommuteMessage(data("update"), toggled)).toBe("ignored");
+	enabled = true;
+	expect(await handleCommuteMessage(data("update"), toggled)).toBe("shown");
+	expect(shown).toHaveLength(1);
 });
 
 it("still ends a session while lock-screen guidance is turned off", async () => {
