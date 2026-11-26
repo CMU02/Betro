@@ -16,14 +16,18 @@ export type LockScreenPlatform = "ios" | "android";
  * - `notificationsOff`: Android 알림 권한이 없다(FCM 데이터 메시지로 그리는 진행 중 알림이 안 보이고,
  *   권한이 없으면 FCM 토큰도 서버에 올리지 않는다).
  * - `activitiesOff`: iOS 설정에서 이 앱의 실시간 현황(Live Activities)이 꺼져 있다.
- * - `disabledInApp`: 앱 설정의 "출퇴근 잠금화면 안내"를 껐다. 올리는 예약이 `enabled: false`라 서버가 세션을
- *   열지 않으므로 잠금화면뿐 아니라 앱 안 실시간 안내도 시작되지 않는다(서버 변경 없이 끄려고 고른 방식).
+ * - `disabledInApp`: iOS에서 앱 설정의 "출퇴근 잠금화면 안내"를 껐다. 올리는 예약이 `enabled: false`라 서버가
+ *   세션을 열지 않으므로 잠금화면뿐 아니라 앱 안 실시간 안내도 시작되지 않는다(시작 푸시는 기기에서 막을 수
+ *   없어 서버 변경 없이 끄려고 고른 방식).
+ * - `lockScreenOffInApp`: Android에서 같은 설정을 껐다. 서버 세션은 그대로 열려 앱 안 안내는 오고, 진행 중
+ *   알림만 기기가 그리지 않는다(`handleCommuteMessage`).
  */
 export type LockScreenReadiness =
 	| "ready"
 	| "notificationsOff"
 	| "activitiesOff"
-	| "disabledInApp";
+	| "disabledInApp"
+	| "lockScreenOffInApp";
 
 /** 시스템이 막는 경우만. */
 export type LockScreenSystemBlock = "notificationsOff" | "activitiesOff";
@@ -61,12 +65,23 @@ export function systemBlock(
 	return system.pushStatus === "granted" ? null : "notificationsOff";
 }
 
+/**
+ * 서버에 올리는 예약의 `enabled`. iOS는 시작 푸시를 기기에서 막을 수 없어 설정을 그대로 따르고(끄면 세션이
+ * 열리지 않아 앱 안 안내도 멈춘다), Android는 진행 중 알림을 기기가 거르므로 늘 켜 둬 앱 안 안내를 지킨다.
+ */
+export function serverGuidanceEnabled(
+	platform: LockScreenPlatform,
+	inAppEnabled: boolean
+): boolean {
+	return platform === "ios" ? inAppEnabled : true;
+}
+
 /** 앱 설정을 먼저 본다(끈 사람에게 시스템 권한을 켜라고 하지 않는다). 시스템 상태를 모르면 null. */
 export function lockScreenReadiness(
 	input: ReadinessInput
 ): LockScreenReadiness | null {
 	if (!input.inAppEnabled) {
-		return "disabledInApp";
+		return input.platform === "ios" ? "disabledInApp" : "lockScreenOffInApp";
 	}
 	if (input.system === null) {
 		return null;
@@ -96,6 +111,7 @@ export interface FixInput {
 export function lockScreenFixAction(input: FixInput): LockScreenFix {
 	switch (input.readiness) {
 		case "disabledInApp":
+		case "lockScreenOffInApp":
 			return "enableInApp";
 		case "activitiesOff":
 			return "openSettings";
@@ -186,18 +202,28 @@ export interface LockScreenSettingsRow {
 
 /**
  * 설정의 "출퇴근 잠금화면 안내" 행. 토글은 켜져 있는데 시스템이 막으면 부제로 알리고, 누르면 고치는 행을
- * 하나 더 둔다(토글 행은 누르면 토글되므로). 꺼 두면 앱 안 안내도 시작되지 않는다고 부제로만 알린다.
- * 켜져 있고 시스템이 허용하면 null.
+ * 하나 더 둔다(토글 행은 누르면 토글되므로). 꺼 두면 무엇이 멈췄는지 부제로만 알린다(iOS는 앱 안 안내까지,
+ * Android는 잠금화면 알림만). iOS는 끄기 전에도 앱 안 안내까지 멈춘다고 부제로 알린다.
+ * Android에서 켜져 있고 시스템이 허용하면 null.
  */
 export function lockScreenSettingsRow(
+	platform: LockScreenPlatform,
 	inAppEnabled: boolean,
 	block: LockScreenSystemBlock | null
 ): LockScreenSettingsRow | null {
 	if (!inAppEnabled) {
-		return { fixKey: null, subtitleKey: "lockScreen.settings.disabled" };
+		return {
+			fixKey: null,
+			subtitleKey:
+				platform === "ios"
+					? "lockScreen.settings.disabled"
+					: "lockScreen.settings.disabledLockScreenOnly",
+		};
 	}
 	if (block === null) {
-		return null;
+		return platform === "ios"
+			? { fixKey: null, subtitleKey: "lockScreen.settings.stopsInApp" }
+			: null;
 	}
 	return block === "notificationsOff"
 		? {

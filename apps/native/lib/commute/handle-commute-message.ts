@@ -27,6 +27,7 @@ export interface CommuteMessageDeps {
 	client: ServerClient;
 	/**
 	 * 설정의 "출퇴근 잠금화면 안내"가 켜져 있는지. false면 그리지 않고 떠 있는 알림을 지운다.
+	 * Android는 꺼도 서버 세션이 그대로 돌아(앱 안 안내를 지키려고) 이것이 알림을 막는 유일한 곳이다.
 	 * 없으면 켜진 것으로 본다.
 	 */
 	enabled?: () => boolean;
@@ -89,7 +90,7 @@ export async function handleCommuteMessage(
 		deps.notifier.end(sessionId);
 		return "ended";
 	}
-	// 꺼 둔 뒤 서버가 아직 모르고 보낸 값이면(꺼짐이 서버에 닿기 전) 그리지 않고 남은 알림도 치운다.
+	// 꺼 두면 서버는 세션을 계속 보낸다(앱 안 안내용). 그리지 않고 남은 알림도 치운다.
 	if (deps.enabled?.() === false) {
 		deps.notifier.end(sessionId);
 		return "ignored";

@@ -243,6 +243,7 @@ describe("guideModel idle", () => {
 			"notificationsOff",
 			"activitiesOff",
 			"disabledInApp",
+			"lockScreenOffInApp",
 		] as const) {
 			const model = guideModel({
 				lockScreen,
@@ -267,12 +268,13 @@ describe("guideModel idle", () => {
 		});
 		expect(off.kind === "idle" && off.nextLabel).toBe("다음 출발");
 
-		// 시스템이 잠금화면만 막으면 세션은 열리고 앱 안 안내는 온다.
+		// 시스템이나 Android 앱 설정이 잠금화면만 막으면 세션은 열리고 앱 안 안내는 온다.
 		for (const lockScreen of [
 			null,
 			"ready",
 			"notificationsOff",
 			"activitiesOff",
+			"lockScreenOffInApp",
 		] as const) {
 			const model = guideModel({
 				lockScreen,

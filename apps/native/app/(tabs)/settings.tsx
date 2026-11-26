@@ -197,12 +197,13 @@ function openCrashTest(): void {
 
 /**
  * "출퇴근 잠금화면 안내" 토글. 토글은 앱 설정만 바꾼다. 켜 두었는데 시스템이 막으면(Android 알림 꺼짐,
- * iOS 실시간 현황 꺼짐) 부제로 알리고 그 아래 고치는 행을 둔다. 꺼 두면 앱 안 안내도 시작되지 않는다고
- * 부제로 알린다. 앱이 앞으로 올 때 상태를 다시 읽는다.
+ * iOS 실시간 현황 꺼짐) 부제로 알리고 그 아래 고치는 행을 둔다. 무엇이 멈추는지(iOS는 앱 안 안내까지,
+ * Android는 잠금화면 알림만)는 `lockScreenSettingsRow`가 정한다. 앱이 앞으로 올 때 상태를 다시 읽는다.
  */
 function LockScreenGuidanceRows({ enabled }: { enabled: boolean }) {
 	const { readiness, system } = useLockScreenReadiness();
 	const row = lockScreenSettingsRow(
+		lockScreenPlatform,
 		enabled,
 		systemBlock(lockScreenPlatform, system)
 	);
