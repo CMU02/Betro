@@ -5,6 +5,7 @@ import { reportError } from "@/lib/crash/crash-reporting";
 import { t } from "@/lib/i18n/t";
 import { appPlaces } from "@/lib/places/app-places";
 import { planHeaderOf } from "@/lib/places/plan-headers";
+import { appPreferences } from "@/lib/preferences/app-preferences";
 import { ensureRegistered, serverClient } from "@/lib/server/app-server";
 import { CommuteNotification } from "@/modules/commute-notification";
 import {
@@ -35,6 +36,7 @@ export async function handleAppCommuteMessage(
 	try {
 		return await handleCommuteMessage(data, {
 			client: serverClient,
+			enabled: () => appPreferences.get().commuteLiveActivityEnabled,
 			header: (planId) =>
 				Promise.resolve(planHeaderOf(planId, appPlaces.get(), t)),
 			notifier,

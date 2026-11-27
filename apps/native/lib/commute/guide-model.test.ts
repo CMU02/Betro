@@ -158,6 +158,7 @@ describe("guideModel idle", () => {
 			kind: "idle",
 			// NOW는 화요일 08:00, 오늘 안내가 막 시작하는 시각이다. 서버가 3분 안에 세션을 열므로 아직 오늘이다.
 			next: "오늘 08:10에 나가요 · 08:00부터 잠금화면에 떠요",
+			nextLabel: "다음 안내",
 			routes: [
 				{
 					badge: [
@@ -234,6 +235,86 @@ describe("guideModel idle", () => {
 		});
 		expect(synced.kind === "idle" && synced.next).toBe(
 			"오늘 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
+		);
+	});
+
+	it("does not promise the lock screen when guidance will not appear on this device", () => {
+		for (const lockScreen of [
+			"notificationsOff",
+			"activitiesOff",
+			"disabledInApp",
+			"lockScreenOffInApp",
+		] as const) {
+			const model = guideModel({
+				lockScreen,
+				now: NOW,
+				place: placeOf(),
+				session: null,
+				t,
+				timezone: TIMEZONE,
+			});
+			expect(model.kind === "idle" && model.next).toBe("오늘 08:10에 나가요");
+		}
+	});
+
+	it("does not call it the next guidance when the app setting stops it from starting", () => {
+		const off = guideModel({
+			lockScreen: "disabledInApp",
+			now: NOW,
+			place: placeOf(),
+			session: null,
+			t,
+			timezone: TIMEZONE,
+		});
+		expect(off.kind === "idle" && off.nextLabel).toBe("다음 출발");
+
+		// 시스템이나 Android 앱 설정이 잠금화면만 막으면 세션은 열리고 앱 안 안내는 온다.
+		for (const lockScreen of [
+			null,
+			"ready",
+			"notificationsOff",
+			"activitiesOff",
+			"lockScreenOffInApp",
+		] as const) {
+			const model = guideModel({
+				lockScreen,
+				now: NOW,
+				place: placeOf(),
+				session: null,
+				t,
+				timezone: TIMEZONE,
+			});
+			expect(model.kind === "idle" && model.nextLabel).toBe("다음 안내");
+		}
+	});
+
+	it("keeps the promise while the device state is unknown or ready", () => {
+		for (const lockScreen of [null, "ready"] as const) {
+			const model = guideModel({
+				lockScreen,
+				now: NOW,
+				place: placeOf(),
+				session: null,
+				t,
+				timezone: TIMEZONE,
+			});
+			expect(model.kind === "idle" && model.next).toBe(
+				"오늘 08:10에 나가요 · 08:00부터 잠금화면에 떠요"
+			);
+		}
+	});
+
+	it("still says a pending place is not on the server when guidance is also blocked", () => {
+		const model = guideModel({
+			lockScreen: "notificationsOff",
+			now: NOW,
+			place: { ...placeOf(), sync: "pending" },
+			session: null,
+			t,
+			timezone: TIMEZONE,
+		});
+		expect(model.kind === "idle" && model.next).toBe(
+			"평일 08:10에 나가요 · 아직 서버에 저장되지 않았어요"
 		);
 	});
 

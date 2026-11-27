@@ -226,10 +226,10 @@ export function VehicleSheet({
 					{onOpenDetail === undefined ? null : (
 						<Pressable
 							accessibilityRole="button"
-							className="h-11 justify-center"
+							className="h-11 justify-center active:opacity-60"
 							onPress={onOpenDetail}
 						>
-							<AppText className="text-accent-primary" variant="bodyMStrong">
+							<AppText className="text-text-accent" variant="bodyMStrong">
 								{t("map.sheet.more")}
 							</AppText>
 						</Pressable>

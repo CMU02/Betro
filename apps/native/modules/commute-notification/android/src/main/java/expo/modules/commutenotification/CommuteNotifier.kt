@@ -136,6 +136,17 @@ object CommuteNotifier {
     }
   }
 
+  /**
+   * 떠 있는 알림과 타이머 알람만 지운다(설정에서 잠금화면 안내를 끌 때). 서버를 기다리지 않아 연결이 없어도 지워진다.
+   * `end`와 달리 세션을 끝난 것으로 적지 않고, 그린 `seq`도 잊는다. 다시 켜면 같은 세션의 다음 메시지를 그린다.
+   */
+  @Synchronized
+  fun hideAll(context: Context) {
+    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY_SEQ).remove(KEY_LAST).apply()
+    context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+    cancelCountdownEnd(context)
+  }
+
   /** 알람이 울릴 때 받는 `PendingIntent`. 같은 요청 코드와 Intent라 다시 걸면 바뀌고 취소도 같은 것을 찾는다. */
   private fun countdownEndIntent(context: Context, sessionId: String?, seq: Long?): PendingIntent {
     val intent = Intent(context, CountdownEndReceiver::class.java).setAction(CountdownEndReceiver.ACTION)

@@ -4,6 +4,7 @@ import {
 	handleAppCommuteMessage,
 	registerAppFcmToken,
 } from "@/lib/commute/app-commute";
+import { useLockScreenSystem } from "@/lib/commute/use-lock-screen";
 import { t } from "@/lib/i18n/t";
 import { appReachability } from "@/lib/network/app-reachability";
 import { onReconnect } from "@/lib/network/reachability";
@@ -18,7 +19,9 @@ const LAUNCH_OPTIONS = subscribeOptionsForLaunch();
  * permission screen does); when permission is already granted it fetches the token and
  * shows foreground messages as an alert (FCM does not render a banner while the app is open).
  * Renders nothing. The root layout remounts it when onboarding completes so a permission
- * granted on that screen starts the subscription without a relaunch.
+ * granted on that screen starts the subscription without a relaunch. A permission granted
+ * later (the sheet after saving a place, or the system settings app) restarts it through
+ * the shared lock-screen status, so the FCM token reaches the server without a relaunch.
  */
 export function PushNotifications() {
 	const onForegroundMessage = useCallback((message: PushMessage) => {
@@ -35,9 +38,11 @@ export function PushNotifications() {
 		}
 	}, []);
 
+	const system = useLockScreenSystem();
 	const { lastOpenedMessage, permission, token } = usePushNotifications(
 		{ onForegroundMessage },
-		LAUNCH_OPTIONS
+		LAUNCH_OPTIONS,
+		system?.pushStatus ?? null
 	);
 
 	useEffect(() => {

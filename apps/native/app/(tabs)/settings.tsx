@@ -25,7 +25,19 @@ import { Screen } from "@/components/ui/screen";
 import { Section } from "@/components/ui/section";
 import { Segmented } from "@/components/ui/segmented";
 import { useAppTheme } from "@/contexts/app-theme-context";
+import {
+	lockScreenPlatform,
+	setAppLockScreenGuidance,
+} from "@/lib/commute/app-lock-screen";
 import { showLockSamples } from "@/lib/commute/lock-sample-presenter";
+import {
+	lockScreenSettingsRow,
+	systemBlock,
+} from "@/lib/commute/lock-screen-readiness";
+import {
+	useLockScreenFix,
+	useLockScreenReadiness,
+} from "@/lib/commute/use-lock-screen";
 import {
 	isCrashReportingActive,
 	sendTestException,
@@ -183,6 +195,50 @@ function openCrashTest(): void {
 	]);
 }
 
+/**
+ * "출퇴근 잠금화면 안내" 토글. 토글은 앱 설정만 바꾼다. 켜 두었는데 시스템이 막으면(Android 알림 꺼짐,
+ * iOS 실시간 현황 꺼짐) 부제로 알리고 그 아래 고치는 행을 둔다. 무엇이 멈추는지(iOS는 앱 안 안내까지,
+ * Android는 잠금화면 알림만)는 `lockScreenSettingsRow`가 정한다. 앱이 앞으로 올 때 상태를 다시 읽는다.
+ */
+function LockScreenGuidanceRows({ enabled }: { enabled: boolean }) {
+	const { readiness, system } = useLockScreenReadiness();
+	const row = lockScreenSettingsRow(
+		lockScreenPlatform,
+		enabled,
+		systemBlock(lockScreenPlatform, system)
+	);
+	const { run } = useLockScreenFix(readiness, system);
+	const toggle = useCallback((value: boolean) => {
+		setAppLockScreenGuidance(value).catch(() => undefined);
+	}, []);
+	const fix = useCallback(() => {
+		run().catch(() => undefined);
+	}, [run]);
+	const fixKey = row?.fixKey ?? null;
+	return (
+		<>
+			<ListRow
+				icon={BellTileIcon}
+				subtitle={row ? t(row.subtitleKey) : undefined}
+				title={t("settings.commuteLockScreen.title")}
+				trailing={{ onChange: toggle, type: "toggle", value: enabled }}
+			/>
+			{fixKey ? (
+				<>
+					<ListDivider />
+					<ListRow
+						// 제목을 위 행 제목 시작선(아이콘 24 뒤)에 맞춘다.
+						leading={<View className="size-6" />}
+						onPress={fix}
+						title={t(fixKey)}
+						trailing={{ type: "chevron" }}
+					/>
+				</>
+			) : null}
+		</>
+	);
+}
+
 /** 설정 탭(Figma 12). 로그인이 없는 게스트 구성이라 프로필·로그아웃은 없다. */
 export default function SettingsTab() {
 	const router = useRouter();
@@ -202,10 +258,6 @@ export default function SettingsTab() {
 	);
 	const toggleDataSaver = useCallback(
 		(value: boolean) => update({ dataSaver: value }),
-		[update]
-	);
-	const toggleLiveActivity = useCallback(
-		(value: boolean) => update({ commuteLiveActivityEnabled: value }),
 		[update]
 	);
 	const openDataSources = useCallback(() => {
@@ -274,14 +326,8 @@ export default function SettingsTab() {
 				</Section>
 				<MapLinesSection />
 				<Section title={t("settings.sections.notifications")}>
-					<ListRow
-						icon={BellTileIcon}
-						title={t("settings.commuteLockScreen.title")}
-						trailing={{
-							onChange: toggleLiveActivity,
-							type: "toggle",
-							value: preferences.commuteLiveActivityEnabled,
-						}}
+					<LockScreenGuidanceRows
+						enabled={preferences.commuteLiveActivityEnabled}
 					/>
 				</Section>
 				<Section title={t("settings.sections.about")}>

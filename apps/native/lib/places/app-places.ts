@@ -1,8 +1,10 @@
 import Storage from "expo-sqlite/kv-store";
-
+import { Platform } from "react-native";
+import { serverGuidanceEnabled } from "@/lib/commute/lock-screen-readiness";
 import { appCrashSink } from "@/lib/crash/app-crash-reporting";
 import { reportError } from "@/lib/crash/crash-reporting";
 import { t } from "@/lib/i18n/t";
+import { appPreferences } from "@/lib/preferences/app-preferences";
 import { serverClient } from "@/lib/server/app-server";
 import { CommuteActivity } from "@/modules/commute-activity";
 
@@ -21,6 +23,12 @@ export const appPlaces = createPlacesStore({
 /** 화면이 `savePlace`, `deletePlace`에 넘기는 값. 머리줄을 넘기지 못해도 저장 결과는 그대로 돌려준다. */
 export const appSyncDeps: SyncDeps = {
 	client: serverClient,
+	// `app-lock-screen`의 `lockScreenPlatform`은 이 파일을 가져와 순환하므로 Platform을 바로 본다.
+	guidanceEnabled: () =>
+		serverGuidanceEnabled(
+			Platform.OS === "ios" ? "ios" : "android",
+			appPreferences.get().commuteLiveActivityEnabled
+		),
 	now: Date.now,
 	setHeaders: async (headers) => {
 		try {

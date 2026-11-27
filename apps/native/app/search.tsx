@@ -10,6 +10,7 @@ import {
 	useSyncExternalStore,
 } from "react";
 import { FlatList, ScrollView, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { withUniwind } from "uniwind";
 
@@ -385,15 +386,19 @@ export default function SearchScreen() {
 				))}
 			</ScrollView>
 			{body}
-			<FlatList
-				contentContainerStyle={{
-					paddingBottom: insets.bottom + BOTTOM_PADDING,
-				}}
-				data={items}
-				keyboardShouldPersistTaps="handled"
-				keyExtractor={itemKey}
-				renderItem={renderItem}
-			/>
+			{/* 목록이 키보드 위에서 끝나야 가려진 결과까지 스크롤되고, 끌면 키보드가 내려간다. */}
+			<KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+				<FlatList
+					contentContainerStyle={{
+						paddingBottom: insets.bottom + BOTTOM_PADDING,
+					}}
+					data={items}
+					keyboardDismissMode="on-drag"
+					keyboardShouldPersistTaps="handled"
+					keyExtractor={itemKey}
+					renderItem={renderItem}
+				/>
+			</KeyboardAvoidingView>
 		</View>
 	);
 }

@@ -850,3 +850,69 @@ it("uploads only the plan and keeps the bus line meta on the device", async () =
 	expect(JSON.stringify(server.calls[0]?.body)).not.toContain("busMeta");
 	expect(store.get().places[0]?.busMeta).toEqual(work.busMeta);
 });
+
+// 잠금화면 안내 켜기·끄기(설정)
+
+function disabledPlanOf(planId: string): CommutePlan {
+	return { ...planOf(planId), enabled: false };
+}
+
+it("uploads the plan turned off while lock-screen guidance is off and keeps the device copy", async () => {
+	const { deps, server, store } = setup();
+	const work = place("work", WORK_PLAN, { sync: "pending" });
+
+	expect(await savePlace({ ...deps, guidanceEnabled: () => false }, work)).toBe(
+		"saved"
+	);
+	expect(server.calls.map((call) => call.body)).toEqual([
+		disabledPlanOf(WORK_PLAN),
+	]);
+	expect(store.get().places).toEqual([
+		{ ...work, sync: "synced", updatedAt: NOW },
+	]);
+});
+
+it("re-uploads synced places whose server copy disagrees with the guidance setting", async () => {
+	const server = fakeServer([planOf(WORK_PLAN), disabledPlanOf(HOME_PLAN)]);
+	const { deps, store } = setup(
+		{
+			places: [
+				place("work", WORK_PLAN),
+				place("home", HOME_PLAN, { kind: "home" }),
+			],
+		},
+		server
+	);
+
+	expect(await reconcile({ ...deps, guidanceEnabled: () => false })).toEqual({
+		imported: 0,
+		pushed: 1,
+		removed: 0,
+	});
+	expect(server.requests()).toEqual([
+		"GET /v1/commute/plans",
+		`PUT /v1/commute/plans/${WORK_PLAN}`,
+	]);
+	expect(server.plans.get(WORK_PLAN)).toEqual(disabledPlanOf(WORK_PLAN));
+	expect(store.get().places.map((p) => p.sync)).toEqual(["synced", "synced"]);
+});
+
+it("turns an imported plan back on when guidance is on", async () => {
+	const server = fakeServer([disabledPlanOf(SERVER_PLAN)]);
+	const { deps } = setup({}, server);
+
+	expect(await reconcile({ ...deps, guidanceEnabled: () => true })).toEqual({
+		imported: 1,
+		pushed: 1,
+		removed: 0,
+	});
+	expect(server.plans.get(SERVER_PLAN)).toEqual(planOf(SERVER_PLAN));
+});
+
+it("leaves the enabled flag alone when no guidance setting is given", async () => {
+	const server = fakeServer([disabledPlanOf(WORK_PLAN)]);
+	const { deps } = setup({ places: [place("work", WORK_PLAN)] }, server);
+
+	expect(await reconcile(deps)).toEqual({ imported: 0, pushed: 0, removed: 0 });
+	expect(server.requests()).toEqual(["GET /v1/commute/plans"]);
+});

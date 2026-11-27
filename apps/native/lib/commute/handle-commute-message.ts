@@ -20,11 +20,19 @@ export interface ShowRequest {
 
 export interface CommuteNotifierPort {
 	end: (sessionId: string) => void;
+	/** 떠 있는 알림만 지운다. 세션을 끝난 것으로 적지 않아 다시 켜면 같은 세션을 그릴 수 있다. */
+	hideAll: () => void;
 	show: (input: ShowRequest) => boolean;
 }
 
 export interface CommuteMessageDeps {
 	client: ServerClient;
+	/**
+	 * 설정의 "출퇴근 잠금화면 안내"가 켜져 있는지. false면 그리지 않고 떠 있는 알림을 지운다.
+	 * Android는 꺼도 서버 세션이 그대로 돌아(앱 안 안내를 지키려고) 이것이 알림을 막는 유일한 곳이다.
+	 * 없으면 켜진 것으로 본다.
+	 */
+	enabled?: () => boolean;
 	/** 기기가 저장한 planId별 머리줄. 모르면 null. */
 	header: (planId: string) => Promise<string | null>;
 	notifier: CommuteNotifierPort;
@@ -83,6 +91,11 @@ export async function handleCommuteMessage(
 	if (event === "end") {
 		deps.notifier.end(sessionId);
 		return "ended";
+	}
+	// 꺼 두면 서버는 세션을 계속 보낸다(앱 안 안내용). 그리지 않고 남은 알림도 치운다.
+	if (deps.enabled?.() === false) {
+		deps.notifier.hideAll();
+		return "ignored";
 	}
 	const state = parseContentState(parseJson(data.state));
 	if (state === null) {

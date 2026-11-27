@@ -13,6 +13,8 @@ import { BackHandler, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { withUniwind } from "uniwind";
 
+import { LockScreenPrompt } from "@/components/commute/lock-screen-prompt";
+import { LockScreenWarning } from "@/components/commute/lock-screen-warning";
 import { AddRowButton, RouteCard } from "@/components/places/route-card";
 import { TimeRow } from "@/components/places/time-row";
 import { WeekdayPicker } from "@/components/places/weekday-picker";
@@ -24,6 +26,18 @@ import { ListRow } from "@/components/ui/list-row";
 import { OfflineNotice } from "@/components/ui/offline-notice";
 import { TextField } from "@/components/ui/text-field";
 import { TopBar } from "@/components/ui/top-bar";
+import {
+	appLockScreenStatus,
+	lockScreenPlatform,
+} from "@/lib/commute/app-lock-screen";
+import {
+	isLockScreenBlocked,
+	type LockScreenPromptModel,
+	lockScreenPromptModel,
+	lockScreenReadiness,
+	shouldOfferLockScreenPrompt,
+} from "@/lib/commute/lock-screen-readiness";
+import { useLockScreenReadiness } from "@/lib/commute/use-lock-screen";
 import { appCrashSink } from "@/lib/crash/app-crash-reporting";
 import { reportError } from "@/lib/crash/crash-reporting";
 import { t } from "@/lib/i18n/t";
@@ -51,6 +65,7 @@ import {
 	setWalkAt,
 	toggleDay,
 } from "@/lib/places/setup-form-model";
+import { appPreferences } from "@/lib/preferences/app-preferences";
 
 const Trash = withUniwind(Trash2Icon);
 
@@ -193,6 +208,20 @@ function DeletePlaceButton({ onDelete }: { onDelete: () => void }) {
 				/>
 			) : null}
 		</View>
+	);
+}
+
+/**
+ * 나가는 시각 몇 분 전에 잠금화면에 뜨는지. 이 기기에서 뜨지 않으면(알림·실시간 현황·앱 설정이 꺼짐)
+ * 약속하지 않고 까닭과 고치는 버튼을 보인다.
+ */
+function LeadNote() {
+	const { readiness, system } = useLockScreenReadiness();
+	if (isLockScreenBlocked(readiness)) {
+		return <LockScreenWarning readiness={readiness} system={system} />;
+	}
+	return (
+		<InlineNotice body={t("placeSetup.note", { m: DEFAULT_LEAD_MINUTES })} />
 	);
 }
 
@@ -340,7 +369,7 @@ function SetupBody({
 					}}
 				/>
 			</View>
-			<InlineNotice body={t("placeSetup.note", { m: DEFAULT_LEAD_MINUTES })} />
+			<LeadNote />
 			{mode === "edit" ? <DeletePlaceButton onDelete={onDelete} /> : null}
 		</>
 	);
@@ -371,6 +400,9 @@ export function SetupForm({ mode, place }: SetupFormProps) {
 	const [attempted, setAttempted] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState<MessageKey | null>(null);
+	/** 저장 뒤 잠금화면 안내 시트. 답하면 `answerPrompt`가 기다리던 저장 흐름을 이어 화면을 닫는다. */
+	const [prompt, setPrompt] = useState<LockScreenPromptModel | null>(null);
+	const answerPrompt = useRef<(() => void) | null>(null);
 	/**
 	 * 저장·삭제가 도는 중이면 true. 두 번 눌러 PUT이 두 번 나가지 않게 하고, 저장 중에는 뒤로 가기와
 	 * 구간 고르기도 막는다. 느린 저장이 끝나 `router.back()`이 다른 화면을 닫지 않게 하기 위해서다.
@@ -384,6 +416,9 @@ export function SetupForm({ mode, place }: SetupFormProps) {
 		mounted.current = true;
 		return () => {
 			mounted.current = false;
+			// 시트가 떠 있는 채로 사라지면 기다리던 저장 흐름을 풀어 준다.
+			answerPrompt.current?.();
+			answerPrompt.current = null;
 		};
 	}, []);
 
@@ -444,6 +479,32 @@ export function SetupForm({ mode, place }: SetupFormProps) {
 		[router]
 	);
 
+	/**
+	 * 저장한 뒤 이 기기에서 잠금화면 안내가 뜨지 않으면(Android 알림 꺼짐, iOS 실시간 현황 꺼짐) 장소 이름과
+	 * 나가는 시각으로 한 번 묻는다. 앱에서 끈 경우와 이미 되는 경우에는 묻지 않는다. 답할 때까지 기다린다.
+	 */
+	const offerLockScreen = useCallback(async (saved: Place) => {
+		const readiness = lockScreenReadiness({
+			inAppEnabled: appPreferences.get().commuteLiveActivityEnabled,
+			platform: lockScreenPlatform,
+			system: await appLockScreenStatus.refresh(),
+		});
+		if (!(shouldOfferLockScreenPrompt(readiness) && mounted.current)) {
+			return;
+		}
+		const model = lockScreenPromptModel(saved, readiness, t);
+		await new Promise<void>((resolve) => {
+			answerPrompt.current = resolve;
+			setPrompt(model);
+		});
+	}, []);
+
+	const finishPrompt = useCallback(() => {
+		setPrompt(null);
+		answerPrompt.current?.();
+		answerPrompt.current = null;
+	}, []);
+
 	const save = useCallback(async () => {
 		const current = appSetupDraft.get();
 		if (busy.current || current === null) {
@@ -455,6 +516,7 @@ export function SetupForm({ mode, place }: SetupFormProps) {
 			return;
 		}
 		await runSave({
+			afterSaved: () => offerLockScreen(built.place),
 			// 임시 값은 화면이 닫힐 때(언마운트) 지운다. 먼저 지우면 닫히는 동안 빈 화면이 보인다.
 			close: () => router.back(),
 			isOpen: () => mounted.current && navigation.isFocused(),
@@ -464,7 +526,7 @@ export function SetupForm({ mode, place }: SetupFormProps) {
 			showError: setSaveError,
 			sink: appCrashSink,
 		});
-	}, [navigation, router]);
+	}, [navigation, offerLockScreen, router]);
 
 	/**
 	 * 기기에서는 `deletePlace`를 부르는 순간 지워지므로 서버 응답(최대 10초)을 기다리지 않고 닫는다.
@@ -538,6 +600,9 @@ export function SetupForm({ mode, place }: SetupFormProps) {
 					onPress={handleSave}
 				/>
 			</View>
+			{prompt ? (
+				<LockScreenPrompt model={prompt} onDone={finishPrompt} />
+			) : null}
 		</View>
 	);
 }
