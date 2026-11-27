@@ -1,7 +1,8 @@
 import { cn } from "heroui-native";
 import { SearchIcon, XIcon } from "lucide-react-native";
-import { useCallback } from "react";
+import { type Ref, useCallback, useImperativeHandle, useRef } from "react";
 import {
+	Keyboard,
 	Platform,
 	Pressable,
 	Text,
@@ -31,6 +32,22 @@ const ANDROID_INPUT_PROPS =
 		: ({} as const);
 const ANDROID_INPUT_STYLE = { paddingVertical: 0 } as const;
 
+/** 화면이 입력란을 다루는 손잡이. */
+export interface TextFieldHandle {
+	/**
+	 * 키보드가 떠 있을 때만 입력란에 커서를 다시 둔다. 칩 같은 다른 컨트롤을 누른 뒤에도 바로 이어 쓰게 하되,
+	 * 목록을 끌어 키보드를 내린 사람에게 키보드를 다시 띄우지는 않는다.
+	 */
+	keepTyping: () => void;
+}
+
+/** 키보드가 떠 있으면 입력란에 커서를 다시 둔다(Android에서 키보드는 남고 포커스만 빠지는 경우를 막는다). */
+function refocusIfTyping(input: TextInput | null): void {
+	if (input !== null && Keyboard.isVisible()) {
+		input.focus();
+	}
+}
+
 export interface TextFieldProps {
 	accessibilityLabel: string;
 	/** true면 화면이 열리자마자 입력란에 커서를 두고 키보드를 연다. 기본 false. */
@@ -39,10 +56,13 @@ export interface TextFieldProps {
 	editable?: boolean;
 	onChangeText: (text: string) => void;
 	placeholder: string;
+	/** 화면이 `keepTyping`을 부를 때 쓴다. */
+	ref?: Ref<TextFieldHandle>;
 	returnKeyType?: TextInputProps["returnKeyType"];
 	/**
 	 * 있으면 Figma `SearchBar`(5:303) 모양으로 그린다: 52pt 알약, 앞 돋보기, `border/subtle` 테두리.
 	 * 글자가 있으면 테두리가 `accent/primary`가 되고 끝에 지우기(x) 버튼이 생긴다. 값은 그 버튼의 이름.
+	 * 지우기를 눌러도 키보드가 떠 있었으면 입력란에 커서가 남는다.
 	 */
 	search?: { clearLabel: string };
 	value: string;
@@ -90,11 +110,21 @@ export function TextField({
 	editable,
 	onChangeText,
 	placeholder,
+	ref,
 	returnKeyType,
 	search,
 	value,
 }: TextFieldProps) {
-	const clear = useCallback(() => onChangeText(""), [onChangeText]);
+	const inputRef = useRef<TextInput | null>(null);
+	useImperativeHandle(
+		ref,
+		() => ({ keepTyping: () => refocusIfTyping(inputRef.current) }),
+		[]
+	);
+	const clear = useCallback(() => {
+		onChangeText("");
+		refocusIfTyping(inputRef.current);
+	}, [onChangeText]);
 	const input = (
 		<TextInput
 			accessibilityLabel={accessibilityLabel}
@@ -112,6 +142,7 @@ export function TextField({
 			onChangeText={onChangeText}
 			placeholder={placeholder}
 			placeholderTextColorClassName="accent-text-tertiary"
+			ref={inputRef}
 			returnKeyType={returnKeyType}
 			style={[TEXT_STYLES.bodyM, ANDROID_INPUT_STYLE, ANDROID_INPUT_PROPS]}
 			value={value}

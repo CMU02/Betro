@@ -495,7 +495,7 @@ export const ko = {
 		alternativeTitle: "대안 {n}",
 		delete: {
 			cancel: "취소",
-			confirm: "한 번 더 누르면 지워요",
+			confirm: "삭제 확인",
 			label: "장소 삭제",
 		},
 		/** 이름 없는 기타 장소의 도보 줄에 쓰는 목적지 */

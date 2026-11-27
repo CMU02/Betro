@@ -272,10 +272,7 @@ function StopRow({
 		stop.status === null && !stop.vehicleHere ? undefined : (
 			<View className="flex-row items-center gap-2">
 				{stop.vehicleHere ? (
-					<BusIcon
-						colorClassName="accent-accent-primary"
-						size={BUS_ICON_SIZE}
-					/>
+					<BusIcon colorClassName="accent-text-accent" size={BUS_ICON_SIZE} />
 				) : null}
 				{stop.status === null ? null : (
 					<AppText variant="bodyMStrong">{stop.status.text}</AppText>

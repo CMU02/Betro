@@ -31,10 +31,7 @@ const RouteMenuRow = memo(function RouteMenuRowView({
 		>
 			<View className="w-[18px]">
 				{option.selected ? (
-					<Check
-						colorClassName="accent-accent-primary"
-						size={CHECK_ICON_SIZE}
-					/>
+					<Check colorClassName="accent-text-accent" size={CHECK_ICON_SIZE} />
 				) : null}
 			</View>
 			<AppText

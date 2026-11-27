@@ -656,6 +656,7 @@ export default function MapTab() {
 		data.smoothVehicleMotion
 	);
 	const [sheetHeight, setSheetHeight] = useState(0);
+	const [emptyCardHeight, setEmptyCardHeight] = useState(0);
 	useFitRoute({
 		fitKey,
 		mapRef,
@@ -726,15 +727,19 @@ export default function MapTab() {
 	// 시트가 열려 있으면 그 높이만큼 아래를 비워, 확대하고 따라가는 차량이 시트 위에 보이게 한다.
 	const sheetInset =
 		sheet.sheetVehicle === null ? 0 : sheetHeight + OVERLAY_GAP;
+	// 장소가 없을 때 떠 있는 빈 상태 카드가 네이버 로고와 축척을 가리지 않게 카드 높이도 비운다.
+	const emptyCardInset =
+		hasPlaces || emptyCardHeight === 0 ? 0 : emptyCardHeight + OVERLAY_GAP;
+	const bottomInset = Math.max(sheetInset, emptyCardInset);
 	const mapPadding = useMemo(
 		() => ({
-			bottom: bottomOverlay + sheetInset,
+			bottom: bottomOverlay + bottomInset,
 			top:
 				insets.top +
 				SEARCH_OVERLAY_HEIGHT +
 				(hasPlaces ? TOP_OVERLAY_HEIGHT : 0),
 		}),
-		[bottomOverlay, hasPlaces, insets.top, sheetInset]
+		[bottomOverlay, bottomInset, hasPlaces, insets.top]
 	);
 	const topStyle = useMemo(
 		() => ({ top: insets.top + OVERLAY_GAP }),
@@ -799,7 +804,11 @@ export default function MapTab() {
 				)}
 			</View>
 			{hasPlaces ? null : (
-				<EmptyCard bottomOffset={bottomOffset} onRegister={register} />
+				<EmptyCard
+					bottomOffset={bottomOffset}
+					onHeight={setEmptyCardHeight}
+					onRegister={register}
+				/>
 			)}
 			{sheet.sheetVehicle === null ? null : (
 				<SelectedSheet

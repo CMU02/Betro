@@ -24,8 +24,10 @@ import { TopBar } from "@/components/ui/top-bar";
 import { useAppTheme } from "@/contexts/app-theme-context";
 import { fetchStationView, STATION_VIEW_MAX } from "@/lib/detail/detail-client";
 import {
+	type LineMapState,
 	type StationDirectionRow,
 	stationModel,
+	stationSectionPhase,
 } from "@/lib/detail/station-model";
 import {
 	type StationViewPhase,
@@ -109,8 +111,11 @@ function StationMap({ lat, lng }: { lat: number; lng: number }) {
 	);
 }
 
-/** 노선 지도를 받아 노선 ref로 묶는다. 응답이 바뀔 때만 새 객체를 낸다. */
-function useLineMaps(lines: string[]): Record<string, SubwayMap> {
+/** 노선 지도를 받아 노선 ref로 묶는다. 응답이나 상태가 바뀔 때만 새 객체를 낸다. */
+function useLineMaps(lines: string[]): {
+	maps: Record<string, SubwayMap>;
+	states: Record<string, LineMapState>;
+} {
 	const queries = useQueries({
 		queries: lines.map((line) => ({
 			queryFn: () => loadRefMap({ line, mode: "subway" }),
@@ -118,17 +123,30 @@ function useLineMaps(lines: string[]): Record<string, SubwayMap> {
 			staleTime: MAP_REF_STALE_MS,
 		})),
 	});
-	const signature = queries.map((query) => query.dataUpdatedAt).join(",");
-	// biome-ignore lint/correctness/useExhaustiveDependencies: 지도 응답이 바뀔 때만(dataUpdatedAt) 다시 만든다.
+	// 실패는 dataUpdatedAt을 바꾸지 않으므로 status와 실패 횟수도 함께 본다(안 그러면 loading에 머문다).
+	const signature = queries
+		.map(
+			(query) => `${query.dataUpdatedAt}:${query.status}:${query.failureCount}`
+		)
+		.join(",");
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 지도 응답이나 상태가 바뀔 때만(signature) 다시 만든다.
 	return useMemo(() => {
-		const byLine: Record<string, SubwayMap> = {};
+		const maps: Record<string, SubwayMap> = {};
+		const states: Record<string, LineMapState> = {};
 		lines.forEach((line, index) => {
-			const data = queries[index]?.data;
-			if (data !== undefined) {
-				byLine[line] = data as SubwayMap;
+			const query = queries[index];
+			if (query?.data === undefined) {
+				// 첫 실패에서 바로 failed로 본다. 재시도(기본 3회)를 다 기다리면 도착 정보가 수십 초 가려진다.
+				states[line] =
+					query?.status === "error" || (query?.failureCount ?? 0) > 0
+						? "failed"
+						: "loading";
+			} else {
+				maps[line] = query.data as SubwayMap;
+				states[line] = "ready";
 			}
 		});
-		return byLine;
+		return { maps, states };
 	}, [lines, signature]);
 }
 
@@ -212,20 +230,18 @@ function FirstLastRows({
 
 function ArrivalsBody({
 	directions,
-	failed,
 	line,
-	loaded,
 	onOpenTrain,
 	onRetry,
+	phase,
 }: {
 	directions: StationDirectionRow[];
-	failed: boolean;
 	line: string;
-	loaded: boolean;
 	onOpenTrain: (trainNo: string, line: string) => void;
 	onRetry: () => void;
+	phase: StationViewPhase;
 }) {
-	if (failed) {
+	if (phase === "failed") {
 		return (
 			<EmptyState
 				action={
@@ -241,7 +257,7 @@ function ArrivalsBody({
 			/>
 		);
 	}
-	if (!loaded) {
+	if (phase === "loading") {
 		return (
 			<AppText className="px-4 py-3 text-text-secondary" variant="bodyS">
 				{t("stationDetail.loading")}
@@ -274,7 +290,7 @@ function StationBody({
 	visible: boolean;
 }) {
 	const [picked, setPicked] = useState<string | null>(null);
-	const maps = useLineMaps(lines);
+	const { maps, states } = useLineMaps(lines);
 	const phase = stationViewPhase(viewQuery.data);
 	// 도착은 1초마다 다시 센다. 폴링이 오래 실패하면 마지막 도착판을 추정으로 내리고 지난 열차는 뺀다.
 	const now = useNowMs(visible);
@@ -288,6 +304,11 @@ function StationBody({
 	const directions = models
 		.filter((model) => model.line === selectedLine)
 		.flatMap((model) => model.directions);
+	// 고른 노선의 지도를 받기 전에는 방면 대신 상행·하행이 먼저 보이지 않도록 두 카드를 loading에 둔다.
+	const sectionPhase = stationSectionPhase(
+		phase,
+		states[selectedLine] ?? "failed"
+	);
 	return (
 		<View className="gap-4 px-4">
 			<View className="flex-row gap-1">
@@ -316,15 +337,14 @@ function StationBody({
 			>
 				<ArrivalsBody
 					directions={directions}
-					failed={phase === "failed"}
 					line={selectedLine}
-					loaded={view !== null}
 					onOpenTrain={onOpenTrain}
 					onRetry={onRetry}
+					phase={sectionPhase}
 				/>
 			</Section>
 			<Section title={t("stationDetail.firstLast")}>
-				<FirstLastRows directions={directions} phase={phase} />
+				<FirstLastRows directions={directions} phase={sectionPhase} />
 			</Section>
 		</View>
 	);
